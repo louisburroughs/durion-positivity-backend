@@ -78,6 +78,10 @@ class VendorBillControllerDuplicateRuleTest extends BaseControllerSliceTest {
     @MockitoBean
     private VendorBillApprovalService approvalService;
 
+    /** The AP choice reads (#2670) this controller also serves. */
+    @MockitoBean
+    private com.positivity.accounting.internal.service.ApChoicesService apChoicesService;
+
     private static VendorBillDuplicateException duplicateOf(String vendorName) {
         VendorBill original = new VendorBill(ORIGINAL_ID);
         original.setBillNumber("INV-00123");

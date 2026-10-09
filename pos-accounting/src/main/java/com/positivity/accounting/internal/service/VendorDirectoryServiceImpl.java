@@ -10,7 +10,6 @@ import com.positivity.accounting.internal.dto.VendorResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.ApVendorSettings;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
-import com.positivity.accounting.internal.entity.MappingKey;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
@@ -18,8 +17,6 @@ import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.ApVendorSettingsRepository;
 import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
-import com.positivity.accounting.internal.repository.MappingKeyRepository;
-import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -27,6 +24,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
@@ -91,7 +89,6 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     private static final Pattern SCHEME_CODE = Pattern.compile("^[A-Z][A-Z_]{1,15}$");
 
     private static final int DEFAULT_LIMIT = 20;
-    private static final String VENDOR_BILL_CATEGORY = VendorBillPostingService.POSTING_CATEGORY;
     private static final Set<String> STATUSES = Set.of("ACTIVE", "INACTIVE");
 
     private final Clock clock;
@@ -99,9 +96,9 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     private final ApVendorSettingsRepository settings;
     private final VendorBillRepository bills;
     private final AccountingAuditLogRepository auditLogs;
-    private final PostingCategoryRepository postingCategories;
-    private final MappingKeyRepository mappingKeys;
+    private final VendorBillExpenseKeys expenseKeys;
     private final InformationReturnFormsService informationReturnForms;
+    private final ActorDisplayNames actorNames;
 
     @Override
     @Transactional(readOnly = true)
@@ -346,15 +343,8 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
             return null;
         }
         String key = given.trim().toUpperCase(Locale.ROOT);
-        boolean active = key.startsWith(VendorBillPostingService.EXPENSE_KEY_PREFIX)
-                && key.length() > VendorBillPostingService.EXPENSE_KEY_PREFIX.length()
-                && postingCategories
-                        .findByCategoryName(VENDOR_BILL_CATEGORY)
-                        .flatMap(category -> mappingKeys.findByPostingCategory_PostingCategoryIdAndKeyName(
-                                category.getPostingCategoryId(), key))
-                        .map(MappingKey::getIsActive)
-                        .orElse(false);
-        if (!active) {
+        // The expense-category read lists exactly the keys this accepts (VendorBillExpenseKeys, #2670).
+        if (!expenseKeys.isActive(key)) {
             errors.add(new VendorBillException.FieldError(
                     "defaultExpenseMappingKey", "must name an active VENDOR_BILL expense key, EXPENSE_<CODE>"));
             return null;
@@ -639,15 +629,24 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
                         List.of(vendor),
                         row.map(r -> Map.of(vendor.getVendorId(), r)).orElse(Map.of()))
                 .contains(vendor.getVendorId());
+        // The two actors' names in one query (#2670); null when not known, never the username.
+        Map<String, String> names = row.map(r -> actorNames.namesOf(
+                        Arrays.asList(r.getRemitToConfirmedBy(), r.isApHold() ? r.getApHoldSetBy() : null)))
+                .orElse(Map.of());
         VendorApSettingsResponse apSettings = row.map(r -> new VendorApSettingsResponse(
                         r.getDefaultDebitClass(),
                         r.getDefaultExpenseMappingKey(),
                         r.getConfirmedRemitToVersion(),
                         r.getRemitToConfirmedBy(),
+                        ActorDisplayNames.nameOf(names, r.getRemitToConfirmedBy()),
                         r.getRemitToConfirmedAt(),
                         r.isApHold()
                                 ? new VendorApSettingsResponse.ApHold(
-                                        true, r.getApHoldReason(), r.getApHoldSetBy(), r.getApHoldSetAt())
+                                        true,
+                                        r.getApHoldReason(),
+                                        r.getApHoldSetBy(),
+                                        ActorDisplayNames.nameOf(names, r.getApHoldSetBy()),
+                                        r.getApHoldSetAt())
                                 : VendorApSettingsResponse.ApHold.NONE,
                         informationReturn(r, vendor),
                         r.isAcceptTaxOnResaleGoods()))

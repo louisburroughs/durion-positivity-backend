@@ -1206,6 +1206,109 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                 .hasSize(10);
     }
 
+    @Test
+    @DisplayName("#2670 C.1: each command's response, its replay and the list serve the history row's actorName from"
+            + " the people-contact copy; an unlinked username serves null; the kept replay copy holds no name")
+    void pettyExpenseCategoryActorNames() {
+        UUID tenant = tenant();
+        provisionAccounting(tenant);
+        UUID person = UUIDv7Generator.generate();
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        owner.update(
+                "INSERT INTO ext_people_contact_person (tenant_id, person_id, first_name, last_name,"
+                        + " aggregate_version, updated_at) VALUES (?, ?, 'Dana', 'Reyes', 1, now())",
+                tenant,
+                person);
+        owner.update(
+                "INSERT INTO ext_people_contact_user_link (tenant_id, link_id, person_id, username, status,"
+                        + " aggregate_version, updated_at) VALUES (?, ?, ?, 'controller.cfo', 'ACTIVE', 1, now())",
+                tenant,
+                UUIDv7Generator.generate(),
+                person);
+        signIn(
+                "controller.cfo",
+                "accounting:mapping-key:create",
+                "accounting:mapping-key:edit",
+                "accounting:mapping-key:deactivate",
+                "accounting:gl-mapping:create");
+        UUID misc = asTenant(
+                tenant, () -> glAccounts.findByAccountCode("6360").orElseThrow().getGlAccountId());
+        LocalDate today = LocalDate.ofInstant(clock.instant(), java.time.ZoneOffset.UTC); // the tenant's zone is UTC
+
+        PettyExpenseCategoryUpdateRequest relabel = new PettyExpenseCategoryUpdateRequest(
+                "Staff meals and coffee", null, null, "Cashiers asked for a clearer label", UUIDv7Generator.generate());
+        PettyExpenseCategoryResponse relabelled = asTenant(tenant, () -> categories.update("STAFF_MEALS", relabel));
+        PettyExpenseCategoryResponse created = asTenant(tenant, () -> categories.create(create("TIRE_DISPOSAL", misc)));
+        PettyExpenseCategoryResponse moved = asTenant(
+                tenant,
+                () -> categories.remap(
+                        "SHOP_SUPPLIES",
+                        new PettyExpenseCategoryRemapRequest(
+                                misc,
+                                today.withDayOfMonth(1).plusMonths(1),
+                                "Supplies get their own account from next month",
+                                UUIDv7Generator.generate())));
+        PettyExpenseCategoryResponse inactive = asTenant(
+                tenant,
+                () -> categories.deactivate(
+                        "VEHICLE_FUEL",
+                        new PettyExpenseCategoryDeactivateRequest(
+                                "We stopped buying fuel in cash", UUIDv7Generator.generate())));
+        for (PettyExpenseCategoryResponse response : List.of(relabelled, created, moved, inactive)) {
+            assertThat(response.history())
+                    .as("%s: the command's row names its person", response.code())
+                    .last()
+                    .satisfies(row -> {
+                        assertThat(row.actor()).isEqualTo("controller.cfo");
+                        assertThat(row.actorName()).isEqualTo("Dana Reyes");
+                    });
+        }
+        assertThat(owner.queryForList(
+                        "SELECT response_json FROM petty_expense_category_change WHERE tenant_id = ? AND response_json IS NOT NULL",
+                        String.class,
+                        tenant))
+                .as("the kept replay copies hold no name")
+                .isNotEmpty()
+                .allSatisfy(json -> assertThat(json).doesNotContain("Dana").doesNotContain("Reyes"));
+
+        // The person is renamed after the command: a replay serves the name as it is now.
+        owner.update(
+                "UPDATE ext_people_contact_person SET last_name = 'Reyes-Ortiz' WHERE tenant_id = ? AND person_id = ?",
+                tenant,
+                person);
+        PettyExpenseCategoryResponse replayed = asTenant(tenant, () -> categories.update("STAFF_MEALS", relabel));
+        assertThat(replayed.replayed()).isTrue();
+        assertThat(replayed.history().getLast().actorName()).isEqualTo("Dana Reyes-Ortiz");
+
+        // An unlinked username: null on the response and on the list, never the username.
+        signIn("clerk.ana", "accounting:mapping-key:edit");
+        PettyExpenseCategoryResponse byClerk = asTenant(
+                tenant,
+                () -> categories.update(
+                        "OFFICE_SUPPLIES",
+                        new PettyExpenseCategoryUpdateRequest(
+                                "Office and printer supplies",
+                                null,
+                                null,
+                                "Printer paper belongs here too",
+                                UUIDv7Generator.generate())));
+        assertThat(byClerk.history().getLast().actor()).isEqualTo("clerk.ana");
+        assertThat(byClerk.history().getLast().actorName()).isNull();
+
+        List<PettyExpenseCategoryResponse> listed =
+                asTenant(tenant, () -> categories.list()).categories();
+        assertThat(listed)
+                .flatExtracting(PettyExpenseCategoryResponse::history)
+                .filteredOn(row -> row.actor().equals("controller.cfo"))
+                .hasSize(4)
+                .allSatisfy(row -> assertThat(row.actorName()).isEqualTo("Dana Reyes-Ortiz"));
+        assertThat(listed)
+                .flatExtracting(PettyExpenseCategoryResponse::history)
+                .filteredOn(row -> row.actor().equals("clerk.ana"))
+                .singleElement()
+                .satisfies(row -> assertThat(row.actorName()).isNull());
+    }
+
     // ---- helpers --------------------------------------------------------------------------------------------
 
     private UUID tenant() {

@@ -1,12 +1,14 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillExpenseCategoryListResponse;
 import com.positivity.accounting.internal.dto.VendorBillListRow;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
+import com.positivity.accounting.internal.service.ApChoicesService;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.events.EmitEvent;
@@ -65,6 +67,7 @@ public class VendorBillController {
 
     private final VendorBillService vendorBillService;
     private final VendorBillApprovalService approvalService;
+    private final ApChoicesService apChoicesService;
 
     /**
      * Create a vendor bill from a goods received event.
@@ -96,7 +99,8 @@ public class VendorBillController {
                 vendorName and dimensions are optional.
                 Emits an ACCOUNTING_VENDOR_BILL_CREATE event and posts nothing (a bill posts once, at \
                 approval).
-                Returns 201 with the created (or already-existing) bill, 400 when the payload fails \
+                Returns 201 with the created (or already-existing) bill (createdByName, the creator's display \
+                name, absent when not known), 400 when the payload fails \
                 validation, 422 VENDOR_INACTIVE, and 503 VENDOR_REPLICATION_PENDING with Retry-After when \
                 the vendor is not in the copy yet.
                 Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) \
@@ -204,7 +208,8 @@ public class VendorBillController {
                 Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, invoiceDate and \
                 lineItems; dueDate is optional.
                 Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the \
-                returned bill's status conveys the outcome, APPROVED included.
+                returned bill's status conveys the outcome, APPROVED included, and each of its actors carries a \
+                display name (createdByName, submittedByName, approvedByName), absent when not known or SYSTEM.
                 Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing \
                 invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or \
                 REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring \
@@ -274,6 +279,50 @@ public class VendorBillController {
     }
 
     /**
+     * The expense categories an approver may choose (AP reads #2670). The literal segment is mapped ahead of {@code
+     * /{billId}}, so it is never read as a bill id.
+     *
+     * <p>GET /v1/accounting/vendor-bills/expense-categories
+     */
+    @GetMapping("/expense-categories")
+    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_EXPENSE_CATEGORIES_VIEW", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {AccountingPermissions.AP_VIEW})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
+    @Operation(
+            operationId = "listVendorBillExpenseCategories",
+            summary = "List Vendor Bill Expense Categories",
+            description = """
+                Lists the expense categories a vendor bill may be classified under: every active VENDOR_BILL \
+                mapping key EXPENSE_<CODE>, with its label and the number and name of the account it resolves to \
+                at the start of asOf, the tenant's business date (both absent when no mapping is effective that day; \
+                an approval naming that key answers 422 GL_MAPPING_NOT_CONFIGURED).
+                Categories are ordered by label (case-insensitive, a missing label as its key), then by key, and the \
+                client keeps that order; an empty list is a 200.
+                The list is the one the vendor AP settings write checks defaultExpenseMappingKey against, so a key \
+                listed here is accepted there.
+                Use this tool when an approver chooses "An expense" for a bill, its difference, or a vendor's default \
+                category; do not use it to change a key, use the mapping-key administration instead.
+                Preconditions: none beyond accounting:ap:view.
+                Required inputs: none; there are no request parameters and no request body.
+                Emits an ACCOUNTING_VENDOR_BILL_EXPENSE_CATEGORIES_VIEW audit event; no state changes.
+                Returns 401 without a valid token and 403 FORBIDDEN without accounting:ap:view.
+                """,
+            tags = {"Vendor Bill API"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "The active expense categories",
+            content = @Content(schema = @Schema(implementation = VendorBillExpenseCategoryListResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN: the caller lacks accounting:ap:view",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<VendorBillExpenseCategoryListResponse> listVendorBillExpenseCategories() {
+        return ResponseEntity.ok(apChoicesService.expenseCategories());
+    }
+
+    /**
      * Get vendor bill by bill ID.
      *
      * GET /v1/accounting/vendor-bills/{billId}
@@ -292,7 +341,9 @@ public class VendorBillController {
             summary = "Get Vendor Bill By Id",
             description = """
                 Returns one vendor bill as the review screen reads it: status, amounts (with the vendor's net and \
-                tax) and open amount, channel, the submission and (once approved) the approval, the rejection, the \
+                tax) and open amount, channel, the submission and (once approved) the approval, the rejection \
+                (each actor with its display name: createdByName, approval.submittedByName, approval.approvedByName \
+                and rejection.rejectedByName, absent when not known or SYSTEM), the \
                 status explanation, the latest match evidence, the open candidates of an ambiguous match (each \
                 with candidateId and invoiceEventId), re-issues held against it, the received lines with what was \
                 billed, the checks (MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP and, on an EDI bill \
@@ -346,7 +397,8 @@ public class VendorBillController {
             summary = "Get Vendor Bill By Origin Event",
             description = """
                 Returns the vendor bill created from a specific goods-received event, using the event id \
-                recorded at bill creation.
+                recorded at bill creation, each actor with its display name (createdByName, submittedByName, \
+                approvedByName, rejectedByName), absent when not known or SYSTEM.
                 Use this tool to check whether a goods-received event was already billed, for example \
                 before replaying it; use getVendorBillById instead when the bill id is known.
                 Preconditions: a bill must have been created from the event.

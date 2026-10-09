@@ -153,6 +153,15 @@ pos:
       tax-manifest-topic: ${POS_ACCOUNTING_KAFKA_TAX_MANIFEST_TOPIC:tax.manifest.v1}
       tax-manifest-consumer-group: ${POS_ACCOUNTING_KAFKA_TAX_MANIFEST_CONSUMER_GROUP:pos-accounting-tax-manifests}
       tax-commands-topic: ${POS_ACCOUNTING_KAFKA_TAX_COMMANDS_TOPIC:tax.commands.v1}
+      # CAP:550 AP reads (#2670): pos-people-contact's persons and user-person links into the ext_people_contact_*
+      # copy that names AP actors (ADR-0044 section 6), its per-tenant manifest, and the
+      # people-contact.outbox.replay-requested command a drifted window sends. The events group reads from the
+      # earliest offset, so persons and links published before it first ran are applied once.
+      people-contact-events-topic: ${POS_ACCOUNTING_KAFKA_PC_EVENTS_TOPIC:people-contact.events.v1}
+      people-contact-events-consumer-group: ${POS_ACCOUNTING_KAFKA_PC_EVENTS_CONSUMER_GROUP:pos-accounting-people-contact-events}
+      people-contact-manifest-topic: ${POS_ACCOUNTING_KAFKA_PC_MANIFEST_TOPIC:people-contact.manifest.v1}
+      people-contact-manifest-consumer-group: ${POS_ACCOUNTING_KAFKA_PC_MANIFEST_CONSUMER_GROUP:pos-accounting-people-contact-manifests}
+      people-contact-commands-topic: ${POS_ACCOUNTING_KAFKA_PC_COMMANDS_TOPIC:people-contact.commands.v1}
     # CAP:550 S32c (ADR-0071 §5-6): the tax-registration front door. pos-tax is internal-only and not on Eureka, so
     # it is reached on a fixed base URL. The secret is accounting's per-caller front-door secret, from the
     # environment or a secret store (POS_TAX_ACCOUNTING_SECRET, the value pos-tax expects); blank, every

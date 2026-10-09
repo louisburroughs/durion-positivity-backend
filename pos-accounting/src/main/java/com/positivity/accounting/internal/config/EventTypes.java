@@ -85,7 +85,8 @@ public final class EventTypes {
      * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET, +2 vendor commands (CAP:550 S24, #2517):
      * ACCOUNTING_VENDOR_REMIT_TO_CONFIRM, ACCOUNTING_VENDOR_AP_SETTINGS_SET, +1 information-return forms read (CAP:550
      * #2615): ACCOUNTING_INFORMATION_RETURN_FORMS_VIEW, +1 configured tax regimes read (CAP:550 #2659):
-     * ACCOUNTING_TAX_REGIMES_VIEW, +3
+     * ACCOUNTING_TAX_REGIMES_VIEW, +2 AP choice reads (CAP:550 AP reads, #2670):
+     * ACCOUNTING_VENDOR_BILL_EXPENSE_CATEGORIES_VIEW, ACCOUNTING_AP_PAY_FROM_ACCOUNTS_VIEW, +3
      * from accounting period lifecycle (Story B1, Issue #937):
      * ACCOUNTING_PERIOD_LIST, ACCOUNTING_PERIOD_CLOSE,
      * ACCOUNTING_PERIOD_REOPEN, +2 previously emitted but unregistered
@@ -484,6 +485,15 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_TAX_REGIMES_VIEW",
                                 "List a country's configured tax regimes with their regions and tax types")
+                        .build(),
+                // VendorBillController / APPaymentController — the AP choice reads (CAP:550 AP reads, #2670)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_VENDOR_BILL_EXPENSE_CATEGORIES_VIEW",
+                                "List the active vendor-bill expense categories with the account each posts to")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_AP_PAY_FROM_ACCOUNTS_VIEW",
+                                "List the bank accounts a vendor payment may come from today")
                         .build(),
 
                 // AccountingPeriodController — 3 events (Story B1, Issue #937)

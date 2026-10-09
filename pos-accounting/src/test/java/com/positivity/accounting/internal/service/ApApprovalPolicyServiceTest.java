@@ -55,6 +55,7 @@ class ApApprovalPolicyServiceTest {
 
     private final AccountingConfigurationRepository configuration = mock();
     private final AccountingAuditLogRepository auditLogs = mock();
+    private final ActorDisplayNames actorNames = mock();
     private final FunctionalCurrency usd = new FunctionalCurrency(new LedgerCurrency("USD"));
     private final Map<String, AccountingConfiguration> stored = new HashMap<>();
     private final List<AccountingAuditLog> written = new ArrayList<>();
@@ -64,7 +65,7 @@ class ApApprovalPolicyServiceTest {
     void wire() {
         ApApprovalPolicy policy = new ApApprovalPolicy(configuration, usd);
         service = new ApApprovalPolicyServiceImpl(
-                CLOCK, policy, configuration, auditLogs, usd, mock(ApApprovalPolicyLock.class));
+                CLOCK, policy, configuration, auditLogs, usd, mock(ApApprovalPolicyLock.class), actorNames);
         when(configuration.findByConfigKeyIn(anyCollection())).thenAnswer(inv -> List.copyOf(stored.values()));
         when(configuration.findWithLockByConfigKey(anyString()))
                 .thenAnswer(inv -> Optional.ofNullable(stored.get(inv.getArgument(0, String.class))));
@@ -178,6 +179,42 @@ class ApApprovalPolicyServiceTest {
             assertThat(row.changedByRoles()).containsExactly("CONTROLLER");
         });
         assertThat(after.history().get(0).justification()).isEqualTo("Vendors moved to fifteen days");
+    }
+
+    @Test
+    @DisplayName("#2670 AC 6 and AC 8: a 20-row history page with 5 distinct users resolves their names in one call;"
+            + " a known user serves changedByName, an unknown one null, never the username")
+    void historyNamesInOneCall() {
+        for (int i = 0; i < 20; i++) {
+            AccountingAuditLog row = new AccountingAuditLog();
+            row.setOperation("AP_APPROVAL_POLICY_SET");
+            row.setEntityId(UUID.randomUUID());
+            row.setUserId(i % 5 == 0 ? "controller.cfo" : "user." + (i % 5));
+            row.setTimestamp(CLOCK.instant().plusSeconds(i));
+            row.setNewValue("setting=AP_CLERK_APPROVAL_LIMIT;value=" + i + ".00;roles=CONTROLLER");
+            row.setOldValue("0.00");
+            row.setJustification("Routine parts bills");
+            written.add(row);
+        }
+        when(actorNames.namesOf(anyCollection())).thenReturn(Map.of("controller.cfo", "Dana Reyes"));
+
+        ApApprovalPolicyResponse page = service.get(0, 20);
+
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Collection<String>> asked =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(actorNames, org.mockito.Mockito.times(1)).namesOf(asked.capture());
+        assertThat(java.util.Set.copyOf(asked.getValue()))
+                .containsExactlyInAnyOrder("controller.cfo", "user.1", "user.2", "user.3", "user.4");
+        assertThat(page.history()).hasSize(20);
+        assertThat(page.history())
+                .filteredOn(row -> row.changedBy().equals("controller.cfo"))
+                .hasSize(4)
+                .allSatisfy(row -> assertThat(row.changedByName()).isEqualTo("Dana Reyes"));
+        assertThat(page.history())
+                .filteredOn(row -> !row.changedBy().equals("controller.cfo"))
+                .allSatisfy(row -> assertThat(row.changedByName()).isNull());
+        assertThat(page.history().get(0).toString()).doesNotContain("Dana Reyes");
     }
 
     @Test

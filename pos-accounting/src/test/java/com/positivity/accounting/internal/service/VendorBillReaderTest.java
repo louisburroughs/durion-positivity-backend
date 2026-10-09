@@ -553,7 +553,8 @@ class VendorBillReaderTest {
                 mock(VendorBillTaxRecoveryRepository.class),
                 mock(GLMappingResolver.class),
                 mock(GLAccountRepository.class),
-                mock(VendorBillPurchaseTax.class));
+                mock(VendorBillPurchaseTax.class),
+                mock(ActorDisplayNames.class));
         VendorBill over = billOf("3000.00", "clerk.ana");
         over.setStatus(VendorBillStatus.AWAITING_APPROVAL);
         over.setBillNumber("INV-OVER");
@@ -655,7 +656,8 @@ class VendorBillReaderTest {
                 mock(VendorBillTaxRecoveryRepository.class),
                 mock(GLMappingResolver.class),
                 mock(GLAccountRepository.class),
-                mock(VendorBillPurchaseTax.class));
+                mock(VendorBillPurchaseTax.class),
+                mock(ActorDisplayNames.class));
         UUID heldVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71");
         UUID freeVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a72");
         VendorBill heldBill = billOf("100.00", "clerk.ana");
@@ -691,6 +693,7 @@ class VendorBillReaderTest {
     private final GLMappingResolver readResolver = mock(GLMappingResolver.class);
     private final GLAccountRepository readAccounts = mock(GLAccountRepository.class);
     private final VendorBillGlPostingRepository readPostings = mock(VendorBillGlPostingRepository.class);
+    private final ActorDisplayNames readNames = mock(ActorDisplayNames.class);
 
     private VendorBillReader taxReader() {
         ApApprovalPolicy approvalPolicy = mock();
@@ -713,7 +716,8 @@ class VendorBillReaderTest {
                 readRecoveries,
                 readResolver,
                 readAccounts,
-                PurchaseTaxFixtures.off());
+                PurchaseTaxFixtures.off(),
+                readNames);
     }
 
     private VendorBill postedBill(UUID id, String net, String tax, String gross) {
@@ -853,5 +857,79 @@ class VendorBillReaderTest {
             assertThat(row.recoveredAmount()).isZero();
             assertThat(row.recoveryWithheldReason()).isEqualTo("SUPPLIER_REGISTRATION_MISSING");
         });
+    }
+
+    // ---- AP reads #2670: the actors' display names ------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2670 AC 6 and AC 7: the bill read serves approvedByName and createdByName from one lookup; SYSTEM"
+            + " and an unknown actor serve null, never the username")
+    void actorNames() {
+        UUID billId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b04");
+        VendorBillReader reader = taxReader();
+        VendorBill bill = postedBill(billId, "100.00", "0.00", "100.00");
+        bill.setSubmittedAt(java.time.Instant.parse("2026-10-01T09:00:00Z"));
+        bill.setSubmittedBy("SYSTEM");
+        bill.setApprovedAt(java.time.Instant.parse("2026-10-01T10:00:00Z"));
+        bill.setApprovedBy("controller.cfo");
+        bill.setApprovedByKind(com.positivity.accounting.internal.enums.VendorBillApproverKind.PERSON);
+        when(readTaxes.findByVendorBillIdOrderByTaxType(billId)).thenReturn(List.of());
+        when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId)).thenReturn(List.of());
+        when(readNames.namesOf(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of("controller.cfo", "Dana Reyes"));
+
+        com.positivity.accounting.internal.dto.VendorBillResponse read = reader.read(bill);
+
+        assertThat(read.getApproval().approvedBy()).isEqualTo("controller.cfo");
+        assertThat(read.getApproval().approvedByName()).isEqualTo("Dana Reyes");
+        assertThat(read.getApproval().submittedBy()).isEqualTo("SYSTEM");
+        assertThat(read.getApproval().submittedByName()).isNull();
+        assertThat(read.getCreatedBy()).isEqualTo("clerk.ana");
+        assertThat(read.getCreatedByName())
+                .as("clerk.ana is not linked: null, never the username")
+                .isNull();
+        assertThat(read.getApproval().toString()).doesNotContain("Dana Reyes");
+        assertThat(read.toString()).doesNotContain("Dana Reyes");
+        org.mockito.Mockito.verify(readNames, org.mockito.Mockito.times(1))
+                .namesOf(org.mockito.ArgumentMatchers.anyCollection());
+    }
+
+    @Test
+    @DisplayName(
+            "#2676 review B2: a rejected bill serves rejectedByName beside rejectedBy with its reason unchanged; an"
+                    + " unlinked rejecter serves null, never the username")
+    void rejectedByName() {
+        VendorBillReader reader = taxReader();
+        when(readNames.namesOf(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of("controller.cfo", "Dana Reyes"));
+
+        VendorBill named = rejected(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b05"), "controller.cfo");
+        VendorBillReview.Rejection rejection = reader.read(named).getRejection();
+        assertThat(rejection.rejectedBy()).isEqualTo("controller.cfo");
+        assertThat(rejection.rejectedByName()).isEqualTo("Dana Reyes");
+        assertThat(rejection.reason()).isEqualTo("Duplicate of INV-77 already paid");
+        assertThat(rejection.toString()).doesNotContain("Dana Reyes");
+
+        VendorBill unlinked = rejected(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b06"), "clerk.ana");
+        VendorBillReview.Rejection byClerk = reader.read(unlinked).getRejection();
+        assertThat(byClerk.rejectedBy()).isEqualTo("clerk.ana");
+        assertThat(byClerk.rejectedByName()).isNull();
+        assertThat(byClerk.reason()).isEqualTo("Duplicate of INV-77 already paid");
+    }
+
+    private VendorBill rejected(UUID id, String rejectedBy) {
+        VendorBill bill = new VendorBill(id);
+        bill.setTotalAmount(new BigDecimal("100.00"));
+        bill.setCurrency("CAD");
+        bill.setCreatedBy("clerk.ana");
+        bill.setStatus(VendorBillStatus.REJECTED);
+        bill.setBillNumber("INV-" + id.toString().substring(32));
+        bill.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        bill.setRejectedAt(java.time.Instant.parse("2026-10-02T09:00:00Z"));
+        bill.setRejectedBy(rejectedBy);
+        bill.setRejectionReason("Duplicate of INV-77 already paid");
+        when(readTaxes.findByVendorBillIdOrderByTaxType(id)).thenReturn(List.of());
+        when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(id)).thenReturn(List.of());
+        return bill;
     }
 }

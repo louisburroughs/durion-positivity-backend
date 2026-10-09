@@ -50,6 +50,14 @@ public record VendorApSettingsResponse(
         @Nullable
         String remitToConfirmedBy,
 
+        @Schema(
+                description = "The display name of the person who confirmed it (\"First Last\"), resolved now from"
+                        + " accounting's people-contact copy; absent when not known, never the sign-in name",
+                example = "Dana Reyes",
+                requiredMode = NOT_REQUIRED)
+        @Nullable
+        String remitToConfirmedByName,
+
         @Schema(description = "When it was confirmed", requiredMode = NOT_REQUIRED) @Nullable
         Instant remitToConfirmedAt,
 
@@ -70,8 +78,8 @@ public record VendorApSettingsResponse(
         boolean acceptTaxOnResaleGoods) {
 
     /** Nothing written yet: no defaults, not held, not reportable. */
-    public static final VendorApSettingsResponse NONE =
-            new VendorApSettingsResponse(null, null, null, null, null, ApHold.NONE, InformationReturn.NONE, false);
+    public static final VendorApSettingsResponse NONE = new VendorApSettingsResponse(
+            null, null, null, null, null, null, ApHold.NONE, InformationReturn.NONE, false);
 
     /**
      * The AP payment hold (#2615). The reason is staff free text handled as CONFIDENTIAL (ADR-0072): served here, never
@@ -103,17 +111,26 @@ public record VendorApSettingsResponse(
             String setBy,
 
             @Schema(
+                    description = "The display name of the person who set the hold (\"First Last\"), resolved now from"
+                            + " accounting's people-contact copy; absent when not known or without a hold, never the"
+                            + " sign-in name",
+                    example = "Dana Reyes",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String setByName,
+
+            @Schema(
                     description = "When the hold was set or its reason last changed; null without a hold",
                     requiredMode = NOT_REQUIRED)
             @Nullable
             Instant setAt) {
 
         /** Not held. */
-        public static final ApHold NONE = new ApHold(false, null, null, null);
+        public static final ApHold NONE = new ApHold(false, null, null, null, null);
 
         @Override
         public String toString() {
-            // The reason is CONFIDENTIAL (ADR-0072): never printed.
+            // The reason and setByName are CONFIDENTIAL (ADR-0072): never printed.
             return "ApHold[onHold=" + onHold + ", setBy=" + setBy + ", setAt=" + setAt + "]";
         }
     }

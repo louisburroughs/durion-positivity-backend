@@ -222,15 +222,17 @@ FROM (VALUES
     ('VENDOR_BILL', 'PURCHASE_PRICE_DIFFERENCE', 'Billed minus received price, US tax on goods, price allowances (5050, AW39)'),
     ('VENDOR_BILL', 'FREIGHT_IN', 'Freight stated separately on a bill (5060, AW39)'),
     ('VENDOR_BILL', 'USE_TAX_PAYABLE', 'Self-assessed (use) tax accrued on an untaxed expense bill where the tax country''s rule says so (2240, AW44)'),
-    ('VENDOR_BILL', 'EXPENSE_SHOP_SUPPLIES', 'Shop supplies (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_SMALL_TOOLS', 'Small tools (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_OFFICE_SUPPLIES', 'Office supplies (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_BUILDING_REPAIRS', 'Building repairs (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_EQUIPMENT_REPAIRS', 'Equipment repairs (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_POSTAGE_SHIPPING', 'Postage and shipping (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_CLEANING_JANITORIAL', 'Cleaning and janitorial (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_STAFF_MEALS', 'Staff meals (AW18, AW30)'),
-    ('VENDOR_BILL', 'EXPENSE_VEHICLE_FUEL', 'Vehicle fuel (AW18, AW30)'),
+    -- The VENDOR_BILL EXPENSE_<CODE> keys (AW18, AW30, AW39): their descriptions are served as the category labels of
+    -- GET /v1/accounting/vendor-bills/expense-categories (#2670), so they are plain labels.
+    ('VENDOR_BILL', 'EXPENSE_SHOP_SUPPLIES', 'Shop supplies'),
+    ('VENDOR_BILL', 'EXPENSE_SMALL_TOOLS', 'Small tools'),
+    ('VENDOR_BILL', 'EXPENSE_OFFICE_SUPPLIES', 'Office supplies'),
+    ('VENDOR_BILL', 'EXPENSE_BUILDING_REPAIRS', 'Building repairs'),
+    ('VENDOR_BILL', 'EXPENSE_EQUIPMENT_REPAIRS', 'Equipment repairs'),
+    ('VENDOR_BILL', 'EXPENSE_POSTAGE_SHIPPING', 'Postage and shipping'),
+    ('VENDOR_BILL', 'EXPENSE_CLEANING_JANITORIAL', 'Cleaning and janitorial'),
+    ('VENDOR_BILL', 'EXPENSE_STAFF_MEALS', 'Staff meals'),
+    ('VENDOR_BILL', 'EXPENSE_VEHICLE_FUEL', 'Vehicle fuel'),
     ('AP_PAYMENT', 'ACCOUNTS_PAYABLE', 'Debit side of a vendor payment: the gross paid, applied or not (2000, AW41)'),
     ('AP_PAYMENT', 'PAYMENT_FEES', 'Debit side of the fee the bank charged on a vendor payment (6030, AW41)')
 ) AS t(category, key_name, description)

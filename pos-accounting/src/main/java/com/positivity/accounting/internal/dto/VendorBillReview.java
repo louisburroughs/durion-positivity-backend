@@ -113,6 +113,15 @@ public final class VendorBillReview {
             @Nullable
             String submittedBy,
 
+            @Schema(
+                    description = "The display name of the person who sent it (\"First Last\"), resolved now from"
+                            + " accounting's people-contact copy; absent when not known and for SYSTEM, never the sign-in"
+                            + " name",
+                    example = "Ana Ortiz",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String submittedByName,
+
             @Schema(description = "Why it was sent", requiredMode = NOT_REQUIRED) @Nullable
             String submissionJustification,
 
@@ -145,8 +154,21 @@ public final class VendorBillReview {
             @Nullable
             Instant approvedAt,
 
-            @Schema(description = "Who approved it; only on an approved bill", requiredMode = NOT_REQUIRED) @Nullable
+            @Schema(
+                    description = "Who approved it (sign-in name, or SYSTEM); only on an approved bill",
+                    example = "controller.cfo",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
             String approvedBy,
+
+            @Schema(
+                    description = "The display name of the approver (\"First Last\"), resolved now from accounting's"
+                            + " people-contact copy; absent when not known, for SYSTEM and before approval, never the"
+                            + " sign-in name",
+                    example = "Dana Reyes",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String approvedByName,
 
             @Schema(description = "The approver's justification; only on an approved bill", requiredMode = NOT_REQUIRED)
             @Nullable
@@ -157,7 +179,18 @@ public final class VendorBillReview {
                     example = "PERSON",
                     requiredMode = NOT_REQUIRED)
             @Nullable
-            VendorBillApproverKind approvedByKind) {}
+            VendorBillApproverKind approvedByKind) {
+
+        @Override
+        public String toString() {
+            // submittedByName and approvedByName are persons' names, CONFIDENTIAL (ADR-0072): never printed.
+            return "Approval[submittedAt=" + submittedAt + ", submittedBy=" + submittedBy + ", requiredTier="
+                    + requiredTier + ", clerkLimit=" + clerkLimit + ", currencyCode=" + currencyCode
+                    + ", proposedClassification=" + proposedClassification + ", proposedDifference="
+                    + proposedDifference + ", approvedAt=" + approvedAt + ", approvedBy=" + approvedBy
+                    + ", approvedByKind=" + approvedByKind + "]";
+        }
+    }
 
     @Schema(
             name = "VendorBillTaxOnResaleOverride",
@@ -183,11 +216,27 @@ public final class VendorBillReview {
             @Schema(description = "When", requiredMode = REQUIRED)
             Instant rejectedAt,
 
-            @Schema(description = "Who", example = "controller.cfo", requiredMode = REQUIRED)
+            @Schema(description = "Who (sign-in name)", example = "controller.cfo", requiredMode = REQUIRED)
             String rejectedBy,
 
+            @Schema(
+                    description = "The display name of the person who rejected or voided it (\"First Last\"),"
+                            + " resolved now from accounting's people-contact copy; absent when not known, never the"
+                            + " sign-in name",
+                    example = "Dana Reyes",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String rejectedByName,
+
             @Schema(description = "The reason given", requiredMode = REQUIRED)
-            String reason) {}
+            String reason) {
+
+        @Override
+        public String toString() {
+            // rejectedByName is a person's name, CONFIDENTIAL (ADR-0072): never printed.
+            return "Rejection[rejectedAt=" + rejectedAt + ", rejectedBy=" + rejectedBy + ", reason=" + reason + "]";
+        }
+    }
 
     @Schema(name = "VendorBillMatchPoints", description = "Points per match criterion (P3)")
     public record Points(

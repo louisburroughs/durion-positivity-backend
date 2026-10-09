@@ -1651,6 +1651,91 @@ country.
 | PUT | `/v1/accounting/vendors/{vendorId}/ap-settings` `{…, acceptTaxOnResaleGoods?}` | `accounting:ap_approval_policy:manage` | a boolean: absent unchanged, null 400 `VALIDATION_ERROR` (`fieldErrors[acceptTaxOnResaleGoods]`); in the fingerprint (409 `IDEMPOTENCY_CONFLICT`); each change one `AP_VENDOR_SETTINGS_SET` row |
 | GET | `/v1/accounting/vendors/{vendorId}` | `accounting:ap:view` | `apSettings.acceptTaxOnResaleGoods` |
 
+## AP reads: expense categories, pay-from accounts and actor names (CAP:550, #2670)
+
+Ruling 6079195896 on louisburroughs/durion-positivity-frontend#464 (rows 2, 11, 15, 17; Q1 C, Q4): the server decides
+which expense keys and bank accounts an approver or payer may choose (P7), and the AP reads name people instead of
+showing sign-in names (P8, ADR-0064). Nothing here posts, and no decision, guard, permission or error code changes.
+
+| Method | Path | Permission | Response and codes |
+| --- | --- | --- | --- |
+| GET | `/v1/accounting/vendor-bills/expense-categories` (`listVendorBillExpenseCategories`) | `accounting:ap:view` | 200 `{asOf, categories: [{mappingKey, label, accountNumber, accountName}]}`; 401; 403 `FORBIDDEN` |
+| GET | `/v1/accounting/ap/pay-from-accounts` (`listApPayFromAccounts`) | `accounting:ap:pay` | 200 `{asOf, currencyCode, defaultBankAccountId, accounts: [{bankAccountId, accountNumber, accountName, bankName, accountMask}]}`; 401; 403 `FORBIDDEN` |
+
+**A null field is absent.** The module serializes with `spring.jackson.default-property-inclusion: non_null`, so every
+field this section calls null (`label`, `accountNumber` / `accountName`, `defaultBankAccountId`, `bankName`,
+`accountMask`, every `…ByName` and `actorName`) is omitted from the JSON when it has no value, and the specs describe
+it as absent. Clients treat a missing field as null.
+
+- **Expense categories.** The active `VENDOR_BILL` keys `EXPENSE_<CODE>` (the prefix, a code after it, `isActive`),
+  tested by `VendorBillExpenseKeys`, the same test `PUT /v1/accounting/vendors/{vendorId}/ap-settings` applies to
+  `defaultExpenseMappingKey`: a listed key is accepted there, any other is 400 `fieldErrors[defaultExpenseMappingKey]`.
+  `label` is the key's description (null without one); `accountNumber` / `accountName` are the account the key's
+  category-default mapping resolves to at the start of `asOf`, the tenant's business date, both null when no mapping is
+  effective that day (the key is still listed; an approval naming it answers 422 `GL_MAPPING_NOT_CONFIGURED`). Order:
+  label case-insensitively (a null label sorts as its key), then key. The path's literal segment is mapped ahead of
+  `{billId}`. The template's nine keys carry plain labels ("Shop supplies", ..., "Vehicle fuel") in
+  `R__seed_reference_accounting.sql`, which template provisioning copies to new tenants. Template application is
+  add-only, so `V26__vendor_bill_expense_key_labels.sql` gives the tenants provisioned before the same labels, but only
+  where a key's description still equals the old seeded text ("Shop supplies (AW18, AW30)", ...): a description a
+  tenant edited is never touched, and keys and mappings do not change.
+- **Pay-from accounts.** Exactly the accounts `POST /v1/accounting/ap/payments` would accept now: `ApPayFromAccounts`
+  holds the eligibility rule of slot 1c (the section above), and both the pay command and this read call it. `asOf` is
+  the business date the payment would execute on, `currencyCode` the functional currency, `defaultBankAccountId` the
+  single eligible account (the one an omitted `bankAccountId` resolves to), else null. `bankName` and `accountMask`
+  come from the bank-account profile (`BankAccountLabels`, the bank reconciliation read model), null without one; a
+  full bank account number is never served. Accounts are ordered by account number. An empty list means no account is
+  set up (a payment answers 400 `fieldErrors[bankAccountId]`). The read is informational: the payment still checks
+  eligibility when it executes.
+- **Actor names.** A nullable display name beside every AP actor: `ap-approval-policy` `history[].changedByName`; the
+  bill read's `createdByName`, `approval.submittedByName`, `approval.approvedByName` and `rejection.rejectedByName`
+  (every response built by `VendorBillReader.read`, the decision commands' included); the vendor read's
+  `apSettings.remitToConfirmedByName` and `apSettings.apHold.setByName` (`getVendorById`, `confirmVendorRemitTo`,
+  `setVendorApSettings`). The name is "First Last" with blanks dropped and trimmed (the #2481 rule), resolved at read
+  time, one query per response (`ActorDisplayNames`): username, through its `ACTIVE` link, to its person. It is null
+  when the username has no `ACTIVE` link, the person is not in the copy or was deleted, both names are blank, or the
+  actor is `SYSTEM` (a kind, rendered "Automatic"). The username is never the fallback, and stays in the API for audit.
+- **Petty-expense category history (C.1, S21 ruling Q2).** `PettyExpenseCategoryHistoryItem.actorName` beside
+  `actor`, on `GET /v1/accounting/petty-expense-categories` and on the create, update, deactivate and remap
+  responses, a replayed `requestId` included. Same resolver and rules; one lookup per response across every
+  category's rows. The name is resolved when the response is built: the kept replay copy (`response_json`) never
+  holds one, so a replay serves the person's current name.
+- **The people-contact copy** (V25, ADR-0044 §6; the pos-location / pos-customer precedent). pos-accounting never
+  joins another database and never calls pos-people-contact or pos-security-service for a name.
+  `PeopleContactEventsListener` consumes `people-contact.events.v1`
+  (`pos.accounting.kafka.people-contact-events-topic`; consumer group `pos-accounting-people-contact-events`, set by
+  `pos.accounting.kafka.people-contact-events-consumer-group`):
+  `person.updated` / `.person.deleted` into `ext_people_contact_person (person_id, first_name, last_name, deleted)` and
+  `user-person-link.updated` / `.removed` into `ext_people_contact_user_link (link_id, person_id, username, status)`;
+  no preferred name, contact point or address (ADR-0072 minimisation). It holds no repository: `PeopleContactReplica`
+  applies each fact by aggregate id and the envelope's `aggregateVersion` (an older fact changes nothing, an equal one
+  applies), tombstones on removal (a removed link keeps its row with status `REMOVED` and the fact's version; a deleted
+  person keeps its row with `deleted` set, names cleared, and the fact's version, so a late older update cannot bring
+  either back), and records every eventId, ignored types included, in `processed_events` (owner
+  `people-contact`). `PeopleContactManifestListener` compares each `people-contact.manifest.v1` window with that
+  ledger and sends `people-contact.outbox.replay-requested` on `people-contact.commands.v1` for a drifted tenant and
+  window. Both tables are tenant-scoped under RLS (ADR-0062).
+- **First fill and its gap.** The events group reads from the earliest offset (`auto.offset.reset=earliest` on the
+  listener, as `TenantEventsListener` and the pos-location precedent do), so the facts still on the topic when the
+  group first runs are applied once. `people-contact.events.v1` keeps 7 days (`retention.ms` 604800000), and a
+  manifest window is published once, so a person or link not changed in the 7 days before the deploy (a long-standing
+  `controller.cfo`, say) is never in the copy, and its name stays null until that person or link changes. **Rollout
+  step (manual, once per tenant, by the operator):** ask pos-people-contact to re-send its outbox from an old date.
+  - Topic `people-contact.commands.v1`; header `tenantId` = the tenant's UUID as UTF-8 text (`TenantHeaders.KAFKA_TENANT_ID`;
+    pos-people-contact replays only the bound tenant's rows); any key (the manifest listeners use the `since` value).
+  - Value: `{"commandType":"people-contact.outbox.replay-requested","payload":{"since":"<ISO-8601 instant>"}}`, with
+    no `until`, so every outbox row of the tenant created at or after `since` is re-queued and re-published
+    (`PeopleContactCommandListener.handleOutboxReplayRequested` → `OutboxEventRepository.markForReplaySince`).
+  - pos-people-contact refuses a `since` older than `pos.people-contact.outbox.replay.max-lookback` (default `P30D`,
+    environment `POS_PEOPLE_CONTACT_OUTBOX_REPLAY_MAX_LOOKBACK`) and logs "exceeds max lookback". For a tenant whose
+    people predate that, raise the lookback on pos-people-contact for the rollout (for example `P3650D`), send the
+    command with `since` at or before the tenant's first person, then restore the default.
+  - The re-published facts reach every consumer of the topic; each skips the eventIds it already processed, and
+    accounting applies the rest by version. Nothing in pos-accounting sends this command automatically.
+- **Data classification (ADR-0072).** First and last names and every `…ByName` field are CONFIDENTIAL: served, never
+  logged and never a metric tag, and left out of every `toString`. `accountMask` is a CONFIDENTIAL masked derivative,
+  served and never logged. Usernames are INTERNAL, as the `…By` fields already are.
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,

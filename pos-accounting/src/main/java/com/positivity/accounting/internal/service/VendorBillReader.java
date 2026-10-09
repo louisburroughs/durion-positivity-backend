@@ -36,6 +36,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
@@ -124,6 +125,7 @@ public class VendorBillReader {
     private final GLMappingResolver glMappingResolver;
     private final GLAccountRepository glAccounts;
     private final VendorBillPurchaseTax purchaseTax;
+    private final ActorDisplayNames actorNames;
 
     /** The full read of one bill, for the caller in the security context. */
     @Transactional(readOnly = true)
@@ -153,6 +155,9 @@ public class VendorBillReader {
         checks.add(withinClerkLimit(bill.getStatus(), bill.getTotalAmount(), settings, ledgerCurrency.code()));
         checks.add(vendorApHold(bill.getStatus(), openAmount, () -> vendorCopies.apHold(bill.getVendorId())));
         checks.add(taxOnResaleGoods(bill, stored));
+        // The bill's actors' names in one query (#2670); null when not known, never the username.
+        Map<String, String> names = actorNames.namesOf(
+                Arrays.asList(bill.getCreatedBy(), bill.getSubmittedBy(), bill.getApprovedBy(), bill.getRejectedBy()));
 
         return VendorBillResponse.builder()
                 .vendorBillId(billId)
@@ -172,9 +177,10 @@ public class VendorBillReader {
                 .paymentTransactionId(bill.getPaymentTransactionId())
                 .createdAt(bill.getCreatedAt())
                 .createdBy(bill.getCreatedBy())
+                .createdByName(ActorDisplayNames.nameOf(names, bill.getCreatedBy()))
                 .channel(channel)
-                .approval(approval(bill, approvedOnce, settings, ledgerCurrency.code()))
-                .rejection(rejection(bill))
+                .approval(approval(bill, approvedOnce, settings, ledgerCurrency.code(), names))
+                .rejection(rejection(bill, names))
                 .statusExplanation(statusExplanation(bill))
                 .openAmount(openAmount)
                 .match(latest.map(VendorBillReader::match).orElse(null))
@@ -367,7 +373,11 @@ public class VendorBillReader {
     // ---- the bill's blocks ----------------------------------------------------------------------------------
 
     private static VendorBillReview.@Nullable Approval approval(
-            VendorBill bill, boolean approvedOnce, ApApprovalPolicy.Settings settings, String currencyCode) {
+            VendorBill bill,
+            boolean approvedOnce,
+            ApApprovalPolicy.Settings settings,
+            String currencyCode,
+            Map<String, String> names) {
         if (bill.getSubmittedAt() == null && !approvedOnce) {
             return null;
         }
@@ -385,6 +395,7 @@ public class VendorBillReader {
         return new VendorBillReview.Approval(
                 bill.getSubmittedAt(),
                 bill.getSubmittedBy(),
+                ActorDisplayNames.nameOf(names, bill.getSubmittedBy()),
                 bill.getSubmissionJustification(),
                 settings.tier(bill.getTotalAmount()),
                 settings.clerkApprovalLimit(),
@@ -393,16 +404,21 @@ public class VendorBillReader {
                 difference,
                 approvedOnce ? bill.getApprovedAt() : null,
                 approvedOnce ? bill.getApprovedBy() : null,
+                approvedOnce ? ActorDisplayNames.nameOf(names, bill.getApprovedBy()) : null,
                 approvedOnce ? bill.getApprovalJustification() : null,
                 approvedOnce ? bill.getApprovedByKind() : null);
     }
 
-    private static VendorBillReview.@Nullable Rejection rejection(VendorBill bill) {
+    private static VendorBillReview.@Nullable Rejection rejection(VendorBill bill, Map<String, String> names) {
         boolean decided = bill.getStatus() == VendorBillStatus.REJECTED || bill.getStatus() == VendorBillStatus.VOIDED;
         if (!decided || bill.getRejectedAt() == null) {
             return null;
         }
-        return new VendorBillReview.Rejection(bill.getRejectedAt(), bill.getRejectedBy(), bill.getRejectionReason());
+        return new VendorBillReview.Rejection(
+                bill.getRejectedAt(),
+                bill.getRejectedBy(),
+                ActorDisplayNames.nameOf(names, bill.getRejectedBy()),
+                bill.getRejectionReason());
     }
 
     private static @Nullable String statusExplanation(VendorBill bill) {

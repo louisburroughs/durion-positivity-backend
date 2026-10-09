@@ -16,6 +16,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -116,6 +117,16 @@ public class VendorBillResponse {
     @Schema(description = "Created by user", example = "system", requiredMode = NOT_REQUIRED)
     @JsonProperty("createdBy")
     private String createdBy;
+
+    @Schema(
+            description = "The display name of the person who created the bill (\"First Last\"), resolved now from"
+                    + " accounting's people-contact copy; absent when not known or created by the system, never the"
+                    + " sign-in name",
+            example = "Ben Okafor",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("createdByName")
+    @ToString.Exclude
+    private @Nullable String createdByName;
 
     @Schema(description = "Where the bill came from", example = "SUPPLIER_CONNECTION", requiredMode = NOT_REQUIRED)
     @JsonProperty("channel")
