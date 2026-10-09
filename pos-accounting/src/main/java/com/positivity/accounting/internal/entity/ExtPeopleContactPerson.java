@@ -4,6 +4,7 @@ import com.positivity.shared.id.AssignedIdentifier;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -14,6 +15,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Accounting's copy of one pos-people-contact person (AP reads #2670; ADR-0044 §6), written only by {@code
@@ -22,6 +25,7 @@ import lombok.ToString;
  * beside an AP actor's username. The names are CONFIDENTIAL, so {@code toString} leaves them out.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Data
 @EqualsAndHashCode(callSuper = false, onlyExplicitlyIncluded = true)
 @NoArgsConstructor
@@ -49,6 +53,7 @@ public class ExtPeopleContactPerson extends TenantScopedEntity {
     private long aggregateVersion;
 
     /** When this copy was last written. */
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }

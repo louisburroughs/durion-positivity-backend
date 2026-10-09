@@ -4,6 +4,7 @@ import com.positivity.shared.id.AssignedIdentifier;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -13,6 +14,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Accounting's copy of one pos-people-contact user-person link (AP reads #2670; ADR-0044 §6), written only by {@code
@@ -21,6 +24,7 @@ import lombok.NoArgsConstructor;
  * username is INTERNAL (ADR-0072), as the AP actor fields that carry it already are.
  */
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Data
 @EqualsAndHashCode(callSuper = false, onlyExplicitlyIncluded = true)
 @NoArgsConstructor
@@ -52,6 +56,7 @@ public class ExtPeopleContactUserLink extends TenantScopedEntity {
     private long aggregateVersion;
 
     /** When this copy was last written. */
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }
