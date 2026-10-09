@@ -313,7 +313,7 @@ class TaxRegistrationServiceImplTest {
             createdWith(service, requestId);
 
             TaxRegistrationService.WriteResult result = service.create(new TaxRegistrationCreateRequest(
-                    "ZZ", "R_1", "zz 12345", JAN_1, null, "Registered with the authority, again", requestId));
+                    "ZZ", "R_1", "zz 12345", JAN_1, null, "  Registered with the authority  ", requestId));
 
             assertThat(result.replayed()).isTrue();
             assertThat(result.registration().registrationId())
@@ -325,14 +325,16 @@ class TaxRegistrationServiceImplTest {
         }
 
         @Test
-        @DisplayName("[M] the same requestId with another number or other dates is 409 IDEMPOTENCY_CONFLICT, never"
-                + " echoing the number")
+        @DisplayName("[M] the same requestId with another justification, number or dates is 409 IDEMPOTENCY_CONFLICT,"
+                + " never echoing the number")
         void sameRequestIdOtherBody() {
             TaxRegistrationServiceImpl service = zz();
             UUID requestId = UUID.randomUUID();
             createdWith(service, requestId);
 
             for (TaxRegistrationCreateRequest other : List.of(
+                    new TaxRegistrationCreateRequest(
+                            "ZZ", "R_1", ZZ_NUMBER, JAN_1, null, "Another reason for the same number", requestId),
                     new TaxRegistrationCreateRequest(
                             "ZZ", "R_1", "ZZ54321", JAN_1, null, "Registered with the authority", requestId),
                     new TaxRegistrationCreateRequest(

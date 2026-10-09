@@ -106,8 +106,9 @@ public class TaxExceptionHandler {
     }
 
     /**
-     * A tax-registration write that overlaps another registration or read a stale version (CAP:550 S32c): 409 with
-     * {@code TAX_REGISTRATION_OVERLAP} or {@code OPTIMISTIC_LOCK}, which the pos-accounting front door relays.
+     * A tax-registration write that overlaps another registration, read a stale version, or reused a request id for
+     * another request (CAP:550 S32c): 409 with {@code TAX_REGISTRATION_OVERLAP}, {@code OPTIMISTIC_LOCK} or {@code
+     * IDEMPOTENCY_CONFLICT}, which the pos-accounting front door relays.
      */
     @ExceptionHandler(TaxRegistrationConflictException.class)
     public ResponseEntity<ApiError> handleRegistrationConflict(

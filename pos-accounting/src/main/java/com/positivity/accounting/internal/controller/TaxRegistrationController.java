@@ -205,6 +205,10 @@ public class TaxRegistrationController {
             description = "TAX_REGISTRATION_OVERLAP, OPTIMISTIC_LOCK or IDEMPOTENCY_CONFLICT, relayed from pos-tax",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
+            responseCode = "422",
+            description = "TAX_JURISDICTION_NOT_CONFIGURED or TAX_REGIME_NOT_DECLARED, relayed from pos-tax",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
             responseCode = "503",
             description = "SERVICE_UNAVAILABLE: pos-tax cannot be reached; retry after Retry-After seconds",
             content = @Content(schema = @Schema(implementation = ApiError.class)))

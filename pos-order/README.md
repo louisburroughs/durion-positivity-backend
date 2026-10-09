@@ -226,6 +226,8 @@ drawer fields to show; it never calls pos-tax for registrations (ADR-0071 §7, A
 - `TaxRegistrationReplica.inEffectOn(countryCode, regime, businessDate)` is the as-of read (both ends inclusive,
   AW49). An empty answer means the copy holds none in effect that day; a caller that must act on absence (S32d)
   retries or holds rather than reading "not registered" from a copy that may not have caught up.
+- `TaxRegistrationReplica.inEffectFor(countryCode, businessDate)` lists every registration of the country in effect
+  that day, in regime order (at most one per regime): the regimes a drawer may offer (S32d), under the same caveat.
 - The copy keeps no registration number: the drawer needs only whether a regime is registered on a date.
 
 ## Purchase order transmission timeline (issue #1638)

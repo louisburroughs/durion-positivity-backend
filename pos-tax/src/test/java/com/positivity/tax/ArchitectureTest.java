@@ -206,14 +206,17 @@ public class ArchitectureTest {
                     + " auditing provider onto wall time");
 
     /**
-     * CAP:550 S32c: only the registry's service builds a {@code tax.registration.changed} fact or sets a stored
-     * registration number, so both happen only after {@code RegistrationNumberShapes.wellFormed} has accepted the
-     * number (ADR-0072 Decision 1, condition a).
+     * CAP:550 S32c: only the registry's service builds a {@code tax.registration.changed} fact or puts a number into a
+     * registration (setter, builder or all-args constructor), so both happen only after {@code
+     * RegistrationNumberShapes.wellFormed} has accepted the number (ADR-0072 Decision 1, condition a).
      */
     @ArchTest
     static final ArchRule registration_facts_and_numbers_are_written_only_by_the_registry = noClasses()
             .that()
             .doNotHaveFullyQualifiedName("com.positivity.tax.internal.service.TaxRegistrationServiceImpl")
+            // The entity's own Lombok builder calls its all-args constructor; it is not a writer.
+            .and()
+            .doNotHaveFullyQualifiedName("com.positivity.tax.internal.entity.TaxRegistration$TaxRegistrationBuilder")
             .should()
             .callConstructor(
                     com.positivity.domainevents.tax.TaxRegistrationChangedV1.class,
@@ -230,5 +233,25 @@ public class ArchitectureTest {
                     java.time.Instant.class)
             .orShould()
             .callMethod(com.positivity.tax.internal.entity.TaxRegistration.class, "setRegistrationNumber", String.class)
+            .orShould()
+            .callMethod(
+                    com.positivity.tax.internal.entity.TaxRegistration.TaxRegistrationBuilder.class,
+                    "registrationNumber",
+                    String.class)
+            .orShould()
+            .callConstructor(
+                    com.positivity.tax.internal.entity.TaxRegistration.class,
+                    UUID.class,
+                    String.class,
+                    String.class,
+                    String.class,
+                    String.class,
+                    java.time.LocalDate.class,
+                    java.time.LocalDate.class,
+                    long.class,
+                    java.time.Instant.class,
+                    String.class,
+                    java.time.Instant.class,
+                    String.class)
             .because("a registration number is stored or published only after its regime's shape check (S32c)");
 }

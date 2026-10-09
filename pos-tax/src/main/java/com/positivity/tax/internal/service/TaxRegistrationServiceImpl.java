@@ -244,7 +244,11 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
         }
     }
 
-    /** The regime as the country's profile declares it; a country without a profile or another regime is 400. */
+    /**
+     * The regime as the country's profile declares it: a country without a profile is 422 {@code
+     * TAX_JURISDICTION_NOT_CONFIGURED}, and a regime the profile does not declare is 422 {@code
+     * TAX_REGIME_NOT_DECLARED}.
+     */
     private RegimeEntry declaredRegime(String countryCode, String regime) {
         TaxCountryProfiles.CountryTaxProfile profile = profiles.profile(countryCode)
                 .orElseThrow(() -> unprocessable(
@@ -376,7 +380,8 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
         boolean same = TaxRegistrationHistory.CREATE.equals(applied.getChangeType())
                 && countryCode.equals(first.countryCode())
                 && regime.equals(first.regime())
-                && first.sameChange(number, request.effectiveFrom(), request.effectiveTo());
+                && first.sameChange(number, request.effectiveFrom(), request.effectiveTo())
+                && sameJustification(applied, request.justification());
         if (!same) {
             throw TaxRegistrationConflictException.idempotencyConflict();
         }
@@ -392,7 +397,8 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
         Snapshot first = readSnapshot(applied.getNewState());
         boolean same = TaxRegistrationHistory.UPDATE.equals(applied.getChangeType())
                 && registrationId.equals(applied.getRegistrationId())
-                && first.sameChange(number, request.effectiveFrom(), request.effectiveTo());
+                && first.sameChange(number, request.effectiveFrom(), request.effectiveTo())
+                && sameJustification(applied, request.justification());
         if (!same) {
             throw TaxRegistrationConflictException.idempotencyConflict();
         }
@@ -503,10 +509,17 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
     }
 
     /**
-     * The history row, flushed now: a concurrent request with the same id loses on {@code
-     * uq_tax_registration_history_request} and answers 409 {@code IDEMPOTENCY_CONFLICT}; retried, it gets the first
-     * result.
+     * The history row, flushed now. Two identical requests at the same moment never reach this key: two creates meet
+     * the exclusion constraint first (409 {@code TAX_REGISTRATION_OVERLAP}) and two changes the version (409 {@code
+     * OPTIMISTIC_LOCK}); a resend afterwards returns the first result. {@code uq_tax_registration_history_request}
+     * answers 409 {@code IDEMPOTENCY_CONFLICT} only when one request id is used for two different registrations at the
+     * same moment.
      */
+    /** The justification is part of the request's payload (ADR-0017 §2); the history keeps it trimmed. */
+    private static boolean sameJustification(TaxRegistrationHistory applied, String justification) {
+        return applied.getJustification().equals(justification.trim());
+    }
+
     private void saveHistory(TaxRegistrationHistory change) {
         try {
             history.saveAndFlush(change);

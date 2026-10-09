@@ -60,8 +60,11 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
   `fieldErrors[registrationNumber]` for a number that does not match the regime's shape (never echoed or logged,
   nothing stored or queued). Then the `requestId` (ADR-0017 §2): the same request again returns 200 with the
   **first result** (the registration as that write left it, from its history row); the id reused for another
-  operation, registration, number or dates is 409 `IDEMPOTENCY_CONFLICT`, and so is a concurrent request with the same
-  id (retried, it gets the first result). Last, 409 `OPTIMISTIC_LOCK` and 409 `TAX_REGISTRATION_OVERLAP`. Success: 201
+  operation, registration, number, dates or justification is 409 `IDEMPOTENCY_CONFLICT`. Two identical requests at
+  the same moment are settled before the request id is: two creates by the exclusion constraint (409
+  `TAX_REGISTRATION_OVERLAP`), two changes by the version (409 `OPTIMISTIC_LOCK`); resent afterwards, either returns the
+  first result. The request-id key itself answers 409 `IDEMPOTENCY_CONFLICT` only when one id is used for two different
+  registrations at the same moment. Last, 409 `OPTIMISTIC_LOCK` and 409 `TAX_REGISTRATION_OVERLAP`. Success: 201
   on create, 200 on change. These endpoints are kept out of the gateway aggregate (`AGGREGATE_EXCLUDED_MODULES`) and
   pos-mcp-server's tools (`excluded-write-path-patterns`).
 

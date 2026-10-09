@@ -104,8 +104,8 @@ public class AccountingExceptionHandler {
     }
 
     /**
-     * pos-tax refused a tax-registration write with 400, 404 or 409 (CAP:550 S32c; AW59): its status, code, message
-     * and field errors are relayed unchanged; the correlation id is this request's (ADR-0017 §4).
+     * pos-tax refused a tax-registration write with 400, 404, 409 or 422 (CAP:550 S32c; AW59): its status, code,
+     * message and field errors are relayed unchanged; the correlation id is this request's (ADR-0017 §4).
      */
     @ExceptionHandler(TaxRegistrationRelayException.class)
     public ResponseEntity<ApiError> handleTaxRegistrationRelay(

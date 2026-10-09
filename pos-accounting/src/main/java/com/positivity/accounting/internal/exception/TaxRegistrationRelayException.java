@@ -4,9 +4,10 @@ import com.positivity.shared.error.ApiError;
 import org.jspecify.annotations.NonNull;
 
 /**
- * pos-tax refused a tax-registration write with 400, 404 or 409 (CAP:550 S32c; AW59): the front door relays its
- * status and its error envelope unchanged, {@code TAX_REGISTRATION_OVERLAP} and {@code VALIDATION_ERROR} with
- * {@code fieldErrors[registrationNumber]} included. pos-tax never puts a number in that envelope.
+ * pos-tax refused a tax-registration write with 400, 404, 409 or 422 (CAP:550 S32c; AW59): the front door relays its
+ * status and its error envelope's code, message and field errors, {@code TAX_REGISTRATION_OVERLAP}, {@code
+ * IDEMPOTENCY_CONFLICT}, {@code TAX_REGIME_NOT_DECLARED} and {@code VALIDATION_ERROR} with {@code
+ * fieldErrors[registrationNumber]} included. pos-tax never puts a number in that envelope.
  */
 public class TaxRegistrationRelayException extends RuntimeException {
 
