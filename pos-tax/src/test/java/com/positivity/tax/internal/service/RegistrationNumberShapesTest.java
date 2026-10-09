@@ -343,4 +343,31 @@ class RegistrationNumberShapesTest {
         assertThat(RegistrationNumberShapes.normalize("\t ab-c d\u00e9\u00a0 ")).isEqualTo("ABCD\u00e9\u00a0");
         assertThat(RegistrationNumberShapes.normalize("a\u2010b")).isEqualTo("A\u2010B");
     }
+
+    /**
+     * CAP:550 S32d AC 25: the normalisation matrix. The SAME rows, inputs and outputs, run in pos-tax's
+     * {@code RegistrationNumberShapesTest} and pos-order's {@code SupplierRegistrationNumbersTest}, so the two copies of
+     * the rule cannot drift (Order acknowledgement 2026-10-08). Changing one table without the other is a review
+     * failure.
+     */
+    static Stream<Arguments> normalisationMatrix() {
+        return Stream.of(
+                Arguments.of(" 000 000 000-rt-0001 ", "000000000RT0001"),
+                Arguments.of("000 000 000 rt 0001", "000000000RT0001"),
+                Arguments.of("000000000rt0001", "000000000RT0001"),
+                Arguments.of("\t000000000RT0001\n", "000000000RT0001"),
+                Arguments.of("000000000\tRT0001", "000000000\tRT0001"),
+                Arguments.of("000000000\u00A0RT0001", "000000000\u00A0RT0001"),
+                Arguments.of("\u2003000000000RT0001", "\u2003000000000RT0001"),
+                Arguments.of("000000000\u2013RT0001", "000000000\u2013RT0001"),
+                Arguments.of("\u00e9-z", "\u00e9Z"),
+                Arguments.of("- -", ""));
+    }
+
+    @ParameterizedTest(name = "[{index}] normalize")
+    @MethodSource("normalisationMatrix")
+    @DisplayName("CAP:550 S32d AC 25: the normalisation matrix shared with pos-order")
+    void normalisationMatrixSharedWithPosOrder(String input, String expected) {
+        assertThat(RegistrationNumberShapes.normalize(input)).isEqualTo(expected);
+    }
 }

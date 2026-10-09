@@ -92,6 +92,7 @@ class VendorBillAutoApprovalTest {
                         new VendorBillPostingService.PostingDate(INVOICE_DATE, VendorBillPostingDateRule.BILL_DATE));
         when(postingService.post(any(), any(), any(), anyString())).thenAnswer(inv -> posting());
         when(bills.save(any(VendorBill.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(postingService.taxPlan(any())).thenReturn(VendorBillTaxSplit.Plan.NONE);
     }
 
     private void limits(String clerk, String auto) {
@@ -295,6 +296,75 @@ class VendorBillAutoApprovalTest {
         assertThat(bill.getApprovedByKind()).isNull();
         verify(bills, never()).save(any());
         verify(auditLogs, never()).save(any());
+    }
+
+    // ---- CAP:550 S32d item 10 (AW51, AW53) ------------------------------------------------------------------
+
+    private void taxPlan(VendorBillTaxSplit.Withheld withheld) {
+        when(postingService.taxPlan(any()))
+                .thenReturn(new VendorBillTaxSplit.Plan(
+                        true,
+                        List.of(new VendorBillTaxSplit.Item(
+                                withheld == VendorBillTaxSplit.Withheld.TAX_SPLIT_MISSING ? null : "GST",
+                                null,
+                                new BigDecimal("12.50"),
+                                null,
+                                withheld))));
+    }
+
+    @Test
+    @DisplayName("S32d AC 10: a recovery-enabled tenant's bill with a tax total and no split stays AWAITING_APPROVAL,"
+            + " skipped with TAX_SPLIT_MISSING")
+    void unsplitTaxSkips() {
+        billed("250.00", true);
+        taxPlan(VendorBillTaxSplit.Withheld.TAX_SPLIT_MISSING);
+
+        assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
+
+        assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.AWAITING_APPROVAL);
+        assertThat(onlyAudit().getNewValue()).contains("code=TAX_SPLIT_MISSING");
+        verify(postingService, never()).post(any(), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("S32d AC 11: a bill whose vendor lacks the supplier registration is held, skipped with"
+            + " SUPPLIER_REGISTRATION_MISSING")
+    void missingEvidenceSkips() {
+        billed("250.00", true);
+        taxPlan(VendorBillTaxSplit.Withheld.SUPPLIER_REGISTRATION_MISSING);
+
+        assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
+
+        assertThat(onlyAudit().getNewValue()).contains("code=SUPPLIER_REGISTRATION_MISSING");
+        verify(postingService, never()).post(any(), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("S32d (AW49): pos-tax unable to answer holds the bill (SERVICE_UNAVAILABLE), never read as off")
+    void taxProfileUnavailableSkips() {
+        billed("250.00", true);
+        when(postingService.taxPlan(any()))
+                .thenThrow(new com.positivity.accounting.internal.exception.TaxServiceUnavailableException(
+                        "The tax configuration is unavailable"));
+
+        assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isFalse();
+
+        assertThat(onlyAudit().getNewValue()).contains("code=SERVICE_UNAVAILABLE");
+        verify(postingService, never()).post(any(), any(), any(), anyString());
+    }
+
+    @Test
+    @DisplayName("S32d: a withheld type that needs no person (NOT_RECOVERABLE) still approves automatically, and the"
+            + " audit records the recovery")
+    void notRecoverableStillApproves() {
+        billed("250.00", true);
+        taxPlan(VendorBillTaxSplit.Withheld.NOT_RECOVERABLE);
+        when(postingService.recoveryAudit(bill.getVendorBillId()))
+                .thenReturn("inputTaxRecovery=GST:12.50:NOT_RECOVERABLE");
+
+        assertThat(autoApproval.approveIfEligible(bill, evidence, 95)).isTrue();
+
+        assertThat(onlyAudit().getNewValue()).contains("inputTaxRecovery=GST:12.50:NOT_RECOVERABLE");
     }
 
     @Test

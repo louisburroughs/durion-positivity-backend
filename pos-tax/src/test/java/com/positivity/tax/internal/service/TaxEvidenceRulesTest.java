@@ -177,6 +177,26 @@ class TaxEvidenceRulesTest {
         assertThat(response.rules()).isEmpty();
         assertThat(response.currency()).isNull();
         assertThat(response.source()).isEqualTo("STUB");
+        assertThat(response.supplierRegistrationRegime()).isNull();
+    }
+
+    @Test
+    @DisplayName("CAP:550 S32d: the read names the country's configured supplier regime, the registration a bill's"
+            + " vendor must hold (AW53)")
+    void readNamesTheSupplierRegime() {
+        Map<String, String> properties = new LinkedHashMap<>(TaxProfileFixtures.MADE_UP_COUNTRY);
+        properties.putAll(TaxProfileFixtures.MADE_UP_COUNTRY_STUBS);
+
+        assertThat(rules(properties).read("ZZ", LocalDate.parse("2026-01-01")).supplierRegistrationRegime())
+                .isEqualTo("R_1");
+        assertThat(rules(stubsWith(p -> {}))
+                        .read("CA", LocalDate.parse("2026-08-27"))
+                        .supplierRegistrationRegime())
+                .isEqualTo("GST_HST");
+        assertThat(rules(stubsWith(p -> p.remove("pos.tax.countries.CA.supplier-registration-regime")))
+                        .read("CA", LocalDate.parse("2026-08-27"))
+                        .supplierRegistrationRegime())
+                .isNull();
     }
 
     @Test

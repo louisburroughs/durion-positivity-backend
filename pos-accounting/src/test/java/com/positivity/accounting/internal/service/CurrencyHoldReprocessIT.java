@@ -232,7 +232,12 @@ class CurrencyHoldReprocessIT {
                         "clerk-1",
                         null,
                         null,
-                        CLOSED_AT.minusSeconds(3600))));
+                        CLOSED_AT.minusSeconds(3600),
+                        null,
+                        List.of(),
+                        null,
+                        null,
+                        null)));
     }
 
     private RegisterSessionClosedV1 eurShortage() {

@@ -3,10 +3,18 @@ package com.positivity.accounting.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -71,7 +79,20 @@ public final class VendorBillCommands {
                             + " gross - (net + tax) exceeds the rounding tolerance",
                     requiredMode = NOT_REQUIRED)
             @Valid
-            VendorBillReview.@Nullable Difference difference) {}
+            VendorBillReview.@Nullable Difference difference,
+
+            @ArraySchema(
+                    arraySchema =
+                            @Schema(
+                                    description = "The tax the vendor's document states, by tax type, copied from the"
+                                            + " document (CAP:550 S32d, AW51); replaces the tax by type stored on the"
+                                            + " bill and must add up to its stated tax, else 422"
+                                            + " AP_BILL_TAX_SPLIT_MISMATCH. Omit it to keep what the bill states",
+                                    requiredMode = NOT_REQUIRED),
+                    schema = @Schema(implementation = TaxAmount.class))
+            @Valid
+            @Nullable
+            List<@NonNull TaxAmount> taxByType) {}
 
     @Schema(name = "VendorBillRejectRequest", description = "Reject a bill awaiting approval")
     public record Reject(
@@ -139,7 +160,47 @@ public final class VendorBillCommands {
                             + " gross - (net + tax) exceeds the rounding tolerance",
                     requiredMode = NOT_REQUIRED)
             @Valid
-            VendorBillReview.@Nullable Difference difference) {}
+            VendorBillReview.@Nullable Difference difference,
+
+            @ArraySchema(
+                    arraySchema =
+                            @Schema(
+                                    description =
+                                            "The tax the vendor's document states, by tax type, ACCEPT only, copied from"
+                                                    + " the document (CAP:550 S32d, AW51); replaces the tax by type stored on the"
+                                                    + " bill and must add up to its stated tax, else 422"
+                                                    + " AP_BILL_TAX_SPLIT_MISMATCH. Omit it to keep what the bill states",
+                                    requiredMode = NOT_REQUIRED),
+                    schema = @Schema(implementation = TaxAmount.class))
+            @Valid
+            @Nullable
+            List<@NonNull TaxAmount> taxByType) {}
+
+    /**
+     * One tax type a vendor's document states, with its amount, copied by the person approving or accepting the bill
+     * (CAP:550 S32d item 10). The amount is positive as the document prints it; a credit note's are stored negative.
+     */
+    @Schema(name = "VendorBillTaxAmount", description = "One tax type the vendor's document states, with its amount")
+    public record TaxAmount(
+            @Schema(
+                    description = "The tax type as pos-tax's country profile names it (upper-case letters, digits or"
+                            + " underscores)",
+                    example = "TAX_TYPE_1",
+                    pattern = "^[A-Z0-9_]{1,32}$",
+                    requiredMode = REQUIRED)
+            @NotBlank
+            @Pattern(regexp = "^[A-Z0-9_]{1,32}$")
+            @Nullable
+            String taxType,
+
+            @Schema(
+                    description = "The amount the document states for it, positive, at most the currency's decimals",
+                    example = "50.00",
+                    requiredMode = REQUIRED)
+            @NotNull
+            @Positive
+            @Nullable
+            BigDecimal amount) {}
 
     /**
      * The bill's real due date, entered during approval review (CAP:550 S13, #2510; §4.2, AW11). The actor is the

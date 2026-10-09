@@ -147,6 +147,8 @@ class AccountingTemplateReaderTest {
                 defaultGlMappings,
                 statementLines,
                 mock(com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository.class),
+                mock(com.positivity.accounting.internal.repository.PettyExpenseCategoryTaxSettingRepository.class),
+                mock(com.positivity.accounting.internal.repository.AccountingTemplateCurrencyEntryRepository.class),
                 mock(PlatformTransactionManager.class));
     }
 

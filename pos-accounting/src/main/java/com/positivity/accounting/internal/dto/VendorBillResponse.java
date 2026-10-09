@@ -205,4 +205,19 @@ public class VendorBillResponse {
     @Schema(description = "The entry posted at approval; null until approved", requiredMode = NOT_REQUIRED)
     @JsonProperty("posting")
     private VendorBillReview.@Nullable Posting posting;
+
+    @Schema(
+            description = "The tax the vendor's document states, by tax type (CAP:550 S32d); empty when it states"
+                    + " none by type",
+            requiredMode = REQUIRED)
+    @JsonProperty("taxByType")
+    private List<VendorBillReview.TaxByType> taxByType;
+
+    @Schema(
+            description = "What the posting did with each stated tax amount for a tenant that recovers input tax:"
+                    + " the amount recovered and its account, or why nothing was (CAP:550 S32d); null before the"
+                    + " posting and for a tenant without recovery, whose bill books the gross",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("inputTaxRecovery")
+    private @Nullable List<VendorBillReview.InputTaxRecovery> inputTaxRecovery;
 }

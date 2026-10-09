@@ -141,7 +141,8 @@ class FinancialReportingG2ServiceTest {
                 databaseDialectSupport,
                 displayReferenceResolver,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
-                new com.positivity.accounting.internal.config.LedgerCurrency("USD"));
+                new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
+                org.mockito.Mockito.mock(TypedOutputTax.class));
     }
 
     // ================= General Ledger =================

@@ -2,7 +2,10 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.OutboxEventWriter;
 import com.positivity.accounting.internal.entity.InvoiceGlPosting;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.repository.InvoiceGlPostingRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.accounting.InvoiceGlPostedV1;
@@ -12,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -43,6 +47,14 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>Accounts are never hardcoded: all three legs resolve through the {@code INVOICE_REVENUE}
  * posting category and its {@code ACCOUNTS_RECEIVABLE} / {@code SERVICE_REVENUE} /
  * {@code SALES_TAX_PAYABLE} mapping keys (seeded by {@code R__seed_reference_accounting.sql}).
+ *
+ * <p><b>Output tax by type (CAP:550 S32d item 11, AW50).</b> A tenant whose currency template mapped {@code
+ * SALES_TAX_PAYABLE_<taxType>} keys posts one tax leg per tax type of the invoice's {@code ext_invoice_tax} rows, each
+ * to its type's key ({@link TypedOutputTax}); AR is then revenue plus the legs. When those rows do not account for the
+ * whole tax, or a type has no mapped key, nothing posts: AR, revenue and tax wait together, and the fact is held
+ * {@code SUSPENDED / TAX_TYPE_MISSING} for the audited reprocess ({@link InvoiceRevenueReprocessor}). No default
+ * account is used and no type is inferred. Such a tenant's reversal mirrors the original entry's lines, so it releases
+ * exactly the accounts the recognition reached. A tenant without typed keys (every USD tenant) posts as before.
  *
  * <p><b>Idempotency</b> is the {@code invoice_gl_posting} row, written in the same transaction
  * as the journal entry: a redelivered or replayed fact finds the open row (or the already-reversed
@@ -88,6 +100,8 @@ public class InvoiceRevenuePostingService {
     private final InvoiceGlPostingRepository invoiceGlPostingRepository;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
     private final AccountingCalendarZoneResolver zoneResolver;
+    private final TypedOutputTax typedOutputTax;
+    private final JournalEntryRepository journalEntryRepository;
 
     /**
      * Post revenue recognition for a finalized invoice, exactly once per {@code (invoiceId,
@@ -97,7 +111,8 @@ public class InvoiceRevenuePostingService {
      * @param payload the consumed {@code invoice.invoice.updated} fact (status FINALIZED/POSTED)
      * @return what the fact did, for the listener's ingestion record (#2433): the posted entry,
      *     {@code AlreadyPosted} for a cycle already posted, {@code NothingToPost} for a zero total,
-     *     {@code Skipped} for a fact without {@code finalizedAt} or a deposit-take invoice
+     *     {@code Skipped} for a fact without {@code finalizedAt} or a deposit-take invoice, {@code Held / TAX_TYPE_MISSING}
+     *     for a tenant posting by tax type whose invoice tax cannot be posted by type (AW50)
      */
     @Transactional
     public @NonNull FactPostingOutcome postRevenue(@NonNull InvoiceUpdatedV1 payload) {
@@ -146,18 +161,45 @@ public class InvoiceRevenuePostingService {
         // Business time, not processing time: the entry lands in the invoice's month and
         // redeliveries resolve the same effective-dated mapping.
         LocalDateTime transactionDate = zoneResolver.postingDateTime(finalizedAt);
-        Accounts accounts = resolveAccounts(transactionDate);
+        TypedOutputTax.Plan plan = typedOutputTax.planInvoice(invoiceId, tax, transactionDate);
+        if (plan instanceof TypedOutputTax.Plan.TaxTypeMissing missing) {
+            log.warn(
+                    "Invoice revenue held, its tax cannot be posted by type (AW50) | invoiceId={} | tax={} | {}",
+                    invoiceId,
+                    tax,
+                    missing.detail());
+            return new FactPostingOutcome.Held(PostingFailureReason.TAX_TYPE_MISSING, missing.detail());
+        }
 
-        UUID journalEntryId = glPostingService.postInvoiceRevenue(
-                toSourceEventId(invoiceId, finalizedAt),
-                invoiceId,
-                accounts.accountsReceivable(),
-                accounts.serviceRevenue(),
-                accounts.salesTaxPayable(),
-                revenue,
-                tax,
-                transactionDate,
-                "Invoice revenue recognition - INV#" + displayNumber(payload));
+        UUID journalEntryId;
+        if (plan instanceof TypedOutputTax.Plan.Typed typed) {
+            List<GLPostingService.TaxLeg> legs = typed.legs().stream()
+                    .map(leg -> new GLPostingService.TaxLeg(leg.accountId(), leg.amount(), leg.taxType()))
+                    .toList();
+            tax = legs.stream().map(GLPostingService.TaxLeg::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+            revenue = total.subtract(tax);
+            journalEntryId = glPostingService.postInvoiceRevenueByTaxType(
+                    toSourceEventId(invoiceId, finalizedAt),
+                    invoiceId,
+                    glMappingResolver.resolveGLAccount(POSTING_CATEGORY_NAME, ACCOUNTS_RECEIVABLE_KEY, transactionDate),
+                    glMappingResolver.resolveGLAccount(POSTING_CATEGORY_NAME, SERVICE_REVENUE_KEY, transactionDate),
+                    revenue,
+                    legs,
+                    transactionDate,
+                    "Invoice revenue recognition - INV#" + displayNumber(payload));
+        } else {
+            Accounts accounts = resolveAccounts(transactionDate);
+            journalEntryId = glPostingService.postInvoiceRevenue(
+                    toSourceEventId(invoiceId, finalizedAt),
+                    invoiceId,
+                    accounts.accountsReceivable(),
+                    accounts.serviceRevenue(),
+                    accounts.salesTaxPayable(),
+                    revenue,
+                    tax,
+                    transactionDate,
+                    "Invoice revenue recognition - INV#" + displayNumber(payload));
+        }
 
         invoiceGlPostingRepository.save(InvoiceGlPosting.builder()
                 .invoiceId(invoiceId)
@@ -166,6 +208,7 @@ public class InvoiceRevenuePostingService {
                 .postedAt(finalizedAt)
                 .revenueAmount(revenue)
                 .taxAmount(tax)
+                .taxPostedByType(plan instanceof TypedOutputTax.Plan.Typed)
                 .build());
 
         publishFact(new InvoiceGlPostedV1(
@@ -212,18 +255,31 @@ public class InvoiceRevenuePostingService {
         // The revert's business time: the mirror lands in the current open period (period gate
         // applies), never a restatement of the original posting period.
         LocalDateTime transactionDate = zoneResolver.postingDateTime(occurredAt);
-        Accounts accounts = resolveAccounts(transactionDate);
+        String description = "Invoice revenue reversal (" + payload.status() + ") - INV#" + displayNumber(payload);
 
-        UUID reversalJournalEntryId = glPostingService.postInvoiceRevenueReversal(
-                toReversalSourceEventId(invoiceId, posting.getFinalizedAt()),
-                invoiceId,
-                accounts.accountsReceivable(),
-                accounts.serviceRevenue(),
-                accounts.salesTaxPayable(),
-                revenue,
-                tax,
-                transactionDate,
-                "Invoice revenue reversal (" + payload.status() + ") - INV#" + displayNumber(payload));
+        UUID reversalJournalEntryId;
+        if (posting.isTaxPostedByType()) {
+            // An entry posted by tax type is released exactly as it posted (ADR-0047; #2664 review A3), whatever the
+            // tenant's keys are now: a key end-dated since must not send the reversal to the untyped account.
+            reversalJournalEntryId = glPostingService.postMirror(
+                    JournalEntrySourceTypes.INVOICE_REVENUE_REVERSAL,
+                    toReversalSourceEventId(invoiceId, posting.getFinalizedAt()),
+                    postedLines(posting.getJournalEntryId()),
+                    transactionDate,
+                    description);
+        } else {
+            Accounts accounts = resolveAccounts(transactionDate);
+            reversalJournalEntryId = glPostingService.postInvoiceRevenueReversal(
+                    toReversalSourceEventId(invoiceId, posting.getFinalizedAt()),
+                    invoiceId,
+                    accounts.accountsReceivable(),
+                    accounts.serviceRevenue(),
+                    accounts.salesTaxPayable(),
+                    revenue,
+                    tax,
+                    transactionDate,
+                    description);
+        }
 
         posting.setReversalJournalEntryId(reversalJournalEntryId);
         posting.setReversedAt(occurredAt);
@@ -247,6 +303,22 @@ public class InvoiceRevenuePostingService {
                 reversalJournalEntryId,
                 posting.getJournalEntryId());
         return FactPostingOutcome.posted(reversalJournalEntryId);
+    }
+
+    /** The lines of a posted entry, as {@link GLPostingService#postMirror} reverses them. */
+    private @NonNull List<GLPostingService.PostedLine> postedLines(@NonNull UUID journalEntryId) {
+        JournalEntry entry = journalEntryRepository
+                .findById(journalEntryId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Journal entry " + journalEntryId + " of an open invoice posting does not exist"));
+        return entry.getLines().stream()
+                .map(line -> new GLPostingService.PostedLine(
+                        line.getGlAccount().getGlAccountId(),
+                        line.getDebitAmount() == null ? BigDecimal.ZERO : line.getDebitAmount(),
+                        line.getCreditAmount() == null ? BigDecimal.ZERO : line.getCreditAmount(),
+                        line.getDescription(),
+                        line.getDimensions()))
+                .toList();
     }
 
     private @NonNull Accounts resolveAccounts(@NonNull LocalDateTime transactionDate) {

@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.repository.VendorBillReissueRepository
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
+import com.positivity.domainevents.supplier.SupplierInvoiceTax;
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
@@ -27,9 +28,11 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -168,6 +171,7 @@ public class SupplierEventsListener {
     private final VendorBillDuplicateGuard duplicateGuard;
     private final VendorBillReissueRepository reissues;
     private final VendorBillLocks locks;
+    private final VendorBillStatedTax statedTax;
     private final @Nullable MeterRegistry meterRegistry;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
@@ -185,6 +189,7 @@ public class SupplierEventsListener {
             VendorBillDuplicateGuard duplicateGuard,
             VendorBillReissueRepository reissues,
             VendorBillLocks locks,
+            VendorBillStatedTax statedTax,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -198,6 +203,7 @@ public class SupplierEventsListener {
         this.duplicateGuard = duplicateGuard;
         this.reissues = reissues;
         this.locks = locks;
+        this.statedTax = statedTax;
         this.meterRegistry = meterRegistry.getIfAvailable();
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -624,6 +630,8 @@ public class SupplierEventsListener {
             }
             throw e;
         }
+        // S32d item 10 (closes G11): every bill keeps the tax its document states by type, signed like its total.
+        statedTax.storeFromDocument(bill, taxByType(fact));
         record(eventId, bill, fact, FactPostingOutcome.nothingToPost());
         log.info(
                 "Created vendor bill from supplier invoice {} ({} {}) for vendor {} status={}",
@@ -633,6 +641,52 @@ public class SupplierEventsListener {
                 vendor.getVendorNumber(),
                 bill.getStatus());
         return bill.getVendorBillId();
+    }
+
+    /** The shape a stored tax type must have ({@code vendor_bill_tax.tax_type}'s CHECK). */
+    static final Pattern TAX_TYPE_SHAPE = Pattern.compile("^[A-Z0-9_]{1,32}$");
+
+    /** Counted, never logged by value, when a document's tax labels cannot be stored as tax types. */
+    static final String UNSPLIT_LABELS_METRIC = "accounting.vendor_bill.tax_labels_unusable";
+
+    /**
+     * The fact's tax by type, signed like the bill's total; a type stated twice is added up. Null when none.
+     *
+     * <p>The document's label is normalised (trimmed, upper-cased in the root locale) and must then have the shape of a
+     * configured tax type. The label never blocks the bill (#2664 review A1): when any label does not fit, no tax by
+     * type is kept at all, so the bill reads as unsplit ({@code TAX_SPLIT_MISSING}) and nothing is recovered; only the
+     * number of labels is logged and counted, never a label's value.
+     */
+    private @Nullable Map<String, BigDecimal> taxByType(SupplierInvoiceReceivedV1 fact) {
+        if (fact.taxes() == null || fact.taxes().isEmpty()) {
+            return null;
+        }
+        Map<String, BigDecimal> byType = new LinkedHashMap<>();
+        int unusable = 0;
+        for (SupplierInvoiceTax tax : fact.taxes()) {
+            String type = tax.taxType() == null ? "" : tax.taxType().trim().toUpperCase(Locale.ROOT);
+            if (!TAX_TYPE_SHAPE.matcher(type).matches()) {
+                unusable++;
+                continue;
+            }
+            byType.merge(type, signed(fact, tax.amount()), BigDecimal::add);
+        }
+        if (unusable > 0) {
+            log.warn(
+                    "Supplier invoice {} states {} of {} tax label(s) that are not a tax type; the bill keeps no tax"
+                            + " by type and reads as unsplit (TAX_SPLIT_MISSING)",
+                    fact.vendorInvoiceNumber(),
+                    unusable,
+                    fact.taxes().size());
+            if (meterRegistry != null) {
+                Counter.builder(UNSPLIT_LABELS_METRIC)
+                        .description("Supplier invoices whose tax labels could not be kept as tax types (S32d)")
+                        .register(meterRegistry)
+                        .increment();
+            }
+            return null;
+        }
+        return byType;
     }
 
     private static String inactive(ExtSupplierVendor vendor) {

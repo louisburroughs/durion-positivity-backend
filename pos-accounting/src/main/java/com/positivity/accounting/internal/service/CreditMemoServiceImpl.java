@@ -8,14 +8,18 @@ import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
+import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.DisplayReferenceType;
+import com.positivity.accounting.internal.exception.TaxTypeMissingException;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Collection;
@@ -82,6 +86,9 @@ public class CreditMemoServiceImpl implements CreditMemoService {
     private final GLPostingService glPostingService;
     private final AccountingPeriodService periodService;
     private final CreditMemoGLConfig glConfig;
+    private final TypedOutputTax typedOutputTax;
+    private final AccountingCalendarZoneResolver zoneResolver;
+    private final JournalEntryRepository journalEntryRepository;
 
     /**
      * Create a Credit Memo to reverse invoice charges.
@@ -118,6 +125,14 @@ public class CreditMemoServiceImpl implements CreditMemoService {
 
         PriorPeriodInfo priorPeriodInfo = determinePriorPeriodInfo(invoice);
 
+        // A tenant posting output tax by type reverses the tax by type, or not at all (CAP:550 S32d, AW50): checked
+        // before anything is stored, so a refusal leaves no memo behind.
+        TypedOutputTax.Plan taxPlan = typedOutputTax.planCredit(
+                invoice.getInvoiceId(), creditCalculation.taxReversed(), zoneResolver.postingDateTime(clock.instant()));
+        if (taxPlan instanceof TypedOutputTax.Plan.TaxTypeMissing missing) {
+            throw new TaxTypeMissingException(missing.detail());
+        }
+
         CreditMemo creditMemo = creditMemoRepository.save(
                 buildCreditMemo(request, currentUser, invoice, creditCalculation.taxReversed(), priorPeriodInfo));
 
@@ -135,7 +150,7 @@ public class CreditMemoServiceImpl implements CreditMemoService {
                 creditCalculation.taxReversed(),
                 creditCalculation.finalCredit());
 
-        postGlEntries(creditMemo, request, creditCalculation.taxReversed(), priorPeriodInfo);
+        postGlEntries(creditMemo, request, creditCalculation.taxReversed(), priorPeriodInfo, taxPlan);
 
         // Display reference assigned last, deliberately (issue #1779, matching
         // EventIngestionServiceImpl.submitEvent's placement for #1680). The scope row is read
@@ -348,8 +363,23 @@ public class CreditMemoServiceImpl implements CreditMemoService {
             CreditMemo creditMemo,
             CreateCreditMemoRequest request,
             BigDecimal taxReversed,
-            PriorPeriodInfo priorPeriodInfo) {
+            PriorPeriodInfo priorPeriodInfo,
+            TypedOutputTax.Plan taxPlan) {
         try {
+            if (taxPlan instanceof TypedOutputTax.Plan.Typed typed) {
+                glPostingService.postCreditMemoReversalByTaxType(
+                        creditMemo.getCreditMemoId(),
+                        glConfig.getRevenueAccountId(),
+                        glConfig.getArAccountId(),
+                        request.getCreditAmount(),
+                        typed.legs().stream()
+                                .map(leg -> new GLPostingService.TaxLeg(leg.accountId(), leg.amount(), leg.taxType()))
+                                .toList(),
+                        "Credit Memo " + creditMemo.getCreditMemoId() + " - " + request.getReasonCode(),
+                        priorPeriodInfo.priorPeriod(),
+                        priorPeriodInfo.originalPeriodId());
+                return;
+            }
             glPostingService.postCreditMemoReversal(
                     creditMemo.getCreditMemoId(),
                     glConfig.getRevenueAccountId(),
@@ -471,13 +501,14 @@ public class CreditMemoServiceImpl implements CreditMemoService {
         creditMemoRepository.save(creditMemo);
 
         try {
-            glPostingService.postCreditMemoVoid(
+            LocalDateTime voidDate = zoneResolver.postingDateTime(clock.instant());
+            // Accounting ruling R3.2 on #2639: a void restores exactly what the memo's own reversal posted
+            // (ADR-0047), typed or not, whatever the tenant's keys are today.
+            glPostingService.postMirror(
+                    JournalEntrySourceTypes.CREDIT_MEMO_VOID,
                     creditMemo.getCreditMemoId(),
-                    glConfig.getRevenueAccountId(),
-                    glConfig.getTaxPayableAccountId(),
-                    glConfig.getArAccountId(),
-                    creditMemo.getCreditAmount(),
-                    creditMemo.getTaxAmountReversed(),
+                    reversalLines(creditMemo.getCreditMemoId()),
+                    voidDate,
                     "Void Credit Memo " + creditMemo.getCreditMemoId() + " - " + voidReason);
         } catch (Exception e) {
             log.error(
@@ -525,6 +556,23 @@ public class CreditMemoServiceImpl implements CreditMemoService {
      * @param creditMemo the memo being built; its {@code creditMemoReference} is set as a side
      *                   effect
      */
+    /** The lines of the memo's own reversal entry, as {@link GLPostingService#postMirror} restores them. */
+    private List<GLPostingService.PostedLine> reversalLines(UUID creditMemoId) {
+        JournalEntry reversal = journalEntryRepository.findBySourceEvent(creditMemoId).stream()
+                .filter(entry -> JournalEntrySourceTypes.CREDIT_MEMO_REVERSAL.equals(entry.getSourceEventType()))
+                .findFirst()
+                .orElseThrow(() ->
+                        new IllegalStateException("Credit memo " + creditMemoId + " has no reversal entry to restore"));
+        return reversal.getLines().stream()
+                .map(line -> new GLPostingService.PostedLine(
+                        line.getGlAccount().getGlAccountId(),
+                        line.getDebitAmount() == null ? BigDecimal.ZERO : line.getDebitAmount(),
+                        line.getCreditAmount() == null ? BigDecimal.ZERO : line.getCreditAmount(),
+                        line.getDescription(),
+                        line.getDimensions()))
+                .toList();
+    }
+
     private void assignCreditMemoReference(CreditMemo creditMemo) {
         String scopeKey = creditMemoReferenceScopeKey(creditMemo.getCreationTimestamp());
         AccountingSequence sequence = sequenceLocker.lockOrProvision(scopeKey);

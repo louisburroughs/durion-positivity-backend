@@ -55,6 +55,7 @@ import com.positivity.accounting.internal.exception.TaxServiceUnavailableExcepti
 import com.positivity.accounting.internal.exception.TaxSnapshotConflictException;
 import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException;
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
+import com.positivity.accounting.internal.exception.TaxTypeMissingException;
 import com.positivity.accounting.internal.exception.UnbalancedRulesException;
 import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.accounting.internal.exception.VendorBillException;
@@ -236,6 +237,15 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleGLAccountNotActive(
             GLAccountNotActiveException ex, HttpServletRequest request) {
         return build(HttpStatus.UNPROCESSABLE_CONTENT, "GL_ACCOUNT_NOT_ACTIVE", ex.getMessage(), request);
+    }
+
+    /**
+     * A credit memo whose tax cannot be reversed by type (CAP:550 S32d, AW50): 422 {@code TAX_TYPE_MISSING}, the
+     * state of the invoice's tax rows and the tenant's keys (ADR-0017 §2); nothing was stored.
+     */
+    @ExceptionHandler(TaxTypeMissingException.class)
+    public ResponseEntity<ApiError> handleTaxTypeMissing(TaxTypeMissingException ex, HttpServletRequest request) {
+        return build(HttpStatus.UNPROCESSABLE_CONTENT, TaxTypeMissingException.CODE, ex.getMessage(), request);
     }
 
     /**

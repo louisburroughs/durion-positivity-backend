@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -131,6 +132,7 @@ class RegisterSessionServiceImplTest {
                 registerFloatRepository,
                 categoryRepository,
                 new com.positivity.order.internal.config.FunctionalCurrency("USD"),
+                org.mockito.Mockito.mock(DrawerStatedTax.class),
                 clock,
                 meters);
         org.mockito.Mockito.lenient().when(sessionPolicyService.current()).thenReturn(DEFAULT_POLICY);
@@ -467,7 +469,8 @@ class RegisterSessionServiceImplTest {
         RegisterSession closing = openSession(id);
         closing.setStatus(RegisterSessionStatus.CLOSING);
         when(registerSessionRepository.findById(id)).thenReturn(Optional.of(closing));
-        when(registerSessionRepository.findByIdForUpdate(id)).thenReturn(Optional.of(closing));
+        // CAP:550 S32d: OPEN is checked before any lock (and before pos-tax), and again under the lock.
+        lenient().when(registerSessionRepository.findByIdForUpdate(id)).thenReturn(Optional.of(closing));
 
         assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
                         id,
@@ -478,6 +481,9 @@ class RegisterSessionServiceImplTest {
                         null,
                         null,
                         "BAG-1",
+                        null,
+                        null,
+                        null,
                         null,
                         null,
                         null)))

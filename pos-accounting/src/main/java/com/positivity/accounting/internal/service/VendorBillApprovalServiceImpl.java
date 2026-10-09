@@ -19,6 +19,7 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
@@ -138,6 +139,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     private final ApApprovalPolicy policy;
     private final ApLockTimeout lockTimeout;
     private final SupplierVendorCopies vendorCopies;
+    private final VendorBillStatedTax statedTax;
     private final TransactionTemplate commandTransaction;
     private final TransactionTemplate refusalTransaction;
 
@@ -157,6 +159,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             ApApprovalPolicy policy,
             ApLockTimeout lockTimeout,
             SupplierVendorCopies vendorCopies,
+            VendorBillStatedTax statedTax,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.bills = bills;
@@ -173,6 +176,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         this.policy = policy;
         this.lockTimeout = lockTimeout;
         this.vendorCopies = vendorCopies;
+        this.statedTax = statedTax;
         this.commandTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -233,6 +237,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             // 5. content, 6. the posting
             readyContent(bill, difference);
             requireClassified(bill, classification, difference, actor);
+            // S32d item 10 (AW51): the tax by type copied from the document replaces what the bill states.
+            statedTax.replaceFromApproval(bill, command.taxByType());
             Decision decision = new Decision(tier, settings, exception);
             approveAndPost(
                     bill,
@@ -243,6 +249,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     override,
                     AUDIT_APPROVE,
                     null,
+                    VendorBillStatedTax.auditOf(command.taxByType()),
                     decision);
             return reader.read(bill);
         });
@@ -296,6 +303,8 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     String exception = creatorRule(bill, settings, actor, reason, "reason");
                     readyContent(bill, difference);
                     requireClassified(bill, classification, difference, actor);
+                    // S32d item 10 (AW51): the tax by type copied from the document replaces what the bill states.
+                    statedTax.replaceFromApproval(bill, command.taxByType());
                     approveAndPost(
                             bill,
                             actor,
@@ -305,6 +314,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                             override,
                             AUDIT_RESOLVE,
                             "ACCEPT",
+                            VendorBillStatedTax.auditOf(command.taxByType()),
                             new Decision(tier, settings, exception));
                 }
                 case CORRECT -> correct(bill, actor, reason);
@@ -584,6 +594,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             @Nullable String override,
             String operation,
             @Nullable String resolution,
+            @Nullable String taxByType,
             Decision decision) {
         VendorBillPostingService.Classification effective =
                 requireExpenseKey(merge(classification, bill, vendorCopies.apDefaults(bill.getVendorId())));
@@ -607,16 +618,20 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         bill.setModifiedBy(actor);
         bills.save(bill);
         String details = differenceDetails(bill);
+        // S32d item 10: the split and what the posting recovered (S12's approval audit records both).
+        String recovery = postingService.recoveryAudit(bill.getVendorBillId());
         audit(
                 bill,
                 operation,
                 actor,
                 justification,
-                (resolution == null ? "" : "action=" + resolution + ";") + "journalEntryId="
-                        + posting.getJournalEntryId() + ";postingDate=" + posting.getPostingDate()
+                (resolution == null ? "" : "action=" + resolution + ";")
+                        + (taxByType == null ? "" : taxByType + ";")
+                        + "journalEntryId=" + posting.getJournalEntryId() + ";postingDate=" + posting.getPostingDate()
                         + ";postingDateRule=" + posting.getPostingDateRule() + ";roundingAdjustment="
                         + posting.getRoundingAdjustment().toPlainString()
                         + (details == null ? "" : ";" + details)
+                        + (recovery == null ? "" : ";" + recovery)
                         + (override == null ? "" : ";periodOverride=true"),
                 decision);
         if (decision.exception() != null) {
@@ -766,6 +781,9 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         }
         if (cause instanceof GLMappingNotConfiguredException) {
             return "GL_MAPPING_NOT_CONFIGURED";
+        }
+        if (cause instanceof TaxServiceUnavailableException) {
+            return TaxServiceUnavailableException.CODE;
         }
         return cause.getClass().getSimpleName();
     }

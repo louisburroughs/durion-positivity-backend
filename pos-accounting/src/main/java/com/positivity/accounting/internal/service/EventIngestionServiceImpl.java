@@ -118,6 +118,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private final EventPayloadReferenceProjector eventPayloadReferenceProjector;
     private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
     private final GoodsReceiptReprocessor goodsReceiptReprocessor;
+    private final InvoiceRevenueReprocessor invoiceRevenueReprocessor;
 
     /** Scope-key prefix for the per-month {@code accounting_event.eventReference} counter. */
     private static final String EVENT_REFERENCE_SCOPE_PREFIX = "AE-";
@@ -394,6 +395,19 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             }
         }
 
+        // An invoice held because its output tax cannot be posted by type (CAP:550 S32d, AW50) re-runs revenue
+        // recognition from the stored fact, never the posting engine: no rule set exists for an invoice fact.
+        if (InvoiceRevenueReprocessor.handles(event.getEventType(), event.getFailureReasonCode())) {
+            try {
+                return reprocessInvoiceRevenue(event, triggeredByUserId);
+            } catch (DataIntegrityViolationException | OptimisticLockingFailureException e) {
+                String msg = "Concurrent reprocessing detected for event " + eventId
+                        + ". Another transaction has modified this event. Please retry.";
+                log.warn(msg, e);
+                throw new IllegalStateException(msg, e);
+            }
+        }
+
         // Increment attempt count
         Integer currentAttemptCount = event.getAttemptCount();
         int nextAttemptCount = (currentAttemptCount == null ? 0 : currentAttemptCount) + 1;
@@ -502,6 +516,50 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         reprocessingAttemptHistoryRepository.save(attempt);
         log.info(
                 "Reprocessed goods receipt event {} through its own path: {} {}",
+                event.getEventId(),
+                result.status(),
+                result.reason() == null ? "" : result.reason());
+        return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
+    }
+
+    /**
+     * CAP:550 S32d (AW50): re-run invoice revenue recognition for an invoice held {@code TAX_TYPE_MISSING}, through
+     * {@link InvoiceRevenueReprocessor}. Shaped like {@link #reprocessGoodsReceipt}: every attempt counts and writes
+     * its history row; a hold keeps the row {@code SUSPENDED} with the new detail.
+     */
+    private AccountingEventResponse reprocessInvoiceRevenue(
+            @NonNull AccountingEvent event, @NonNull String triggeredByUserId) {
+        InvoiceRevenueReprocessor.Result result = invoiceRevenueReprocessor.reprocess(event.getPayload());
+        event.setResolvedByUserId(triggeredByUserId);
+        event.setAttemptCount((event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1);
+        event.setStatus(result.status());
+        event.setFailureReasonCode(result.reason());
+        if (result.status() == AccountingEventStatus.PROCESSED) {
+            event.setFailureDetails(null);
+            event.setErrorMessage(null);
+        } else {
+            event.setFailureDetails(result.detail());
+            event.setErrorMessage(result.detail());
+        }
+        if (result.resolved()) {
+            event.setProcessedAt(Instant.now(clock));
+            event.setIdempotencyOutcome(result.idempotencyOutcome().name());
+            event.setJournalEntryId(result.journalEntryId());
+        }
+
+        ReprocessingAttemptHistory attempt = new ReprocessingAttemptHistory();
+        attempt.setAccountingEvent(event);
+        attempt.setTriggeredByUserId(triggeredByUserId);
+        attempt.setAttemptedAt(Instant.now(clock));
+        attempt.setOutcome(
+                result.status() == AccountingEventStatus.PROCESSED
+                        ? ReprocessingOutcome.SUCCESS
+                        : ReprocessingOutcome.FAILURE);
+        attempt.setOutcomeDetails("Invoice revenue re-run: " + result.status()
+                + (result.reason() == null ? "" : " / " + result.reason()) + " (" + result.detail() + ")");
+        reprocessingAttemptHistoryRepository.save(attempt);
+        log.info(
+                "Reprocessed invoice event {} through revenue recognition: {} {}",
                 event.getEventId(),
                 result.status(),
                 result.reason() == null ? "" : result.reason());

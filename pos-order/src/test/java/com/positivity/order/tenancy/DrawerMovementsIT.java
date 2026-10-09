@@ -4,16 +4,20 @@ import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_A;
 import static com.positivity.tenancy.testing.TenantTestSupport.TENANT_B;
 import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.order.internal.config.OutboxEventWriter;
 import com.positivity.order.internal.entity.CashMovementApproval;
 import com.positivity.order.internal.entity.CashMovementApprovalStatus;
 import com.positivity.order.internal.entity.CashMovementReason;
+import com.positivity.order.internal.entity.CashMovementStatedTax;
 import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
 import com.positivity.order.internal.entity.OutboxEvent;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.repository.CashMovementApprovalRepository;
+import com.positivity.order.internal.repository.CashMovementRepository;
+import com.positivity.order.internal.repository.CashMovementStatedTaxRepository;
 import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.OutboxEventRepository;
@@ -51,6 +55,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import tools.jackson.databind.JsonNode;
@@ -180,6 +185,9 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
                     null,
                     "R-IT-1",
                     "gloves",
+                    null,
+                    null,
+                    null,
                     null));
             registerSessionService.recordCashMovement(new CashMovementCommand(
                     id,
@@ -190,6 +198,9 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
                     null,
                     null,
                     "BAG-IT-1",
+                    null,
+                    null,
+                    null,
                     null,
                     null,
                     null));
@@ -221,6 +232,84 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
         assertThat(movements.get(0).path("currencyCode").stringValue()).isEqualTo("USD");
         assertThat(movements.get(0).path("clerkUserId").stringValue()).isEqualTo(CASHIER_ID.toString());
         assertThat(payload.path("currencyCode").stringValue()).isEqualTo("USD");
+        // CAP:550 S32d: statedTaxes is always a list on the fact, empty without stated tax.
+        assertThat(movements.get(0).path("statedTaxes").isArray()).isTrue();
+        assertThat(movements.get(0).path("statedTaxes").size()).isZero();
+        assertThat(movements.get(1).path("statedTaxes").isArray()).isTrue();
+    }
+
+    @Autowired
+    private CashMovementStatedTaxRepository statedTaxes;
+
+    @Autowired
+    private CashMovementRepository cashMovements;
+
+    @Test
+    @DisplayName("CAP:550 S32d: the database refuses a duplicate regime and a non-positive amount, per tenant")
+    void statedTaxRowsAreConstrainedAndIsolated() {
+        String register = "T-" + UUID.randomUUID();
+        String categoryCode = "IT_" + register.substring(2, 10);
+        UUID movementId = asTenant(TENANT_A, () -> {
+            UUID shop = UUID.randomUUID();
+            categories.saveAndFlush(category(categoryCode));
+            UUID id = registerSessionService
+                    .openSession(new OpenSessionCommand(register, shop))
+                    .sessionId();
+            UUID movement = registerSessionService
+                    .recordCashMovement(new CashMovementCommand(
+                            id,
+                            UUIDv7Generator.generate(),
+                            "PETTY_EXPENSE",
+                            new BigDecimal("40.00"),
+                            "USD",
+                            categoryCode,
+                            null,
+                            null,
+                            "R-IT-2",
+                            "towels",
+                            null,
+                            null,
+                            null,
+                            null))
+                    .movement()
+                    .movementId();
+            statedTaxes.saveAndFlush(statedTax(movement, "REGIME_1", "4.60"));
+            return movement;
+        });
+
+        asTenant(TENANT_A, () -> {
+            assertThatThrownBy(() -> statedTaxes.saveAndFlush(statedTax(movementId, "REGIME_1", "1.00")))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+            return null;
+        });
+        asTenant(TENANT_A, () -> {
+            assertThatThrownBy(() -> statedTaxes.saveAndFlush(statedTax(movementId, "REGIME_2", "0.00")))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+            return null;
+        });
+        asTenant(TENANT_A, () -> {
+            assertThatThrownBy(() -> statedTaxes.saveAndFlush(statedTax(movementId, "REGIME_3", "-1.00")))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+            assertThat(statedTaxes.findByMovementIdOrderByRegimeAsc(movementId)).hasSize(1);
+            assertThat(cashMovements.findById(movementId)).hasValueSatisfying(m -> {
+                assertThat(m.getSupplierRegistrationNumber()).isNull();
+                assertThat(m.getTaxPlausibility()).isNull();
+                assertThat(m.getSupplierRegistrationRequired()).isNull();
+            });
+            return null;
+        });
+        asTenant(TENANT_B, () -> {
+            assertThat(statedTaxes.findByMovementIdOrderByRegimeAsc(movementId)).isEmpty();
+            return null;
+        });
+    }
+
+    private static CashMovementStatedTax statedTax(UUID movementId, String regime, String amount) {
+        return CashMovementStatedTax.builder()
+                .movementId(movementId)
+                .regime(regime)
+                .amount(new BigDecimal(amount))
+                .build();
     }
 
     /**
@@ -273,7 +362,10 @@ class DrawerMovementsIT extends PostgresTenancyTestBase {
                                 null,
                                 "R-IT-2",
                                 "gloves",
-                                token));
+                                token,
+                                null,
+                                null,
+                                null));
                         return "recorded";
                     } catch (CashMovementRefusedException e) {
                         return e.refusal().name();

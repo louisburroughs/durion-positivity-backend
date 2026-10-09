@@ -124,6 +124,7 @@ class RegisterSessionCashMovementTest {
                 floats,
                 categories,
                 new FunctionalCurrency("USD"),
+                mock(DrawerStatedTax.class),
                 CLOCK,
                 meters);
         session = RegisterSession.builder()
@@ -204,12 +205,28 @@ class RegisterSessionCashMovementTest {
                 null,
                 "R-" + amount,
                 "gloves",
-                token);
+                token,
+                null,
+                null,
+                null);
     }
 
     private static CashMovementCommand bankDrop(UUID requestId, String amount, String bag) {
         return new CashMovementCommand(
-                SESSION_ID, requestId, "BANK_DROP", new BigDecimal(amount), "USD", null, null, bag, null, null, null);
+                SESSION_ID,
+                requestId,
+                "BANK_DROP",
+                new BigDecimal(amount),
+                "USD",
+                null,
+                null,
+                bag,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     private static CashMovementCommand floatChange(String reason, String amount, String token) {
@@ -224,7 +241,10 @@ class RegisterSessionCashMovementTest {
                 null,
                 null,
                 null,
-                token);
+                token,
+                null,
+                null,
+                null);
     }
 
     private void managerApproves(CashMovementReason reason, String amount, String category) {
@@ -368,6 +388,9 @@ class RegisterSessionCashMovementTest {
                     null,
                     null,
                     null,
+                    null,
+                    null,
+                    null,
                     null);
 
             assertThatThrownBy(() -> service.recordCashMovement(cod))
@@ -411,6 +434,9 @@ class RegisterSessionCashMovementTest {
                             null,
                             "R",
                             "n",
+                            null,
+                            null,
+                            null,
                             null),
                     new CashMovementCommand(
                             SESSION_ID,
@@ -423,6 +449,9 @@ class RegisterSessionCashMovementTest {
                             null,
                             null,
                             "n",
+                            null,
+                            null,
+                            null,
                             null),
                     new CashMovementCommand(
                             SESSION_ID,
@@ -434,6 +463,9 @@ class RegisterSessionCashMovementTest {
                             null,
                             null,
                             "R",
+                            null,
+                            null,
+                            null,
                             null,
                             null))) {
                 assertThatThrownBy(() -> service.recordCashMovement(missing))
@@ -450,10 +482,26 @@ class RegisterSessionCashMovementTest {
                             null,
                             null,
                             "x",
+                            null,
+                            null,
+                            null,
                             null)))
                     .isInstanceOf(RegisterSessionRequestValidationException.class);
             assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
-                            SESSION_ID, null, "BANK_DROP", BigDecimal.TEN, "USD", null, null, "B", null, null, null)))
+                            SESSION_ID,
+                            null,
+                            "BANK_DROP",
+                            BigDecimal.TEN,
+                            "USD",
+                            null,
+                            null,
+                            "B",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null)))
                     .isInstanceOf(RegisterSessionRequestValidationException.class)
                     .hasMessageContaining("requestId");
             assertThat(recorded).isEmpty();
@@ -617,6 +665,9 @@ class RegisterSessionCashMovementTest {
                             "B",
                             null,
                             null,
+                            null,
+                            null,
+                            null,
                             null)))
                     .isInstanceOf(RegisterSessionRequestValidationException.class)
                     .hasMessageContaining("currencyCode");
@@ -631,6 +682,9 @@ class RegisterSessionCashMovementTest {
                             "B",
                             null,
                             null,
+                            null,
+                            null,
+                            null,
                             null)))
                     .isInstanceOf(RegisterSessionRequestValidationException.class);
             assertThatThrownBy(() -> service.recordCashMovement(new CashMovementCommand(
@@ -642,6 +696,9 @@ class RegisterSessionCashMovementTest {
                             null,
                             null,
                             "B",
+                            null,
+                            null,
+                            null,
                             null,
                             null,
                             null)))
@@ -762,6 +819,9 @@ class RegisterSessionCashMovementTest {
                     "B",
                     null,
                     null,
+                    null,
+                    null,
+                    null,
                     null);
         }
 
@@ -807,7 +867,10 @@ class RegisterSessionCashMovementTest {
                     "B",
                     null,
                     null,
-                    "token-1"));
+                    "token-1",
+                    null,
+                    null,
+                    null));
 
             verify(approvalService)
                     .use(
@@ -834,6 +897,9 @@ class RegisterSessionCashMovementTest {
                     null,
                     "R-1",
                     "gloves",
+                    null,
+                    null,
+                    null,
                     null);
 
             assertThatThrownBy(() -> service.recordCashMovement(petty))

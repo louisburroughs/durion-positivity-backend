@@ -104,7 +104,7 @@ public class TaxLiabilitySnapshot extends TenantScopedEntity {
     @Column(name = "total_net_tax", nullable = false, precision = 19, scale = 4)
     private BigDecimal totalNetTax;
 
-    @Column(name = "tax_payable_account_code", length = 20, nullable = false)
+    @Column(name = "tax_payable_account_code", length = 200, nullable = false)
     private String taxPayableAccountCode;
 
     @Column(name = "gl_net_activity", nullable = false, precision = 19, scale = 4)

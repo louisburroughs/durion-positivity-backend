@@ -38,6 +38,14 @@ public sealed interface FactPostingOutcome {
      */
     record CurrencyHeld() implements FactPostingOutcome {}
 
+    /**
+     * The fact cannot post yet and is held {@code SUSPENDED} with {@code reason} (CAP:550 S32d: {@code
+     * TAX_TYPE_MISSING}); the recorder writes the held record, which the audited reprocess releases through the
+     * fact's own path.
+     */
+    record Held(
+            @NonNull PostingFailureReason reason, @NonNull String detail) implements FactPostingOutcome {}
+
     static @NonNull FactPostingOutcome posted(@NonNull UUID journalEntryId) {
         return new Posted(journalEntryId);
     }
@@ -60,6 +68,12 @@ public sealed interface FactPostingOutcome {
     static @NonNull FactPostingOutcome combine(@NonNull FactPostingOutcome first, @NonNull FactPostingOutcome second) {
         if (first instanceof CurrencyHeld || second instanceof CurrencyHeld) {
             return new CurrencyHeld();
+        }
+        if (first instanceof Held) {
+            return first;
+        }
+        if (second instanceof Held) {
+            return second;
         }
         for (Class<? extends FactPostingOutcome> precedence :
                 List.of(Posted.class, AlreadyPosted.class, Skipped.class)) {
