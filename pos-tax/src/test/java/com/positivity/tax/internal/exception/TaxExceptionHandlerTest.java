@@ -198,6 +198,9 @@ class TaxExceptionHandlerTest {
                     Named.of("handleRateLookupUnsupported", (HandlerInvocation)
                             request -> handler.handleRateLookupUnsupported(
                                     new TaxRateLookupUnsupportedException("Rate lookup unsupported"), request)),
+                    Named.of("handleCalculationTypeUnsupported", (HandlerInvocation)
+                            request -> handler.handleCalculationTypeUnsupported(
+                                    new TaxCalculationTypeUnsupportedException("USE unsupported"), request)),
                     Named.of("handleCurrencyNotSupported", (HandlerInvocation)
                             request -> handler.handleCurrencyNotSupported(
                                     new TaxCurrencyNotSupportedException("currency mismatch"), request)),

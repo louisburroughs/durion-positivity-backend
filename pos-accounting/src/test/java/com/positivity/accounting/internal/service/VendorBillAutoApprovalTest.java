@@ -442,8 +442,12 @@ class VendorBillAutoApprovalTest {
             assertThat(onlyAudit().getNewValue()).contains("code=SERVICE_UNAVAILABLE");
             verify(postingService, never()).post(any(), any(), any(), anyString(), any());
 
-            when(client.purchaseRules(any(), any())).thenReturn(PurchaseTaxFixtures.HOLD_AND_SELF_ASSESS);
-            when(client.useTax(any())).thenThrow(new TaxServiceUnavailableException("unavailable"));
+            org.mockito.Mockito.doReturn(PurchaseTaxFixtures.HOLD_AND_SELF_ASSESS)
+                    .when(client)
+                    .purchaseRules(any(), any());
+            doThrow(new TaxServiceUnavailableException("unavailable"))
+                    .when(client)
+                    .useTax(any());
             assertThat(autoApproval.precheck(bill).refusal())
                     .get()
                     .satisfies(e ->
