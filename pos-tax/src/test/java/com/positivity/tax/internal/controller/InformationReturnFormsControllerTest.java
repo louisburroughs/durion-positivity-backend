@@ -51,6 +51,11 @@ class InformationReturnFormsControllerTest {
         }
 
         @Bean
+        java.time.Clock clock() {
+            return java.time.Clock.fixed(java.time.Instant.parse("2026-10-08T12:00:00Z"), java.time.ZoneOffset.UTC);
+        }
+
+        @Bean
         InformationReturnForms informationReturnForms() {
             return new InformationReturnForms(PROPERTIES);
         }

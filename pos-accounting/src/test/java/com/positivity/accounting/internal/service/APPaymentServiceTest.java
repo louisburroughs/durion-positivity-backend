@@ -1077,6 +1077,10 @@ class APPaymentServiceTest {
         VendorBill heldBill = approvedBill("INV-HELD", "100.00", "bob");
         VendorBill freeBill = approvedBill("INV-FREE", "50.00", "bob");
         freeBill.setVendorId(free);
+        freeBill.setVendorBillId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b99"));
+        when(billRepository.findById(heldBill.getVendorBillId())).thenReturn(Optional.of(heldBill));
+        when(billRepository.findById(freeBill.getVendorBillId())).thenReturn(Optional.of(freeBill));
+        when(allocationRepository.sumAllocatedAmountByVendorBillId(any())).thenReturn(BigDecimal.ZERO);
         when(billRepository.findByStatusAndOpenAmountGreaterThan(any(), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(heldBill, freeBill)));
         when(vendorCopies.heldVendors(java.util.Set.of(held, free)))
