@@ -26,6 +26,7 @@ import com.positivity.tax.internal.entity.TaxRegistrationHistory;
 import com.positivity.tax.internal.exception.TaxRegistrationConflictException;
 import com.positivity.tax.internal.exception.TaxRegistrationNotFoundException;
 import com.positivity.tax.internal.exception.TaxRequestInvalidException;
+import com.positivity.tax.internal.exception.TaxRequestUnprocessableException;
 import com.positivity.tax.internal.repository.TaxRegistrationHistoryRepository;
 import com.positivity.tax.internal.repository.TaxRegistrationRepository;
 import com.positivity.tenancy.TenantContext;
@@ -142,7 +143,7 @@ class TaxRegistrationServiceImplTest {
         assertThat(fact.status()).isEqualTo("ACTIVE");
 
         ArgumentCaptor<TaxRegistrationHistory> change = ArgumentCaptor.forClass(TaxRegistrationHistory.class);
-        verify(history).save(change.capture());
+        verify(history).saveAndFlush(change.capture());
         assertThat(change.getValue().getChangeType()).isEqualTo(TaxRegistrationHistory.CREATE);
         assertThat(change.getValue().getActor()).as("AC 3: the forwarded actor").isEqualTo(ACTOR);
         assertThat(change.getValue().getOldState()).isNull();
@@ -186,27 +187,30 @@ class TaxRegistrationServiceImplTest {
         }
 
         verify(registrations, never()).saveAndFlush(any());
-        verify(history, never()).save(any());
+        verify(history, never()).saveAndFlush(any());
         verify(outbox, never()).publish(anyString(), any());
         assertThat(logs.list)
                 .allSatisfy(event -> assertThat(event.getFormattedMessage()).doesNotContain(MALFORMED));
     }
 
     @Test
-    @DisplayName("a regime the country does not declare, or a country without a profile, is 400")
+    @DisplayName("ADR-0017: a regime the country does not declare is 422 TAX_REGIME_NOT_DECLARED, a country without a"
+            + " profile 422 TAX_JURISDICTION_NOT_CONFIGURED")
     void undeclaredRegimeOrCountry() {
         assertThatThrownBy(() -> zz().create(create("ZZ", "R_2", ZZ_NUMBER, JAN_1)))
-                .isInstanceOfSatisfying(
-                        TaxRequestInvalidException.class,
-                        refused -> assertThat(refused.getFieldErrors())
-                                .extracting(error -> error.field())
-                                .containsExactly("regime"));
+                .isInstanceOfSatisfying(TaxRequestUnprocessableException.class, refused -> {
+                    assertThat(refused.getCode()).isEqualTo("TAX_REGIME_NOT_DECLARED");
+                    assertThat(refused.getFieldErrors())
+                            .extracting(error -> error.field())
+                            .containsExactly("regime");
+                });
         assertThatThrownBy(() -> zz().create(create("XY", "R_1", ZZ_NUMBER, JAN_1)))
-                .isInstanceOfSatisfying(
-                        TaxRequestInvalidException.class,
-                        refused -> assertThat(refused.getFieldErrors())
-                                .extracting(error -> error.field())
-                                .containsExactly("countryCode"));
+                .isInstanceOfSatisfying(TaxRequestUnprocessableException.class, refused -> {
+                    assertThat(refused.getCode()).isEqualTo("TAX_JURISDICTION_NOT_CONFIGURED");
+                    assertThat(refused.getFieldErrors())
+                            .extracting(error -> error.field())
+                            .containsExactly("countryCode");
+                });
         verify(registrations, never()).saveAndFlush(any());
     }
 
@@ -287,37 +291,116 @@ class TaxRegistrationServiceImplTest {
         }
     }
 
-    @Test
-    @DisplayName("AC 1: a replayed requestId returns the first result and writes nothing")
-    void replayReturnsTheFirstResult() {
-        UUID requestId = UUID.randomUUID();
-        TaxRegistration stored = TaxRegistration.builder()
-                .id(UUID.fromString("01990000-0000-7000-8000-0000000000a1"))
-                .countryCode("ZZ")
-                .regime("R_1")
-                .registrationNumber("ZZ12345")
-                .jurisdictionCode("ZZ")
-                .effectiveFrom(JAN_1)
-                .createdAt(CLOCK.instant())
-                .createdBy(ACTOR)
-                .updatedAt(CLOCK.instant())
-                .updatedBy(ACTOR)
-                .build();
-        when(history.findByRequestId(requestId))
-                .thenReturn(Optional.of(TaxRegistrationHistory.builder()
-                        .registrationId(stored.getId())
-                        .requestId(requestId)
-                        .build()));
-        when(registrations.findById(stored.getId())).thenReturn(Optional.of(stored));
-
-        TaxRegistrationService.WriteResult result = zz().create(new TaxRegistrationCreateRequest(
+    /** Creates once with {@code requestId} and makes the history mock answer it, as the table would. */
+    private TaxRegistrationHistory createdWith(TaxRegistrationServiceImpl service, UUID requestId) {
+        service.create(new TaxRegistrationCreateRequest(
                 "ZZ", "R_1", ZZ_NUMBER, JAN_1, null, "Registered with the authority", requestId));
+        ArgumentCaptor<TaxRegistrationHistory> change = ArgumentCaptor.forClass(TaxRegistrationHistory.class);
+        verify(history).saveAndFlush(change.capture());
+        when(history.findByRequestId(requestId)).thenReturn(Optional.of(change.getValue()));
+        return change.getValue();
+    }
 
-        assertThat(result.replayed()).isTrue();
-        assertThat(result.registration().registrationId()).isEqualTo(stored.getId());
-        verify(registrations, never()).saveAndFlush(any());
-        verify(history, never()).save(any());
-        verify(outbox, never()).publish(anyString(), any());
+    @Nested
+    @DisplayName("replay (ADR-0017 §2)")
+    class Replay {
+
+        @Test
+        @DisplayName("[M] AC 1: the same request again returns the first result and writes nothing more")
+        void sameRequestReturnsTheFirstResult() {
+            TaxRegistrationServiceImpl service = zz();
+            UUID requestId = UUID.randomUUID();
+            createdWith(service, requestId);
+
+            TaxRegistrationService.WriteResult result = service.create(new TaxRegistrationCreateRequest(
+                    "ZZ", "R_1", "zz 12345", JAN_1, null, "Registered with the authority, again", requestId));
+
+            assertThat(result.replayed()).isTrue();
+            assertThat(result.registration().registrationId())
+                    .isEqualTo(UUID.fromString("01990000-0000-7000-8000-0000000000a1"));
+            assertThat(result.registration().registrationNumber()).isEqualTo("ZZ12345");
+            verify(registrations, times(1)).saveAndFlush(any());
+            verify(history, times(1)).saveAndFlush(any());
+            verify(outbox, times(1)).publish(anyString(), any());
+        }
+
+        @Test
+        @DisplayName("[M] the same requestId with another number or other dates is 409 IDEMPOTENCY_CONFLICT, never"
+                + " echoing the number")
+        void sameRequestIdOtherBody() {
+            TaxRegistrationServiceImpl service = zz();
+            UUID requestId = UUID.randomUUID();
+            createdWith(service, requestId);
+
+            for (TaxRegistrationCreateRequest other : List.of(
+                    new TaxRegistrationCreateRequest(
+                            "ZZ", "R_1", "ZZ54321", JAN_1, null, "Registered with the authority", requestId),
+                    new TaxRegistrationCreateRequest(
+                            "ZZ",
+                            "R_1",
+                            ZZ_NUMBER,
+                            JAN_1.plusDays(1),
+                            null,
+                            "Registered with the authority",
+                            requestId),
+                    new TaxRegistrationCreateRequest(
+                            "ZZ",
+                            "R_1",
+                            ZZ_NUMBER,
+                            JAN_1,
+                            LocalDate.of(2026, 12, 31),
+                            "Registered with the authority",
+                            requestId))) {
+                assertThatThrownBy(() -> service.create(other))
+                        .isInstanceOfSatisfying(TaxRegistrationConflictException.class, conflict -> {
+                            assertThat(conflict.getCode()).isEqualTo("IDEMPOTENCY_CONFLICT");
+                            assertThat(conflict.getMessage())
+                                    .doesNotContain("54321")
+                                    .doesNotContain("12345");
+                        });
+            }
+            verify(registrations, times(1)).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("[M] a create's requestId reused on PUT /{other} is 409 IDEMPOTENCY_CONFLICT")
+        void createRequestIdReusedOnAChange() {
+            TaxRegistrationServiceImpl service = zz();
+            UUID requestId = UUID.randomUUID();
+            createdWith(service, requestId);
+            UUID other = UUID.fromString("01990000-0000-7000-8000-0000000000b2");
+            when(registrations.findById(other))
+                    .thenReturn(Optional.of(TaxRegistration.builder()
+                            .id(other)
+                            .countryCode("ZZ")
+                            .regime("R_1")
+                            .registrationNumber(ZZ_NUMBER)
+                            .jurisdictionCode("ZZ")
+                            .effectiveFrom(JAN_1)
+                            .build()));
+
+            assertThatThrownBy(() -> service.update(
+                            other,
+                            new TaxRegistrationUpdateRequest(
+                                    "ZZ12345", JAN_1, null, 0L, "Registered with the authority", requestId)))
+                    .isInstanceOfSatisfying(
+                            TaxRegistrationConflictException.class,
+                            conflict -> assertThat(conflict.getCode()).isEqualTo("IDEMPOTENCY_CONFLICT"));
+        }
+
+        @Test
+        @DisplayName("a concurrent request with the same id, stopped by the unique key, is 409 IDEMPOTENCY_CONFLICT")
+        void concurrentDuplicate() {
+            org.mockito.Mockito.doThrow(new DataIntegrityViolationException(
+                            "duplicate", new SQLException("duplicate key value", "23505")))
+                    .when(history)
+                    .saveAndFlush(any());
+
+            assertThatThrownBy(() -> zz().create(create("ZZ", "R_1", ZZ_NUMBER, JAN_1)))
+                    .isInstanceOfSatisfying(
+                            TaxRegistrationConflictException.class,
+                            conflict -> assertThat(conflict.getCode()).isEqualTo("IDEMPOTENCY_CONFLICT"));
+        }
     }
 
     @Nested
@@ -360,7 +443,7 @@ class TaxRegistrationServiceImplTest {
             assertThat(result.registration().effectiveTo()).isEqualTo(LocalDate.of(2026, 9, 30));
             assertThat(result.registration().status()).isEqualTo("ENDED");
             ArgumentCaptor<TaxRegistrationHistory> change = ArgumentCaptor.forClass(TaxRegistrationHistory.class);
-            verify(history).save(change.capture());
+            verify(history).saveAndFlush(change.capture());
             assertThat(change.getValue().getChangeType()).isEqualTo(TaxRegistrationHistory.UPDATE);
             assertThat(change.getValue().getOldState()).contains("\"effectiveTo\":null");
             assertThat(change.getValue().getNewState()).contains("2026-09-30");

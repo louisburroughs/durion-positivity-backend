@@ -215,6 +215,39 @@ require_supplier_audit_key() {
   require_supplier_key SUPPLIER_VENDOR_TAXID_ENC_KEY "vendor tax-registration number"
 }
 
+# pos-accounting's per-caller secret for pos-tax's tax-registration writes (CAP:550 S32c, ADR-0071 §6), read by
+# both services. A value supplied by the workflow is persisted (replacing an older one: the secret seals nothing, so
+# a change only needs both services restarted, which this deploy does). With none supplied the copy on the box
+# stays. With neither, the deploy warns and carries on: every other service is unaffected, and pos-tax refuses every
+# registration write (401) while pos-accounting answers 503 until the secret exists (fail closed). Never echoed.
+require_tax_front_door_secret() {
+  local name=POS_TAX_ACCOUNTING_SECRET existing supplied
+  existing="$(grep -E "^${name}=" "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+  existing="${existing%\'}"
+  existing="${existing#\'}"
+  existing="$(trim_space "${existing}")"
+  supplied="$(trim_space "${!name:-}")"
+
+  if [[ -n "${supplied}" ]]; then
+    if ! [[ "${supplied}" =~ ^[A-Za-z0-9+/=._-]{32,256}$ ]]; then
+      echo "ERROR: ${name} must be 32 to 256 characters of [A-Za-z0-9+/=._-] (openssl rand -hex 32)." >&2
+      exit 1
+    fi
+    local quoted
+    quoted="$(env_single_quote "${supplied}")"
+    if grep -q "^${name}=" "${ENV_FILE}"; then
+      sed -i "s|^${name}=.*|${name}=${quoted}|" "${ENV_FILE}"
+    else
+      printf '%s=%s\n' "${name}" "${quoted}" >> "${ENV_FILE}"
+    fi
+  elif [[ -z "${existing}" ]]; then
+    echo "WARNING: ${name} is empty or missing in ${ENV_FILE} and none was supplied by the deploy." >&2
+    echo "Tax-registration writes stay refused until it is set as the ${name} repository secret." >&2
+  fi
+  # As for the pos-supplier keys (#1577): an exported, possibly empty copy would shadow the env file.
+  unset "${name}"
+}
+
 # The key a deploy would leave in force: the supplied value when there is one, otherwise the one
 # persisted in the env file; quotes and whitespace removed.
 effective_supplier_key() {
@@ -980,6 +1013,7 @@ if [[ "${MODE}" == "config-only" ]]; then
   require_env_entry ECR_REGISTRY
   require_env_entry SECURITY_SEED_ADMIN_PASSWORD_HASH
   require_supplier_audit_key
+  require_tax_front_door_secret
   ecr_login "$(env_value ECR_REGISTRY)"
 else
   if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
@@ -1012,6 +1046,7 @@ else
   fi
 
   require_supplier_audit_key
+  require_tax_front_door_secret
 
   # Either half of the accelerated switch, and only on a full deploy: an ordinary one is the
   # teardown, so the marker cannot survive a redeploy that did not ask for it.

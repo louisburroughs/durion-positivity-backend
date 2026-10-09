@@ -59,5 +59,10 @@ class ExtTaxRegistrationRepositoryTest extends PostgresSliceTestBase {
                 .map(TaxRegistrationReplica.Registration::jurisdictionCode)
                 .contains("Z1");
         assertThat(replica.inEffectOn("ZZ", "R_2", LocalDate.of(2026, 4, 1))).isEmpty();
+        assertThat(replica.inEffectFor("ZZ", LocalDate.of(2026, 3, 15)))
+                .as("the regimes a drawer may offer that day, in regime order")
+                .extracting(TaxRegistrationReplica.Registration::registrationId)
+                .containsExactly(CURRENT, OTHER_REGIME);
+        assertThat(replica.inEffectFor("ZZ", LocalDate.of(2024, 12, 31))).isEmpty();
     }
 }

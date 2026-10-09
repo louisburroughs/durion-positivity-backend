@@ -1,6 +1,7 @@
 package com.positivity.order.internal.service;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -27,6 +28,17 @@ public interface TaxRegistrationReplica {
     @NonNull
     Optional<Registration> inEffectOn(
             @NonNull String countryCode, @NonNull String regime, @NonNull LocalDate businessDate);
+
+    /**
+     * Every registration of one country in effect on {@code businessDate} (both ends inclusive), one per regime at
+     * most: the regimes a drawer may offer (S32d). Empty under the same caveat as {@link #inEffectOn}.
+     *
+     * @param countryCode  ISO 3166-1 alpha-2 country
+     * @param businessDate the business date
+     * @return the registrations, in regime order
+     */
+    @NonNull
+    List<Registration> inEffectFor(@NonNull String countryCode, @NonNull LocalDate businessDate);
 
     /**
      * A registration as the drawer reads it: no number, which the copy does not keep.

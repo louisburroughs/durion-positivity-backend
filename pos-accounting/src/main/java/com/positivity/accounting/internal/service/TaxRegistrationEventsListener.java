@@ -7,9 +7,11 @@ import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.tax.TaxRegistrationChangedV1;
 import com.positivity.kafka.common.KafkaRails;
+import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -109,6 +111,14 @@ public class TaxRegistrationEventsListener {
     private void apply(JsonNode envelope) {
         TaxRegistrationChangedV1 fact =
                 objectMapper.treeToValue(envelope.path("payload"), TaxRegistrationChangedV1.class);
+        UUID bound = TenantContext.current().orElse(null);
+        if (!fact.tenantId().equals(bound)) {
+            // The record header bound one tenant and the payload names another: never apply it under either.
+            log.warn(
+                    "Skipping tax.registration.changed registration={} whose tenant does not match the bound tenant",
+                    fact.registrationId());
+            return;
+        }
         ExtTaxRegistration existing =
                 registrations.findById(fact.registrationId()).orElse(null);
         if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), fact.version())) {

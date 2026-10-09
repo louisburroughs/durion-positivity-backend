@@ -18,7 +18,11 @@ import com.positivity.accounting.internal.dto.RecordTaxRegistrationRequest;
 import com.positivity.accounting.internal.exception.TaxRegistrationRelayException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.tenancy.TenantContext;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
+import java.net.ServerSocket;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -26,11 +30,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -54,13 +62,14 @@ class TaxRegistrationClientTest {
              "updatedBy":"01990000-0000-7000-8000-0000000000e1"}
             """;
 
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private MockRestServiceServer server;
     private TaxRegistrationClient client;
 
     private TaxRegistrationClient client(String secret) {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        return new TaxRegistrationClient(builder, new ObjectMapper(), BASE, secret);
+        return new TaxRegistrationClient(builder, new ObjectMapper(), BASE, secret, meters);
     }
 
     @BeforeEach
@@ -195,12 +204,74 @@ class TaxRegistrationClientTest {
         server.expect(requestTo(BASE + "/v1/tax/registrations")).andRespond(withStatus(HttpStatus.UNAUTHORIZED));
         assertThatThrownBy(() -> client.create(record("123456789RT0001"), ACTOR))
                 .isInstanceOf(TaxServiceUnavailableException.class);
+        assertThat(meters.counter(TaxRegistrationClient.SECRET_REFUSED_COUNTER).count())
+                .as("a secret mismatch is counted")
+                .isEqualTo(1.0);
 
         client = client(SECRET);
         server.expect(requestTo(BASE + "/v1/tax/registrations"))
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
         assertThatThrownBy(() -> client.create(record("123456789RT0001"), ACTOR))
                 .isInstanceOf(TaxServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("AC 4: a pos-tax that accepts the connection but never answers is 503 after the read timeout")
+    void readTimeoutIsUnavailable() throws Exception {
+        try (ServerSocket silent = new ServerSocket(0)) {
+            TaxRegistrationClient timed = new TaxRegistrationClient(
+                    RestClient.builder(),
+                    new ObjectMapper(),
+                    "http://localhost:" + silent.getLocalPort(),
+                    SECRET,
+                    Duration.ofSeconds(2),
+                    Duration.ofMillis(300),
+                    new StaticListableBeanFactory().getBeanProvider(MeterRegistry.class));
+            long started = System.nanoTime();
+
+            assertThatThrownBy(() -> timed.create(record("123456789RT0001"), ACTOR))
+                    .isInstanceOf(TaxServiceUnavailableException.class);
+            assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(5));
+        }
+    }
+
+    @Test
+    @DisplayName("ADR-0017 §4: the inbound X-Correlation-Id is forwarded to pos-tax")
+    void forwardsTheCorrelationId() {
+        MockHttpServletRequest inbound = new MockHttpServletRequest();
+        inbound.addHeader("X-Correlation-Id", "corr-inbound");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(inbound));
+        try {
+            server.expect(requestTo(BASE + "/v1/tax/registrations"))
+                    .andExpect(header("X-Correlation-Id", "corr-inbound"))
+                    .andRespond(withStatus(HttpStatus.CREATED)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(REGISTRATION));
+
+            client.create(record("123456789RT0001"), ACTOR);
+
+            server.verify();
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
+    }
+
+    @Test
+    @DisplayName("pos-tax's 422 TAX_REGIME_NOT_DECLARED is relayed with its code")
+    void relaysTheConfigurationRefusal() {
+        server.expect(requestTo(BASE + "/v1/tax/registrations"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"code":"TAX_REGIME_NOT_DECLARED","message":"Request refused by the tax configuration",
+                                 "status":422,"timestamp":"2026-10-08T12:00:00Z","correlationId":"corr-3"}
+                                """));
+
+        assertThatThrownBy(() -> client.create(record("123456789RT0001"), ACTOR))
+                .isInstanceOfSatisfying(TaxRegistrationRelayException.class, relayed -> {
+                    assertThat(relayed.getStatus()).isEqualTo(422);
+                    assertThat(relayed.getError().code()).isEqualTo("TAX_REGIME_NOT_DECLARED");
+                });
     }
 
     @Test

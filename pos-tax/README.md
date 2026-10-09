@@ -54,9 +54,16 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
   (`pos.tax.front-doors.accounting-secret`, env `POS_TAX_ACCOUNTING_SECRET`); a missing or wrong secret, a blank
   configured secret, or a request without the forwarded `X-User-Id` and `X-Tenant-Id` is 401. No `tax:registration:*`
   permission exists: the person's permission is checked at the front door (`accounting:tax_registration:manage`).
-  Codes: 201; 200 (replay or update); 400 `VALIDATION_ERROR` (a missing field, a country without a profile, an
-  undeclared regime, or a number that does not match the regime's shape, `fieldErrors[registrationNumber]`, never
-  echoed or logged); 404 `TAX_REGISTRATION_NOT_FOUND`; 409 `TAX_REGISTRATION_OVERLAP`, `OPTIMISTIC_LOCK`
+  Refusals in this order (ADR-0017): 400 `VALIDATION_ERROR` (a missing or malformed field); 422
+  `TAX_JURISDICTION_NOT_CONFIGURED` (a country without a profile) and `TAX_REGIME_NOT_DECLARED` (a regime the profile
+  does not declare); on a change, 404 `TAX_REGISTRATION_NOT_FOUND`; 400 `VALIDATION_ERROR` with
+  `fieldErrors[registrationNumber]` for a number that does not match the regime's shape (never echoed or logged,
+  nothing stored or queued). Then the `requestId` (ADR-0017 §2): the same request again returns 200 with the
+  **first result** (the registration as that write left it, from its history row); the id reused for another
+  operation, registration, number or dates is 409 `IDEMPOTENCY_CONFLICT`, and so is a concurrent request with the same
+  id (retried, it gets the first result). Last, 409 `OPTIMISTIC_LOCK` and 409 `TAX_REGISTRATION_OVERLAP`. Success: 201
+  on create, 200 on change. These endpoints are kept out of the gateway aggregate (`AGGREGATE_EXCLUDED_MODULES`) and
+  pos-mcp-server's tools (`excluded-write-path-patterns`).
 
 Error codes beyond validation: 422 `TAX_JURISDICTION_NOT_CONFIGURED` (a profiled country has no rate row for the region on
 the date), 422 `CURRENCY_NOT_SUPPORTED` (a calculation for a profiled country states another currency than the profile's;
@@ -306,7 +313,10 @@ The application pool connects as the non-owner `pos_app` role (Compose: `SPRING_
 unbound `OutboxPublisher` drains every tenant's rows and stamps each row's tenant on the Kafka header. The
 `ManifestPublisher` publishes one `ReconciliationManifestV1` per tenant per closed window on `tax.manifest.v1`, and
 `TaxCommandListener` re-queues a window of the commanding tenant's facts on `tax.outbox.replay-requested` (ADR-0044
-§4). `OutboxEventWriter` is not `@KafkaRails`: a registration change always writes its fact row, and in a broker-less
+§4). The manifest job keeps its last published window in memory, like the other modules' publishers: after a
+restart it publishes the latest closed window and continues from there, so a window missed while the service was
+down is not re-announced (consumers can still alert on a missing manifest). A status on a fact or a response is
+derived on the UTC date of the change; a reader acting as of a business date uses the effective dates. `OutboxEventWriter` is not `@KafkaRails`: a registration change always writes its fact row, and in a broker-less
 profile the row waits unpublished. The publisher, the manifest and the listener are `@KafkaRails`.
 
 The one native statement,

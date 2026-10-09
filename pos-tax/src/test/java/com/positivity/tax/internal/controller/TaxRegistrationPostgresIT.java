@@ -157,6 +157,53 @@ class TaxRegistrationPostgresIT {
     }
 
     @Test
+    @DisplayName("ADR-0017 §2: a requestId reused with another number or dates, or for a change of another"
+            + " registration, is 409 IDEMPOTENCY_CONFLICT and changes nothing")
+    void requestIdReuseIsAConflict() throws Exception {
+        UUID tenant = UUID.randomUUID();
+        UUID actor = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        MvcResult first = mvc.perform(
+                        write(post(PATH), SECRET, actor, tenant).content(body(NUMBER, "2026-01-01", requestId, "")))
+                .andExpect(status().isCreated())
+                .andReturn();
+        mvc.perform(write(post(PATH), SECRET, actor, tenant)
+                        .content(body("987654321RT0001", "2026-01-01", requestId, "")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"));
+        MvcResult otherDates = mvc.perform(
+                        write(post(PATH), SECRET, actor, tenant).content(body(NUMBER, "2026-02-01", requestId, "")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"))
+                .andReturn();
+        assertThat(otherDates.getResponse().getContentAsString()).doesNotContain(STORED, NUMBER);
+
+        MvcResult second = mvc.perform(
+                        write(post(PATH), SECRET, actor, tenant).content("""
+                                {"countryCode":"CA","regime":"QST","registrationNumber":"1234567890TQ0001",
+                                 "effectiveFrom":"2026-01-01","justification":"Registered with the tax authority",
+                                 "requestId":"%s"}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String otherId =
+                com.jayway.jsonpath.JsonPath.read(second.getResponse().getContentAsString(), "$.registrationId");
+        mvc.perform(write(put(PATH + "/" + otherId), SECRET, actor, tenant).content("""
+                        {"registrationNumber":"1234567890TQ0001","effectiveFrom":"2026-01-01","version":0,
+                         "justification":"Reusing the first request id","requestId":"%s"}
+                        """.formatted(requestId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"));
+
+        assertThat(count("tax_registration", tenant)).isEqualTo(2);
+        assertThat(count("tax_registration_history", tenant)).isEqualTo(2);
+        assertThat(count("event_outbox", tenant)).isEqualTo(2);
+        assertThat((String)
+                        com.jayway.jsonpath.JsonPath.read(first.getResponse().getContentAsString(), "$.status"))
+                .isEqualTo("ACTIVE");
+    }
+
+    @Test
     @DisplayName("AC 2: a malformed number is 400 on registrationNumber; nothing is stored or queued, and the value"
             + " is in neither the body nor the DEBUG logs")
     void malformedNumberIsNeverStoredOrEchoed() throws Exception {

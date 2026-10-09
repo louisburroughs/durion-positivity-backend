@@ -23,4 +23,12 @@ public interface ExtTaxRegistrationRepository extends JpaRepository<ExtTaxRegist
             @Param("countryCode") @NonNull String countryCode,
             @Param("regime") @NonNull String regime,
             @Param("asOf") @NonNull LocalDate asOf);
+
+    /** Every registration of one country in effect on {@code asOf} (both ends inclusive), in regime order. */
+    @Query("select r from ExtTaxRegistration r where r.countryCode = :countryCode"
+            + " and r.effectiveFrom <= :asOf and (r.effectiveTo is null or r.effectiveTo >= :asOf)"
+            + " order by r.regime")
+    @NonNull
+    List<ExtTaxRegistration> findAllInEffectOn(
+            @Param("countryCode") @NonNull String countryCode, @Param("asOf") @NonNull LocalDate asOf);
 }

@@ -14,6 +14,7 @@ import com.positivity.tax.internal.enums.TaxRegistrationStatus;
 import com.positivity.tax.internal.exception.TaxRegistrationConflictException;
 import com.positivity.tax.internal.exception.TaxRegistrationNotFoundException;
 import com.positivity.tax.internal.exception.TaxRequestInvalidException;
+import com.positivity.tax.internal.exception.TaxRequestUnprocessableException;
 import com.positivity.tax.internal.repository.TaxRegistrationHistoryRepository;
 import com.positivity.tax.internal.repository.TaxRegistrationRepository;
 import com.positivity.tenancy.TenantContext;
@@ -23,9 +24,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -65,6 +64,9 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
 
     /** SQLSTATE of an exclusion-constraint violation: two concurrent writes that overlap. */
     static final String EXCLUSION_VIOLATION = "23P01";
+
+    /** SQLSTATE of a unique violation: two concurrent requests with one request id. */
+    static final String UNIQUE_VIOLATION = "23505";
 
     private static final Pattern COUNTRY = Pattern.compile("^[A-Z]{2}$");
     private static final String COUNTRY_CODE = "countryCode";
@@ -119,15 +121,15 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
                 errors);
         throwIfAny(errors);
 
-        Optional<WriteResult> replay = replay(request.requestId());
-        if (replay.isPresent()) {
-            return replay.get();
-        }
-
         String countryCode = request.countryCode();
         String regime = request.regime().trim();
         RegimeEntry declared = declaredRegime(countryCode, regime);
         String number = wellFormedNumber(regime, request.registrationNumber());
+
+        Optional<TaxRegistrationHistory> applied = history.findByRequestId(request.requestId());
+        if (applied.isPresent()) {
+            return replayCreate(applied.get(), countryCode, regime, number, request);
+        }
         requireNoOverlap(countryCode, regime, request.effectiveFrom(), request.effectiveTo(), null);
 
         String actor = actor();
@@ -169,18 +171,19 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
         }
         throwIfAny(errors);
 
-        Optional<WriteResult> replay = replay(request.requestId());
-        if (replay.isPresent()) {
-            return replay.get();
-        }
-
         TaxRegistration registration = registrations
                 .findById(registrationId)
                 .orElseThrow(() -> new TaxRegistrationNotFoundException(registrationId));
+        String number = wellFormedNumber(registration.getRegime(), request.registrationNumber());
+
+        Optional<TaxRegistrationHistory> applied = history.findByRequestId(request.requestId());
+        if (applied.isPresent()) {
+            return replayUpdate(applied.get(), registrationId, number, request);
+        }
+
         if (registration.getVersion() != request.version()) {
             throw TaxRegistrationConflictException.optimisticLock();
         }
-        String number = wellFormedNumber(registration.getRegime(), request.registrationNumber());
         requireNoOverlap(
                 registration.getCountryCode(),
                 registration.getRegime(),
@@ -243,12 +246,18 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
 
     /** The regime as the country's profile declares it; a country without a profile or another regime is 400. */
     private RegimeEntry declaredRegime(String countryCode, String regime) {
-        TaxCountryProfiles.CountryTaxProfile profile =
-                profiles.profile(countryCode).orElseThrow(() -> invalid(COUNTRY_CODE, "has no tax profile configured"));
+        TaxCountryProfiles.CountryTaxProfile profile = profiles.profile(countryCode)
+                .orElseThrow(() -> unprocessable(
+                        TaxRequestUnprocessableException.JURISDICTION_NOT_CONFIGURED,
+                        COUNTRY_CODE,
+                        "has no tax profile configured"));
         return profile.regimes().stream()
                 .filter(entry -> entry.regime().equals(regime))
                 .findFirst()
-                .orElseThrow(() -> invalid(REGIME, "is not a regime the country's tax profile declares"));
+                .orElseThrow(() -> unprocessable(
+                        TaxRequestUnprocessableException.REGIME_NOT_DECLARED,
+                        REGIME,
+                        "is not a regime the country's tax profile declares"));
     }
 
     /**
@@ -316,7 +325,7 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
             UUID requestId,
             String actor) {
         Instant now = Instant.now(clock);
-        history.save(TaxRegistrationHistory.builder()
+        saveHistory(TaxRegistrationHistory.builder()
                 .registrationId(registration.getId())
                 .requestId(requestId)
                 .changeType(changeType)
@@ -353,10 +362,41 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
                         clock));
     }
 
-    private Optional<WriteResult> replay(UUID requestId) {
-        return history.findByRequestId(requestId)
-                .flatMap(change -> registrations.findById(change.getRegistrationId()))
-                .map(registration -> new WriteResult(toResponse(registration), true));
+    /**
+     * A create whose request id was already applied (ADR-0017 §2): the same request returns the first result; the
+     * id reused for another body, or for a change, is 409 {@code IDEMPOTENCY_CONFLICT}.
+     */
+    private WriteResult replayCreate(
+            TaxRegistrationHistory applied,
+            String countryCode,
+            String regime,
+            String number,
+            TaxRegistrationCreateRequest request) {
+        Snapshot first = readSnapshot(applied.getNewState());
+        boolean same = TaxRegistrationHistory.CREATE.equals(applied.getChangeType())
+                && countryCode.equals(first.countryCode())
+                && regime.equals(first.regime())
+                && first.sameChange(number, request.effectiveFrom(), request.effectiveTo());
+        if (!same) {
+            throw TaxRegistrationConflictException.idempotencyConflict();
+        }
+        return new WriteResult(first.toResponse(clock), true);
+    }
+
+    /**
+     * A change whose request id was already applied (ADR-0017 §2): the same change of the same registration returns
+     * the first result; anything else is 409 {@code IDEMPOTENCY_CONFLICT}.
+     */
+    private WriteResult replayUpdate(
+            TaxRegistrationHistory applied, UUID registrationId, String number, TaxRegistrationUpdateRequest request) {
+        Snapshot first = readSnapshot(applied.getNewState());
+        boolean same = TaxRegistrationHistory.UPDATE.equals(applied.getChangeType())
+                && registrationId.equals(applied.getRegistrationId())
+                && first.sameChange(number, request.effectiveFrom(), request.effectiveTo());
+        if (!same) {
+            throw TaxRegistrationConflictException.idempotencyConflict();
+        }
+        return new WriteResult(first.toResponse(clock), true);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────────────────────
@@ -385,18 +425,71 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
                 LocalDate.ofInstant(Instant.now(clock), ZoneOffset.UTC));
     }
 
-    /** A JSON snapshot of the registration for its history: old and new states. */
+    /** A JSON snapshot of the registration for its history (old and new states) and for a replay's first result. */
     private String snapshot(TaxRegistration registration) {
-        Map<String, Object> state = new LinkedHashMap<>();
-        state.put("registrationNumber", registration.getRegistrationNumber());
-        state.put("effectiveFrom", String.valueOf(registration.getEffectiveFrom()));
-        state.put(
-                "effectiveTo",
-                registration.getEffectiveTo() == null
-                        ? null
-                        : registration.getEffectiveTo().toString());
-        state.put("version", registration.getVersion());
-        return objectMapper.writeValueAsString(state);
+        return objectMapper.writeValueAsString(new Snapshot(
+                registration.getId(),
+                registration.getCountryCode(),
+                registration.getRegime(),
+                registration.getRegistrationNumber(),
+                registration.getJurisdictionCode(),
+                registration.getEffectiveFrom(),
+                registration.getEffectiveTo(),
+                registration.getVersion(),
+                registration.getCreatedAt(),
+                registration.getCreatedBy(),
+                registration.getUpdatedAt(),
+                registration.getUpdatedBy()));
+    }
+
+    private Snapshot readSnapshot(String json) {
+        return objectMapper.readValue(json, Snapshot.class);
+    }
+
+    /** A registration as one change left it. Carries the number, so its {@code toString} leaves it out. */
+    record Snapshot(
+            UUID registrationId,
+            String countryCode,
+            String regime,
+            String registrationNumber,
+            String jurisdictionCode,
+            LocalDate effectiveFrom,
+            @Nullable LocalDate effectiveTo,
+            long version,
+            Instant createdAt,
+            String createdBy,
+            Instant updatedAt,
+            String updatedBy) {
+
+        boolean sameChange(String number, LocalDate from, @Nullable LocalDate to) {
+            return registrationNumber.equals(number)
+                    && effectiveFrom.equals(from)
+                    && java.util.Objects.equals(effectiveTo, to);
+        }
+
+        TaxRegistrationResponse toResponse(Clock clock) {
+            return new TaxRegistrationResponse(
+                    registrationId,
+                    countryCode,
+                    regime,
+                    registrationNumber,
+                    jurisdictionCode,
+                    effectiveFrom,
+                    effectiveTo,
+                    TaxRegistrationStatus.on(
+                                    effectiveFrom, effectiveTo, LocalDate.ofInstant(Instant.now(clock), ZoneOffset.UTC))
+                            .name(),
+                    version,
+                    createdAt,
+                    createdBy,
+                    updatedAt,
+                    updatedBy);
+        }
+
+        @Override
+        public String toString() {
+            return "Snapshot[registrationId=" + registrationId + ", version=" + version + "]";
+        }
     }
 
     private static String actor() {
@@ -407,6 +500,22 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
             throw new IllegalStateException("A tax-registration write needs the forwarded actor");
         }
         return authentication.getName();
+    }
+
+    /**
+     * The history row, flushed now: a concurrent request with the same id loses on {@code
+     * uq_tax_registration_history_request} and answers 409 {@code IDEMPOTENCY_CONFLICT}; retried, it gets the first
+     * result.
+     */
+    private void saveHistory(TaxRegistrationHistory change) {
+        try {
+            history.saveAndFlush(change);
+        } catch (DataIntegrityViolationException e) {
+            if (UNIQUE_VIOLATION.equals(sqlState(e))) {
+                throw TaxRegistrationConflictException.idempotencyConflict();
+            }
+            throw e;
+        }
     }
 
     private static @Nullable String sqlState(Throwable failure) {
@@ -420,6 +529,11 @@ public class TaxRegistrationServiceImpl implements TaxRegistrationService {
 
     private static ApiError.FieldError fieldError(String field, String rule) {
         return new ApiError.FieldError(field, field + " " + rule);
+    }
+
+    private static TaxRequestUnprocessableException unprocessable(String code, String field, String rule) {
+        return new TaxRequestUnprocessableException(
+                code, "Request refused by the tax configuration", List.of(fieldError(field, rule)));
     }
 
     private static TaxRequestInvalidException invalid(String field, String rule) {

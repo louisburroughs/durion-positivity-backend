@@ -718,25 +718,29 @@ ADR-0071 §5). Nothing here names a country or a regime: they come from pos-tax'
 
 | Method · path | Permission | Codes |
 | --- | --- | --- |
-| `GET /v1/accounting/tax-registrations[?asOf=]` | `accounting:tax_registration:view` | 200; 403 |
-| `POST /v1/accounting/tax-registrations` | `accounting:tax_registration:manage` | 201; 200 (replayed `requestId`); 400; 403; 409 relayed; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
-| `PUT /v1/accounting/tax-registrations/{registrationId}` | `accounting:tax_registration:manage` | 200; 400; 403; 404 relayed; 409 relayed; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
+| `GET /v1/accounting/tax-registrations[?asOf=]` | `accounting:tax_registration:view` | 200; 400 (malformed `asOf`); 403 |
+| `POST /v1/accounting/tax-registrations` | `accounting:tax_registration:manage` | 201; 200 (replayed `requestId`); 400; 403; 409 and 422 relayed; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
+| `PUT /v1/accounting/tax-registrations/{registrationId}` | `accounting:tax_registration:manage` | 200; 400; 403; 404, 409 and 422 relayed; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
 
 - **Writes.** The front door checks the justification (10 to 1000 characters) and the `requestId` (400
   `VALIDATION_ERROR`), then calls pos-tax (`TaxRegistrationClient`, ADR-0044 R2) with its per-caller secret
-  (`pos.accounting.tax.front-door-secret`, env `POS_TAX_ACCOUNTING_SECRET`, never in code), the actor exactly as the
-  gateway forwarded it in `X-User-Id` (a body field never names the actor; a request without a person's id is 403)
-  and the bound tenant. pos-tax's 400, 404 and 409 (`TAX_REGISTRATION_OVERLAP`, `OPTIMISTIC_LOCK`, and
-  `VALIDATION_ERROR` with `fieldErrors[registrationNumber]` for a number that does not match its regime's shape) are
-  relayed unchanged. pos-tax unreachable or failing, a blank secret here or a 401 there is 503
-  `SERVICE_UNAVAILABLE` with `Retry-After`; nothing is stored here either way. pos-tax is never reached from a
-  screen.
+  (`pos.accounting.tax.front-door-secret`, env `POS_TAX_ACCOUNTING_SECRET`, never in code), the actor and the bound
+  tenant. The actor is the authenticated principal's user id (ADR-0018), forwarded to pos-tax as `X-User-Id`; a body
+  field or a raw header never names it, and a caller without a person's user id is 403. The inbound
+  `X-Correlation-Id` is forwarded too. pos-tax's 400, 404, 409 (`TAX_REGISTRATION_OVERLAP`, `OPTIMISTIC_LOCK`,
+  `IDEMPOTENCY_CONFLICT`) and 422 (`TAX_JURISDICTION_NOT_CONFIGURED`, `TAX_REGIME_NOT_DECLARED`) are relayed with their
+  code, message and field errors (`fieldErrors[registrationNumber]` for a number that does not match its regime's
+  shape); the correlation id is this request's. pos-tax unreachable, slower than the timeouts
+  (`pos.accounting.tax.connect-timeout` 2s, `read-timeout` 5s), failing, a blank secret here or a 401 there is 503
+  `SERVICE_UNAVAILABLE` with `Retry-After`; a 401 also counts `accounting.tax_registration.front_door_secret_refused`.
+  Nothing is stored here either way. pos-tax is never reached from a screen.
 - **Replica.** `ext_tax_registration` (V21) is written only by pos-tax's `tax.registration.changed` on
   `tax.events.v1` (`TaxRegistrationEventsListener`), keyed by the registration id and guarded by its version
   (`ReplicaVersionGuard`), so a redelivery or the manifest's re-send applies once. `TaxManifestListener` compares
   each `tax.manifest.v1` window with `processed_events` (owner `tax`) and asks pos-tax to replay a drifted window on
   `tax.commands.v1`. The GET reads it, every row or those in effect on `asOf` (both ends inclusive, AW49); a status
-  is derived on `asOf`, else today in UTC. A write appears in the GET once its fact arrives.
+  is derived on `asOf`, else today in UTC. A write appears in the GET once its fact arrives. A fact whose payload
+  names another tenant than the one its record header bound is skipped and logged.
 - **Data.** The copy keeps the shape-checked, normalised number: INTERNAL under ADR-0072 Decision 1. Nothing logs it.
 
 ## Location scope (ADR-0061, #1885)

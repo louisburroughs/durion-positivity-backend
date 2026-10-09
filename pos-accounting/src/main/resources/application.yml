@@ -160,6 +160,9 @@ pos:
     tax:
       base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
       front-door-secret: ${POS_TAX_ACCOUNTING_SECRET:}
+      # Bounds on each call: a slow pos-tax answers 503 instead of holding the request thread.
+      connect-timeout: ${POS_ACCOUNTING_TAX_CONNECT_TIMEOUT:2s}
+      read-timeout: ${POS_ACCOUNTING_TAX_READ_TIMEOUT:5s}
     # The accounting template held in the platform tenant (#2526; ADR-0062 section 6).
     tenant-template:
       startup-sweep:

@@ -20,12 +20,14 @@ import com.positivity.accounting.internal.exception.TaxServiceUnavailableExcepti
 import com.positivity.accounting.internal.repository.ExtTaxRegistrationRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.TaxRegistrationFrontDoorServiceImpl;
+import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.shared.error.ApiError;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -69,13 +71,27 @@ class TaxRegistrationControllerTest {
     @MockitoBean
     private ExtTaxRegistrationRepository registrations;
 
+    /** A person: the gateway's authentication carries the stable user id in its details (ADR-0018, ADR-0022). */
     private static Authentication caller(String... permissions) {
-        return new UsernamePasswordAuthenticationToken(
+        UsernamePasswordAuthenticationToken token = notAPerson(permissions);
+        token.setDetails(Map.of(
+                GatewaySecurityConstants.DETAIL_USERNAME,
+                "controller-user",
+                GatewaySecurityConstants.DETAIL_USER_ID,
+                ACTOR));
+        return token;
+    }
+
+    /** An authenticated caller with no user id: a service token, never a person. */
+    private static UsernamePasswordAuthenticationToken notAPerson(String... permissions) {
+        UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(
                 "controller-user",
                 null,
                 java.util.Arrays.stream(permissions)
                         .map(SimpleGrantedAuthority::new)
                         .toList());
+        token.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "controller-user"));
+        return token;
     }
 
     private static String body(String justification) {
@@ -135,7 +151,8 @@ class TaxRegistrationControllerTest {
     }
 
     @Test
-    @DisplayName("AC 3: the write is passed on with the X-User-Id actor, never a body field, and answers 201")
+    @DisplayName("AC 3: the write is passed on with the principal's user id as the actor, never a header or body"
+            + " field, and answers 201")
     void recordsWithTheForwardedActor() throws Exception {
         when(client.create(any(), eq(ACTOR.toString())))
                 .thenReturn(new TaxRegistrationClient.Written(registration(), false));
@@ -153,10 +170,26 @@ class TaxRegistrationControllerTest {
     }
 
     @Test
-    @DisplayName("a request without a person's X-User-Id is 403 and pos-tax is not called")
-    void personRequired() throws Exception {
+    @DisplayName("a replayed requestId answers 200 with pos-tax's first result")
+    void replayAnswers200() throws Exception {
+        when(client.create(any(), eq(ACTOR.toString())))
+                .thenReturn(new TaxRegistrationClient.Written(registration(), true));
+
         mockMvc.perform(post(PATH)
                         .with(authentication(caller(AccountingPermissions.TAX_REGISTRATION_MANAGE)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Registered with the tax authority")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registrationId").value(REGISTRATION_ID.toString()));
+    }
+
+    @Test
+    @DisplayName("ADR-0018: a caller without a person's user id is 403, whatever X-User-Id says, and pos-tax is not"
+            + " called")
+    void personRequired() throws Exception {
+        mockMvc.perform(post(PATH)
+                        .with(authentication(notAPerson(AccountingPermissions.TAX_REGISTRATION_MANAGE)))
+                        .header("X-User-Id", ACTOR.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("Registered with the tax authority")))
                 .andExpect(status().isForbidden());

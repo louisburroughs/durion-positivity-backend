@@ -56,21 +56,23 @@ public class TaxRegistrationController {
                     Use this tool only as the pos-accounting front door; do not use it from a screen or another \
                     service, which call POST /v1/accounting/tax-registrations instead.
                     Preconditions: the call carries pos-accounting's front-door secret and the forwarded X-User-Id \
-                    and X-Tenant-Id (401 otherwise); the country has a tax profile and declares the regime (400).
+                    and X-Tenant-Id (401 otherwise); the country has a tax profile (422 \
+                    TAX_JURISDICTION_NOT_CONFIGURED) that declares the regime (422 TAX_REGIME_NOT_DECLARED).
                     Required inputs: countryCode, regime, registrationNumber, effectiveFrom, justification (at least \
                     10 characters) and requestId; effectiveTo is optional and inclusive.
                     The number must match the regime's configured shape (400 VALIDATION_ERROR with \
                     fieldErrors[registrationNumber]); it is never echoed or logged, and nothing is stored when it fails.
                     Emits a TAX_REGISTRATION_CREATE event, writes a history row naming the forwarded actor, and \
-                    returns 201, or 200 with the first result for a replayed requestId.
+                    returns 201, or 200 with the first result when the same request is replayed with its requestId.
                     Returns 409 TAX_REGISTRATION_OVERLAP when another registration of the same country and regime is \
-                    in effect on any date this one covers.
+                    in effect on any date this one covers, and 409 IDEMPOTENCY_CONFLICT when the requestId was used \
+                    for another request.
                     """)
     @ApiResponse(responseCode = "201", description = "The registration was recorded")
     @ApiResponse(responseCode = "200", description = "A replayed requestId: the first result")
     @ApiResponse(
             responseCode = "400",
-            description = "VALIDATION_ERROR: a missing or malformed field, an undeclared regime or a malformed number",
+            description = "VALIDATION_ERROR: a missing or malformed field or a malformed number",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
@@ -78,7 +80,11 @@ public class TaxRegistrationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "TAX_REGISTRATION_OVERLAP",
+            description = "TAX_REGISTRATION_OVERLAP or IDEMPOTENCY_CONFLICT",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "TAX_JURISDICTION_NOT_CONFIGURED or TAX_REGIME_NOT_DECLARED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TAX_REGISTRATION_CREATE", apiVersion = "1")
     public ResponseEntity<TaxRegistrationResponse> create(@RequestBody TaxRegistrationCreateRequest request) {
@@ -102,9 +108,10 @@ public class TaxRegistrationController {
                     The number must match the regime's configured shape (400 VALIDATION_ERROR with \
                     fieldErrors[registrationNumber]); it is never echoed or logged, and nothing changes when it fails.
                     Emits a TAX_REGISTRATION_UPDATE event, writes a history row naming the forwarded actor, and \
-                    returns 200, also with the first result for a replayed requestId.
+                    returns 200, also with the first result when the same change is replayed with its requestId.
                     Returns 409 TAX_REGISTRATION_OVERLAP when the new dates overlap another registration of the same \
-                    country and regime; back-dating never changes an entry already posted.
+                    country and regime, and 409 IDEMPOTENCY_CONFLICT when the requestId was used for another request; \
+                    back-dating never changes an entry already posted.
                     """)
     @ApiResponse(responseCode = "200", description = "The registration was changed, or a replayed requestId")
     @ApiResponse(
@@ -121,7 +128,7 @@ public class TaxRegistrationController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "TAX_REGISTRATION_OVERLAP or OPTIMISTIC_LOCK",
+            description = "TAX_REGISTRATION_OVERLAP, OPTIMISTIC_LOCK or IDEMPOTENCY_CONFLICT",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TAX_REGISTRATION_UPDATE", apiVersion = "1")
     public ResponseEntity<TaxRegistrationResponse> update(

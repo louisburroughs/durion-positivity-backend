@@ -505,6 +505,9 @@ jobs:
           # pos-supplier's vendor tax-registration number key (#2621): same rules as the audit key,
           # and a different key. deploy-backend.sh persists it on first use and refuses a change.
           SUPPLIER_VENDOR_TAXID_ENC_KEY: ${{ secrets.SUPPLIER_VENDOR_TAXID_ENC_KEY }}
+          # CAP:550 S32c: pos-accounting's front-door secret for pos-tax's registration writes (ADR-0071 §6).
+          # deploy-backend.sh persists it; unset, the copy already on the box stays.
+          POS_TAX_ACCOUNTING_SECRET: ${{ secrets.POS_TAX_ACCOUNTING_SECRET }}
           # Only a manual dispatch can ask for the alpha schema reset (drop every backend
           # database, let Flyway rebuild from V1); the automatic promotion path never does.
           RESET_ALPHA_DATABASES: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_alpha_databases }}
@@ -525,6 +528,10 @@ jobs:
           SUPPLIER_VENDOR_TAXID_ENC_KEY="$(printf '%s' "${SUPPLIER_VENDOR_TAXID_ENC_KEY}" | tr -d '[:space:]')"
           if [[ -n "${SUPPLIER_VENDOR_TAXID_ENC_KEY}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT+="SUPPLIER_VENDOR_TAXID_ENC_KEY='${SUPPLIER_VENDOR_TAXID_ENC_KEY}' "
+          fi
+          POS_TAX_ACCOUNTING_SECRET="$(printf '%s' "${POS_TAX_ACCOUNTING_SECRET}" | tr -d '[:space:]')"
+          if [[ -n "${POS_TAX_ACCOUNTING_SECRET}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT+="POS_TAX_ACCOUNTING_SECRET='${POS_TAX_ACCOUNTING_SECRET}' "
           fi
           # Same rule for the reset: the variable reaches the host only when the reset was
           # asked for, so deploy-backend.sh's default (false) is what every other deploy sees.

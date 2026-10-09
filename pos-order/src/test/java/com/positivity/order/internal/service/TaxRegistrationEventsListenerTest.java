@@ -17,12 +17,14 @@ import com.positivity.order.internal.entity.ExtTaxRegistration;
 import com.positivity.order.internal.entity.ProcessedEvent;
 import com.positivity.order.internal.repository.ExtTaxRegistrationRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
+import com.positivity.tenancy.TenantContext;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -40,6 +42,7 @@ import tools.jackson.databind.ObjectMapper;
 class TaxRegistrationEventsListenerTest {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-08T12:00:00Z"), ZoneOffset.UTC);
+    private static final UUID TENANT = UUID.fromString("01990000-0000-7000-8000-0000000000f1");
     private static final UUID REGISTRATION_ID = UUID.fromString("01990000-0000-7000-8000-0000000000a1");
     private static final String NUMBER = "ZZ12345";
 
@@ -49,9 +52,27 @@ class TaxRegistrationEventsListenerTest {
 
     @BeforeEach
     void setUp() {
+        TenantContext.bind(TENANT);
         listener = new TaxRegistrationEventsListener(
                 CLOCK, new ObjectMapper(), processed, registrations, mock(PlatformTransactionManager.class));
         when(registrations.findById(any())).thenReturn(Optional.empty());
+    }
+
+    @AfterEach
+    void clearTenant() {
+        TenantContext.clear();
+    }
+
+    @Test
+    @DisplayName("a fact whose payload names another tenant than the bound one is skipped, and marked")
+    void otherTenantSkipped() {
+        TenantContext.clear();
+        TenantContext.bind(UUID.fromString("01990000-0000-7000-8000-0000000000f2"));
+
+        listener.onTaxEvent(fact("e-other", 0, null));
+
+        verify(registrations, never()).save(any());
+        verify(processed, times(1)).save(any());
     }
 
     private static String fact(String eventId, long version, String effectiveTo) {
