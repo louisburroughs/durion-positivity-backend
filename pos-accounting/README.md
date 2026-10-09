@@ -792,6 +792,17 @@ exactly as before.
   `NOT_REGISTERED`, `CATEGORY_NOT_RECOVERABLE`, `RATE_UNAVAILABLE`, `EVIDENCE_MISSING` or
   `SUPPLIER_REGISTRATION_MISSING`), with the supplier's number as the claim's evidence (INTERNAL, ADR-0072 Decision 1;
   never logged).
+- **Output tax by type (item 11, AW50).** `ext_invoice_tax.tax_type` is filled from S32a's
+  `TaxBreakdownLine.taxType`. A tenant that has any `SALES_TAX_PAYABLE_<taxType>` key mapped under `INVOICE_REVENUE`
+  (`TypedOutputTax`) posts one tax leg per type to that key, HALF_UP per leg with any cent on the largest, and its
+  reversals mirror the original lines. An invoice whose typed rows do not account for its whole tax, or whose type
+  has no mapped key, posts nothing (AR, revenue and tax wait together): it is held `SUSPENDED` / `TAX_TYPE_MISSING`
+  and posted by the audited reprocess (`InvoiceRevenueReprocessor`). No default account is used and no type is
+  inferred. A credit memo against such an invoice is refused with 422 `TAX_TYPE_MISSING` before anything is stored;
+  a typed tenant's credit splits its tax across the types pro rata. A tenant without typed keys (USD) posts exactly
+  as before. The tax-liability reconciliation compares against every account the `SALES_TAX_PAYABLE` and
+  `SALES_TAX_PAYABLE_*` keys map to in the period, never a literal code (`taxPayableAccountCode` lists them,
+  comma-joined; still `2200` for a USD tenant).
 - **Cash rounding (item 12).** The CAD data provisions 6050 and `CASH_ROUNDING_DIFFERENCE`; the posting waits on
   ADR-0067 step A8, which adds the settled amount and the signed rounding to the cash `PaymentSettledV1`.
 - **Flyway.** `V22__input_tax_recovery.sql`.
