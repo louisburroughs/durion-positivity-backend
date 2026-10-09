@@ -206,16 +206,19 @@ public class CrmAccountsController {
     @Operation(operationId = "createCrmCommercialAccount", summary = "Create Commercial Account", description = """
                     Creates a commercial party record with status ACTIVE and a generated customer number of the \
                     form CUST-XXXXXXXX.
-                    Use this tool when onboarding a new commercial customer; do not use searchParties or \
-                    checkPartyDuplicates, which only look up existing parties, and run checkPartyDuplicates \
-                    first to avoid creating a duplicate, because no uniqueness check is applied here.
+                    Use this tool when onboarding a new commercial customer; do not use it for an individual \
+                    customer, which is createCrmPerson (it links the person's name and contact points in \
+                    pos-people); do not use searchParties or checkPartyDuplicates, which only look up existing \
+                    parties, and run checkPartyDuplicates first to avoid creating a duplicate, because no \
+                    uniqueness check is applied here.
                     Preconditions: none beyond authorization; the service performs no duplicate detection on \
                     legalName.
-                    Required inputs: legalName (non-blank, max 255); partyType defaults to COMMERCIAL and must \
-                    be PERSON, COMMERCIAL, or UNKNOWN when supplied; displayName, taxId, billingTermsId, and \
-                    externalIdentifiers are optional.
+                    Required inputs: legalName (non-blank, max 255); partyType is optional and must be \
+                    COMMERCIAL when supplied; displayName, taxId, billingTermsId, and externalIdentifiers are \
+                    optional.
                     Emits a CUSTOMER_PARTY_CREATE event and publishes a party-changed customer fact.
-                    Returns 400 when legalName is missing or blank, or when partyType is not a recognized value.
+                    Returns 400 when legalName is missing or blank, or when partyType is anything other than \
+                    COMMERCIAL (PERSON included: an individual is created with createCrmPerson).
                     """)
     @ApiResponses(
             value = {

@@ -91,6 +91,8 @@ public class CrmPersonController {
                     is stored as given; omit it and a CUST-PER number is generated.
                     Emits a CRM_PERSON_CREATE event, publishes a party-changed customer fact, and writes \
                     the contact points to pos-people.
+                    The response carries both ids: partyId is the customer party that getParty, vehicles, \
+                    estimates and appointments take, and personId is the pos-people identity getPerson takes.
                     Returns 400 when firstName, lastName, or preferredContactMethod is missing or an email \
                     value is malformed, and 409 when the supplied customerNumber already belongs to another \
                     party.
