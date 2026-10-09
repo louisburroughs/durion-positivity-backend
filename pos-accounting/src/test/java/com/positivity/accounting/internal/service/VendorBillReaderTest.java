@@ -681,4 +681,174 @@ class VendorBillReaderTest {
                         org.assertj.core.groups.Tuple.tuple("INV-FREE", false));
         verify(copies, times(1)).heldVendors(any());
     }
+
+    // ---- CAP:550 S32d item 10: the bill read's tax by type and recovery (review of #2664 B4) ---------------------
+
+    private final VendorBillTaxRepository readTaxes = mock(VendorBillTaxRepository.class);
+    private final VendorBillTaxRecoveryRepository readRecoveries = mock(VendorBillTaxRecoveryRepository.class);
+    private final GLMappingResolver readResolver = mock(GLMappingResolver.class);
+    private final GLAccountRepository readAccounts = mock(GLAccountRepository.class);
+    private final VendorBillGlPostingRepository readPostings = mock(VendorBillGlPostingRepository.class);
+
+    private VendorBillReader taxReader() {
+        ApApprovalPolicy approvalPolicy = mock();
+        when(approvalPolicy.settings()).thenReturn(policy("2500.00", "0", false));
+        return new VendorBillReader(
+                Clock.systemUTC(),
+                mock(VendorBillRepository.class),
+                mock(VendorBillLineRepository.class),
+                mock(VendorBillMatchEvidenceRepository.class),
+                mock(VendorBillMatchCandidateRepository.class),
+                readPostings,
+                mock(VendorBillReissueRepository.class),
+                mock(APPaymentAllocationRepository.class),
+                mock(JournalEntryRepository.class),
+                mock(AccountingCalendarZoneResolver.class),
+                new LedgerCurrency("CAD"),
+                approvalPolicy,
+                mock(SupplierVendorCopies.class),
+                readTaxes,
+                readRecoveries,
+                readResolver,
+                readAccounts);
+    }
+
+    private VendorBill postedBill(UUID id, String net, String tax, String gross) {
+        VendorBill bill = new VendorBill(id);
+        bill.setTotalAmount(new BigDecimal(gross));
+        bill.setNetAmount(new BigDecimal(net));
+        bill.setTaxAmount(new BigDecimal(tax));
+        bill.setCurrency("CAD");
+        bill.setCreatedBy("clerk.ana");
+        bill.setStatus(VendorBillStatus.APPROVED);
+        bill.setBillNumber("INV-" + id.toString().substring(32));
+        bill.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        com.positivity.accounting.internal.entity.VendorBillGlPosting posting =
+                new com.positivity.accounting.internal.entity.VendorBillGlPosting();
+        posting.setVendorBillId(id);
+        posting.setPostingDate(java.time.LocalDate.of(2026, 10, 1));
+        when(readPostings.findByVendorBillId(id)).thenReturn(java.util.Optional.of(posting));
+        return bill;
+    }
+
+    private static com.positivity.accounting.internal.entity.VendorBillTax statedTax(
+            UUID billId, String type, String amount) {
+        com.positivity.accounting.internal.entity.VendorBillTax tax =
+                new com.positivity.accounting.internal.entity.VendorBillTax();
+        tax.setVendorBillId(billId);
+        tax.setTaxType(type);
+        tax.setAmount(new BigDecimal(amount));
+        tax.setSource(com.positivity.accounting.internal.entity.VendorBillTax.Source.DOCUMENT);
+        return tax;
+    }
+
+    private static com.positivity.accounting.internal.entity.VendorBillTaxRecovery recovery(
+            UUID billId,
+            String type,
+            String regime,
+            String stated,
+            String recovered,
+            String mappingKey,
+            String withheld) {
+        com.positivity.accounting.internal.entity.VendorBillTaxRecovery row =
+                new com.positivity.accounting.internal.entity.VendorBillTaxRecovery();
+        row.setVendorBillId(billId);
+        row.setTaxType(type);
+        row.setRegime(regime);
+        row.setStatedAmount(new BigDecimal(stated));
+        row.setRecoveredAmount(new BigDecimal(recovered));
+        row.setMappingKey(mappingKey);
+        row.setRecoveryWithheldReason(withheld);
+        return row;
+    }
+
+    @Test
+    @DisplayName("S32d AC 8 / B4: a split bill reads its net, its tax by type and the recovery by account")
+    void splitAndRecoveredBillRead() {
+        UUID billId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b01");
+        VendorBillReader reader = taxReader();
+        VendorBill bill = postedBill(billId, "1000.00", "120.00", "1120.00");
+        when(readTaxes.findByVendorBillIdOrderByTaxType(billId))
+                .thenReturn(List.of(statedTax(billId, "GST", "50.00"), statedTax(billId, "PST", "70.00")));
+        when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId))
+                .thenReturn(List.of(
+                        recovery(billId, "GST", "GST_HST", "50.00", "50.00", "TAX_RECOVERABLE_GST_HST", null),
+                        recovery(billId, "PST", null, "70.00", "0.00", null, "NOT_RECOVERABLE")));
+        UUID account1250 = UUID.randomUUID();
+        when(readResolver.resolveGLAccount(
+                        VendorBillPostingService.POSTING_CATEGORY,
+                        "TAX_RECOVERABLE_GST_HST",
+                        java.time.LocalDate.of(2026, 10, 1).atStartOfDay()))
+                .thenReturn(account1250);
+        com.positivity.accounting.internal.entity.GLAccount gl =
+                new com.positivity.accounting.internal.entity.GLAccount(account1250);
+        gl.setAccountCode("1250");
+        gl.setAccountName("GST/HST Recoverable");
+        when(readAccounts.findById(account1250)).thenReturn(java.util.Optional.of(gl));
+
+        com.positivity.accounting.internal.dto.VendorBillResponse read = reader.read(bill);
+
+        assertThat(read.getNetAmount()).isEqualByComparingTo("1000.00");
+        assertThat(read.getTaxByType())
+                .extracting(VendorBillReview.TaxByType::taxType, VendorBillReview.TaxByType::amount)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("GST", new BigDecimal("50.00")),
+                        org.assertj.core.groups.Tuple.tuple("PST", new BigDecimal("70.00")));
+        assertThat(read.getInputTaxRecovery())
+                .extracting(
+                        VendorBillReview.InputTaxRecovery::taxType,
+                        VendorBillReview.InputTaxRecovery::recoveredAmount,
+                        VendorBillReview.InputTaxRecovery::accountCode,
+                        VendorBillReview.InputTaxRecovery::recoveryWithheldReason)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("GST", new BigDecimal("50.00"), "1250", null),
+                        org.assertj.core.groups.Tuple.tuple("PST", new BigDecimal("0.00"), null, "NOT_RECOVERABLE"));
+    }
+
+    @Test
+    @DisplayName("S32d AC 10 / B4: an unsplit bill reads no tax by type and TAX_SPLIT_MISSING")
+    void unsplitBillRead() {
+        UUID billId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b02");
+        VendorBillReader reader = taxReader();
+        VendorBill bill = postedBill(billId, "1000.00", "120.00", "1120.00");
+        when(readTaxes.findByVendorBillIdOrderByTaxType(billId)).thenReturn(List.of());
+        when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId))
+                .thenReturn(List.of(recovery(billId, null, null, "120.00", "0.00", null, "TAX_SPLIT_MISSING")));
+
+        com.positivity.accounting.internal.dto.VendorBillResponse read = reader.read(bill);
+
+        assertThat(read.getNetAmount()).isEqualByComparingTo("1000.00");
+        assertThat(read.getTaxByType()).isEmpty();
+        assertThat(read.getInputTaxRecovery()).singleElement().satisfies(row -> {
+            assertThat(row.taxType()).isNull();
+            assertThat(row.statedAmount()).isEqualByComparingTo("120.00");
+            assertThat(row.recoveredAmount()).isZero();
+            assertThat(row.accountCode()).isNull();
+            assertThat(row.recoveryWithheldReason()).isEqualTo("TAX_SPLIT_MISSING");
+        });
+    }
+
+    @Test
+    @DisplayName("S32d AC 11 / B4: a bill without the supplier's registration reads SUPPLIER_REGISTRATION_MISSING")
+    void missingEvidenceBillRead() {
+        UUID billId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b03");
+        VendorBillReader reader = taxReader();
+        VendorBill bill = postedBill(billId, "142.86", "7.14", "150.00");
+        when(readTaxes.findByVendorBillIdOrderByTaxType(billId)).thenReturn(List.of(statedTax(billId, "GST", "7.14")));
+        when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId))
+                .thenReturn(List.of(
+                        recovery(billId, "GST", "GST_HST", "7.14", "0.00", null, "SUPPLIER_REGISTRATION_MISSING")));
+
+        com.positivity.accounting.internal.dto.VendorBillResponse read = reader.read(bill);
+
+        assertThat(read.getNetAmount()).isEqualByComparingTo("142.86");
+        assertThat(read.getTaxByType())
+                .extracting(VendorBillReview.TaxByType::taxType)
+                .containsExactly("GST");
+        assertThat(read.getInputTaxRecovery()).singleElement().satisfies(row -> {
+            assertThat(row.regime()).isEqualTo("GST_HST");
+            assertThat(row.recoveredAmount()).isZero();
+            assertThat(row.recoveryWithheldReason()).isEqualTo("SUPPLIER_REGISTRATION_MISSING");
+        });
+    }
 }

@@ -549,9 +549,13 @@ class InvoiceRevenuePostingServiceTest {
     @DisplayName("S32d: a typed tenant's reversal mirrors the recognition's own lines (ADR-0047)")
     void typedTenantReversalMirrorsTheOriginalLines() {
         UUID gstAccount = UUID.randomUUID();
-        when(typedOutputTax.typedAccounts(any())).thenReturn(java.util.Map.of("GST", gstAccount));
+        org.mockito.Mockito.lenient()
+                .when(typedOutputTax.typedAccounts(any()))
+                .thenReturn(java.util.Map.of("GST", gstAccount));
+        InvoiceGlPosting typedPosting = openPosting();
+        typedPosting.setTaxPostedByType(true);
         when(repository.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE_ID))
-                .thenReturn(Optional.of(openPosting()));
+                .thenReturn(Optional.of(typedPosting));
         JournalEntry original = new JournalEntry();
         original.setJournalEntryId(JOURNAL_ENTRY_ID);
         original.getLines().add(line(AR, "216.53", "0"));
@@ -575,9 +579,17 @@ class InvoiceRevenuePostingServiceTest {
                         lines.capture(),
                         eq(expectedDate(REVERTED_AT)),
                         anyString());
+        // The original lines as posted (Dr AR / Cr revenue / Cr GST): postMirror swaps each one.
         assertThat(lines.getValue())
-                .extracting(GLPostingService.PostedLine::accountId)
-                .containsExactly(AR, REVENUE, gstAccount);
+                .extracting(
+                        GLPostingService.PostedLine::accountId,
+                        line -> line.debit().stripTrailingZeros(),
+                        line -> line.credit().stripTrailingZeros())
+                .containsExactly(
+                        org.assertj.core.api.Assertions.tuple(AR, new BigDecimal("216.53"), BigDecimal.ZERO),
+                        org.assertj.core.api.Assertions.tuple(
+                                REVENUE, BigDecimal.ZERO, new BigDecimal("200.00").stripTrailingZeros()),
+                        org.assertj.core.api.Assertions.tuple(gstAccount, BigDecimal.ZERO, new BigDecimal("16.53")));
         verify(glPostingService, never())
                 .postInvoiceRevenueReversal(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
     }
