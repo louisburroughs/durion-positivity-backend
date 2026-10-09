@@ -7617,7 +7617,7 @@ paths:
       - accounting:period:reopen
   /v1/accounting/petty-expense-categories:
     get:
-      description: 'Lists the tenant''s petty-expense categories, active and inactive, in code order: per category its permanent code, label, examples, status, the expense account it posts to today (id, number, name, effective from), any account that takes over on a later date, and the change history (date, actor, change old to new, justification).
+      description: 'Lists the tenant''s petty-expense categories, active and inactive, in code order: per category its permanent code, label, examples, status, the expense account it posts to today (id, number, name, effective from), any account that takes over on a later date, and the change history (date, actor and actorName, the actor''s display name or null when not known, change old to new, justification).
 
         Use this tool to show what cashiers may spend drawer cash on and where each category posts; do not use listMappingKeysByCategory, which shows keys without their labels, accounts or history.
 
@@ -7659,7 +7659,7 @@ paths:
 
         Required inputs: code (permanent, [A-Z0-9_]{1,40}), label, glAccountId, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT); examples is optional.
 
-        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_CREATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 201 with the category.
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_CREATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 201 with the category, each history row''s actorName resolved now (null when not known, a replayed requestId included).
 
         '
       operationId: createPettyExpenseCategory
@@ -7737,7 +7737,7 @@ paths:
 
         Required inputs: code (path), label, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT); examples and version are optional.
 
-        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_UPDATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_UPDATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category, each history row''s actorName resolved now (null when not known, a replayed requestId included).
 
         '
       operationId: updatePettyExpenseCategory
@@ -7813,7 +7813,7 @@ paths:
 
         Required inputs: code (path), glAccountId, effectiveFrom, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT).
 
-        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_REMAP event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category, each history row''s actorName resolved now (null when not known, a replayed requestId included).
 
         '
       operationId: remapPettyExpenseCategory
@@ -7895,7 +7895,7 @@ paths:
 
         Required inputs: code (path), justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT).
 
-        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_DEACTIVATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category.
+        Emits an ACCOUNTING_PETTY_EXPENSE_CATEGORY_DEACTIVATE event, writes a history row naming the caller, queues accounting.petty-expense-category.changed, and returns 200 with the category, each history row''s actorName resolved now (null when not known, a replayed requestId included).
 
         '
       operationId: deactivatePettyExpenseCategory
@@ -12973,7 +12973,7 @@ paths:
 
         Emits an ACCOUNTING_VENDOR_BILL_CREATE event and posts nothing (a bill posts once, at approval).
 
-        Returns 201 with the created (or already-existing) bill, 400 when the payload fails validation, 422 VENDOR_INACTIVE, and 503 VENDOR_REPLICATION_PENDING with Retry-After when the vendor is not in the copy yet.
+        Returns 201 with the created (or already-existing) bill (createdByName, the creator''s display name, null when not known), 400 when the payload fails validation, 422 VENDOR_INACTIVE, and 503 VENDOR_REPLICATION_PENDING with Retry-After when the vendor is not in the copy yet.
 
         Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) already holds the same vendor, bill date and bill number, compared ignoring case, spacing, punctuation and leading zeros; referenceId is the existing bill''s vendorBillId and nothing is created. A replayed eventId is never a duplicate.
 
@@ -13128,7 +13128,7 @@ paths:
       - accounting:ap:view
   /v1/accounting/vendor-bills/event/{eventId}:
     get:
-      description: 'Returns the vendor bill created from a specific goods-received event, using the event id recorded at bill creation.
+      description: 'Returns the vendor bill created from a specific goods-received event, using the event id recorded at bill creation, each actor with its display name (createdByName, submittedByName, approvedByName, rejectedByName), null when not known or SYSTEM.
 
         Use this tool to check whether a goods-received event was already billed, for example before replaying it; use getVendorBillById instead when the bill id is known.
 
@@ -13225,7 +13225,7 @@ paths:
 
         Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, invoiceDate and lineItems; dueDate is optional.
 
-        Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the returned bill''s status conveys the outcome, APPROVED included.
+        Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the returned bill''s status conveys the outcome, APPROVED included, and each of its actors carries a display name (createdByName, submittedByName, approvedByName), null when not known or SYSTEM.
 
         Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring case, spacing, punctuation and leading zeros (referenceId names it, and the receipt bill is left untouched), the generic 409 DUPLICATE_RESOURCE when a concurrent writer takes the number between the check and the commit, and 409 OPTIMISTIC_LOCK when the matched bill was decided meanwhile (send the invoice again).
 
@@ -13302,7 +13302,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_BILL_MATCH_CANDIDATE_SELECT and writes a VENDOR_BILL_MATCH_CANDIDATE_SELECT audit row, plus a VENDOR_BILL_MATCH_CANDIDATE_RELEASE row for a bill released; a replay is answered 409 AP_MATCH_CANDIDATE_ALREADY_RESOLVED.
 
-        Returns 200 with the bill read, 401 without a valid token, 403 FORBIDDEN without accounting:ap:approve or accounting:ap:approve_over_limit, 404 AP_MATCH_CANDIDATE_NOT_FOUND, 409 AP_MATCH_CANDIDATE_ALREADY_RESOLVED when someone else resolved the set, 409 AP_BILL_NOT_APPROVABLE naming the chosen bill''s status, 409 AP_BILL_AWAITING_INVOICE for a candidate that kept no invoice, and 409 AP_BILL_DUPLICATE when another live bill already holds the invoice number on the invoice date.
+        Returns 200 with the bill read (each actor with its display name: createdByName, submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), 401 without a valid token, 403 FORBIDDEN without accounting:ap:approve or accounting:ap:approve_over_limit, 404 AP_MATCH_CANDIDATE_NOT_FOUND, 409 AP_MATCH_CANDIDATE_ALREADY_RESOLVED when someone else resolved the set, 409 AP_BILL_NOT_APPROVABLE naming the chosen bill''s status, 409 AP_BILL_AWAITING_INVOICE for a candidate that kept no invoice, and 409 AP_BILL_DUPLICATE when another live bill already holds the invoice number on the invoice date.
 
         '
       operationId: selectVendorBillMatchCandidate
@@ -13501,7 +13501,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused posting writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else, and a replayed approve finds the bill APPROVED and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED (also a creator''s approval without one), VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (nextAction names accounting:ap:approve_over_limit) or AP_BILL_SELF_APPROVAL (the bill''s creator, or the vendor''s creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL), each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED (only when neither the classification, the proposal nor the vendor''s AP defaults give a class), AP_BILL_TAX_ON_RESALE_GOODS (audited as VENDOR_BILL_APPROVE_REFUSED), AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, AP_BILL_TAX_SPLIT_MISMATCH (taxByType not adding up to the stated tax), AMOUNT_PRECISION_EXCEEDS_CURRENCY, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), or, relayed from pos-tax for the use-tax quote, TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED (a configuration to fix, not to retry); 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot give the tax profile, the purchase-tax rules or the use-tax quote; each leaving the bill as it was.
+        Returns 200 with the bill read (each actor with its display name: createdByName, submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), its posting included; 400 JUSTIFICATION_REQUIRED (also a creator''s approval without one), VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (nextAction names accounting:ap:approve_over_limit) or AP_BILL_SELF_APPROVAL (the bill''s creator, or the vendor''s creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL), each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED (only when neither the classification, the proposal nor the vendor''s AP defaults give a class), AP_BILL_TAX_ON_RESALE_GOODS (audited as VENDOR_BILL_APPROVE_REFUSED), AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, AP_BILL_TAX_SPLIT_MISMATCH (taxByType not adding up to the stated tax), AMOUNT_PRECISION_EXCEEDS_CURRENCY, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), or, relayed from pos-tax for the use-tax quote, TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED (a configuration to fix, not to retry); 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot give the tax profile, the purchase-tax rules or the use-tax quote; each leaving the bill as it was.
 
         '
       operationId: approveVendorBill
@@ -13608,7 +13608,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_BILL_DUE_DATE_SET; the same date again writes nothing.
 
-        Returns 200 with the bill read, 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED, 401 without a valid token, 403 FORBIDDEN without accounting:ap:approve, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE for any other status, CURRENCY_HOLD and APPROVED included.
+        Returns 200 with the bill read (each actor with its display name: createdByName, submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED, 401 without a valid token, 403 FORBIDDEN without accounting:ap:approve, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE for any other status, CURRENCY_HOLD and APPROVED included.
 
         '
       operationId: setVendorBillDueDate
@@ -13692,7 +13692,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_BILL_REJECT and writes a VENDOR_BILL_REJECT audit row; a replay finds the bill REJECTED and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read, 400 JUSTIFICATION_REQUIRED for a missing or short reason or ARGUMENT_NOT_VALID for one over 1000 characters, 401 without a valid token, 403 FORBIDDEN without accounting:ap:reject, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE naming the bill''s status.
+        Returns 200 with the bill read (each actor with its display name: createdByName, submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), 400 JUSTIFICATION_REQUIRED for a missing or short reason or ARGUMENT_NOT_VALID for one over 1000 characters, 401 without a valid token, 403 FORBIDDEN without accounting:ap:reject, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE naming the bill''s status.
 
         '
       operationId: rejectVendorBill
@@ -13774,7 +13774,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row; a replay finds the bill moved on and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without the action''s permission, or for ACCEPT AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL (also the vendor''s creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL; audited as VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED (no class given, proposed or defaulted for the vendor), AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_TAX_SPLIT_MISMATCH, AMOUNT_PRECISION_EXCEEDS_CURRENCY, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED or a relayed pos-tax TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED, and 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot answer, leaving the bill as it was.
+        Returns 200 with the bill read (each actor with its display name: createdByName, submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM); 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without the action''s permission, or for ACCEPT AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL (also the vendor''s creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL; audited as VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED (no class given, proposed or defaulted for the vendor), AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_TAX_SPLIT_MISMATCH, AMOUNT_PRECISION_EXCEEDS_CURRENCY, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED or a relayed pos-tax TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED, and 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot answer, leaving the bill as it was.
 
         '
       operationId: resolveVendorBillMatchException
@@ -13881,7 +13881,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_BILL_SUBMIT and writes a VENDOR_BILL_SUBMIT audit row; the command takes no idempotency key, so a replay finds the bill AWAITING_APPROVAL and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read; 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without accounting:ap:approve or accounting:ap:approve_over_limit; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the status or an open ambiguous match, or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_ZERO_TOTAL or AP_BILL_TOTALS_UNRECONCILED, writing nothing.
+        Returns 200 with the bill read (each actor with its display name: createdByName, submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM); 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without accounting:ap:approve or accounting:ap:approve_over_limit; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the status or an open ambiguous match, or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_ZERO_TOTAL or AP_BILL_TOTALS_UNRECONCILED, writing nothing.
 
         '
       operationId: submitVendorBillForApproval
@@ -13974,7 +13974,7 @@ paths:
 
         Emits ACCOUNTING_VENDOR_BILL_VOID and writes a VENDOR_BILL_VOID audit row naming the action (VOID_APPROVED or VOID_UNMATCHED); a replay finds the bill VOIDED and is answered 409 AP_BILL_NOT_VOIDABLE.
 
-        Returns 200 with the bill read, an approved bill''s posting with its reversalReference; 400 JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without accounting:ap:reject, or for an approved bill without an approve permission, or AP_APPROVAL_LIMIT_EXCEEDED over the clerk limit (audited as VENDOR_BILL_VOID_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_VOIDABLE for any other status or an allocated bill; 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for today''s period, leaving the bill as it was.
+        Returns 200 with the bill read (each actor with its display name: createdByName, submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), an approved bill''s posting with its reversalReference; 400 JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without accounting:ap:reject, or for an approved bill without an approve permission, or AP_APPROVAL_LIMIT_EXCEEDED over the clerk limit (audited as VENDOR_BILL_VOID_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_VOIDABLE for any other status or an allocated bill; 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for today''s period, leaving the bill as it was.
 
         '
       operationId: voidVendorBill
@@ -22741,7 +22741,12 @@ components:
       description: One change of a petty-expense category
       properties:
         actor:
-          description: Who made it (from the security context)
+          description: 'Who made it: the sign-in name from the security context, kept for audit and never shown to a person'
+          example: controller.cfo
+          type: string
+        actorName:
+          description: The display name of the person who made it ("First Last"), resolved when the response is built from accounting's people-contact copy; null when not known or SYSTEM, never the sign-in name
+          example: Dana Reyes
           type: string
         changeType:
           description: What changed
