@@ -103,7 +103,7 @@ class VendorBillReaderTest {
     @Test
     @DisplayName(
             "AC11 (S13): a clerk on an over-limit bill sees approve, accept and the void of an approved bill listed"
-                + " but not allowed, with blockedReason AP_APPROVAL_LIMIT_EXCEEDED; the due date is listed in review")
+                    + " but not allowed, with blockedReason AP_APPROVAL_LIMIT_EXCEEDED; the due date is listed in review")
     void clerkOverTheLimit() {
         signIn(CLERK);
         assertThat(VendorBillReader.availableActions(

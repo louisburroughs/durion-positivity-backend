@@ -221,9 +221,9 @@ class ApReadsPostgresIT extends PostgresTenancyTestBase {
     private static void policyChangedBy(UUID tenant, String username) {
         owner().update(
                         "INSERT INTO accounting_audit_log (tenant_id, \"timestamp\", audit_log_id, entity_id,"
-                            + " entity_type, operation, user_id, justification, new_value, old_value) VALUES (?, ?, ?,"
-                            + " ?, 'AP_APPROVAL_POLICY', 'AP_APPROVAL_POLICY_SET', ?, 'Routine parts bills',"
-                            + " 'setting=AP_CLERK_APPROVAL_LIMIT;value=2500.00;roles=CONTROLLER', '0.00')",
+                                + " entity_type, operation, user_id, justification, new_value, old_value) VALUES (?, ?, ?,"
+                                + " ?, 'AP_APPROVAL_POLICY', 'AP_APPROVAL_POLICY_SET', ?, 'Routine parts bills',"
+                                + " 'setting=AP_CLERK_APPROVAL_LIMIT;value=2500.00;roles=CONTROLLER', '0.00')",
                         tenant,
                         java.sql.Timestamp.from(Instant.parse("2026-10-09T10:00:00Z")),
                         UUIDv7Generator.generate(),
