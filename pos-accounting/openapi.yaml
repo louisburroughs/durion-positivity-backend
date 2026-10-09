@@ -36,6 +36,8 @@ tags:
   name: Customer Credits
 - description: Read-only location Labor & Overhead Cost Report (CAP-316)
   name: Location Cost Reporting
+- description: Indirect-tax registrations the company holds
+  name: Accounting Tax Registrations
 - description: Accounts Payable vendor payment operations
   name: AP Payments
 - description: The chart of accounts and mapping defaults a tenant receives
@@ -12124,6 +12126,217 @@ paths:
       - Settlement Reconciliation
       x-required-permissions:
       - accounting:reconciliation:view
+  /v1/accounting/tax-registrations:
+    get:
+      description: 'Lists the company''s indirect-tax registrations from accounting''s copy of pos-tax''s registry: per registration its country, regime, number, jurisdiction, effective dates (both inclusive), status and version.
+
+        Use this tool to show which regimes the company is registered for and from when; do not use it to change one, which is recordTaxRegistration or changeTaxRegistration instead.
+
+        Preconditions: caller holds accounting:tax_registration:view. Read-only and idempotent; the copy follows pos-tax''s tax.registration.changed, so a write appears here shortly after it commits.
+
+        Required inputs: none; asOf (ISO-8601 date) returns only the registrations in effect that day.
+
+        Emits an ACCOUNTING_TAX_REGISTRATION_LIST event and returns 200; status is SCHEDULED, ACTIVE or ENDED on asOf, else on today''s UTC date.
+
+        '
+      operationId: listTaxRegistrations
+      parameters:
+      - description: Only the registrations in effect on this date
+        example: '2026-10-08'
+        in: query
+        name: asOf
+        required: false
+        schema:
+          format: date
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationListResponse'
+          description: The registrations
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:tax_registration:view
+      security:
+      - bearerAuth:
+        - accounting:tax_registration:view
+      summary: List Tax Registrations
+      tags:
+      - Accounting Tax Registrations
+      x-required-permissions:
+      - accounting:tax_registration:view
+    post:
+      description: 'Records that the company is registered for one country''s indirect-tax regime from a date, in pos-tax''s registry, through this front door.
+
+        Use this tool when the company registers for a regime; do not use it to end or correct an existing registration, which is changeTaxRegistration instead.
+
+        Preconditions: caller holds accounting:tax_registration:manage and is a person (403 otherwise); the country''s tax profile declares the regime (400).
+
+        Required inputs: countryCode, regime, registrationNumber, effectiveFrom, justification (at least 10 characters) and requestId; effectiveTo is optional and inclusive.
+
+        The number must match the regime''s configured shape: otherwise 400 VALIDATION_ERROR with fieldErrors[registrationNumber], nothing is stored, and the value is never echoed or logged.
+
+        Emits an ACCOUNTING_TAX_REGISTRATION_CREATE event and returns 201, or 200 with the first result for a replayed requestId; pos-tax''s 409 TAX_REGISTRATION_OVERLAP is relayed unchanged.
+
+        Returns 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot be reached, and nothing is stored.
+
+        '
+      operationId: recordTaxRegistration
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Registered from January:
+                description: Registered from January
+                value:
+                  countryCode: CA
+                  effectiveFrom: '2026-01-01'
+                  justification: Registered with the tax authority
+                  regime: GST_HST
+                  registrationNumber: 123456789 RT 0001
+                  requestId: 019a0000-0000-7000-8000-000000000201
+            schema:
+              $ref: '#/components/schemas/RecordTaxRegistrationRequest'
+        description: The country's regime, the number as printed, its dates and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationView'
+          description: 'A replayed requestId: the first result'
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationView'
+          description: The registration was recorded
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: a missing or invalid field, an undeclared regime or a malformed number'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:tax_registration:manage, or is not a person
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_REGISTRATION_OVERLAP, relayed from pos-tax
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_UNAVAILABLE: pos-tax cannot be reached; retry after Retry-After seconds'
+      security:
+      - bearerAuth:
+        - accounting:tax_registration:manage
+      summary: Record Tax Registration
+      tags:
+      - Accounting Tax Registrations
+      x-required-permissions:
+      - accounting:tax_registration:manage
+  /v1/accounting/tax-registrations/{registrationId}:
+    put:
+      description: 'Changes a tax registration''s number or dates in pos-tax''s registry, or ends it by setting effectiveTo; the country and regime never change, and a registration is never deleted.
+
+        Use this tool to correct or end a registration; do not use it to register another regime, which is recordTaxRegistration instead.
+
+        Preconditions: caller holds accounting:tax_registration:manage and is a person (403 otherwise); the registration exists (404, relayed); version is the current one (409 OPTIMISTIC_LOCK, relayed).
+
+        Required inputs: registrationId (path), registrationNumber, effectiveFrom, version, justification (at least 10 characters) and requestId; effectiveTo is optional and inclusive.
+
+        The number must match the regime''s configured shape (400 VALIDATION_ERROR with fieldErrors[registrationNumber]); back-dating never changes an entry already posted.
+
+        Emits an ACCOUNTING_TAX_REGISTRATION_UPDATE event and returns 200, also for a replayed requestId; pos-tax''s 409 TAX_REGISTRATION_OVERLAP is relayed unchanged.
+
+        Returns 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot be reached, and nothing changes.
+
+        '
+      operationId: changeTaxRegistration
+      parameters:
+      - description: Registration id
+        in: path
+        name: registrationId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Ended in May:
+                description: Ended in May
+                value:
+                  effectiveFrom: '2026-01-01'
+                  effectiveTo: '2026-05-31'
+                  justification: Deregistered at the end of May
+                  registrationNumber: 123456789 RT 0001
+                  requestId: 019a0000-0000-7000-8000-000000000202
+                  version: 0
+            schema:
+              $ref: '#/components/schemas/ChangeTaxRegistrationRequest'
+        description: The registration's new number or dates, the version read, and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationView'
+          description: The registration was changed, or a replayed requestId
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: a missing or invalid field or a malformed number'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:tax_registration:manage, or is not a person
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_REGISTRATION_NOT_FOUND, relayed from pos-tax
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_REGISTRATION_OVERLAP or OPTIMISTIC_LOCK, relayed from pos-tax
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_UNAVAILABLE: pos-tax cannot be reached; retry after Retry-After seconds'
+      security:
+      - bearerAuth:
+        - accounting:tax_registration:manage
+      summary: Change Tax Registration
+      tags:
+      - Accounting Tax Registrations
+      x-required-permissions:
+      - accounting:tax_registration:manage
   /v1/accounting/tenant-template/add-ons/retread-plant:
     put:
       description: 'Turns the retread-plant add-on on for the caller''s tenant: the GL accounts only a shop that runs a retread plant needs (curing consumables, MRT equipment depreciation and leases, inventory charge, scrapped casings, production adjustments, rubber dust sales) and their Labor & Overhead report lines.
@@ -17177,6 +17390,44 @@ components:
           description: Candidate signed amount
           example: 250.0
           type: number
+      type: object
+    ChangeTaxRegistrationRequest:
+      description: A tax registration's new number or dates
+      properties:
+        effectiveFrom:
+          description: Inclusive first day in effect
+          example: '2026-01-01'
+          format: date
+          type: string
+        effectiveTo:
+          description: Inclusive last day in effect; absent while open-ended
+          format: date
+          type: string
+        justification:
+          description: Why the registration changes (at least 10 characters); kept in its history
+          example: Deregistered at the end of May
+          maxLength: 1000
+          minLength: 10
+          type: string
+        registrationNumber:
+          description: The number as printed; spaces and hyphens are ignored. It must match the regime's configured shape, and is never echoed in an error
+          maxLength: 128
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+        version:
+          description: The version the caller read; another one is 409 OPTIMISTIC_LOCK
+          example: 0
+          format: int64
+          type: integer
+      required:
+      - effectiveFrom
+      - justification
+      - registrationNumber
+      - requestId
+      - version
       type: object
     ClearingAdjustment:
       description: Adjustment to clearing
@@ -22688,6 +22939,48 @@ components:
       required:
       - reason
       type: object
+    RecordTaxRegistrationRequest:
+      description: 'A tax registration to record: the country''s regime, the number as printed and its dates'
+      properties:
+        countryCode:
+          description: ISO 3166-1 alpha-2 country
+          example: CA
+          type: string
+        effectiveFrom:
+          description: Inclusive first day in effect
+          example: '2026-01-01'
+          format: date
+          type: string
+        effectiveTo:
+          description: Inclusive last day in effect; absent while open-ended
+          format: date
+          type: string
+        justification:
+          description: Why the registration is recorded (at least 10 characters); kept in its history
+          example: Registered with the tax authority
+          maxLength: 1000
+          minLength: 10
+          type: string
+        regime:
+          description: A regime the country's tax profile declares
+          example: GST_HST
+          type: string
+        registrationNumber:
+          description: The number as printed; spaces and hyphens are ignored. It must match the regime's configured shape, and is never echoed in an error
+          maxLength: 128
+          type: string
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+      required:
+      - countryCode
+      - effectiveFrom
+      - justification
+      - regime
+      - registrationNumber
+      - requestId
+      type: object
     RefundRequest:
       description: Request to record a refund audit event
       properties:
@@ -23780,6 +24073,75 @@ components:
       - snapshotContentHash
       - snapshotId
       - verifiedAt
+      type: object
+    TaxRegistrationListResponse:
+      description: The tenant's tax registrations
+      properties:
+        asOf:
+          description: The date asked for; absent when every registration is listed
+          format: date
+          type: string
+        registrations:
+          description: The registrations, in country, regime and start order
+          items:
+            $ref: '#/components/schemas/TaxRegistrationView'
+          type: array
+      required:
+      - registrations
+      type: object
+    TaxRegistrationView:
+      description: A tenant's registration for an indirect-tax regime
+      properties:
+        changedAt:
+          description: When pos-tax last changed it
+          format: date-time
+          type: string
+        countryCode:
+          description: ISO 3166-1 alpha-2 country
+          example: CA
+          type: string
+        effectiveFrom:
+          description: Inclusive first day in effect
+          format: date
+          type: string
+        effectiveTo:
+          description: Inclusive last day in effect; absent while open-ended
+          format: date
+          type: string
+        jurisdictionCode:
+          description: The regime's single region when it lists exactly one, else the country
+          example: CA
+          type: string
+        regime:
+          description: The regime
+          example: GST_HST
+          type: string
+        registrationId:
+          description: Registration id (pos-tax's)
+          format: uuid
+          type: string
+        registrationNumber:
+          description: The normalised number
+          type: string
+        status:
+          description: SCHEDULED, ACTIVE or ENDED on the reference date (asOf, else today in UTC)
+          example: ACTIVE
+          type: string
+        version:
+          description: Version, sent back on a change
+          example: 0
+          format: int64
+          type: integer
+      required:
+      - changedAt
+      - countryCode
+      - effectiveFrom
+      - jurisdictionCode
+      - regime
+      - registrationId
+      - registrationNumber
+      - status
+      - version
       type: object
     TenantTemplateAttentionItem:
       description: One template entry that waits for the tenant to resolve a clash
