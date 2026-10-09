@@ -385,6 +385,40 @@ class TypedOutputTaxTest {
         }
 
         @Test
+        @DisplayName(
+                "#2664 N1: the replica keeps microseconds of the fact's nanoseconds; still the same cycle, it posts")
+        void microsecondReplicaStillPosts() {
+            Instant factAt = Instant.parse("2026-10-08T10:00:00.123456789Z");
+            rows(row("GST", "50.00"), row("PST", "70.00"));
+            replica("FINALIZED", Instant.parse("2026-10-08T10:00:00.123457Z"));
+            when(glPosting.postInvoiceRevenueByTaxType(any(), any(), any(), any(), any(), any(), any(), anyString()))
+                    .thenReturn(UUID.randomUUID());
+            InvoiceUpdatedV1 fact =
+                    TestZoneResolvers.movedTo(finalized(), Instant.parse("2026-10-08T10:00:00Z"), factAt);
+
+            InvoiceRevenueReprocessor.Result result = reprocessor.reprocess(objectMapper.convertValue(fact, Map.class));
+
+            assertThat(result.status()).isEqualTo(AccountingEventStatus.PROCESSED);
+            verify(glPosting).postInvoiceRevenueByTaxType(any(), any(), any(), any(), any(), any(), any(), anyString());
+        }
+
+        @Test
+        @DisplayName("#2664 N2: no replica row yet: the row stays held (SUSPENDED), nothing posted, never SKIPPED")
+        void missingReplicaStaysHeld() {
+            rows(row("GST", "50.00"), row("PST", "70.00"));
+            when(invoices.findById(INVOICE)).thenReturn(Optional.empty());
+
+            InvoiceRevenueReprocessor.Result result =
+                    reprocessor.reprocess(objectMapper.convertValue(finalized(), Map.class));
+
+            assertThat(result.status()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(result.reason()).isEqualTo("TAX_TYPE_MISSING");
+            assertThat(result.detail()).contains("replica not found");
+            verify(glPosting, never())
+                    .postInvoiceRevenueByTaxType(any(), any(), any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
         @DisplayName("#2664 A4: held, then finalized again: the stale held fact posts nothing")
         void heldThenRefinalizedPostsNothing() {
             rows(row("GST", "50.00"), row("PST", "70.00"));

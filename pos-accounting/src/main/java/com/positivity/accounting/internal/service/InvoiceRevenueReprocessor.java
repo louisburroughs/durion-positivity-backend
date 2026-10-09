@@ -12,8 +12,9 @@ import com.positivity.accounting.internal.exception.GLMappingNotConfiguredExcept
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -129,25 +130,27 @@ public class InvoiceRevenueReprocessor {
         // reverted or finalized again since, the held fact is superseded and posts nothing; otherwise the replica is
         // posted, the way the reconciliation does.
         Optional<ExtInvoice> current = invoices.findById(fact.invoiceId());
-        if (current.isEmpty()
-                || !InvoiceRevenuePostingService.POSTING_STATUSES.contains(
-                        current.get().getStatus())
-                || !Objects.equals(current.get().getFinalizedAt(), fact.finalizedAt())) {
+        if (current.isEmpty()) {
+            // Absence in a replica proves nothing (ADR-0017): the row stays held under its own reason, so it comes
+            // back here once the invoice has replicated (#2664 re-review N2).
+            return held(
+                    PostingFailureReason.TAX_TYPE_MISSING,
+                    "Invoice replica not found; reprocess once it has replicated");
+        }
+        ExtInvoice invoice = current.get();
+        boolean postable = InvoiceRevenuePostingService.POSTING_STATUSES.contains(invoice.getStatus());
+        boolean sameCycle = sameInstant(invoice.getFinalizedAt(), fact.finalizedAt());
+        if (!postable || !sameCycle) {
             return new Result(
                     AccountingEventStatus.SKIPPED,
                     PostingFailureReason.NOT_POSTABLE.name(),
-                    "The held invoice fact is superseded: the invoice is now "
-                            + current.map(ExtInvoice::getStatus).orElse("unknown")
-                            + (current.isPresent()
-                                            && current.get().getFinalizedAt() != null
-                                            && !current.get().getFinalizedAt().equals(fact.finalizedAt())
-                                    ? ", finalized again at " + current.get().getFinalizedAt()
-                                    : "")
+                    "The held invoice fact is superseded: the invoice is now " + invoice.getStatus()
+                            + (sameCycle ? "" : ", finalized again at " + invoice.getFinalizedAt())
                             + "; nothing posted",
                     null,
                     IdempotencyOutcome.NEW);
         }
-        InvoiceUpdatedV1 replica = InvoiceRevenueReconciliationService.toPayload(current.get());
+        InvoiceUpdatedV1 replica = InvoiceRevenueReconciliationService.toPayload(invoice);
         FactPostingOutcome outcome;
         try {
             outcome = postingTransaction.execute(_ -> postingService.postRevenue(replica));
@@ -220,6 +223,21 @@ public class InvoiceRevenueReprocessor {
                 .findFirst()
                 .map(JournalEntry::getJournalEntryId)
                 .orElse(null);
+    }
+
+    /**
+     * The tolerance within which the replica's {@code finalizedAt} is the held fact's (#2664 re-review N1): pos-invoice
+     * publishes nanoseconds and {@code ext_invoice.finalized_at} keeps microseconds, as pos-invoice's own {@code
+     * FINALIZED_AT_TOLERANCE} allows for. A re-finalization is a later business action, never within it.
+     */
+    static final Duration FINALIZED_AT_TOLERANCE = Duration.ofMillis(1);
+
+    /** Whether two finalization instants are the same cycle: both null, or within {@link #FINALIZED_AT_TOLERANCE}. */
+    static boolean sameInstant(@Nullable Instant replica, @Nullable Instant fact) {
+        if (replica == null || fact == null) {
+            return replica == fact;
+        }
+        return Duration.between(replica, fact).abs().compareTo(FINALIZED_AT_TOLERANCE) <= 0;
     }
 
     private static Result held(PostingFailureReason reason, String detail) {
