@@ -211,7 +211,12 @@ class ApPayFromParityTest {
 
         assertThat(listed.accounts()).isEmpty();
         assertThat(listed.defaultBankAccountId()).isNull();
-        assertThatThrownBy(this::paymentWithout).isInstanceOf(VendorBillException.class);
+        assertThatThrownBy(this::paymentWithout).isInstanceOfSatisfying(VendorBillException.class, refusal -> {
+            assertThat(refusal.getCode().status().value()).isEqualTo(400);
+            assertThat(refusal.getFieldErrors())
+                    .extracting(VendorBillException.FieldError::field)
+                    .containsExactly("bankAccountId");
+        });
     }
 
     @Test

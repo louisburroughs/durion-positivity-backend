@@ -893,4 +893,43 @@ class VendorBillReaderTest {
         org.mockito.Mockito.verify(readNames, org.mockito.Mockito.times(1))
                 .namesOf(org.mockito.ArgumentMatchers.anyCollection());
     }
+
+    @Test
+    @DisplayName(
+            "#2676 review B2: a rejected bill serves rejectedByName beside rejectedBy with its reason unchanged; an"
+                    + " unlinked rejecter serves null, never the username")
+    void rejectedByName() {
+        VendorBillReader reader = taxReader();
+        when(readNames.namesOf(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of("controller.cfo", "Dana Reyes"));
+
+        VendorBill named = rejected(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b05"), "controller.cfo");
+        VendorBillReview.Rejection rejection = reader.read(named).getRejection();
+        assertThat(rejection.rejectedBy()).isEqualTo("controller.cfo");
+        assertThat(rejection.rejectedByName()).isEqualTo("Dana Reyes");
+        assertThat(rejection.reason()).isEqualTo("Duplicate of INV-77 already paid");
+        assertThat(rejection.toString()).doesNotContain("Dana Reyes");
+
+        VendorBill unlinked = rejected(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b06"), "clerk.ana");
+        VendorBillReview.Rejection byClerk = reader.read(unlinked).getRejection();
+        assertThat(byClerk.rejectedBy()).isEqualTo("clerk.ana");
+        assertThat(byClerk.rejectedByName()).isNull();
+        assertThat(byClerk.reason()).isEqualTo("Duplicate of INV-77 already paid");
+    }
+
+    private VendorBill rejected(UUID id, String rejectedBy) {
+        VendorBill bill = new VendorBill(id);
+        bill.setTotalAmount(new BigDecimal("100.00"));
+        bill.setCurrency("CAD");
+        bill.setCreatedBy("clerk.ana");
+        bill.setStatus(VendorBillStatus.REJECTED);
+        bill.setBillNumber("INV-" + id.toString().substring(32));
+        bill.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 0, 0));
+        bill.setRejectedAt(java.time.Instant.parse("2026-10-02T09:00:00Z"));
+        bill.setRejectedBy(rejectedBy);
+        bill.setRejectionReason("Duplicate of INV-77 already paid");
+        when(readTaxes.findByVendorBillIdOrderByTaxType(id)).thenReturn(List.of());
+        when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(id)).thenReturn(List.of());
+        return bill;
+    }
 }

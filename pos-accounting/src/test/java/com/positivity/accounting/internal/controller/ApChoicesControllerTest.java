@@ -77,7 +77,8 @@ class ApChoicesControllerTest extends BaseIntegrationTest {
     @DisplayName("AC 3: without accounting:ap:view the categories answer 403 FORBIDDEN")
     void categoriesNeedApView() throws Exception {
         mockMvc.perform(withAuth(get(CATEGORIES), "accounting:mapping-key:view"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         verify(apChoicesService, never()).expenseCategories();
     }
 
@@ -108,7 +109,8 @@ class ApChoicesControllerTest extends BaseIntegrationTest {
             + " answers 403")
     void payFromNeedsApPay() throws Exception {
         mockMvc.perform(withAuth(get(PAY_FROM), "accounting:ap:view,accounting:reconciliation:view"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         verify(apChoicesService, never()).payFromAccounts();
     }
 }
