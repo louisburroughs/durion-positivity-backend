@@ -11,9 +11,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.OutboxEventWriter;
+import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.InvoiceGlPosting;
+import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.repository.InvoiceGlPostingRepository;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.accounting.InvoiceGlPostedV1;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
@@ -22,6 +26,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -57,6 +62,8 @@ class InvoiceRevenuePostingServiceTest {
     private final GLPostingService glPostingService = mock(GLPostingService.class);
     private final InvoiceGlPostingRepository repository = mock(InvoiceGlPostingRepository.class);
     private final OutboxEventWriter outboxEventWriter = mock(OutboxEventWriter.class);
+    private final TypedOutputTax typedOutputTax = mock(TypedOutputTax.class);
+    private final JournalEntryRepository journalEntryRepository = mock(JournalEntryRepository.class);
 
     @SuppressWarnings("unchecked")
     private final ObjectProvider<OutboxEventWriter> writerProvider = mock(ObjectProvider.class);
@@ -73,7 +80,12 @@ class InvoiceRevenuePostingServiceTest {
                 glPostingService,
                 repository,
                 writerProvider,
-                TestZoneResolvers.fixed(ZONE, TEST_CLOCK));
+                TestZoneResolvers.fixed(ZONE, TEST_CLOCK),
+                typedOutputTax,
+                journalEntryRepository);
+        // A tenant without typed tax-payable keys (every USD tenant): posts exactly as before S32d (AC 1).
+        when(typedOutputTax.planInvoice(any(), any(), any())).thenReturn(new TypedOutputTax.Plan.Untyped());
+        when(typedOutputTax.typedAccounts(any())).thenReturn(java.util.Map.of());
     }
 
     private static InvoiceUpdatedV1 fact(
@@ -475,5 +487,108 @@ class InvoiceRevenuePostingServiceTest {
         ArgumentCaptor<InvoiceGlPosting> row = ArgumentCaptor.forClass(InvoiceGlPosting.class);
         verify(repository).save(row.capture());
         assertThat(row.getValue().getFinalizedAt()).isEqualTo(secondFinalizedAt);
+    }
+
+    // ── CAP:550 S32d item 11 (AW50): output tax by type ──────────────────────────────────────────
+
+    @Test
+    @DisplayName("S32d AC 12: a typed plan posts one tax leg per type; AR is revenue plus the legs")
+    void typedPlanPostsALegPerType() {
+        UUID gstAccount = UUID.randomUUID();
+        UUID pstAccount = UUID.randomUUID();
+        LocalDateTime date = expectedDate(FINALIZED_AT);
+        stubAccounts(date);
+        when(repository.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE_ID))
+                .thenReturn(Optional.empty());
+        when(typedOutputTax.planInvoice(INVOICE_ID, new BigDecimal("16.53"), date))
+                .thenReturn(new TypedOutputTax.Plan.Typed(List.of(
+                        new TypedOutputTax.Leg("GST", gstAccount, new BigDecimal("10.00")),
+                        new TypedOutputTax.Leg("PST", pstAccount, new BigDecimal("6.53")))));
+        when(glPostingService.postInvoiceRevenueByTaxType(any(), any(), any(), any(), any(), any(), any(), anyString()))
+                .thenReturn(JOURNAL_ENTRY_ID);
+
+        assertThat(service.postRevenue(finalized())).isEqualTo(FactPostingOutcome.posted(JOURNAL_ENTRY_ID));
+
+        verify(glPostingService)
+                .postInvoiceRevenueByTaxType(
+                        eq(InvoiceRevenuePostingService.toSourceEventId(INVOICE_ID, FINALIZED_AT)),
+                        eq(INVOICE_ID),
+                        eq(AR),
+                        eq(REVENUE),
+                        eq(new BigDecimal("200.00")),
+                        eq(List.of(
+                                new GLPostingService.TaxLeg(gstAccount, new BigDecimal("10.00"), "GST"),
+                                new GLPostingService.TaxLeg(pstAccount, new BigDecimal("6.53"), "PST"))),
+                        eq(date),
+                        anyString());
+        verify(glPostingService, never())
+                .postInvoiceRevenue(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
+        verify(glMappingResolver, never()).resolveGLAccount("INVOICE_REVENUE", "SALES_TAX_PAYABLE", date);
+    }
+
+    @Test
+    @DisplayName("S32d AC 13: TAX_TYPE_MISSING posts nothing, saves no posting, publishes nothing and holds the fact")
+    void taxTypeMissingHolds() {
+        when(repository.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE_ID))
+                .thenReturn(Optional.empty());
+        when(typedOutputTax.planInvoice(any(), any(), any()))
+                .thenReturn(new TypedOutputTax.Plan.TaxTypeMissing("untyped tax"));
+
+        assertThat(service.postRevenue(finalized()))
+                .isEqualTo(new FactPostingOutcome.Held(PostingFailureReason.TAX_TYPE_MISSING, "untyped tax"));
+
+        verify(glPostingService, never())
+                .postInvoiceRevenue(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
+        verify(glPostingService, never())
+                .postInvoiceRevenueByTaxType(any(), any(), any(), any(), any(), any(), any(), anyString());
+        verify(repository, never()).save(any());
+        verify(outboxEventWriter, never()).publish(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("S32d: a typed tenant's reversal mirrors the recognition's own lines (ADR-0047)")
+    void typedTenantReversalMirrorsTheOriginalLines() {
+        UUID gstAccount = UUID.randomUUID();
+        when(typedOutputTax.typedAccounts(any())).thenReturn(java.util.Map.of("GST", gstAccount));
+        when(repository.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE_ID))
+                .thenReturn(Optional.of(openPosting()));
+        JournalEntry original = new JournalEntry();
+        original.setJournalEntryId(JOURNAL_ENTRY_ID);
+        original.getLines().add(line(AR, "216.53", "0"));
+        original.getLines().add(line(REVENUE, "0", "200.00"));
+        original.getLines().add(line(gstAccount, "0", "16.53"));
+        when(journalEntryRepository.findById(JOURNAL_ENTRY_ID)).thenReturn(Optional.of(original));
+        when(glPostingService.postMirror(any(), any(), any(), any(), anyString()))
+                .thenReturn(REVERSAL_ENTRY_ID);
+
+        assertThat(service.reverseRevenue(
+                        fact("CANCELLED", new BigDecimal("216.53"), new BigDecimal("16.53"), FINALIZED_AT, null),
+                        REVERTED_AT))
+                .isEqualTo(FactPostingOutcome.posted(REVERSAL_ENTRY_ID));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<GLPostingService.PostedLine>> lines = ArgumentCaptor.forClass(List.class);
+        verify(glPostingService)
+                .postMirror(
+                        eq(JournalEntrySourceTypes.INVOICE_REVENUE_REVERSAL),
+                        eq(InvoiceRevenuePostingService.toReversalSourceEventId(INVOICE_ID, FINALIZED_AT)),
+                        lines.capture(),
+                        eq(expectedDate(REVERTED_AT)),
+                        anyString());
+        assertThat(lines.getValue())
+                .extracting(GLPostingService.PostedLine::accountId)
+                .containsExactly(AR, REVENUE, gstAccount);
+        verify(glPostingService, never())
+                .postInvoiceRevenueReversal(any(), any(), any(), any(), any(), any(), any(), any(), anyString());
+    }
+
+    private static JournalEntryLine line(UUID account, String debit, String credit) {
+        GLAccount gl = new GLAccount();
+        gl.setGlAccountId(account);
+        JournalEntryLine line = new JournalEntryLine();
+        line.setGlAccount(gl);
+        line.setDebitAmount(new BigDecimal(debit));
+        line.setCreditAmount(new BigDecimal(credit));
+        return line;
     }
 }

@@ -69,6 +69,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -172,13 +173,6 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             VendorBillStatus.MATCH_EXCEPTION,
             VendorBillStatus.AWAITING_APPROVAL);
 
-    /**
-     * Chart-of-accounts code of the single Sales-Tax Payable account (D-4: one GL
-     * account, report-time jurisdiction aggregation). The T8 report reconciles its
-     * total net tax against this account's credit-normal period activity.
-     */
-    private static final String SALES_TAX_PAYABLE_ACCOUNT_CODE = "2200";
-
     /** Reconciliation tolerance for the GL-drift flag (1 cent). */
     private static final BigDecimal RECON_TOLERANCE = new BigDecimal("0.01");
 
@@ -197,6 +191,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private final DisplayReferenceResolver displayReferenceResolver;
     private final Clock clock;
     private final LedgerCurrency ledgerCurrency;
+    private final TypedOutputTax typedOutputTax;
 
     public FinancialReportingServiceImpl(
             JournalEntryRepository journalEntryRepository,
@@ -213,7 +208,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             DatabaseDialectSupport databaseDialectSupport,
             DisplayReferenceResolver displayReferenceResolver,
             Clock clock,
-            LedgerCurrency ledgerCurrency) {
+            LedgerCurrency ledgerCurrency,
+            TypedOutputTax typedOutputTax) {
         this.journalEntryRepository = journalEntryRepository;
         this.statementLineMappingRepository = statementLineMappingRepository;
         this.accountingSequenceRepository = accountingSequenceRepository;
@@ -229,6 +225,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         this.displayReferenceResolver = displayReferenceResolver;
         this.clock = clock;
         this.ledgerCurrency = ledgerCurrency;
+        this.typedOutputTax = typedOutputTax;
     }
 
     @Override
@@ -1241,9 +1238,15 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     }
 
     /**
-     * Reconcile the report's total net tax against the Sales-Tax Payable (2200)
-     * account's
-     * credit-normal period activity. {@code sumPostedBalanceForAccount} returns
+     * Reconcile the report's total net tax against the credit-normal period activity of
+     * the tax-payable accounts in force: every account the {@code SALES_TAX_PAYABLE} key
+     * and each {@code SALES_TAX_PAYABLE_<taxType>} key of {@code INVOICE_REVENUE} maps to
+     * at any time in the period (CAP:550 S32d item 11), never a literal account code. A
+     * tenant without typed keys reconciles against its one tax-payable account, as before;
+     * a tenant posting output tax by type reconciles against all of its typed accounts.
+     * The codes are reported comma-separated in code order.
+     *
+     * <p>Credit-normal period activity. {@code sumPostedBalanceForAccount} returns
      * {@code Σdebit - Σcredit}; the credit-normal (liability) net owed is its
      * negation.
      * Invoice finalization posts {@code Cr 2200}, credit memos post
@@ -1265,12 +1268,14 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             LocalDateTime startDateTime,
             LocalDateTime endDateTime) {
 
-        BigDecimal glNetActivity = glAccountRepository
-                .findByAccountCode(SALES_TAX_PAYABLE_ACCOUNT_CODE)
-                .map(account -> nullSafe(journalEntryRepository.sumPostedBalanceForAccount(
-                                account.getGlAccountId(), startDateTime, endDateTime))
-                        .negate())
-                .orElse(BigDecimal.ZERO);
+        BigDecimal glNetActivity = BigDecimal.ZERO;
+        SortedSet<String> accountCodes = new TreeSet<>();
+        for (UUID accountId : typedOutputTax.taxPayableAccountsInForce(startDateTime, endDateTime)) {
+            glNetActivity = glNetActivity.add(
+                    nullSafe(journalEntryRepository.sumPostedBalanceForAccount(accountId, startDateTime, endDateTime))
+                            .negate());
+            glAccountRepository.findById(accountId).ifPresent(account -> accountCodes.add(account.getAccountCode()));
+        }
 
         BigDecimal drift = reportNetTax.subtract(glNetActivity);
         // Unattributed credits are excluded from the jurisdiction rows by construction,
@@ -1288,7 +1293,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         boolean reconciled = unexplainedDrift.abs().compareTo(RECON_TOLERANCE) <= 0;
 
         return TaxLiabilityReconciliation.builder()
-                .taxPayableAccountCode(SALES_TAX_PAYABLE_ACCOUNT_CODE)
+                .taxPayableAccountCode(String.join(",", accountCodes))
                 .glNetActivity(glNetActivity)
                 .reportNetTax(reportNetTax)
                 .unattributedCredits(unattributedCredits)

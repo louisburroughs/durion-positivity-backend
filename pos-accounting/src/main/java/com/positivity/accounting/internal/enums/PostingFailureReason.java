@@ -114,7 +114,17 @@ public enum PostingFailureReason {
      * A vendor bill posts once, at approval, through the {@code VENDOR_BILL} posting category (AW37, AW40). V17
      * closed every such event SKIPPED with this reason: terminal, never retried.
      */
-    RETIRED_EVENT_TYPE;
+    RETIRED_EVENT_TYPE,
+
+    /**
+     * Output tax that cannot be posted by tax type (CAP:550 S32d item 11, AW50): the tenant posts output tax by type
+     * (its currency template mapped {@code SALES_TAX_PAYABLE_<taxType>} keys), and the invoice's typed tax rows do not
+     * account for its whole tax, or a type has no mapped key. Nothing posts (AR, revenue and tax wait together): no
+     * default account is used and no type is inferred. Held {@code SUSPENDED} and released by the audited reprocess,
+     * which re-reads the invoice's tax rows and the tenant's keys; the scheduled auto-retry loop skips it, since its
+     * remedy is a typed fact or a mapping, never the passage of time.
+     */
+    TAX_TYPE_MISSING;
 
     /**
      * Whether an event failing for this reason ends in the terminal {@code SKIPPED} status: the
@@ -138,6 +148,7 @@ public enum PostingFailureReason {
     public boolean isExcludedFromAutoRetry() {
         return this == PERIOD_CLOSED
                 || this == CURRENCY_NOT_SUPPORTED
+                || this == TAX_TYPE_MISSING
                 // The payload never changes, so a retry fails the same way.
                 || this == VALIDATION_ERROR
                 || this == MISSING_AMOUNT;

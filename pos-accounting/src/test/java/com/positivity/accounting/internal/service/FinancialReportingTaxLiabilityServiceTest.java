@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
@@ -35,6 +37,7 @@ import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -98,6 +101,9 @@ class FinancialReportingTaxLiabilityServiceTest {
     @Mock
     private DisplayReferenceResolver displayReferenceResolver;
 
+    @Mock
+    private TypedOutputTax typedOutputTax;
+
     private FinancialReportingServiceImpl service;
 
     @BeforeEach
@@ -117,7 +123,8 @@ class FinancialReportingTaxLiabilityServiceTest {
                 databaseDialectSupport,
                 displayReferenceResolver,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
-                new com.positivity.accounting.internal.config.LedgerCurrency("USD"));
+                new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
+                typedOutputTax);
     }
 
     @Test
@@ -150,7 +157,8 @@ class FinancialReportingTaxLiabilityServiceTest {
         taxPayable.setGlAccountId(TAX_ACCT);
         taxPayable.setAccountCode("2200");
         taxPayable.setAccountName("Sales Tax Payable");
-        when(glAccountRepository.findByAccountCode("2200")).thenReturn(Optional.of(taxPayable));
+        when(typedOutputTax.taxPayableAccountsInForce(any(), any())).thenReturn(Set.of(TAX_ACCT));
+        when(glAccountRepository.findById(TAX_ACCT)).thenReturn(Optional.of(taxPayable));
         when(journalEntryRepository.sumPostedBalanceForAccount(eq(TAX_ACCT), any(), any()))
                 .thenReturn(new BigDecimal("-230.00"));
 
@@ -201,12 +209,62 @@ class FinancialReportingTaxLiabilityServiceTest {
     }
 
     @Test
+    @DisplayName(
+            "CAP:550 S32d AC 12: the reconciliation sums every tax-payable account its keys map to, no literal code")
+    void reconcilesAgainstEveryMappedTaxPayableAccount() {
+        ExtInvoice inv1 = invoiceFinalized(INV1);
+        when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of(inv1));
+        List<ExtInvoiceTax> master = List.of(
+                taxRow(INV1, "COUNTRY", "CA", "1000.00", "50.00", false, null),
+                taxRow(INV1, "STATE", "CA-BC", "1000.00", "70.00", false, null));
+        when(extInvoiceTaxRepository.findByInvoiceIdIn(anyCollection())).thenAnswer(call -> {
+            Collection<UUID> ids = call.getArgument(0);
+            return master.stream().filter(r -> ids.contains(r.getInvoiceId())).toList();
+        });
+        when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
+                .thenReturn(List.of());
+        // The keys in force reach 2200 (untouched), 2210, 2220 and 2230; 2210 and 2230 carry the invoice's legs.
+        UUID a2200 = UUID.randomUUID();
+        UUID a2210 = UUID.randomUUID();
+        UUID a2220 = UUID.randomUUID();
+        UUID a2230 = UUID.randomUUID();
+        when(typedOutputTax.taxPayableAccountsInForce(any(), any()))
+                .thenReturn(new java.util.LinkedHashSet<>(List.of(a2230, a2200, a2220, a2210)));
+        for (var account : List.of(
+                java.util.Map.entry(a2200, "2200"),
+                java.util.Map.entry(a2210, "2210"),
+                java.util.Map.entry(a2220, "2220"),
+                java.util.Map.entry(a2230, "2230"))) {
+            GLAccount gl = new GLAccount();
+            gl.setGlAccountId(account.getKey());
+            gl.setAccountCode(account.getValue());
+            when(glAccountRepository.findById(account.getKey())).thenReturn(Optional.of(gl));
+        }
+        when(journalEntryRepository.sumPostedBalanceForAccount(eq(a2200), any(), any()))
+                .thenReturn(BigDecimal.ZERO);
+        when(journalEntryRepository.sumPostedBalanceForAccount(eq(a2220), any(), any()))
+                .thenReturn(null);
+        when(journalEntryRepository.sumPostedBalanceForAccount(eq(a2210), any(), any()))
+                .thenReturn(new BigDecimal("-50.00"));
+        when(journalEntryRepository.sumPostedBalanceForAccount(eq(a2230), any(), any()))
+                .thenReturn(new BigDecimal("-70.00"));
+
+        TaxLiabilityReport report = service.generateTaxLiability(START, END);
+
+        assertThat(report.getReconciliation().getTaxPayableAccountCode()).isEqualTo("2200,2210,2220,2230");
+        assertThat(report.getReconciliation().getGlNetActivity()).isEqualByComparingTo("120.00");
+        assertThat(report.getReconciliation().getReportNetTax()).isEqualByComparingTo("120.00");
+        assertThat(report.getReconciliation().getDrift()).isEqualByComparingTo("0");
+        assertThat(report.getReconciliation().getReconciled()).isTrue();
+        verify(glAccountRepository, never()).findByAccountCode(any());
+    }
+
+    @Test
     @DisplayName("Empty period yields no rows, zero totals, and a zero-drift reconciliation")
     void emptyPeriod() {
         when(extInvoiceRepository.findByFinalizedAtBetween(any(), any())).thenReturn(List.of());
         when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
                 .thenReturn(List.of());
-        when(glAccountRepository.findByAccountCode("2200")).thenReturn(Optional.empty());
 
         TaxLiabilityReport report = service.generateTaxLiability(START, END);
 
@@ -234,7 +292,6 @@ class FinancialReportingTaxLiabilityServiceTest {
         });
         when(creditMemoRepository.findByStatusNotAndPostedTimestampBetween(eq(CreditMemoStatus.DRAFT), any(), any()))
                 .thenReturn(List.of());
-        when(glAccountRepository.findByAccountCode("2200")).thenReturn(Optional.empty());
 
         TaxLiabilityReport report = service.generateTaxLiability(START, END);
 
@@ -371,7 +428,8 @@ class FinancialReportingTaxLiabilityServiceTest {
         taxPayable.setGlAccountId(TAX_ACCT);
         taxPayable.setAccountCode("2200");
         taxPayable.setAccountName("Sales Tax Payable");
-        when(glAccountRepository.findByAccountCode("2200")).thenReturn(Optional.of(taxPayable));
+        when(typedOutputTax.taxPayableAccountsInForce(any(), any())).thenReturn(Set.of(TAX_ACCT));
+        when(glAccountRepository.findById(TAX_ACCT)).thenReturn(Optional.of(taxPayable));
         when(journalEntryRepository.sumPostedBalanceForAccount(eq(TAX_ACCT), any(), any()))
                 .thenReturn(new BigDecimal(postedBalance));
     }

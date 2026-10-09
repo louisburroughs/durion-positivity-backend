@@ -41,7 +41,8 @@ import tools.jackson.databind.ObjectMapper;
  * automatic application could not complete yet ({@link #recordSuspended}: {@code SUSPENDED} or {@code
  * FAILED}, #2503), whose reprocess is routed back to that path, and a goods receipt held for its currency or
  * as malformed ({@link #recordCurrencyHeld}, or {@link #recordSuspended} with {@code VALIDATION_ERROR},
- * CAP:550 S41 #2602). The auto-retry loop skips both receipt reasons; a manual reprocess re-runs the
+ * CAP:550 S41 #2602), and an invoice whose output tax cannot be posted by type ({@code TAX_TYPE_MISSING}, CAP:550
+ * S32d, AW50; reprocessed by {@code InvoiceRevenueReprocessor}). The auto-retry loop skips both receipt reasons; a manual reprocess re-runs the
  * receipt's own assessment and posting ({@code GoodsReceiptReprocessor}, routed from {@code
  * EventIngestionServiceImpl#rerunPosting}), never the posting engine. Any other path must not write {@code
  * SUSPENDED} or {@code FAILED}: the retry scheduler and {@code retryAccountingEvent} select those
@@ -80,7 +81,8 @@ public class KafkaFactIngestionRecorder {
 
     /**
      * Record a consumed fact by what its posting path reported (issue #2433). {@link
-     * FactPostingOutcome.CurrencyHeld} writes nothing: the posting path recorded the hold itself.
+     * FactPostingOutcome.CurrencyHeld} writes nothing: the posting path recorded the hold itself. {@link
+     * FactPostingOutcome.Held} writes the {@code SUSPENDED} record with its reason ({@link #recordSuspended}).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(
@@ -125,6 +127,17 @@ public class KafkaFactIngestionRecorder {
                         fact,
                         skipped.reason(),
                         skipped.detail());
+            case FactPostingOutcome.Held held ->
+                recordSuspended(
+                        sourceSystem,
+                        eventType,
+                        envelopeEventId,
+                        domainKeyId,
+                        transactionDate,
+                        fact,
+                        AccountingEventStatus.SUSPENDED,
+                        held.reason().name(),
+                        held.detail());
             case FactPostingOutcome.CurrencyHeld _ ->
                 log.debug(
                         "Fact held for its currency by its posting path, no further record | eventType={} | domainKeyId={}",

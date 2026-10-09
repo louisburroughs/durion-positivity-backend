@@ -74,6 +74,14 @@ public class ExtInvoiceTax extends TenantScopedEntity {
     @Column(name = "exemption_reason_code", length = 32)
     private String exemptionReasonCode;
 
+    /**
+     * pos-tax's tax type for the row (CAP:550 S32d item 11; S32a {@code TaxBreakdownLine.taxType}): the key of its
+     * typed payable leg, {@code SALES_TAX_PAYABLE_<taxType>}. Null on a row written before S32d or from a fact that
+     * carries none; such a row is untyped (AW50).
+     */
+    @Column(name = "tax_type", length = 32)
+    private String taxType;
+
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
