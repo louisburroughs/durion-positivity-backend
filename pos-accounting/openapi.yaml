@@ -13431,7 +13431,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'SERVICE_UNAVAILABLE with Retry-After: pos-tax''s tax profile, which decides input-tax recovery, cannot be read; nothing is written'
+          description: 'SERVICE_UNAVAILABLE: pos-tax cannot give the tax profile, the purchase-tax rules or the use-tax quote; nothing is written. Retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
       security:
       - bearerAuth:
         - accounting:ap:approve
