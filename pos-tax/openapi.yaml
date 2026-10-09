@@ -660,15 +660,15 @@ paths:
 
         Use this tool only as the pos-accounting front door; do not use it from a screen or another service, which call POST /v1/accounting/tax-registrations instead.
 
-        Preconditions: the call carries pos-accounting''s front-door secret and the forwarded X-User-Id and X-Tenant-Id (401 otherwise); the country has a tax profile and declares the regime (400).
+        Preconditions: the call carries pos-accounting''s front-door secret and the forwarded X-User-Id and X-Tenant-Id (401 otherwise); the country has a tax profile (422 TAX_JURISDICTION_NOT_CONFIGURED) that declares the regime (422 TAX_REGIME_NOT_DECLARED).
 
         Required inputs: countryCode, regime, registrationNumber, effectiveFrom, justification (at least 10 characters) and requestId; effectiveTo is optional and inclusive.
 
         The number must match the regime''s configured shape (400 VALIDATION_ERROR with fieldErrors[registrationNumber]); it is never echoed or logged, and nothing is stored when it fails.
 
-        Emits a TAX_REGISTRATION_CREATE event, writes a history row naming the forwarded actor, and returns 201, or 200 with the first result for a replayed requestId.
+        Emits a TAX_REGISTRATION_CREATE event, writes a history row naming the forwarded actor, and returns 201, or 200 with the first result when the same request is replayed with its requestId.
 
-        Returns 409 TAX_REGISTRATION_OVERLAP when another registration of the same country and regime is in effect on any date this one covers.
+        Returns 409 TAX_REGISTRATION_OVERLAP when another registration of the same country and regime is in effect on any date this one covers, and 409 IDEMPOTENCY_CONFLICT when the requestId was used for another request.
 
         '
       operationId: createTaxRegistration
@@ -696,7 +696,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: a missing or malformed field, an undeclared regime or a malformed number'
+          description: 'VALIDATION_ERROR: a missing or malformed field or a malformed number'
         '401':
           content:
             application/json:
@@ -708,7 +708,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: TAX_REGISTRATION_OVERLAP
+          description: TAX_REGISTRATION_OVERLAP or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_JURISDICTION_NOT_CONFIGURED or TAX_REGIME_NOT_DECLARED
       security:
       - accountingFrontDoorSecret: []
       summary: Record a tax registration
@@ -728,9 +734,9 @@ paths:
 
         The number must match the regime''s configured shape (400 VALIDATION_ERROR with fieldErrors[registrationNumber]); it is never echoed or logged, and nothing changes when it fails.
 
-        Emits a TAX_REGISTRATION_UPDATE event, writes a history row naming the forwarded actor, and returns 200, also with the first result for a replayed requestId.
+        Emits a TAX_REGISTRATION_UPDATE event, writes a history row naming the forwarded actor, and returns 200, also with the first result when the same change is replayed with its requestId.
 
-        Returns 409 TAX_REGISTRATION_OVERLAP when the new dates overlap another registration of the same country and regime; back-dating never changes an entry already posted.
+        Returns 409 TAX_REGISTRATION_OVERLAP when the new dates overlap another registration of the same country and regime, and 409 IDEMPOTENCY_CONFLICT when the requestId was used for another request; back-dating never changes an entry already posted.
 
         '
       operationId: updateTaxRegistration
@@ -778,7 +784,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: TAX_REGISTRATION_OVERLAP or OPTIMISTIC_LOCK
+          description: TAX_REGISTRATION_OVERLAP, OPTIMISTIC_LOCK or IDEMPOTENCY_CONFLICT
       security:
       - accountingFrontDoorSecret: []
       summary: Change a tax registration

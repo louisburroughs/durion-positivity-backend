@@ -12168,6 +12168,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/TaxRegistrationListResponse'
           description: The registrations
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: asOf is not an ISO-8601 date'
         '403':
           content:
             application/json:
@@ -12187,13 +12193,13 @@ paths:
 
         Use this tool when the company registers for a regime; do not use it to end or correct an existing registration, which is changeTaxRegistration instead.
 
-        Preconditions: caller holds accounting:tax_registration:manage and is a person (403 otherwise); the country''s tax profile declares the regime (400).
+        Preconditions: caller holds accounting:tax_registration:manage and is a person (403 otherwise); the country has a tax profile that declares the regime (422 relayed).
 
         Required inputs: countryCode, regime, registrationNumber, effectiveFrom, justification (at least 10 characters) and requestId; effectiveTo is optional and inclusive.
 
         The number must match the regime''s configured shape: otherwise 400 VALIDATION_ERROR with fieldErrors[registrationNumber], nothing is stored, and the value is never echoed or logged.
 
-        Emits an ACCOUNTING_TAX_REGISTRATION_CREATE event and returns 201, or 200 with the first result for a replayed requestId; pos-tax''s 409 TAX_REGISTRATION_OVERLAP is relayed unchanged.
+        Emits an ACCOUNTING_TAX_REGISTRATION_CREATE event and returns 201, or 200 with the first result for a replayed requestId; pos-tax''s 409 TAX_REGISTRATION_OVERLAP and IDEMPOTENCY_CONFLICT are relayed unchanged.
 
         Returns 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot be reached, and nothing is stored.
 
@@ -12234,7 +12240,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: a missing or invalid field, an undeclared regime or a malformed number'
+          description: 'VALIDATION_ERROR: a missing or invalid field or a malformed number'
         '403':
           content:
             application/json:
@@ -12246,7 +12252,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: TAX_REGISTRATION_OVERLAP, relayed from pos-tax
+          description: TAX_REGISTRATION_OVERLAP or IDEMPOTENCY_CONFLICT, relayed from pos-tax
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_JURISDICTION_NOT_CONFIGURED or TAX_REGIME_NOT_DECLARED, relayed from pos-tax
         '503':
           content:
             application/json:
@@ -12273,7 +12285,7 @@ paths:
 
         The number must match the regime''s configured shape (400 VALIDATION_ERROR with fieldErrors[registrationNumber]); back-dating never changes an entry already posted.
 
-        Emits an ACCOUNTING_TAX_REGISTRATION_UPDATE event and returns 200, also for a replayed requestId; pos-tax''s 409 TAX_REGISTRATION_OVERLAP is relayed unchanged.
+        Emits an ACCOUNTING_TAX_REGISTRATION_UPDATE event and returns 200, also for a replayed requestId; pos-tax''s 409 TAX_REGISTRATION_OVERLAP and IDEMPOTENCY_CONFLICT are relayed unchanged.
 
         Returns 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot be reached, and nothing changes.
 
@@ -12334,7 +12346,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: TAX_REGISTRATION_OVERLAP or OPTIMISTIC_LOCK, relayed from pos-tax
+          description: TAX_REGISTRATION_OVERLAP, OPTIMISTIC_LOCK or IDEMPOTENCY_CONFLICT, relayed from pos-tax
         '503':
           content:
             application/json:
