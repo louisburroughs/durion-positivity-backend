@@ -293,7 +293,7 @@ class TaxReferenceClientTest {
                     });
         }
         record Answer(HttpStatus status, String code) {}
-        for (Answer answer : new Answer[] {
+        for (Answer refusal : new Answer[] {
             new Answer(HttpStatus.UNPROCESSABLE_CONTENT, "AMOUNT_PRECISION_EXCEEDS_CURRENCY"),
             new Answer(HttpStatus.UNPROCESSABLE_CONTENT, null),
             new Answer(HttpStatus.BAD_REQUEST, "TAX_JURISDICTION_NOT_CONFIGURED"),
@@ -301,11 +301,11 @@ class TaxReferenceClientTest {
         }) {
             client = client();
             server.expect(requestTo(BASE + "/v1/tax/calculate"))
-                    .andRespond(withStatus(answer.status())
+                    .andRespond(withStatus(refusal.status())
                             .contentType(MediaType.APPLICATION_JSON)
-                            .body(answer.code() == null ? "not json" : "{\"code\":\"" + answer.code() + "\"}"));
+                            .body(refusal.code() == null ? "not json" : "{\"code\":\"" + refusal.code() + "\"}"));
             assertThatThrownBy(() -> client.useTax(request))
-                    .as("%s", answer)
+                    .as("%s", refusal)
                     .isInstanceOf(TaxServiceUnavailableException.class);
         }
 
