@@ -245,7 +245,7 @@ class InputTaxRecoveryServiceTest {
         account.setAccountName("GST/HST Recoverable");
         when(accounts.findById(accountId)).thenReturn(Optional.of(account));
         when(taxProfiles.evidenceRules("CA", TODAY))
-                .thenReturn(new TaxProfileClient.EvidenceRules("CA", TODAY, "CAD", List.of()));
+                .thenReturn(new TaxProfileClient.EvidenceRules("CA", TODAY, "CAD", List.of(), null));
 
         InputTaxRecoveryResponse read = service.read();
 
