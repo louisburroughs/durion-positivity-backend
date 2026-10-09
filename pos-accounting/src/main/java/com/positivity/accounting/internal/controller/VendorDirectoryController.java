@@ -123,7 +123,7 @@ public class VendorDirectoryController {
                     Returns one vendor from accounting's copy of the pos-supplier vendor master, with its \
                     vendorNumber, status, remitToVersion, paymentDetailsChanged, apHold and apSettings: the AP \
                     defaults, the last remit-to confirmation (remitToConfirmedBy and remitToConfirmedByName), apHold \
-                    (onHold, reason, setBy, setByName, setAt; each ...ByName the person's display name, null when \
+                    (onHold, reason, setBy, setByName, setAt; each name field the person's display name, null when \
                     not known) and \
                     informationReturn (reportable, form, box, payeeTaxRegistrationScheme, payeeTinOnFile and the \
                     masked payeeTinLast4; a full taxpayer number is never served).
