@@ -52,6 +52,9 @@ class CrmPersonControllerWebMvcTest {
     ObjectMapper objectMapper;
 
     @MockitoBean
+    java.time.Clock clock;
+
+    @MockitoBean
     PersonService personService;
 
     @Test
