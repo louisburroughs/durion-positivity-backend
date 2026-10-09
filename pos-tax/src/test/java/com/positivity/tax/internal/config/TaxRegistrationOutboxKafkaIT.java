@@ -32,21 +32,21 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.test.EmbeddedKafkaKraftBroker;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.testcontainers.kafka.KafkaContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
  * CAP:550 S32c AC 1 (fact): a registration change writes one outbox row in its transaction, the outbox publisher
  * puts {@code tax.registration.changed} on a real broker with the tenant header, and a manifest-driven replay of the
- * window re-sends the same event (same eventId, so consumers apply it once). Postgres and Kafka on Testcontainers;
- * the {@code pg} profile runs without the {@code @KafkaRails} beans, so the publisher is built here on the
+ * window re-sends the same event (same eventId, so consumers apply it once). Postgres on Testcontainers and a real
+ * KRaft broker in the JVM (spring-kafka-test); the {@code pg} profile runs without the {@code @KafkaRails} beans, so the publisher is built here on the
  * container's broker. Requires Docker.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
@@ -54,29 +54,20 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Tax registration outbox to Kafka (CAP:550 S32c)")
 class TaxRegistrationOutboxKafkaIT {
 
-    /**
-     * A Docker host reported as {@code 0.0.0.0} (some build hosts) would become the broker's advertised listener,
-     * which Kafka refuses; the broker is then advertised, and reached, on {@code localhost}.
-     */
-    private static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.9.0") {
-        @Override
-        public String getHost() {
-            String host = super.getHost();
-            return "0.0.0.0".equals(host) ? "localhost" : host;
-        }
-    };
+    /** A real KRaft broker in this JVM; its listener is advertised on localhost. */
+    private static final EmbeddedKafkaKraftBroker KAFKA = new EmbeddedKafkaKraftBroker(1, 1, "tax.events.v1");
 
     private static final String TOPIC = "tax.events.v1";
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
         TaxPostgresContainer.registerDataSourceProperties(registry);
-        KAFKA.start();
+        KAFKA.afterPropertiesSet();
     }
 
     @AfterAll
     static void stop() {
-        KAFKA.stop();
+        KAFKA.destroy();
     }
 
     @Autowired
@@ -121,7 +112,7 @@ class TaxRegistrationOutboxKafkaIT {
         }
 
         KafkaTemplate<String, String> template = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBrokersAsString(),
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class)));
         OutboxPublisher publisher = new OutboxPublisher(
@@ -130,7 +121,7 @@ class TaxRegistrationOutboxKafkaIT {
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                KAFKA.getBootstrapServers(),
+                KAFKA.getBrokersAsString(),
                 ConsumerConfig.GROUP_ID_CONFIG,
                 "s32c-" + UUID.randomUUID(),
                 ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,

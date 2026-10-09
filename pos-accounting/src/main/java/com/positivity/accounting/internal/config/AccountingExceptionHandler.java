@@ -104,17 +104,28 @@ public class AccountingExceptionHandler {
     }
 
     /**
-     * pos-tax refused a tax-registration write with 400, 404 or 409 (CAP:550 S32c; AW59): its status and its error
-     * envelope are relayed unchanged, correlation id included.
+     * pos-tax refused a tax-registration write with 400, 404 or 409 (CAP:550 S32c; AW59): its status, code, message
+     * and field errors are relayed unchanged; the correlation id is this request's (ADR-0017 §4).
      */
     @ExceptionHandler(TaxRegistrationRelayException.class)
     public ResponseEntity<ApiError> handleTaxRegistrationRelay(
             TaxRegistrationRelayException ex, HttpServletRequest request) {
-        ApiError error = ex.getError();
+        ApiError relayed = ex.getError();
+        String correlationId = resolveCorrelationId(request);
         HttpHeaders headers = new HttpHeaders();
-        headers.add(
-                X_CORRELATION_ID,
-                error.correlationId() != null ? error.correlationId() : resolveCorrelationId(request));
+        headers.add(X_CORRELATION_ID, correlationId);
+        ApiError error = new ApiError(
+                relayed.code(),
+                relayed.message(),
+                ex.getStatus(),
+                relayed.timestamp(),
+                correlationId,
+                relayed.fieldErrors(),
+                relayed.referenceId(),
+                relayed.nextAction(),
+                relayed.supportAction(),
+                relayed.conflicts(),
+                relayed.suggestedAlternatives());
         return new ResponseEntity<>(error, headers, HttpStatus.valueOf(ex.getStatus()));
     }
 

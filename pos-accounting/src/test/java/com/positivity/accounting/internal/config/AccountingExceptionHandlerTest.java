@@ -142,6 +142,22 @@ class AccountingExceptionHandlerTest {
                             new AuthenticationCredentialsNotFoundException("no credentials"), request)),
                     Named.of("handleAccessDenied", (HandlerInvocation)
                             request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)),
+                    Named.of("handleTaxRegistrationRelay", (HandlerInvocation)
+                            request -> handler.handleTaxRegistrationRelay(
+                                    new com.positivity.accounting.internal.exception.TaxRegistrationRelayException(
+                                            409,
+                                            ApiError.of(
+                                                    "TAX_REGISTRATION_OVERLAP",
+                                                    "Another registration is in effect",
+                                                    409,
+                                                    "2026-10-08T12:00:00Z",
+                                                    "pos-tax-correlation")),
+                                    request)),
+                    Named.of("handleTaxServiceUnavailable", (HandlerInvocation)
+                            request -> handler.handleTaxServiceUnavailable(
+                                    new com.positivity.accounting.internal.exception.TaxServiceUnavailableException(
+                                            "The tax registry is unavailable"),
+                                    request)),
                     Named.of("handleVendorBillDuplicate", (HandlerInvocation)
                             request -> handler.handleVendorBillDuplicate(vendorBillDuplicate(), request)),
                     Named.of("handleInvalidDateRange", (HandlerInvocation) request ->

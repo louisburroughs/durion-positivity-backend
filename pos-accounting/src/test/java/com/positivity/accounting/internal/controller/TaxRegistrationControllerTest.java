@@ -184,7 +184,7 @@ class TaxRegistrationControllerTest {
                         .content(body("Registered with the tax authority")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("TAX_REGISTRATION_OVERLAP"))
-                .andExpect(jsonPath("$.correlationId").value("corr-1"));
+                .andExpect(jsonPath("$.message").value("Another registration is in effect"));
     }
 
     @Test
