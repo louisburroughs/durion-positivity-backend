@@ -10,6 +10,7 @@ import com.positivity.tax.internal.service.TaxRegistrationService.WriteResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -87,7 +88,19 @@ public class TaxRegistrationController {
             description = "TAX_JURISDICTION_NOT_CONFIGURED or TAX_REGIME_NOT_DECLARED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TAX_REGISTRATION_CREATE", apiVersion = "1")
-    public ResponseEntity<TaxRegistrationResponse> create(@RequestBody TaxRegistrationCreateRequest request) {
+    public ResponseEntity<TaxRegistrationResponse> create(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description = "The country's regime, the number as printed, its dates and why",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = TaxRegistrationCreateRequest.class),
+                                            examples = @ExampleObject(name = "Registered from January", value = """
+                                                    {"countryCode":"ZZ","regime":"REGIME_1","registrationNumber":"ZZ 12345","effectiveFrom":"2026-01-01","justification":"Registered with the tax authority","requestId":"019a0000-0000-7000-8000-000000000301"}
+                                                    """)))
+                    @RequestBody
+                    TaxRegistrationCreateRequest request) {
         WriteResult result = service.create(request);
         return ResponseEntity.status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(result.registration());
@@ -133,7 +146,18 @@ public class TaxRegistrationController {
     @EmitEvent(id = "TAX_REGISTRATION_UPDATE", apiVersion = "1")
     public ResponseEntity<TaxRegistrationResponse> update(
             @Parameter(description = "Registration id") @PathVariable UUID registrationId,
-            @RequestBody TaxRegistrationUpdateRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            required = true,
+                            description = "The registration's new number or dates, the version read, and why",
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            schema = @Schema(implementation = TaxRegistrationUpdateRequest.class),
+                                            examples = @ExampleObject(name = "Ended in May", value = """
+                                                    {"registrationNumber":"ZZ 12345","effectiveFrom":"2026-01-01","effectiveTo":"2026-05-31","version":0,"justification":"Deregistered at the end of May","requestId":"019a0000-0000-7000-8000-000000000302"}
+                                                    """)))
+                    @RequestBody
+                    TaxRegistrationUpdateRequest request) {
         return ResponseEntity.ok(service.update(registrationId, request).registration());
     }
 }
