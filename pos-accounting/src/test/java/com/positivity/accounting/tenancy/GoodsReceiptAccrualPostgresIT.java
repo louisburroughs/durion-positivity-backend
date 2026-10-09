@@ -482,7 +482,7 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                 tenant,
                 () -> approvals.approve(
                         created.getVendorBillId(),
-                        new VendorBillCommands.Approve("Checked the delivery", null, null, null)));
+                        new VendorBillCommands.Approve("Checked the delivery", null, null, null, null)));
 
         assertThat(entryCount(tenant)).isEqualTo(2);
         assertThat(net(tenant, "2100")).isEqualByComparingTo("0");

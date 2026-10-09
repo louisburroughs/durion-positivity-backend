@@ -69,6 +69,14 @@ public class InvoiceGlPosting extends TenantScopedEntity {
     @Column(name = "tax_amount", nullable = false, updatable = false, precision = 19, scale = 4)
     private BigDecimal taxAmount;
 
+    /**
+     * Whether the entry posted its tax by tax type (CAP:550 S32d, AW50): a credit against the invoice follows how
+     * the invoice itself posted, never the tenant's keys today. False on every posting made before S32d.
+     */
+    @Builder.Default
+    @Column(name = "tax_posted_by_type", nullable = false, updatable = false)
+    private boolean taxPostedByType = false;
+
     /** The mirror entry that reversed {@link #journalEntryId}; null while the posting is open. */
     @Column(name = "reversal_journal_entry_id", columnDefinition = "UUID")
     private UUID reversalJournalEntryId;

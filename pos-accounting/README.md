@@ -743,6 +743,89 @@ ADR-0071 §5). Nothing here names a country or a regime: they come from pos-tax'
   names another tenant than the one its record header bound is skipped and logged.
 - **Data.** The copy keeps the shape-checked, normalised number: INTERNAL under ADR-0072 Decision 1. Nothing logs it.
 
+## Input-tax recovery and typed output tax (CAP:550 S32d, #2639)
+
+Multi-national first: recovery is keyed by *regime*, output tax by *tax type*, and accounts come from mapping keys a
+currency's template data provisions. Countries, regimes and tax types come from pos-tax's profiles (S32a); no code
+names one, nor an account number. A tenant with no registration and no typed keys (every USD tenant today) books
+exactly as before.
+
+| Method · path / listener | Permission | Codes |
+| --- | --- | --- |
+| `GET /v1/accounting/input-tax-recovery` | `accounting:mapping-key:view` | 200; 403; 422 `ACCOUNTING_TIME_ZONE_UNSET` |
+| `PUT /v1/accounting/petty-expense-categories/{categoryCode}/tax-recovery` | `accounting:mapping-key:edit` | 200 (a replayed `requestId` returns the first result); 400; 403; 404; 409 `OPTIMISTIC_LOCK` / `IDEMPOTENCY_CONFLICT`; 422 `INPUT_TAX_RECOVERY_NOT_ENABLED` |
+| Close fact v2 (`order.session.closed`) | — | one expense line, one line per recovered regime, one cash line |
+
+- **Flags (AW49).** `InputTaxRecoveryFlags`: recovery under regime `R` is on at a date only while a registration for
+  `R` is in effect in `ext_tax_registration` (S32c) **and** the currency pos-tax configures for its country
+  (`GET /v1/tax/tax-types`) is the functional currency (today the ledger currency; ADR-0067 A2 replaces the source).
+  Postings ask at their business date, so back-dating a registration never changes a posted entry. A profile that
+  cannot be read (`TaxProfileClient`: the gateway authority header `tax:rates:view`, the bound tenant, the inbound
+  `X-Correlation-Id`, `pos.accounting.tax.connect-timeout` / `read-timeout`) throws: the posting rolls back for retry
+  and recovery is never read as off.
+- **Settings read.** One row per registered regime (country, regime, `enabled`, the registration in effect with its
+  number and start, and the `INPUT_TAX_<regime>` account), the evidence rules of each registered country, every
+  category's `taxRecoverable` / `recoverablePercent` / `version`, and the change history (date, actor and role, old to
+  new, reason). It never fails because of pos-tax: `enabled` is then null (unknown, never off) and `evidenceRules`
+  null.
+- **Category recovery (item 4).** A category without a setting is not recoverable. The PUT writes
+  `petty_expense_category_tax_setting`, a history row in force from now (`petty_expense_category_tax_setting_change`,
+  never updated) and queues `accounting.petty-expense-category.changed`, which gains `taxRecoverable` and
+  `recoverablePercent` (additive; a message without them reads as not recoverable). Refused with 422
+  `INPUT_TAX_RECOVERY_NOT_ENABLED` while no regime's recovery is on today. Emits
+  `ACCOUNTING_PETTY_CATEGORY_TAX_RECOVERY_UPDATE`.
+- **Currency template data (item 3).** `CurrencyTemplateSource` owns the template entries the platform tenant's
+  `accounting_template_currency_entry` rows reserve for a functional currency; the generic source owns none of them.
+  The CAD data set in `R__seed_reference_accounting.sql` (placeholders held for expert advice, OI-4: recovery must
+  not reach a production CAD tenant before it is answered): 1250 / 1260 (`TAX_RECOVERABLE`), 2210 / 2220 / 2230
+  (`TAX_PAYABLE`), 6050 Cash Rounding; `INPUT_TAX_<regime>` under `REGISTER_CASH_MOVEMENT`, `TAX_RECOVERABLE_<regime>`
+  under `VENDOR_BILL`, `SALES_TAX_PAYABLE_<taxType>` under `INVOICE_REVENUE`, `CASH_ROUNDING_DIFFERENCE` under
+  `CASH_ROUNDING`; every category recoverable at 100 %, Staff meals at 50 % (template entry kind
+  `PETTY_EXPENSE_TAX_RECOVERY`, in force from the template's date). Accounts stay remappable.
+- **Petty expenses at close (item 9, AW52).** `PettyExpenseRecoveryDecider`: a stated regime is recovered only when,
+  on the movement's date (its `occurredAt` in the accounting zone), its flag is on, the category was recoverable when
+  the movement was **recorded** (the share then in force, from accounting's own history), pos-tax answered
+  `PLAUSIBLE`, a supplier name and receipt reference are present, and a required supplier number is present.
+  `rec = stated × share / 100`, HALF_UP at the currency exponent. The entry is Dr `PETTY_EXPENSE_<code>` (gross −
+  Σ rec), Dr `INPUT_TAX_<regime>` per recovered regime, Cr `CASH_CLEARING` (gross), with the movement's idempotency
+  key. Every stated regime's outcome is kept in `register_cash_movement_tax_recovery` (`recovery_withheld_reason`
+  `NOT_REGISTERED`, `CATEGORY_NOT_RECOVERABLE`, `RATE_UNAVAILABLE`, `EVIDENCE_MISSING` or
+  `SUPPLIER_REGISTRATION_MISSING`), with the supplier's number as the claim's evidence (INTERNAL, ADR-0072 Decision 1;
+  never logged).
+- **Vendor bills (item 10; AW37-AW43, AW51, AW53).** Every bill stores the tax its document states by type in
+  `vendor_bill_tax` (`VendorBillStatedTax`): the EDI fact's taxes (S23), or the optional `taxByType[]` on approve and
+  resolve-exception `ACCEPT`, copied from the document; it must sum to the stated tax, else 422
+  `AP_BILL_TAX_SPLIT_MISMATCH` (`fieldErrors[taxByType]`). At approval (`VendorBillTaxSplit`), for a tenant with a
+  regime enabled, each typed amount's regime and recoverability come from pos-tax's tax types; a recoverable type
+  whose regime's flag is on at the bill date debits `TAX_RECOVERABLE_<regime>` (a credit note credits it), and
+  anything else goes into its line's class, never into inventory cost. A bill with tax but no split recovers nothing
+  (`TAX_SPLIT_MISSING`) and automatic approval leaves it `AWAITING_APPROVAL`. Evidence (AW53): when the gross reaches
+  the `VENDOR_BILL` evidence rule and the vendor copy holds no registration of the country's supplier regime (pos-tax's
+  `supplierRegistrationRegime`, compared on scheme and `last4` only), nothing is recovered
+  (`SUPPLIER_REGISTRATION_MISSING`) and automatic approval is held. Each type's outcome is kept in
+  `vendor_bill_tax_recovery`; the bill read gains `taxByType[]` and `inputTaxRecovery[]`, and the approval audit
+  records both. A tenant without recovery (every USD tenant) books the gross as before and never calls pos-tax. Tax by
+  type from the bill-intake channel (`BillIntakePort`, the S25 draft) arrives with S25 (#2518).
+- **Output tax by type (item 11, AW50).** `ext_invoice_tax.tax_type` is filled from S32a's
+  `TaxBreakdownLine.taxType`. A tenant that has any `SALES_TAX_PAYABLE_<taxType>` key mapped under `INVOICE_REVENUE`
+  (`TypedOutputTax`) posts one tax leg per type to that key, HALF_UP per leg with any cent on the largest, and its
+  reversals mirror the original lines. An invoice whose typed rows do not account for its whole tax, or whose type
+  has no mapped key, posts nothing (AR, revenue and tax wait together): it is held `SUSPENDED` / `TAX_TYPE_MISSING`
+  and posted by the audited reprocess (`InvoiceRevenueReprocessor`). No default account is used and no type is
+  inferred. A credit memo follows how the invoice's own entry posted its tax (`invoice_gl_posting.tax_posted_by_type`),
+  never the tenant's keys today: an invoice posted untyped is credited untyped, one posted by type is split across
+  its types pro rata, and a memo against a held invoice is refused with 422 `TAX_TYPE_MISSING` before anything is
+  stored (it succeeds once the invoice's reprocess posts it). A memo's void always mirrors the memo's own reversal
+  lines. A tenant without typed keys (USD) posts exactly
+  as before. The tax-liability reconciliation compares against every account the `SALES_TAX_PAYABLE` and
+  `SALES_TAX_PAYABLE_*` keys map to in the period, never a literal code (`taxPayableAccountCode` lists them,
+  comma-joined; still `2200` for a USD tenant).
+- **Cash rounding (item 12).** The CAD data provisions 6050 and `CASH_ROUNDING_DIFFERENCE`; the posting waits for
+  ADR-0067 step A8 (its own story), which adds the settled amount and the signed rounding to the cash
+  `PaymentSettledV1`. Release gate: no production tenant whose currency has a cash-rounding increment (CAD first)
+  takes cash until A8 merges.
+- **Flyway.** `V23__input_tax_recovery.sql`.
+
 ## Location scope (ADR-0061, #1885)
 
 Location-scoped permissions are enforced on top of `@PreAuthorize` using the caller's
@@ -1530,6 +1613,9 @@ country.
   empty answer, or a line tax finer than the ledger currency's minor unit), for the rules or the quote, is 503
   `SERVICE_UNAVAILABLE` with `Retry-After` and writes nothing (AW49: never read as "off"); automatic approval skips
   with `SERVICE_UNAVAILABLE`. The purchase-rules read never relays. Decisions never use a cache.
+- **With input-tax recovery (S32d).** Recovery works on the tax a bill states; the accrual applies only to a bill that
+  states none, so one bill never carries both, and the accrual's two legs are always equal. The hold is the last content
+  check, after S32d's `AP_BILL_TAX_SPLIT_MISMATCH`.
 - **Amounts as returned** (ADR-0067 PC-6): each line tax is taken at the ledger currency's exponent
   (`Currency#getDefaultFractionDigits`), never rounded; one that cannot be represented there is an unusable answer.
 - **Rollout.** With the shipped settings (`accounting.tax.country: US`, pos-tax's `US {HOLD, true}`) every tenant of

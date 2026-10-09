@@ -91,9 +91,13 @@ public class CreditMemoController {
                     the invoice's outstanding balance.
                     Required inputs: originalInvoiceId (UUID), creditAmount (min 0.01) and reasonCode (max 50 \
                     chars, kept for the audit trail); justificationNote (max 1000 chars) is optional.
-                    Emits an ACCOUNTING_CREDIT_MEMO_CREATE event and posts the reversing GL entries.
+                    Emits an ACCOUNTING_CREDIT_MEMO_CREATE event and posts the reversing GL entries; a tenant \
+                    whose currency template maps tax-payable keys by tax type reverses the tax by type, in the \
+                    share the invoice collected each type.
                     Returns 404 when the invoice is not found, 409 when the amount exceeds the outstanding \
-                    balance or the invoice is not finalized, and 401 when no authenticated user is present.
+                    balance or the invoice is not finalized, 422 TAX_TYPE_MISSING when such a tenant's invoice \
+                    carries tax without a tax type or a type without a mapped key (nothing is stored), and 401 \
+                    when no authenticated user is present.
                     """,
             tags = {"Credit Memos"})
     @ApiResponse(responseCode = "201", description = "Credit memo created successfully")
@@ -108,6 +112,11 @@ public class CreditMemoController {
     @ApiResponse(
             responseCode = "409",
             description = "Business rule violation - amount exceeds balance or invoice not finalized",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "TAX_TYPE_MISSING - the tenant posts output tax by type and the invoice's tax cannot be"
+                    + " reversed by type",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_CREDIT_MEMO_CREATE", apiVersion = "1")
     public ResponseEntity<CreditMemoResponse> createCreditMemo(
@@ -163,7 +172,8 @@ public class CreditMemoController {
             summary = "Void Credit Memo",
             description = """
                     Voids a POSTED credit memo by posting the mirror GL entry (debit AR, credit Revenue and \
-                    Sales-Tax Payable) dated at void time, restoring the invoice's outstanding balance.
+                    Sales-Tax Payable, by tax type where the memo reversed by type) dated at void time, restoring \
+                    the invoice's outstanding balance.
                     Use this tool to back out a memo issued in error; do not use createCreditMemo, which \
                     issues new credit, and note that APPLIED memos have been consumed and cannot be voided.
                     Preconditions: the credit memo must exist and be in POSTED status; VOIDED is terminal.

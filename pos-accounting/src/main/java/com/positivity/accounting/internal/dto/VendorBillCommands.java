@@ -3,10 +3,18 @@ package com.positivity.accounting.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -73,6 +81,19 @@ public final class VendorBillCommands {
             @Valid
             VendorBillReview.@Nullable Difference difference,
 
+            @ArraySchema(
+                    arraySchema =
+                            @Schema(
+                                    description = "The tax the vendor's document states, by tax type, copied from the"
+                                            + " document (CAP:550 S32d, AW51); replaces the tax by type stored on the"
+                                            + " bill and must add up to its stated tax, else 422"
+                                            + " AP_BILL_TAX_SPLIT_MISMATCH. Omit it to keep what the bill states",
+                                    requiredMode = NOT_REQUIRED),
+                    schema = @Schema(implementation = TaxAmount.class))
+            @Valid
+            @Nullable
+            List<@NonNull TaxAmount> taxByType,
+
             @Schema(
                     description = "Accepts, for this bill only, tax the vendor charged on goods for resale where the"
                             + " tax country's purchase-tax rules hold such bills (check TAX_ON_RESALE_GOODS FAIL): why"
@@ -88,8 +109,9 @@ public final class VendorBillCommands {
                 @Nullable String justification,
                 VendorBillReview.@Nullable Classification classification,
                 @Nullable String overrideJustification,
-                VendorBillReview.@Nullable Difference difference) {
-            this(justification, classification, overrideJustification, difference, null);
+                VendorBillReview.@Nullable Difference difference,
+                @Nullable List<@NonNull TaxAmount> taxByType) {
+            this(justification, classification, overrideJustification, difference, taxByType, null);
         }
     }
 
@@ -161,6 +183,20 @@ public final class VendorBillCommands {
             @Valid
             VendorBillReview.@Nullable Difference difference,
 
+            @ArraySchema(
+                    arraySchema =
+                            @Schema(
+                                    description =
+                                            "The tax the vendor's document states, by tax type, ACCEPT only, copied from"
+                                                    + " the document (CAP:550 S32d, AW51); replaces the tax by type stored on the"
+                                                    + " bill and must add up to its stated tax, else 422"
+                                                    + " AP_BILL_TAX_SPLIT_MISMATCH. Omit it to keep what the bill states",
+                                    requiredMode = NOT_REQUIRED),
+                    schema = @Schema(implementation = TaxAmount.class))
+            @Valid
+            @Nullable
+            List<@NonNull TaxAmount> taxByType,
+
             @Schema(
                     description = "ACCEPT only: accepts, for this bill only, tax the vendor charged on goods for"
                             + " resale where the tax country's purchase-tax rules hold such bills, 10-1000 characters"
@@ -177,10 +213,37 @@ public final class VendorBillCommands {
                 @Nullable String reason,
                 VendorBillReview.@Nullable Classification classification,
                 @Nullable String overrideJustification,
-                VendorBillReview.@Nullable Difference difference) {
-            this(resolutionAction, reason, classification, overrideJustification, difference, null);
+                VendorBillReview.@Nullable Difference difference,
+                @Nullable List<@NonNull TaxAmount> taxByType) {
+            this(resolutionAction, reason, classification, overrideJustification, difference, taxByType, null);
         }
     }
+
+    /**
+     * One tax type a vendor's document states, with its amount, copied by the person approving or accepting the bill
+     * (CAP:550 S32d item 10). The amount is positive as the document prints it; a credit note's are stored negative.
+     */
+    @Schema(name = "VendorBillTaxAmount", description = "One tax type the vendor's document states, with its amount")
+    public record TaxAmount(
+            @Schema(
+                    description = "The tax type as pos-tax's country profile names it (upper-case letters, digits or"
+                            + " underscores)",
+                    example = "TAX_TYPE_1",
+                    pattern = "^[A-Z0-9_]{1,32}$",
+                    requiredMode = REQUIRED)
+            @NotBlank
+            @Pattern(regexp = "^[A-Z0-9_]{1,32}$")
+            @Nullable
+            String taxType,
+
+            @Schema(
+                    description = "The amount the document states for it, positive, at most the currency's decimals",
+                    example = "50.00",
+                    requiredMode = REQUIRED)
+            @NotNull
+            @Positive
+            @Nullable
+            BigDecimal amount) {}
 
     /**
      * The bill's real due date, entered during approval review (CAP:550 S13, #2510; §4.2, AW11). The actor is the

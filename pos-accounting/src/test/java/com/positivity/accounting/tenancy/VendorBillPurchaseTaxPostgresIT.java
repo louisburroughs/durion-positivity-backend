@@ -490,7 +490,8 @@ class VendorBillPurchaseTaxPostgresIT extends PostgresTenancyTestBase {
                 tenant,
                 () -> approvals.approve(
                         billId,
-                        new VendorBillCommands.Approve(null, null, null, null, taxOnResaleOverrideJustification)));
+                        new VendorBillCommands.Approve(
+                                null, null, null, null, null, taxOnResaleOverrideJustification)));
     }
 
     private UUID submitted(UUID tenant, UUID billId, VendorBillReview.Classification classification) {

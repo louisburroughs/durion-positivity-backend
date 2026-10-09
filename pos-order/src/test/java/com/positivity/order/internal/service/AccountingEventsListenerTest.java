@@ -119,6 +119,36 @@ class AccountingEventsListenerTest {
     }
 
     @Test
+    @DisplayName("CAP:550 S32d: taxRecoverable and recoverablePercent are copied from the category fact")
+    void categoryRecoveryCopied() {
+        String fact = categoryFact("e-r1", 4, "ACTIVE")
+                .replace(
+                        "\"accountName\":\"Shop Supplies & Consumables\"",
+                        "\"accountName\":\"Shop Supplies & Consumables\",\"taxRecoverable\":true,"
+                                + "\"recoverablePercent\":50.00");
+
+        listener.onAccountingEvent(fact);
+
+        ArgumentCaptor<ExtAccountingPettyExpenseCategory> copy =
+                ArgumentCaptor.forClass(ExtAccountingPettyExpenseCategory.class);
+        verify(categories).save(copy.capture());
+        assertThat(copy.getValue().isTaxRecoverable()).isTrue();
+        assertThat(copy.getValue().getRecoverablePercent()).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    @DisplayName("CAP:550 S32d: a category fact without the recovery fields maps to not recoverable")
+    void categoryWithoutRecoveryIsNotRecoverable() {
+        listener.onAccountingEvent(categoryFact("e-r2", 4, "ACTIVE"));
+
+        ArgumentCaptor<ExtAccountingPettyExpenseCategory> copy =
+                ArgumentCaptor.forClass(ExtAccountingPettyExpenseCategory.class);
+        verify(categories).save(copy.capture());
+        assertThat(copy.getValue().isTaxRecoverable()).isFalse();
+        assertThat(copy.getValue().getRecoverablePercent()).isNull();
+    }
+
+    @Test
     @DisplayName("a float fact writes the configured float, a negative one (after a reversal) as it stands")
     void floatCopied() {
         listener.onAccountingEvent(floatFact("e-2", 5, "-25.00"));

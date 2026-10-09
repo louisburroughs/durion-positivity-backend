@@ -177,7 +177,7 @@ public class VendorBillPurchaseTax {
         }
         Set<String> asked = new HashSet<>();
         basis.untaxedExpense().forEach(line -> asked.add(line.lineItemId()));
-        int scale = Currency.getInstance(ledgerCurrency.code()).getDefaultFractionDigits();
+        int scale = Math.max(0, Currency.getInstance(ledgerCurrency.code()).getDefaultFractionDigits());
         BigDecimal total = BigDecimal.ZERO.setScale(scale);
         for (TaxUseQuote.LineTax line : answer.lineItemTaxes()) {
             if (line != null

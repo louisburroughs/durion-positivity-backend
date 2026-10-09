@@ -24,5 +24,10 @@ public enum TemplateEntryKind {
     /**
      * A petty-expense category (#2511), matched by code; applied after its mapping key and GL mapping.
      */
-    PETTY_EXPENSE_CATEGORY
+    PETTY_EXPENSE_CATEGORY,
+    /**
+     * A petty-expense category's tax recovery (CAP:550 S32d), matched by category code; applied after the category.
+     * Only currency-conditional template data carries it.
+     */
+    PETTY_EXPENSE_TAX_RECOVERY
 }

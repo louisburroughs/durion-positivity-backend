@@ -4,12 +4,14 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorBillReview;
+import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
+import com.positivity.accounting.internal.entity.VendorBillTaxRecovery;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillAction;
@@ -18,6 +20,7 @@ import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillStage;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
+import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
@@ -25,6 +28,8 @@ import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRep
 import com.positivity.accounting.internal.repository.VendorBillMatchEvidenceRepository;
 import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.repository.VendorBillTaxRecoveryRepository;
+import com.positivity.accounting.internal.repository.VendorBillTaxRepository;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -114,6 +119,10 @@ public class VendorBillReader {
     private final LedgerCurrency ledgerCurrency;
     private final ApApprovalPolicy policy;
     private final SupplierVendorCopies vendorCopies;
+    private final VendorBillTaxRepository billTaxes;
+    private final VendorBillTaxRecoveryRepository taxRecoveries;
+    private final GLMappingResolver glMappingResolver;
+    private final GLAccountRepository glAccounts;
     private final VendorBillPurchaseTax purchaseTax;
 
     /** The full read of one bill, for the caller in the security context. */
@@ -188,6 +197,13 @@ public class VendorBillReader {
                                 vendorCopies.isCreatorsFirstBill(
                                         bill.getVendorId(), VendorBillDecisions.callerOrNull()))))
                 .posting(posting.map(this::posting).orElse(null))
+                .taxByType(billTaxes.findByVendorBillIdOrderByTaxType(billId).stream()
+                        .map(tax -> new VendorBillReview.TaxByType(
+                                tax.getTaxType(),
+                                tax.getAmount(),
+                                tax.getSource().name()))
+                        .toList())
+                .inputTaxRecovery(inputTaxRecovery(billId, posting.orElse(null)))
                 .taxOnResaleOverride(
                         bill.getTaxOnResaleOverride() == null
                                 ? null
@@ -812,6 +828,45 @@ public class VendorBillReader {
                 || (action == VendorBillAction.APPROVE && blocks.creatorException());
         actions.add(new VendorBillReview.AvailableAction(
                 action, blockedReason == null, blockedReason, justificationRequired));
+    }
+
+    /**
+     * What the posting did with each stated tax amount (CAP:550 S32d item 10), the account read through the recovered
+     * key's mapping on the posting date; null when the posting recorded nothing (a tenant without recovery, a bill not
+     * yet posted).
+     */
+    private @Nullable List<VendorBillReview.InputTaxRecovery> inputTaxRecovery(
+            UUID billId, @Nullable VendorBillGlPosting posting) {
+        List<VendorBillTaxRecovery> rows = taxRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId);
+        if (rows.isEmpty() || posting == null) {
+            return null;
+        }
+        return rows.stream()
+                .map(row -> {
+                    Optional<GLAccount> account = row.getMappingKey() == null
+                            ? Optional.empty()
+                            : recoveryAccount(row.getMappingKey(), posting.getPostingDate());
+                    return new VendorBillReview.InputTaxRecovery(
+                            row.getTaxType(),
+                            row.getRegime(),
+                            row.getStatedAmount(),
+                            row.getRecoveredAmount(),
+                            account.map(GLAccount::getAccountCode).orElse(null),
+                            account.map(GLAccount::getAccountName).orElse(null),
+                            row.getRecoveryWithheldReason());
+                })
+                .toList();
+    }
+
+    private Optional<GLAccount> recoveryAccount(String mappingKey, LocalDate postingDate) {
+        try {
+            UUID accountId = glMappingResolver.resolveGLAccount(
+                    VendorBillPostingService.POSTING_CATEGORY, mappingKey, postingDate.atStartOfDay());
+            return glAccounts.findById(accountId);
+        } catch (RuntimeException unmapped) {
+            // The key was remapped away since: the read still shows the amount, without an account.
+            return Optional.empty();
+        }
     }
 
     private VendorBillReview.Posting posting(VendorBillGlPosting posting) {

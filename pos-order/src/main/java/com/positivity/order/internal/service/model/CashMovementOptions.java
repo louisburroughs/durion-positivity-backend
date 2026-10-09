@@ -16,7 +16,8 @@ public record CashMovementOptions(
         @NonNull UUID sessionId,
         @NonNull String currencyCode,
         @NonNull List<ReasonOption> reasons,
-        @NonNull List<CategoryOption> categories) {
+        @NonNull List<CategoryOption> categories,
+        @Nullable EvidenceRule evidenceRule) {
 
     /** One reason's options. */
     public record ReasonOption(
@@ -32,5 +33,16 @@ public record CashMovementOptions(
     public record CategoryOption(
             @NonNull String code,
             @NonNull String label,
-            @Nullable String examples) {}
+            @Nullable String examples,
+            @NonNull List<String> offeredRegimes) {}
+
+    /**
+     * The drawer receipt's evidence threshold (CAP:550 S32d): from this receipt total the supplier's number is asked
+     * for; null when pos-tax did not answer or names none.
+     *
+     * @param threshold    the receipt total, tax included
+     * @param currencyCode its ISO 4217 code
+     */
+    public record EvidenceRule(
+            @NonNull BigDecimal threshold, @NonNull String currencyCode) {}
 }

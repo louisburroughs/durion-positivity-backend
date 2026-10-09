@@ -183,7 +183,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                 tenant,
                 () -> approvals.approve(
                         created.getVendorBillId(),
-                        new VendorBillCommands.Approve("Checked the delivery", null, null, null)));
+                        new VendorBillCommands.Approve("Checked the delivery", null, null, null, null)));
 
         assertThat(approved.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
         assertThat(approved.getApproval().approvedBy()).isEqualTo(CONTROLLER);
@@ -207,7 +207,8 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         assertThatThrownBy(() -> asTenant(
                         tenant,
                         () -> approvals.approve(
-                                created.getVendorBillId(), new VendorBillCommands.Approve(null, null, null, null))))
+                                created.getVendorBillId(),
+                                new VendorBillCommands.Approve(null, null, null, null, null))))
                 .isInstanceOfSatisfying(
                         VendorBillException.class,
                         e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_NOT_APPROVABLE));
@@ -255,7 +256,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
 
         signIn(CONTROLLER, CONTROLLER_GRANTS);
         VendorBillResponse approved = asTenant(
-                tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null)));
+                tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null)));
         assertThat(lines(tenant, approved.getPosting().journalEntryId()))
                 .containsExactly("6340 D214.0000", "2000 C214.0000");
         assertThat(approved.getAvailableActions())
@@ -317,6 +318,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                                         null,
                                         new VendorBillReview.Classification(VendorBillDebitClass.GOODS, null),
                                         null,
+                                        null,
                                         null))))
                 .isInstanceOf(AccountingPeriodHardLockedException.class);
 
@@ -357,7 +359,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
 
         signIn(CONTROLLER, CONTROLLER_GRANTS);
         VendorBillResponse approved = asTenant(
-                tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null)));
+                tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null)));
 
         assertThat(approved.getPosting().postingDate()).isEqualTo(today());
         assertThat(approved.getPosting().postingDateRule())
@@ -379,7 +381,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
 
         assertThatThrownBy(() -> asTenant(
                         tenant,
-                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null))))
+                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null))))
                 .isInstanceOfSatisfying(
                         VendorBillException.class,
                         e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_UNCLASSIFIED));
@@ -433,7 +435,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                     tenant,
                     CONTROLLER,
                     CONTROLLER_GRANTS,
-                    () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null))));
+                    () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null))));
             Future<Object> reject = pool.submit(decision(
                     start,
                     tenant,
@@ -530,7 +532,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                 tenant,
                 () -> vendorBills.handleVendorInvoiceReceivedEvent(invoice(vendor, product, today().minusDays(2))));
         signIn(CONTROLLER, CONTROLLER_GRANTS);
-        asTenant(tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null)));
+        asTenant(tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null)));
         return billId;
     }
 
@@ -565,7 +567,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                                 new VendorBillReview.Classification(
                                         VendorBillDebitClass.EXPENSE, "EXPENSE_SHOP_SUPPLIES"),
                                 null)));
-        asTenant(tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null)));
+        asTenant(tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null)));
         allocate(tenant, billId, "100.00");
 
         assertThatThrownBy(() -> asTenant(
@@ -600,7 +602,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         signIn(CONTROLLER, CONTROLLER_GRANTS);
         assertThatThrownBy(() -> asTenant(
                         tenant,
-                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null))))
+                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null))))
                 .isInstanceOf(com.positivity.accounting.internal.exception.AccountingPeriodClosedException.class);
         assertThat(count(tenant, "journal_entry")).isZero();
 
@@ -612,7 +614,8 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                 tenant,
                 () -> approvals.approve(
                         billId,
-                        new VendorBillCommands.Approve(null, null, "Late bill, agreed with the accountant", null)));
+                        new VendorBillCommands.Approve(
+                                null, null, "Late bill, agreed with the accountant", null, null)));
 
         assertThat(approved.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
         assertThat(approved.getPosting().postingDate()).isEqualTo(today());
@@ -642,7 +645,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                                 null)));
 
         VendorBillResponse approved = asTenant(
-                tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null)));
+                tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null)));
 
         assertThat(lines(tenant, approved.getPosting().journalEntryId()))
                 .containsExactlyInAnyOrder("6340 C50.0000", "2000 D50.0000");
@@ -669,7 +672,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
             Callable<VendorBillResponse> approve =
-                    () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null));
+                    () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null));
             Future<Object> first = pool.submit(decision(start, tenant, CONTROLLER, CONTROLLER_GRANTS, approve));
             Future<Object> second = pool.submit(decision(start, tenant, "controller.two", CONTROLLER_GRANTS, approve));
             start.countDown();
@@ -754,7 +757,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
 
         assertThatThrownBy(() -> asTenant(
                         tenant,
-                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null))))
+                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null))))
                 .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
                     assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/EXPENSE_SHOP_SUPPLIES");
                     assertThat(e.getNextAction()).contains("Map VENDOR_BILL / EXPENSE_SHOP_SUPPLIES");
@@ -789,7 +792,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
 
         assertThatThrownBy(() -> asTenant(
                         tenant,
-                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null))))
+                        () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null))))
                 .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, e -> {
                     assertThat(e.getReferenceId()).isEqualTo("VENDOR_BILL/EXPENSE_SHOP_SUPPLIES");
                     assertThat(e.getMessage()).contains("EXPENSE_SHOP_SUPPLIES", today().toString());
@@ -822,7 +825,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                 () -> approvals.resolveException(
                         billId,
                         new VendorBillCommands.ResolveException(
-                                "CORRECT", "Vendor sends a new invoice", null, null, null)));
+                                "CORRECT", "Vendor sends a new invoice", null, null, null, null)));
         assertThat(corrected.getStatus()).isEqualTo(VendorBillStatus.PENDING_RECEIPT_MATCH);
         assertThat(corrected.getTotalAmount()).isEqualByComparingTo("400.00");
         assertThat(corrected.getBillDate()).isEqualTo(received.atTime(9, 30));
@@ -951,8 +954,8 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                 .containsExactly(vendor);
 
         signIn(CONTROLLER, CONTROLLER_GRANTS);
-        VendorBillResponse approved =
-                asTenant(tenant, () -> approvals.approve(edi, new VendorBillCommands.Approve(null, null, null, null)));
+        VendorBillResponse approved = asTenant(
+                tenant, () -> approvals.approve(edi, new VendorBillCommands.Approve(null, null, null, null, null)));
         assertThat(approved.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
     }
 
@@ -977,7 +980,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
 
         signIn(CONTROLLER, CONTROLLER_GRANTS);
         VendorBillResponse approved = asTenant(
-                tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null)));
+                tenant, () -> approvals.approve(billId, new VendorBillCommands.Approve(null, null, null, null, null)));
         assertThat(approved.getPosting().postingDate()).isEqualTo(invoiced);
         assertThat(approved.getPosting().postingDateRule()).isEqualTo(VendorBillPostingDateRule.BILL_DATE);
     }
@@ -1052,7 +1055,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                         () -> approvals.resolveException(
                                 billId,
                                 new VendorBillCommands.ResolveException(
-                                        "ACCEPT", "Totals checked", goods, null, null))))
+                                        "ACCEPT", "Totals checked", goods, null, null, null))))
                 .isInstanceOfSatisfying(
                         VendorBillException.class,
                         e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_TOTALS_UNRECONCILED));
@@ -1069,9 +1072,8 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                                 goods,
                                 null,
                                 new VendorBillReview.Difference(
-                                        VendorBillDifferenceClass.FREIGHT,
-                                        null,
-                                        "Freight on the invoice, not stated"))));
+                                        VendorBillDifferenceClass.FREIGHT, null, "Freight on the invoice, not stated"),
+                                null)));
         assertThat(lines(tenant, approved.getPosting().journalEntryId()))
                 .containsExactlyInAnyOrder("2100 D1000.0000", "5050 D70.0000", "5060 D15.0000", "2000 C1085.0000");
         assertThat(approved.getPosting().differenceClass()).isEqualTo(VendorBillDifferenceClass.FREIGHT);
@@ -1102,7 +1104,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                 () -> approvals.submitForApproval(
                         rounded, new VendorBillCommands.Submit("Stock bought outside a PO", goods, null)));
         VendorBillResponse roundedApproved = asTenant(
-                tenant, () -> approvals.approve(rounded, new VendorBillCommands.Approve(null, null, null, null)));
+                tenant, () -> approvals.approve(rounded, new VendorBillCommands.Approve(null, null, null, null, null)));
         assertThat(lines(tenant, roundedApproved.getPosting().journalEntryId()))
                 .containsExactlyInAnyOrder("2100 D1000.0100", "5050 D70.0000", "2000 C1070.0100");
         assertThat(roundedApproved.getPosting().roundingAdjustment()).isEqualByComparingTo("0.01");
@@ -1117,7 +1119,7 @@ class VendorBillApprovalPostgresIT extends PostgresTenancyTestBase {
                                 new VendorBillReview.Difference(
                                         VendorBillDifferenceClass.PRICE_DIFFERENCE, null, "Discount on the total"))));
         VendorBillResponse shortApproved = asTenant(
-                tenant, () -> approvals.approve(short10, new VendorBillCommands.Approve(null, null, null, null)));
+                tenant, () -> approvals.approve(short10, new VendorBillCommands.Approve(null, null, null, null, null)));
         assertThat(lines(tenant, shortApproved.getPosting().journalEntryId()))
                 .containsExactlyInAnyOrder("2100 D1000.0000", "5050 D60.0000", "2000 C1060.0000");
     }

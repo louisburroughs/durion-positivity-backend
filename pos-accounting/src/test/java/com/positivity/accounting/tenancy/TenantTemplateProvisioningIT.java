@@ -656,8 +656,11 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                 .as("V5 recorded the default tenant's choice")
                 .isTrue();
         assertThat(status.counts().created() + status.counts().adopted())
-                .as("the default tenant holds the whole template, add-on included")
-                .isEqualTo(templateReader.snapshot().entries().size());
+                .as("the default tenant holds the whole template, add-on included, but no other currency's data"
+                        + " (CAP:550 S32d)")
+                .isEqualTo((int) templateReader.snapshot().entries().stream()
+                        .filter(entry -> !templateReader.currencyEntries().containsKey(entry.entryKey()))
+                        .count());
         assertThat(codes(TENANT_A)).contains("1000", "1200", "4000").containsAll(RetreadPlantAddOnSource.ACCOUNT_CODES);
         assertThat(owner.queryForList(
                         "SELECT row_to_json(a)::text FROM gl_account a WHERE tenant_id = ? AND gl_account_id::text"
@@ -821,15 +824,18 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
         // OPENING_BALANCE category with its OPENING_BALANCE_EQUITY key and mapping (3900). #2509 (S12, AW38-AW40)
         // adds 2100, 5050 and 5060, the GOODS_RECEIPT and VENDOR_BILL categories with their 3 + 13 keys and
         // mappings, and the statement lines of 2100, 5050 and 5060. #2603 (S42, AW40-AW41) adds the AP_PAYMENT
-        // category with its ACCOUNTS_PAYABLE and PAYMENT_FEES keys and mappings (2000, 6030). #2604 (S43, AW44) adds
-        // 2240 Use Tax Payable and the VENDOR_BILL key USE_TAX_PAYABLE with its mapping.
-        assertThat(platformBefore.get("gl_account")).isEqualTo(72);
-        assertThat(platformBefore.get("posting_category")).isEqualTo(20);
-        assertThat(platformBefore.get("mapping_key")).isEqualTo(66);
-        assertThat(platformBefore.get("gl_mapping")).isEqualTo(66);
+        // category with its ACCOUNTS_PAYABLE and PAYMENT_FEES keys and mappings (2000, 6030).
+        // #2639 (S32d) adds the CAD data: 1250, 1260, 2210, 2220, 2230 and 6050, the CASH_ROUNDING category, nine
+        // keys and mappings, and the balance-sheet lines of 1250, 1260, 2210, 2220 and 2230. Only a CAD tenant
+        // receives them (CurrencyTemplateSource). #2604 (S43, AW44) adds 2240 Use Tax Payable and the VENDOR_BILL key
+        // USE_TAX_PAYABLE with its mapping, for every tenant.
+        assertThat(platformBefore.get("gl_account")).isEqualTo(78);
+        assertThat(platformBefore.get("posting_category")).isEqualTo(21);
+        assertThat(platformBefore.get("mapping_key")).isEqualTo(75);
+        assertThat(platformBefore.get("gl_mapping")).isEqualTo(75);
         assertThat(platformBefore.get("default_gl_mapping")).isEqualTo(1);
-        // 42 L&O + 12 (#2524) + 3 (#2511) + 3 (#2509)
-        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(60);
+        // 42 L&O + 12 (#2524) + 3 (#2511) + 3 (#2509) + 5 (#2639, CAD)
+        assertThat(platformBefore.get("statement_line_mappings")).isEqualTo(65);
     }
 
     // ------------------------------------------------------------------------------------------

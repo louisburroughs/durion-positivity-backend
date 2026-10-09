@@ -46,8 +46,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * need one, and every refusal of the posting, skips the approval: the bill stays {@code AWAITING_APPROVAL} with no
  * approval field and one {@value #AUDIT_SKIPPED} row carries the code ({@code AP_BILL_ZERO_TOTAL}, {@code
  * AP_BILL_UNCLASSIFIED}, {@code AP_BILL_TOTALS_UNRECONCILED}, {@code AP_BILL_TAX_ON_RESALE_GOODS}, {@code
- * PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}, {@code SERVICE_UNAVAILABLE}). The match
- * itself is kept.
+ * PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code GL_MAPPING_NOT_CONFIGURED}, {@code SERVICE_UNAVAILABLE}; S32d adds
+ * {@code TAX_SPLIT_MISSING} and {@code SUPPLIER_REGISTRATION_MISSING} for a recovery-enabled tenant). The match itself
+ * is kept.
  *
  * <p><b>Purchase tax (CAP:550 S43, AW44).</b> When the bill could qualify, the tax country's purchase-tax rules are read
  * from pos-tax on the posting date and, for a self-assessing rule, the {@code USE} quote is asked once, before the legs
@@ -186,7 +187,8 @@ public class VendorBillAutoApproval {
                         + ";postingDate=" + posting.getPostingDate() + ";postingDateRule="
                         + posting.getPostingDateRule() + ";roundingAdjustment="
                         + posting.getRoundingAdjustment().toPlainString()
-                        + VendorBillApprovalServiceImpl.purchaseTaxDetails(precheck.override(), precheck.useTax()));
+                        + VendorBillApprovalServiceImpl.purchaseTaxDetails(precheck.override(), precheck.useTax())
+                        + recoveryDetails(bill));
         log.info(
                 "Vendor bill {} approved automatically | billId={} | score={} | limit={} | entry={}",
                 bill.getBillNumber(),
@@ -224,6 +226,22 @@ public class VendorBillAutoApproval {
                     VendorBillException.Code.AP_BILL_NOT_APPROVABLE,
                     "Bill " + bill.getBillNumber() + " is not in the ledger currency " + ledgerCurrency.code()));
         }
+        // S32d item 10: a tax that is not split (AW51) or a bill without its evidence (AW53) waits for a person, and a
+        // profile pos-tax cannot answer holds the bill too: recovery is never read as "off" (AW49).
+        VendorBillTaxSplit.Plan plan;
+        try {
+            plan = postingService.taxPlan(bill);
+        } catch (TaxServiceUnavailableException unavailable) {
+            return Precheck.refused(unavailable);
+        }
+        Optional<VendorBillTaxSplit.Withheld> hold = plan.automaticApprovalHold();
+        if (hold.isPresent()) {
+            return Precheck.refused(new Skip(
+                    hold.get().name(),
+                    hold.get() == VendorBillTaxSplit.Withheld.TAX_SPLIT_MISSING
+                            ? "The bill states its tax without the tax by type; a person approves it with taxByType"
+                            : "The vendor holds no supplier registration the evidence rule asks for at this total"));
+        }
         List<VendorBillLine> lines = billLines.findByVendorBill_VendorBillIdOrderByLineNumber(bill.getVendorBillId());
         VendorBillPostingService.Classification classification = classification(bill);
         VendorBillPostingService.PurchaseTaxBasis basis =
@@ -245,7 +263,12 @@ public class VendorBillAutoApproval {
         List<VendorBillPostingService.Leg> legs;
         try {
             legs = VendorBillPostingService.legs(
-                    bill, lines, classification, VendorBillPostingService.difference(bill), useTax);
+                    bill,
+                    lines,
+                    classification,
+                    VendorBillPostingService.difference(bill),
+                    plan.recoveredByKey(),
+                    useTax);
         } catch (VendorBillException refused) {
             return Precheck.refused(refused);
         }
@@ -281,6 +304,12 @@ public class VendorBillAutoApproval {
             return Precheck.refused(refused);
         }
         return new Precheck(Optional.empty(), useTax, override);
+    }
+
+    /** The recovery the posting recorded, for the audit row; empty when it recorded none. */
+    private String recoveryDetails(VendorBill bill) {
+        String recovery = postingService.recoveryAudit(bill.getVendorBillId());
+        return recovery == null ? "" : ";" + recovery;
     }
 
     /**

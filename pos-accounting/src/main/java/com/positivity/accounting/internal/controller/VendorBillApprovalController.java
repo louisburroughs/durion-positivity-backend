@@ -162,7 +162,9 @@ public class VendorBillApprovalController {
                 approved if and only if it posted (AW37): accounts payable is credited the billed gross and the \
                 debits follow the VENDOR_BILL posting category by class (receipt-matched lines 2100 at the received \
                 price with the difference in 5050, unmatched goods 2100 at the stated net with the tax in 5050, \
-                expenses the chosen EXPENSE_<CODE> key with the tax).
+                expenses the chosen EXPENSE_<CODE> key with the tax; for a tenant that recovers input tax, a \
+                recoverable tax type whose regime is registered on the bill date debits TAX_RECOVERABLE_<regime> \
+                instead, and a tax stated without its types recovers nothing).
                 The vendor's gross - (net + tax) within 0.01 per stated line, at most 0.05, goes on the largest \
                 debit as roundingAdjustment and a larger one where difference says (FREIGHT 5060, GOODS 2100, \
                 EXPENSE its key, PRICE_DIFFERENCE 5050); the entry is dated on the bill date when that is on or \
@@ -179,7 +181,8 @@ public class VendorBillApprovalController {
                 posting, whose first act is the self-assessed use-tax quote where those rules accrue it.
                 Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), \
                 classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one \
-                proposed at submission), difference (as submitVendorBillForApproval takes it) and \
+                proposed at submission), difference (as submitVendorBillForApproval takes it), taxByType \
+                [{taxType, amount}] copied from the document (replacing the bill's stored tax by type), \
                 overrideJustification (with accounting:period:override, to post into a CLOSED period) and \
                 taxOnResaleOverrideJustification (10-1000 characters, accepting the bill's tax on goods for resale \
                 for this bill only) are optional.
@@ -194,11 +197,13 @@ public class VendorBillApprovalController {
                 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 \
                 AP_BILL_UNCLASSIFIED (only when neither the classification, the proposal nor the vendor's AP \
                 defaults give a class), AP_BILL_TAX_ON_RESALE_GOODS (audited as VENDOR_BILL_APPROVE_REFUSED), \
-                AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
+                AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, AP_BILL_TAX_SPLIT_MISMATCH (taxByType not adding up \
+                to the stated tax), AMOUNT_PRECISION_EXCEEDS_CURRENCY, PERIOD_CLOSED, PERIOD_HARD_LOCKED or \
                 GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), or, relayed from pos-tax \
                 for the use-tax quote, TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or \
                 TAX_CAPABILITY_UNSUPPORTED (a configuration to fix, not to retry); 503 SERVICE_UNAVAILABLE with \
-                Retry-After when pos-tax cannot give the rules or the quote; each leaving the bill as it was.
+                Retry-After when pos-tax cannot give the tax profile, the purchase-tax rules or the use-tax quote; \
+                each leaving the bill as it was.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -230,20 +235,26 @@ public class VendorBillApprovalController {
             responseCode = "422",
             description = "AP_BILL_UNCLASSIFIED, AP_BILL_TAX_ON_RESALE_GOODS (the tax country's rules hold the bill's"
                     + " tax on goods for resale; override with taxOnResaleOverrideJustification),"
-                    + " AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED,"
+                    + " AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, AP_BILL_TAX_SPLIT_MISMATCH,"
+                    + " AMOUNT_PRECISION_EXCEEDS_CURRENCY, PERIOD_CLOSED, PERIOD_HARD_LOCKED,"
                     + " GL_MAPPING_NOT_CONFIGURED, or relayed from pos-tax for the use-tax quote"
                     + " TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED (nothing"
                     + " written); the approval is rolled back",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description = "SERVICE_UNAVAILABLE: pos-tax cannot give the purchase-tax rules or the use-tax quote;"
-                    + " nothing is written. Retry after the Retry-After interval.",
+            description = "SERVICE_UNAVAILABLE: pos-tax cannot give the tax profile, the purchase-tax rules or the"
+                    + " use-tax quote; nothing is written. Retry after the Retry-After interval.",
             headers =
                     @Header(
                             name = "Retry-After",
                             description = "Seconds to wait before retrying",
                             schema = @Schema(type = "integer")),
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "SERVICE_UNAVAILABLE with Retry-After: pos-tax's tax profile, which decides input-tax"
+                    + " recovery, cannot be read; nothing is written",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> approve(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
@@ -365,7 +376,7 @@ public class VendorBillApprovalController {
                 bill's creator with the reason as an exception's justification, the vendor's totals reconciled or \
                 a difference).
                 Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and \
-                reason (at least 10 characters); ACCEPT also takes classification, difference, \
+                reason (at least 10 characters); ACCEPT also takes classification, difference, taxByType, \
                 overrideJustification and taxOnResaleOverrideJustification as approveVendorBill does, with its \
                 purchase-tax hold and use-tax quote, and an operatorId in the body is ignored because \
                 the actor is the caller.
@@ -379,9 +390,10 @@ public class VendorBillApprovalController {
                 VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for \
                 ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED (no class given, proposed or \
                 defaulted for the vendor), AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED, \
-                AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED or a relayed \
-                pos-tax TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED, and \
-                503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot answer, leaving the bill as it was.
+                AP_BILL_TAX_SPLIT_MISMATCH, AMOUNT_PRECISION_EXCEEDS_CURRENCY, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, \
+                PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED or a relayed pos-tax TAX_JURISDICTION_NOT_CONFIGURED, \
+                CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED, and 503 SERVICE_UNAVAILABLE with Retry-After \
+                when pos-tax cannot answer, leaving the bill as it was.
                 """,
             tags = {"Vendor Bill API"})
     @ApiResponse(
@@ -411,14 +423,15 @@ public class VendorBillApprovalController {
     @ApiResponse(
             responseCode = "422",
             description = "ACCEPT only: AP_BILL_UNCLASSIFIED, AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED,"
-                    + " AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, or relayed"
-                    + " from pos-tax for the use-tax quote TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or"
-                    + " TAX_CAPABILITY_UNSUPPORTED (nothing written); the approval is rolled back",
+                    + " AP_BILL_TAX_SPLIT_MISMATCH, AMOUNT_PRECISION_EXCEEDS_CURRENCY, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED,"
+                    + " PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, or relayed from pos-tax for the use-tax quote"
+                    + " TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED (nothing"
+                    + " written); the approval is rolled back",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description = "ACCEPT only: SERVICE_UNAVAILABLE: pos-tax cannot give the purchase-tax rules or the use-tax"
-                    + " quote; nothing is written. Retry after the Retry-After interval.",
+            description = "ACCEPT only: SERVICE_UNAVAILABLE: pos-tax cannot give the tax profile, the purchase-tax"
+                    + " rules or the use-tax quote; nothing is written. Retry after the Retry-After interval.",
             headers =
                     @Header(
                             name = "Retry-After",

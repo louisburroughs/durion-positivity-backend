@@ -237,6 +237,8 @@ class InvoiceEventsListenerTest {
         assertThat(saved.getValue())
                 .extracting(ExtInvoiceTax::getJurisdictionCode)
                 .containsExactly("ZZ", "Z1");
+        // CAP:550 S32d item 11: the replica keeps each row's tax type, null where the fact states none.
+        assertThat(saved.getValue()).extracting(ExtInvoiceTax::getTaxType).containsExactly("GST", null);
         assertThat(saved.getValue().stream().map(ExtInvoiceTax::getTaxAmount).reduce(BigDecimal.ZERO, BigDecimal::add))
                 .isEqualByComparingTo("3.30");
     }

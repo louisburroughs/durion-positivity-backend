@@ -96,6 +96,20 @@ public record RegisterSessionClosedV1(
      * @param clerkUserId the cashier's stable user id, when the sign-in carried one
      * @param approvedBy the user id of the manager whose approval token it used, or null
      * @param occurredAt when it was recorded
+     * @param supplierName the supplier on a petty-expense receipt (CAP:550 S32d); CONFIDENTIAL, so it
+     *     never appears in {@link #toString()}, an INFO-or-higher log or a metric tag; null when none was
+     *     given or on a message produced before S32d
+     * @param statedTaxes the tax the receipt states, one entry per indirect-tax regime (S32d, AW31 as
+     *     re-confirmed by Order): copied from the receipt, never calculated. The producer always emits a
+     *     list, empty for a movement without stated tax; a message produced before S32d reads it null,
+     *     which a consumer treats as empty
+     * @param supplierRegistrationNumber the supplier's indirect-tax registration number, normalised, kept
+     *     by pos-accounting as the claim's evidence (INTERNAL under ADR-0072 Decision 1); stored only after
+     *     pos-tax found it well formed, and never in {@link #toString()}
+     * @param taxPlausibility {@code PLAUSIBLE} or {@code RATE_UNAVAILABLE}, pos-tax's answer on the stated
+     *     amounts; null when no check was made, which a consumer reads as "not checked"
+     * @param supplierRegistrationRequired whether the evidence rule asked for the supplier's number; null
+     *     when no check was made, never a default {@code false}
      */
     public record Movement(
             @NonNull UUID movementId,
@@ -110,12 +124,59 @@ public record RegisterSessionClosedV1(
             @NonNull String clerkId,
             @Nullable UUID clerkUserId,
             @Nullable UUID approvedBy,
-            @NonNull Instant occurredAt) {
+            @NonNull Instant occurredAt,
+            @Nullable String supplierName,
+            @Nullable List<StatedTax> statedTaxes,
+            @Nullable String supplierRegistrationNumber,
+            @Nullable String taxPlausibility,
+            @Nullable Boolean supplierRegistrationRequired) {
 
         /** Cash into the drawer. */
         public static final String IN = "IN";
 
         /** Cash out of the drawer. */
         public static final String OUT = "OUT";
+
+        /** pos-tax found the stated amounts plausible. */
+        public static final String PLAUSIBLE = "PLAUSIBLE";
+
+        /** pos-tax had no rate to check against, or could not be asked; the posting withholds recovery. */
+        public static final String RATE_UNAVAILABLE = "RATE_UNAVAILABLE";
+
+        /**
+         * Every component except the supplier's name and number, which are replaced by whether they are
+         * present (S32d item 7): a logged fact must never carry either value.
+         */
+        @Override
+        public String toString() {
+            return "Movement[movementId=" + movementId
+                    + ", reason=" + reason
+                    + ", direction=" + direction
+                    + ", amount=" + amount
+                    + ", currencyCode=" + currencyCode
+                    + ", categoryCode=" + categoryCode
+                    + ", vendorId=" + vendorId
+                    + ", bagNumber=" + bagNumber
+                    + ", receiptReference=" + receiptReference
+                    + ", clerkId=" + clerkId
+                    + ", clerkUserId=" + clerkUserId
+                    + ", approvedBy=" + approvedBy
+                    + ", occurredAt=" + occurredAt
+                    + ", supplierNameProvided=" + (supplierName != null)
+                    + ", statedTaxes=" + statedTaxes
+                    + ", supplierRegistrationNumberProvided=" + (supplierRegistrationNumber != null)
+                    + ", taxPlausibility=" + taxPlausibility
+                    + ", supplierRegistrationRequired=" + supplierRegistrationRequired
+                    + "]";
+        }
     }
+
+    /**
+     * One regime's tax as stated on a petty-expense receipt (CAP:550 S32d).
+     *
+     * @param regime the indirect-tax regime code, as pos-tax's country profile names it
+     *     ({@code [A-Z0-9_]{1,32}})
+     * @param amount the stated amount, positive, at the currency's exponent
+     */
+    public record StatedTax(@NonNull String regime, @NonNull BigDecimal amount) {}
 }

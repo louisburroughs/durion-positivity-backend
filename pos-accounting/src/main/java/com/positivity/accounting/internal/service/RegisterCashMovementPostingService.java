@@ -1,13 +1,17 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.entity.RegisterCashMovementTaxRecovery;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.RegisterCashMovementTaxRecoveryRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1.Movement;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -41,7 +45,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <ul>
  *   <li>{@code PETTY_EXPENSE}: {@code Dr PETTY_EXPENSE_<categoryCode> / Cr CASH_CLEARING} (1095) for the movement's
  *       amount, the receipt's gross: sales tax paid is part of the expense and 2200 is never debited (§4.6 "Tax
- *       (US)"). A category deactivated after the movement was recorded still resolves: its mapping key stays.
+ *       (US)"). When a stated regime's tax is recovered (S32d item 9, {@link PettyExpenseRecoveryDecider}), {@code Dr
+ *       INPUT_TAX_<regime>} takes the recovered part and the expense the rest; each stated regime's outcome is kept in
+ *       {@code register_cash_movement_tax_recovery} with the supplier's number as the claim's evidence. A category deactivated after the movement was recorded still resolves: its mapping key stays.
  *   <li>{@code VENDOR_COD}: <b>not posted yet</b>. Its posting (Dr {@code ACCOUNTS_PAYABLE} / Cr {@code CASH_CLEARING}
  *       plus an AP payment with method {@code CASH}) is the vendor cash on delivery half of #2513, which waits on the
  *       vendor copy (S24, #2517) and the pay guard (S13, #2510); pos-order refuses the reason until then (#2576). A
@@ -125,6 +131,9 @@ public class RegisterCashMovementPostingService {
     private final LedgerCurrency ledgerCurrency;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final JournalEntryRepository journalEntryRepository;
+    private final PettyExpenseRecoveryDecider recoveryDecider;
+    private final RegisterCashMovementTaxRecoveryRepository taxRecoveries;
+    private final Clock clock;
     private final @Nullable MeterRegistry meterRegistry;
 
     public RegisterCashMovementPostingService(
@@ -135,6 +144,9 @@ public class RegisterCashMovementPostingService {
             LedgerCurrency ledgerCurrency,
             KafkaFactIngestionRecorder ingestionRecorder,
             JournalEntryRepository journalEntryRepository,
+            PettyExpenseRecoveryDecider recoveryDecider,
+            RegisterCashMovementTaxRecoveryRepository taxRecoveries,
+            Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.zoneResolver = zoneResolver;
         this.idempotencyService = idempotencyService;
@@ -143,6 +155,9 @@ public class RegisterCashMovementPostingService {
         this.ledgerCurrency = ledgerCurrency;
         this.ingestionRecorder = ingestionRecorder;
         this.journalEntryRepository = journalEntryRepository;
+        this.recoveryDecider = recoveryDecider;
+        this.taxRecoveries = taxRecoveries;
+        this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
 
@@ -261,7 +276,12 @@ public class RegisterCashMovementPostingService {
     }
 
     private UUID postPettyExpense(RegisterSessionClosedV1 fact, Movement movement, LocalDateTime transactionDate) {
-        // Dr the category's expense (gross, tax included) / Cr Register Cash Clearing.
+        // S32d item 9: the recovered part of each stated regime's tax leaves the expense for INPUT_TAX_<regime>.
+        List<PettyExpenseRecoveryDecider.RegimeRecovery> recoveries = recoveryDecider.decide(movement);
+        BigDecimal recovered = recoveries.stream()
+                .map(PettyExpenseRecoveryDecider.RegimeRecovery::recovered)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // Dr the category's expense (gross, tax included, less any recovered tax) / Cr Register Cash Clearing.
         UUID expenseAccountId = glMappingResolver.resolveGLAccount(
                 POSTING_CATEGORY_NAME, PETTY_EXPENSE_KEY_PREFIX + movement.categoryCode(), transactionDate);
         UUID clearingAccountId =
@@ -282,15 +302,44 @@ public class RegisterCashMovementPostingService {
                 .append(", session closed ")
                 .append(fact.closedAt());
 
-        UUID posted = glPostingService.postRegisterCashMovement(
-                toSourceEventId(movement.movementId()),
-                expenseAccountId,
-                clearingAccountId,
-                movement.amount(),
-                transactionDate,
-                abbreviate(description.toString()),
-                abbreviate("Drawer petty expense " + movement.categoryCode() + ", register " + fact.terminalId()),
-                dimensions(fact));
+        String lineLabel =
+                abbreviate("Drawer petty expense " + movement.categoryCode() + ", register " + fact.terminalId());
+        UUID posted;
+        if (recovered.signum() == 0) {
+            posted = glPostingService.postRegisterCashMovement(
+                    toSourceEventId(movement.movementId()),
+                    expenseAccountId,
+                    clearingAccountId,
+                    movement.amount(),
+                    transactionDate,
+                    abbreviate(description.toString()),
+                    lineLabel,
+                    dimensions(fact));
+        } else {
+            List<GLPostingService.DebitLine> debits = new ArrayList<>();
+            debits.add(new GLPostingService.DebitLine(
+                    expenseAccountId, movement.amount().subtract(recovered), lineLabel));
+            for (PettyExpenseRecoveryDecider.RegimeRecovery recovery : recoveries) {
+                if (recovery.recovered().signum() > 0) {
+                    UUID inputTaxAccountId = glMappingResolver.resolveGLAccount(
+                            POSTING_CATEGORY_NAME,
+                            InputTaxRecoveryService.inputTaxKey(recovery.regime()),
+                            transactionDate);
+                    debits.add(new GLPostingService.DebitLine(
+                            inputTaxAccountId,
+                            recovery.recovered(),
+                            abbreviate("Input tax " + recovery.regime() + " recovered, " + lineLabel)));
+                }
+            }
+            posted = glPostingService.postRegisterCashMovementLines(
+                    toSourceEventId(movement.movementId()),
+                    debits,
+                    clearingAccountId,
+                    transactionDate,
+                    abbreviate(description.toString()),
+                    dimensions(fact));
+        }
+        recordRecoveries(fact, movement, recoveries, posted);
 
         log.info(
                 "Drawer movement GL posting completed | sessionId={} | terminalId={} | movementId={} | reason={} "
@@ -303,6 +352,41 @@ public class RegisterCashMovementPostingService {
                 movement.amount(),
                 posted);
         return posted;
+    }
+
+    /**
+     * Keeps what each stated regime recovered, or why it did not, with the supplier's number as the claim's evidence
+     * (S32d item 9). Never logged: the number is INTERNAL (ADR-0072 Decision 1).
+     */
+    private void recordRecoveries(
+            RegisterSessionClosedV1 fact,
+            Movement movement,
+            List<PettyExpenseRecoveryDecider.RegimeRecovery> recoveries,
+            UUID journalEntryId) {
+        for (PettyExpenseRecoveryDecider.RegimeRecovery recovery : recoveries) {
+            RegisterCashMovementTaxRecovery row = new RegisterCashMovementTaxRecovery();
+            row.setMovementId(movement.movementId());
+            row.setSessionId(fact.sessionId());
+            row.setJournalEntryId(journalEntryId);
+            row.setRegime(recovery.regime());
+            row.setStatedAmount(recovery.stated());
+            row.setRecoverablePercent(recovery.percent());
+            row.setRecoveredAmount(recovery.recovered());
+            row.setRecoveryWithheldReason(recovery.withheldReason());
+            row.setSupplierRegistrationNumber(movement.supplierRegistrationNumber());
+            row.setCurrencyCode(movement.currencyCode());
+            row.setCreatedAt(Instant.now(clock));
+            taxRecoveries.save(row);
+            log.info(
+                    "Drawer petty expense tax recovery | sessionId={} | movementId={} | regime={} | stated={}"
+                            + " | recovered={} | withheldReason={}",
+                    fact.sessionId(),
+                    movement.movementId(),
+                    recovery.regime(),
+                    recovery.stated(),
+                    recovery.recovered(),
+                    recovery.withheldReason());
+        }
     }
 
     /** A petty expense the close fact's contract allows to post; anything else fails the fact for retry / DLQ. */

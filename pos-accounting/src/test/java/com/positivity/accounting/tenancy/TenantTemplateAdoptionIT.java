@@ -154,7 +154,10 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
         assertThat(chartRows(owner))
                 .as("the new seed wrote no default-tenant row")
                 .isEqualTo(before);
-        int templateEntries = templateReader.snapshot().entries().size();
+        // The currency-conditional entries (CAP:550 S32d, the CAD data) never reach this USD tenant.
+        int templateEntries = (int) templateReader.snapshot().entries().stream()
+                .filter(entry -> !templateReader.currencyEntries().containsKey(entry.entryKey()))
+                .count();
 
         AccountingTemplateStartupSweep sweep =
                 new AccountingTemplateStartupSweep(tenantIterator, templateReader, provisioner, meterRegistry);
@@ -248,8 +251,8 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
                         "SELECT count(*) FROM gl_account WHERE tenant_id = ?", Integer.class, PlatformTenant.ID))
                 .as("the template stays in the platform tenant")
                 // 62 + 1080, 3000, 3900, 6295, 6375, 6380 (6040 took 6115's place) + 2100, 5050, 5060 (#2509)
-                // + 2240 (#2604)
-                .isEqualTo(72);
+                // + the CAD data's 1250, 1260, 2210, 2220, 2230, 6050 (#2639) + 2240 (#2604)
+                .isEqualTo(78);
 
         List<String> recordsAfterFirst = templateRows(owner);
         sweep.run(new DefaultApplicationArguments());
@@ -288,6 +291,9 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
 
     private static void removePlatformTemplate(JdbcTemplate owner) {
         for (String table : List.of(
+                "accounting_template_currency_entry",
+                "petty_expense_category_tax_setting_change",
+                "petty_expense_category_tax_setting",
                 "petty_expense_category_change",
                 "petty_expense_category",
                 "statement_line_mappings",

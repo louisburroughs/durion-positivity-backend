@@ -105,6 +105,7 @@ class VendorBillPurchaseTaxDecisionTest {
                 mock(ApLockTimeout.class),
                 vendorCopies,
                 PurchaseTaxFixtures.purchaseTax(client, vendorCopies, billLines, CLOCK),
+                mock(VendorBillStatedTax.class),
                 mock(PlatformTransactionManager.class));
         when(policy.settings()).thenReturn(POLICY);
         when(policy.forDecision()).thenReturn(POLICY);
@@ -161,7 +162,8 @@ class VendorBillPurchaseTaxDecisionTest {
 
     private VendorBillResponse approve(String taxOnResaleOverrideJustification) {
         return service.approve(
-                BILL_ID, new VendorBillCommands.Approve(null, null, null, null, taxOnResaleOverrideJustification));
+                BILL_ID,
+                new VendorBillCommands.Approve(null, null, null, null, null, taxOnResaleOverrideJustification));
     }
 
     @Test
@@ -271,7 +273,8 @@ class VendorBillPurchaseTaxDecisionTest {
 
         assertThatThrownBy(() -> service.resolveException(
                         BILL_ID,
-                        new VendorBillCommands.ResolveException("ACCEPT", "Price agreed by phone", null, null, null)))
+                        new VendorBillCommands.ResolveException(
+                                "ACCEPT", "Price agreed by phone", null, null, null, null)))
                 .isInstanceOfSatisfying(
                         VendorBillException.class,
                         e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_BILL_TAX_ON_RESALE_GOODS));
@@ -280,7 +283,7 @@ class VendorBillPurchaseTaxDecisionTest {
         service.resolveException(
                 BILL_ID,
                 new VendorBillCommands.ResolveException(
-                        "ACCEPT", "Price agreed by phone", null, null, null, JUSTIFICATION));
+                        "ACCEPT", "Price agreed by phone", null, null, null, null, JUSTIFICATION));
         assertThat(bill.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
         assertThat(bill.getTaxOnResaleOverride()).isEqualTo(TaxOnResaleOverrideSource.BILL);
     }

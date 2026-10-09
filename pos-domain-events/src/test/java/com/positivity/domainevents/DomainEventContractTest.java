@@ -380,7 +380,28 @@ class DomainEventContractTest {
             "closed indirect-tax shape (conditions a-c), INTERNAL under ADR-0072 Decision 1. Sign-off:"
                     + " https://github.com/louisburroughs/durion/pull/571#issuecomment-6062991022 (Security"
                     + " confirmation) and https://github.com/louisburroughs/durion/pull/571#issuecomment-6063855576"
+                    + " (Security decision)",
+            // CAP:550 S32d (#2639): pos-order records the supplier's number only after pos-tax found it well
+            // formed, and pos-accounting keeps it as the evidence of an input-tax claim.
+            "com.positivity.domainevents.order.RegisterSessionClosedV1#movements[].supplierRegistrationNumber",
+            "closed indirect-tax shape (conditions a-c), INTERNAL under ADR-0072 Decision 1. Sign-off:"
+                    + " https://github.com/louisburroughs/durion/pull/571#issuecomment-6062991022 (Security"
+                    + " confirmation) and https://github.com/louisburroughs/durion/pull/571#issuecomment-6063855576"
                     + " (Security decision)");
+
+    @Test
+    @DisplayName("CAP:550 S32d AC 19: the close fact passes the guard only through its supplier-number ALLOWED entry")
+    void closeFactSupplierNumberPassesOnlyThroughItsAllowedEntry() {
+        Class<?> fact = com.positivity.domainevents.order.RegisterSessionClosedV1.class;
+        assertThat(restrictedFieldPaths(fact))
+                .as("the guard sees the number, so without the entry noRestrictedFieldNames fails")
+                .containsExactly("movements[].supplierRegistrationNumber");
+        assertThat(ALLOWED.get(fact.getName() + "#movements[].supplierRegistrationNumber"))
+                .contains("closed indirect-tax shape (conditions a-c), INTERNAL under ADR-0072 Decision 1")
+                .contains("6062991022")
+                .contains("6063855576");
+        assertThat(eventRecords()).as("the fact is in the swept set").contains(fact);
+    }
 
     @Test
     @DisplayName("CAP:550 S32c AC 5: TaxRegistrationChangedV1 passes the guard only through its ALLOWED entry")

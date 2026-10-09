@@ -227,7 +227,12 @@ class UndepositedSessionProjectionTest {
                 "clerk-1",
                 null,
                 null,
-                CLOSED_AT.minusSeconds(3600));
+                CLOSED_AT.minusSeconds(3600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private static Movement bankDrop(UUID id, String amount, String bag, String currency) {
@@ -244,7 +249,12 @@ class UndepositedSessionProjectionTest {
                 "clerk-1",
                 null,
                 null,
-                CLOSED_AT.minusSeconds(600));
+                CLOSED_AT.minusSeconds(600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private static Movement movement(String reason, String direction, String amount, String bag) {
@@ -261,7 +271,12 @@ class UndepositedSessionProjectionTest {
                 "clerk-1",
                 null,
                 null,
-                CLOSED_AT.minusSeconds(1200));
+                CLOSED_AT.minusSeconds(1200),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private static RegisterSessionClosedV1 fact(

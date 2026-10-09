@@ -60,5 +60,12 @@ public enum AccountSubtype {
      * Cash kept on the premises, outside the bank (ASSET). Example: 1080 Register Float, the drawers'
      * change float (#2511, AW9, AW16). Never {@link #BANK_CASH}: bank reconciliation does not see it.
      */
-    CASH_ON_HAND
+    CASH_ON_HAND,
+
+    /**
+     * Indirect tax the shop paid and may recover from the tax authority (ASSET), one account per regime (CAP:550 S32d,
+     * AW20). The accounts reach a tenant only through its currency's template data; postings resolve them through the
+     * {@code INPUT_TAX_<regime>} and {@code TAX_RECOVERABLE_<regime>} mapping keys, never by number.
+     */
+    TAX_RECOVERABLE
 }

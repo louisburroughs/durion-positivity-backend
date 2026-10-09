@@ -14,8 +14,10 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.entity.RegisterCashMovementTaxRecovery;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.RegisterCashMovementTaxRecoveryRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1.Movement;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -64,6 +66,9 @@ class RegisterCashMovementPostingServiceTest {
     private final GLPostingService glPostingService = mock(GLPostingService.class);
     private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
     private final JournalEntryRepository journalEntryRepository = mock(JournalEntryRepository.class);
+    private final PettyExpenseRecoveryDecider recoveryDecider = mock(PettyExpenseRecoveryDecider.class);
+    private final RegisterCashMovementTaxRecoveryRepository taxRecoveries =
+            mock(RegisterCashMovementTaxRecoveryRepository.class);
     private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     private RegisterCashMovementPostingService service;
@@ -81,7 +86,11 @@ class RegisterCashMovementPostingServiceTest {
                 new LedgerCurrency("USD"),
                 ingestionRecorder,
                 journalEntryRepository,
+                recoveryDecider,
+                taxRecoveries,
+                TEST_CLOCK,
                 registry);
+        when(recoveryDecider.decide(any())).thenReturn(List.of());
         when(glMappingResolver.resolveGLAccount("REGISTER_CASH_MOVEMENT", "PETTY_EXPENSE_SHOP_SUPPLIES", POSTING_DATE))
                 .thenReturn(SHOP_SUPPLIES_ACCOUNT);
         when(glMappingResolver.resolveGLAccount("REGISTER_CASH_MOVEMENT", "PETTY_EXPENSE_STAFF_MEALS", POSTING_DATE))
@@ -119,7 +128,12 @@ class RegisterCashMovementPostingServiceTest {
                 "clerk-1",
                 null,
                 null,
-                CLOSED_AT.minusSeconds(3600));
+                CLOSED_AT.minusSeconds(3600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
     }
 
     private static RegisterSessionClosedV1 fact(String currencyCode, UUID locationId, List<Movement> movements) {
@@ -560,5 +574,101 @@ class RegisterCashMovementPostingServiceTest {
         verify(idempotencyService, never()).isKeyProcessed("REGISTER_CASH_MOVEMENT_GL_POSTING:null");
         verify(idempotencyService, never()).registerKey(anyString(), any());
         verifyNoInteractions(glPostingService);
+    }
+
+    // ---- CAP:550 S32d item 9: recovery at close ---------------------------------------------------------------
+
+    @Test
+    @DisplayName("S32d AC 5: a recovered GST_HST 4.60 on a 40.00 receipt splits the expense and keeps the evidence")
+    void recoveredTaxLeavesTheExpense() {
+        UUID inputTax = UUID.fromString("00000000-0000-0000-0000-000000001250");
+        UUID journal = UUID.fromString("00000000-0000-0000-0000-00000000e001");
+        when(glMappingResolver.resolveGLAccount("REGISTER_CASH_MOVEMENT", "INPUT_TAX_GST_HST", POSTING_DATE))
+                .thenReturn(inputTax);
+        Movement movement = new Movement(
+                PETTY_1,
+                "PETTY_EXPENSE",
+                "OUT",
+                new BigDecimal("40.00"),
+                "USD",
+                "SHOP_SUPPLIES",
+                null,
+                null,
+                "R-9",
+                "clerk-1",
+                null,
+                null,
+                CLOSED_AT.minusSeconds(3600),
+                "Corner Hardware",
+                List.of(new RegisterSessionClosedV1.StatedTax("GST_HST", new BigDecimal("4.60"))),
+                "000000000RT0001",
+                Movement.PLAUSIBLE,
+                Boolean.FALSE);
+        when(recoveryDecider.decide(movement))
+                .thenReturn(List.of(new PettyExpenseRecoveryDecider.RegimeRecovery(
+                        "GST_HST", new BigDecimal("4.60"), new BigDecimal("100.00"), new BigDecimal("4.60"), null)));
+        when(glPostingService.postRegisterCashMovementLines(any(), any(), any(), any(), anyString(), any()))
+                .thenReturn(journal);
+
+        service.postMovements(fact("USD", LOCATION_ID, List.of(movement)), ENVELOPE_EVENT_ID);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<GLPostingService.DebitLine>> debits = ArgumentCaptor.forClass(List.class);
+        verify(glPostingService)
+                .postRegisterCashMovementLines(
+                        eq(RegisterCashMovementPostingService.toSourceEventId(PETTY_1)),
+                        debits.capture(),
+                        eq(CLEARING_ACCOUNT),
+                        eq(POSTING_DATE),
+                        anyString(),
+                        any());
+        assertThat(debits.getValue()).hasSize(2);
+        assertThat(debits.getValue().get(0).accountId()).isEqualTo(SHOP_SUPPLIES_ACCOUNT);
+        assertThat(debits.getValue().get(0).amount()).isEqualByComparingTo("35.40");
+        assertThat(debits.getValue().get(1).accountId()).isEqualTo(inputTax);
+        assertThat(debits.getValue().get(1).amount()).isEqualByComparingTo("4.60");
+        verify(glPostingService, never())
+                .postRegisterCashMovement(any(), any(), any(), any(), any(), anyString(), anyString(), any());
+
+        ArgumentCaptor<RegisterCashMovementTaxRecovery> row =
+                ArgumentCaptor.forClass(RegisterCashMovementTaxRecovery.class);
+        verify(taxRecoveries).save(row.capture());
+        assertThat(row.getValue().getRegime()).isEqualTo("GST_HST");
+        assertThat(row.getValue().getRecoveredAmount()).isEqualByComparingTo("4.60");
+        assertThat(row.getValue().getRecoveryWithheldReason()).isNull();
+        assertThat(row.getValue().getSupplierRegistrationNumber()).isEqualTo("000000000RT0001");
+        assertThat(row.getValue().getJournalEntryId()).isEqualTo(journal);
+        assertThat(row.getValue().toString()).doesNotContain("000000000RT0001");
+    }
+
+    @Test
+    @DisplayName("S32d item 9: a withheld regime posts the gross as before and records the reason")
+    void withheldTaxStaysInTheExpense() {
+        Movement movement = petty(PETTY_1, "SHOP_SUPPLIES", "40.00", "R-9");
+        when(recoveryDecider.decide(movement))
+                .thenReturn(List.of(new PettyExpenseRecoveryDecider.RegimeRecovery(
+                        "GST_HST",
+                        new BigDecimal("4.60"),
+                        null,
+                        BigDecimal.ZERO,
+                        PettyExpenseRecoveryDecider.NOT_REGISTERED)));
+
+        service.postMovements(fact("USD", LOCATION_ID, List.of(movement)), ENVELOPE_EVENT_ID);
+
+        verify(glPostingService)
+                .postRegisterCashMovement(
+                        eq(RegisterCashMovementPostingService.toSourceEventId(PETTY_1)),
+                        eq(SHOP_SUPPLIES_ACCOUNT),
+                        eq(CLEARING_ACCOUNT),
+                        eq(new BigDecimal("40.00")),
+                        eq(POSTING_DATE),
+                        anyString(),
+                        anyString(),
+                        any());
+        verify(glPostingService, never()).postRegisterCashMovementLines(any(), any(), any(), any(), any(), any());
+        ArgumentCaptor<RegisterCashMovementTaxRecovery> row =
+                ArgumentCaptor.forClass(RegisterCashMovementTaxRecovery.class);
+        verify(taxRecoveries).save(row.capture());
+        assertThat(row.getValue().getRecoveryWithheldReason()).isEqualTo("NOT_REGISTERED");
     }
 }

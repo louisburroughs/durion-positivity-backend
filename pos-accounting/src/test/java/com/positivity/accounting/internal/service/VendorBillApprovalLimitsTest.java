@@ -108,6 +108,7 @@ class VendorBillApprovalLimitsTest {
                 mock(ApLockTimeout.class),
                 vendorCopies,
                 PurchaseTaxFixtures.off(),
+                mock(VendorBillStatedTax.class),
                 mock(PlatformTransactionManager.class));
         when(postingService.postingDate(any()))
                 .thenReturn(new VendorBillPostingService.PostingDate(
@@ -177,7 +178,7 @@ class VendorBillApprovalLimitsTest {
     }
 
     private static VendorBillCommands.Approve approve(String justification) {
-        return new VendorBillCommands.Approve(justification, null, null, null);
+        return new VendorBillCommands.Approve(justification, null, null, null, null);
     }
 
     private static VendorBillCommands.ResolveException accept(VendorBillReview.Difference difference) {
@@ -186,7 +187,8 @@ class VendorBillApprovalLimitsTest {
                 "Price agreed with the vendor",
                 new VendorBillReview.Classification(VendorBillDebitClass.GOODS, null),
                 null,
-                difference);
+                difference,
+                null);
     }
 
     private static final VendorBillReview.Difference FREIGHT =
@@ -484,7 +486,7 @@ class VendorBillApprovalLimitsTest {
             service.resolveException(
                     BILL_ID,
                     new VendorBillCommands.ResolveException(
-                            "ACCEPT", "Shop supplies as agreed with the vendor", null, null, null));
+                            "ACCEPT", "Shop supplies as agreed with the vendor", null, null, null, null));
             verify(postingService).post(eq(bill), eq(expected), any(), anyString(), any());
         }
 

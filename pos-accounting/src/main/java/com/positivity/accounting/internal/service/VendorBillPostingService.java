@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillGlPosting;
 import com.positivity.accounting.internal.entity.VendorBillLine;
+import com.positivity.accounting.internal.entity.VendorBillTaxRecovery;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillDifferenceClass;
 import com.positivity.accounting.internal.enums.VendorBillPostingDateRule;
@@ -15,6 +16,7 @@ import com.positivity.accounting.internal.exception.GLMappingNotConfiguredExcept
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillGlPostingRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
+import com.positivity.accounting.internal.repository.VendorBillTaxRecoveryRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -126,6 +129,8 @@ public class VendorBillPostingService {
     private final AccountingCalendarZoneResolver zoneResolver;
     private final AccountingPeriodGate periodGate;
     private final LedgerCurrency ledgerCurrency;
+    private final VendorBillTaxSplit taxSplit;
+    private final VendorBillTaxRecoveryRepository taxRecoveries;
 
     /** The approver's classification (AW39): the class of a bill without stored lines, and the expense key. */
     public record Classification(
@@ -233,11 +238,14 @@ public class VendorBillPostingService {
                     "Bill " + bill.getBillNumber() + " is already posted");
         }
         Classification effective = classification == null ? new Classification(null, null) : classification;
+        // S32d item 10: the stated tax by type a recovery-enabled tenant recovers, decided before anything is written.
+        VendorBillTaxSplit.Plan plan = taxSplit.plan(bill);
         Entry entry = entry(
                 bill,
                 billLines.findByVendorBill_VendorBillIdOrderByLineNumber(billId),
                 effective,
                 difference(bill),
+                plan.recoveredByKey(),
                 useTax);
 
         PostingDate postingDate = postingDate(bill);
@@ -275,6 +283,7 @@ public class VendorBillPostingService {
         posting.setPostedAt(Instant.now(clock));
         posting.setPostedBy(actor);
         VendorBillGlPosting saved = postings.saveAndFlush(posting);
+        recordRecovery(bill, saved, plan);
         bill.setJournalEntryId(posted.getJournalEntryId());
         log.info(
                 "Vendor bill {} posted at approval: entry {} ({}) dated {} ({}), gross {}",
@@ -285,6 +294,73 @@ public class VendorBillPostingService {
                 postingDate.rule(),
                 saved.getGrossAmount());
         return saved;
+    }
+
+    /**
+     * The decision on {@code bill}'s stated tax its posting would make now (S32d item 10), writing nothing: automatic
+     * approval asks it before it posts, so a bill whose tax is not split or whose evidence is missing waits for a
+     * person (AW51, AW53).
+     *
+     * @throws com.positivity.accounting.internal.exception.TaxServiceUnavailableException when pos-tax's profile or
+     *     evidence rule cannot be read
+     */
+    public VendorBillTaxSplit.@NonNull Plan taxPlan(@NonNull VendorBill bill) {
+        return taxSplit.plan(bill);
+    }
+
+    /**
+     * The recovery {@code bill}'s posting recorded, for the approval's audit row (S32d item 10): {@code
+     * inputTaxRecovery=<taxType>:<amount>-><key>|<taxType>:<amount>:<reason>}; null when it recorded none (a tenant
+     * without recovery, or a bill without tax).
+     */
+    public @Nullable String recoveryAudit(@NonNull UUID billId) {
+        List<VendorBillTaxRecovery> rows = taxRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId);
+        if (rows.isEmpty()) {
+            return null;
+        }
+        StringBuilder text = new StringBuilder("inputTaxRecovery=");
+        for (int i = 0; i < rows.size(); i++) {
+            VendorBillTaxRecovery row = rows.get(i);
+            if (i > 0) {
+                text.append('|');
+            }
+            text.append(row.getTaxType() == null ? "UNSPLIT" : row.getTaxType())
+                    .append(':')
+                    .append(row.getStatedAmount()
+                            .setScale(SCALE, RoundingMode.HALF_UP)
+                            .toPlainString());
+            if (row.getRecoveryWithheldReason() == null) {
+                text.append("->").append(row.getMappingKey());
+            } else {
+                text.append(':').append(row.getRecoveryWithheldReason());
+            }
+        }
+        return text.toString();
+    }
+
+    /** One recovery row per stated amount, signed like the bill, for a recovery-enabled tenant (S32d item 10). */
+    private void recordRecovery(VendorBill bill, VendorBillGlPosting posting, VendorBillTaxSplit.Plan plan) {
+        if (!plan.enabled() || plan.items().isEmpty()) {
+            return;
+        }
+        BigDecimal sign = gross(bill).signum() < 0 ? BigDecimal.ONE.negate() : BigDecimal.ONE;
+        Instant now = Instant.now(clock);
+        List<VendorBillTaxRecovery> rows = new ArrayList<>();
+        for (VendorBillTaxSplit.Item item : plan.items()) {
+            VendorBillTaxRecovery row = new VendorBillTaxRecovery();
+            row.setVendorBillId(bill.getVendorBillId());
+            row.setVendorBillGlPostingId(posting.getVendorBillGlPostingId());
+            row.setTaxType(item.taxType());
+            row.setRegime(item.regime());
+            row.setStatedAmount(item.amount().multiply(sign));
+            row.setRecoveredAmount(item.recovered() ? item.amount().multiply(sign) : BigDecimal.ZERO);
+            row.setMappingKey(item.mappingKey());
+            row.setRecoveryWithheldReason(
+                    item.withheld() == null ? null : item.withheld().name());
+            row.setCreatedAt(now);
+            rows.add(row);
+        }
+        taxRecoveries.saveAll(rows);
     }
 
     /**
@@ -452,13 +528,31 @@ public class VendorBillPostingService {
             @NonNull List<VendorBillLine> lines,
             @NonNull Classification classification,
             @Nullable Difference difference) {
-        return entry(bill, lines, classification, difference, null);
+        return entry(bill, lines, classification, difference, Map.of(), null);
     }
 
     /**
-     * {@link #entry(VendorBill, List, Classification, Difference)} with a self-assessed tax accrual (CAP:550 S43): Dr
-     * its expense key, Cr {@code USE_TAX_PAYABLE}, after the AW39 legs balance on the gross.
+     * {@link #entry(VendorBill, List, Classification, Difference)} for a recovery-enabled tenant (CAP:550 S32d item
+     * 10), without a self-assessed tax accrual.
+     */
+    static @NonNull Entry entry(
+            @NonNull VendorBill bill,
+            @NonNull List<VendorBillLine> lines,
+            @NonNull Classification classification,
+            @Nullable Difference difference,
+            @NonNull Map<String, BigDecimal> recovered) {
+        return entry(bill, lines, classification, difference, recovered, null);
+    }
+
+    /**
+     * {@link #entry(VendorBill, List, Classification, Difference)} for a recovery-enabled tenant (CAP:550 S32d item
+     * 10): each recovered amount debits its {@code TAX_RECOVERABLE_<regime>} key (a credit note credits it), and only
+     * the tax not recovered goes into the class, prorated by line net on a bill with lines. Recoverable tax never
+     * reaches 2100, 5050 or inventory cost. With a self-assessed tax accrual (CAP:550 S43): Dr its expense key, Cr
+     * {@code USE_TAX_PAYABLE}, after the legs balance on the gross. The two never meet on one bill: recovery takes
+     * stated tax, the accrual applies only to a bill stating none; either way the accrual's two legs are equal.
      *
+     * @param recovered the recovered amounts by mapping key, positive; empty books the gross as before
      * @param useTax the accrual, or null when none
      */
     static @NonNull Entry entry(
@@ -466,8 +560,11 @@ public class VendorBillPostingService {
             @NonNull List<VendorBillLine> lines,
             @NonNull Classification classification,
             @Nullable Difference difference,
+            @NonNull Map<String, BigDecimal> recovered,
             @Nullable UseTax useTax) {
         BigDecimal gross = gross(bill);
+        BigDecimal sign = gross.signum() < 0 ? BigDecimal.ONE.negate() : BigDecimal.ONE;
+        BigDecimal recoveredTotal = recovered.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
         if (gross.signum() == 0) {
             throw new VendorBillException(
                     VendorBillException.Code.AP_BILL_ZERO_TOTAL,
@@ -480,11 +577,19 @@ public class VendorBillPostingService {
         Optional<VendorBillTotals> totals = VendorBillTotals.of(bill);
         if (totals.isPresent() || lines.isEmpty() || gross.signum() < 0) {
             VendorBillTotals stated = totals.orElseGet(() -> legacyTotals(bill, gross));
+            // The class keeps only the tax not recovered; the recovered tax has its own debit below.
+            VendorBillTotals classTotals = new VendorBillTotals(
+                    stated.gross(),
+                    stated.net(),
+                    stated.tax().subtract(recoveredTotal.multiply(sign)),
+                    stated.difference(),
+                    stated.tolerance());
             if (gross.signum() < 0) {
-                creditNote(bill, stated.net().add(stated.tax()), classification, debits);
+                creditNote(bill, classTotals.net().add(classTotals.tax()), classification, debits);
             } else {
-                headerOnly(bill, stated, classification, debits);
+                headerOnly(bill, classTotals, classification, debits);
             }
+            recovered.forEach((key, amount) -> add(debits, key, amount.multiply(sign)));
             if (!stated.reconciled()) {
                 if (difference == null) {
                     throw unreconciled(bill, stated);
@@ -494,7 +599,13 @@ public class VendorBillPostingService {
                 differenceAmount = stated.difference();
             }
         } else {
-            byLine(bill, lines, classification, debits);
+            byLine(
+                    bill,
+                    lines,
+                    classification,
+                    debits,
+                    scaled(bill.getTaxAmount()).abs().subtract(recoveredTotal));
+            recovered.forEach((key, amount) -> add(debits, key, amount.multiply(sign)));
             BigDecimal residual = gross.subtract(debits.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add));
             if (residual.abs().compareTo(VendorBillTotals.TOLERANCE_PER_BILL) > 0) {
                 // L-a: the lines' debits and the billed total are apart by more than rounding; never absorbed.
@@ -506,7 +617,7 @@ public class VendorBillPostingService {
                                 + " rounding allowed); correct the bill or void it");
             }
         }
-        BigDecimal rounding = balanceOnLargest(debits, gross);
+        BigDecimal rounding = balanceOnLargest(debits, gross, recovered.keySet());
         boolean accrues = useTax != null && useTax.amount().signum() > 0 && gross.signum() > 0;
         if (accrues) {
             // As returned, at the ledger currency's exponent (PC-6): never rounded again here.
@@ -534,14 +645,25 @@ public class VendorBillPostingService {
         return entry(bill, lines, classification, difference).legs();
     }
 
-    /** The legs alone, with a self-assessed tax accrual; see {@link #entry}. */
+    /** The legs alone, with the recovered tax; see {@link #entry(VendorBill, List, Classification, Difference, Map)}. */
     static @NonNull List<Leg> legs(
             @NonNull VendorBill bill,
             @NonNull List<VendorBillLine> lines,
             @NonNull Classification classification,
             @Nullable Difference difference,
+            @NonNull Map<String, BigDecimal> recovered) {
+        return entry(bill, lines, classification, difference, recovered).legs();
+    }
+
+    /** The legs alone, with the recovered tax and a self-assessed tax accrual; see {@link #entry}. */
+    static @NonNull List<Leg> legs(
+            @NonNull VendorBill bill,
+            @NonNull List<VendorBillLine> lines,
+            @NonNull Classification classification,
+            @Nullable Difference difference,
+            @NonNull Map<String, BigDecimal> recovered,
             @Nullable UseTax useTax) {
-        return entry(bill, lines, classification, difference, useTax).legs();
+        return entry(bill, lines, classification, difference, recovered, useTax).legs();
     }
 
     /**
@@ -634,7 +756,8 @@ public class VendorBillPostingService {
             VendorBill bill,
             List<VendorBillLine> lines,
             Classification classification,
-            Map<String, BigDecimal> debits) {
+            Map<String, BigDecimal> debits,
+            BigDecimal classTax) {
         List<VendorBillLine> billed = new ArrayList<>();
         List<BigDecimal> nets = new ArrayList<>();
         for (VendorBillLine line : lines) {
@@ -645,7 +768,7 @@ public class VendorBillPostingService {
             billed.add(line);
             nets.add(net);
         }
-        List<BigDecimal> taxShares = prorate(scaled(bill.getTaxAmount()).abs(), nets);
+        List<BigDecimal> taxShares = prorate(classTax, nets);
         for (int i = 0; i < billed.size(); i++) {
             VendorBillLine line = billed.get(i);
             BigDecimal net = nets.get(i);
@@ -703,14 +826,19 @@ public class VendorBillPostingService {
         return shares;
     }
 
-    /** Puts {@code gross - sum(debits)} on the largest debit and returns it, the rounding adjustment. */
-    private static BigDecimal balanceOnLargest(Map<String, BigDecimal> debits, BigDecimal gross) {
+    /**
+     * Puts {@code gross - sum(debits)} on the largest debit and returns it, the rounding adjustment. A recovered tax
+     * amount is copied as stated, so it never takes the rounding while another debit can.
+     */
+    private static BigDecimal balanceOnLargest(Map<String, BigDecimal> debits, BigDecimal gross, Set<String> stated) {
         BigDecimal sum = debits.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal residual = gross.subtract(sum).setScale(SCALE, RoundingMode.HALF_UP);
         if (residual.signum() == 0 || debits.isEmpty()) {
             return BigDecimal.ZERO.setScale(SCALE);
         }
+        boolean other = debits.keySet().stream().anyMatch(key -> !stated.contains(key));
         String largest = debits.entrySet().stream()
+                .filter(e -> !other || !stated.contains(e.getKey()))
                 .max(Comparator.comparing(e -> e.getValue().abs()))
                 .map(Map.Entry::getKey)
                 .orElseThrow();
@@ -799,7 +927,11 @@ public class VendorBillPostingService {
                     case PURCHASE_PRICE_DIFFERENCE_KEY -> "Purchase price difference and tax on goods";
                     case FREIGHT_IN_KEY -> "Freight on the vendor's bill";
                     case USE_TAX_PAYABLE_KEY -> "Self-assessed use tax";
-                    default -> "Expense " + mappingKey.substring(Math.min(mappingKey.length(), 8));
+                    default ->
+                        mappingKey.startsWith(VendorBillTaxSplit.RECOVERABLE_KEY_PREFIX)
+                                ? "Recoverable tax "
+                                        + mappingKey.substring(VendorBillTaxSplit.RECOVERABLE_KEY_PREFIX.length())
+                                : "Expense " + mappingKey.substring(Math.min(mappingKey.length(), 8));
                 };
         return truncate(what + " - bill " + bill.getBillNumber(), 500);
     }

@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
 import com.positivity.accounting.internal.enums.TemplateEntryKind;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -61,7 +62,14 @@ public record AccountingTemplate(
 
     /** One template entry. */
     public sealed interface Entry
-            permits Account, Category, Key, GlMapping, DefaultGlMapping, StatementLine, PettyExpenseCategory {
+            permits Account,
+                    Category,
+                    Key,
+                    GlMapping,
+                    DefaultGlMapping,
+                    StatementLine,
+                    PettyExpenseCategory,
+                    PettyExpenseTaxRecovery {
 
         /** The entry's kind. */
         @NonNull
@@ -317,6 +325,49 @@ public record AccountingTemplate(
         @Override
         public String describe() {
             return "petty-expense category " + code + " (" + label + ")";
+        }
+    }
+
+    /**
+     * A petty-expense category's tax recovery (CAP:550 S32d item 3): whether the tax stated on its receipts is
+     * recovered, and which share. Matched in a tenant by category code and applied after the category, in force from
+     * the template's date so it covers every movement. A tenant that has set its own keeps it.
+     */
+    public record PettyExpenseTaxRecovery(
+            @NonNull String code,
+            boolean taxRecoverable,
+            @Nullable BigDecimal recoverablePercent) implements Entry {
+
+        /** The entry key of the category this recovery belongs to. */
+        public @NonNull String categoryEntryKey() {
+            return TemplateEntryKind.PETTY_EXPENSE_CATEGORY.name() + ":" + code;
+        }
+
+        @Override
+        public TemplateEntryKind kind() {
+            return TemplateEntryKind.PETTY_EXPENSE_TAX_RECOVERY;
+        }
+
+        @Override
+        public String naturalKey() {
+            return code;
+        }
+
+        @Override
+        public String canonical() {
+            return join(
+                    taxRecoverable,
+                    recoverablePercent == null
+                            ? null
+                            : recoverablePercent.stripTrailingZeros().toPlainString());
+        }
+
+        @Override
+        public String describe() {
+            return "tax recovery of petty-expense category " + code
+                    + (taxRecoverable
+                            ? " at " + recoverablePercent.stripTrailingZeros().toPlainString() + " %"
+                            : " off");
         }
     }
 

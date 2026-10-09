@@ -508,3 +508,186 @@ ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET
     line_description = EXCLUDED.line_description,
     display_order = EXCLUDED.display_order,
     operation = EXCLUDED.operation;
+
+-- ============================================================================
+-- Currency-conditional data (CAP:550 S32d item 3; SPEC-accounting-workspace §4.7, §9.5a; AW20, AW30, AW54, AW56).
+-- A tenant receives an entry of this section only when its functional currency is the one its
+-- accounting_template_currency_entry row names (CurrencyTemplateSource); no other source owns them, so a tenant in
+-- another currency, every USD tenant today, receives none of it. The code names no account, regime or tax type:
+-- this is data. Accounts stay remappable.
+--
+-- CAD, the first data set. PLACEHOLDERS held for expert advice (OI-4): which tax types are recoverable and at what
+-- share (Staff meals at 50 % especially). Recovery must not reach a production CAD tenant before OI-4 is answered;
+-- that is a release gate on configuration, not code.
+-- ============================================================================
+
+-- CAD: GL accounts. 1250 / 1260 hold recoverable tax per regime; 2210 / 2220 / 2230 the tax collected per tax type,
+-- in place of 2200 for typed postings; 6050 the cash-rounding difference, on the computed IS_OTHER_EXPENSES line (AW56).
+INSERT INTO gl_account (gl_account_id, account_code, account_name, account_type, account_subtype, reconcilable, activation_date, version, created_at, created_by, modified_at, modified_by)
+SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.name, t.type, t.subtype, t.reconcilable, TIMESTAMP '2020-01-01 00:00:00', 0, NOW(), 'seed-generator', NOW(), 'seed-generator'
+FROM (VALUES
+    ('1250', 'GST/HST Recoverable', 'ASSET', 'TAX_RECOVERABLE', FALSE),
+    ('1260', 'QST Recoverable', 'ASSET', 'TAX_RECOVERABLE', FALSE),
+    ('2210', 'GST/HST Payable', 'LIABILITY', 'TAX_PAYABLE', FALSE),
+    ('2220', 'QST Payable', 'LIABILITY', 'TAX_PAYABLE', FALSE),
+    ('2230', 'PST Payable', 'LIABILITY', 'TAX_PAYABLE', FALSE),
+    ('6050', 'Cash Rounding', 'EXPENSE', 'OPERATING_EXPENSE', FALSE)
+) AS t(code, name, type, subtype, reconcilable)
+ON CONFLICT (tenant_id, account_code) DO UPDATE SET
+    account_name = EXCLUDED.account_name,
+    account_type = EXCLUDED.account_type,
+    account_subtype = EXCLUDED.account_subtype,
+    reconcilable = EXCLUDED.reconcilable,
+    activation_date = EXCLUDED.activation_date,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+
+-- CAD: the cash-rounding posting category (AW54).
+INSERT INTO posting_category (posting_category_id, category_name, description, is_active, created_at, created_by, modified_at, modified_by)
+SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:CATEGORY:' || t.name)::uuid, t.name, t.description, TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator'
+FROM (VALUES
+    ('CASH_ROUNDING', 'The difference between cash tendered and the amount settled when a cash total is rounded (AW54)')
+) AS t(name, description)
+ON CONFLICT (tenant_id, posting_category_id) DO UPDATE SET
+    category_name = EXCLUDED.category_name,
+    description = EXCLUDED.description,
+    is_active = EXCLUDED.is_active,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+
+-- CAD: mapping keys. INPUT_TAX_<regime> and TAX_RECOVERABLE_<regime> per regime; SALES_TAX_PAYABLE_<taxType> per tax
+-- type (pos-tax's CA profile, S32a).
+INSERT INTO mapping_key (mapping_key_id, posting_category_id, key_name, description, is_active, created_at, created_by, modified_at, modified_by)
+SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:MAPPING_KEY:' || t.category || '/' || t.key_name)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:CATEGORY:' || t.category)::uuid, t.key_name, t.description, TRUE, NOW(), 'seed-generator', NOW(), 'seed-generator'
+FROM (VALUES
+    ('REGISTER_CASH_MOVEMENT', 'INPUT_TAX_GST_HST', 'GST/HST recovered on a drawer receipt (S32d)'),
+    ('REGISTER_CASH_MOVEMENT', 'INPUT_TAX_QST', 'QST recovered on a drawer receipt (S32d)'),
+    ('VENDOR_BILL', 'TAX_RECOVERABLE_GST_HST', 'GST/HST recovered on a vendor bill (AW37-AW43)'),
+    ('VENDOR_BILL', 'TAX_RECOVERABLE_QST', 'QST recovered on a vendor bill (AW37-AW43)'),
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE_GST', 'GST collected (AW50)'),
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE_HST', 'HST collected (AW50)'),
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE_QST', 'QST collected (AW50)'),
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE_PST', 'PST collected (AW50)'),
+    ('CASH_ROUNDING', 'CASH_ROUNDING_DIFFERENCE', 'Cash tendered minus the amount settled (AW54)')
+) AS t(category, key_name, description)
+ON CONFLICT (tenant_id, mapping_key_id) DO UPDATE SET
+    posting_category_id = EXCLUDED.posting_category_id,
+    key_name = EXCLUDED.key_name,
+    description = EXCLUDED.description,
+    is_active = EXCLUDED.is_active,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+
+-- CAD: GL mappings.
+INSERT INTO gl_mapping (gl_mapping_id, source_system, external_code, posting_category_id, mapping_key_id, gl_account_id, effective_start_date, created_at, created_by)
+SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:GL_MAPPING:' || t.category || '/' || t.key_name)::uuid, t.source_system, t.external_code, md5('accounting-template:01900000-0000-7000-8000-000000000000:CATEGORY:' || t.category)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:MAPPING_KEY:' || t.category || '/' || t.key_name)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.account_code)::uuid, TIMESTAMP '2020-01-01 00:00:00', NOW(), 'seed-generator'
+FROM (VALUES
+    ('REGISTER_CASH_MOVEMENT', 'INPUT_TAX_GST_HST', 'ACCOUNTING', 'REGISTER_CASH_MOVEMENT_INPUT_TAX_GST_HST', '1250'),
+    ('REGISTER_CASH_MOVEMENT', 'INPUT_TAX_QST', 'ACCOUNTING', 'REGISTER_CASH_MOVEMENT_INPUT_TAX_QST', '1260'),
+    ('VENDOR_BILL', 'TAX_RECOVERABLE_GST_HST', 'ACCOUNTING', 'VENDOR_BILL_TAX_RECOVERABLE_GST_HST', '1250'),
+    ('VENDOR_BILL', 'TAX_RECOVERABLE_QST', 'ACCOUNTING', 'VENDOR_BILL_TAX_RECOVERABLE_QST', '1260'),
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE_GST', 'ACCOUNTING', 'INVOICE_REVENUE_SALES_TAX_PAYABLE_GST', '2210'),
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE_HST', 'ACCOUNTING', 'INVOICE_REVENUE_SALES_TAX_PAYABLE_HST', '2210'),
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE_QST', 'ACCOUNTING', 'INVOICE_REVENUE_SALES_TAX_PAYABLE_QST', '2220'),
+    ('INVOICE_REVENUE', 'SALES_TAX_PAYABLE_PST', 'ACCOUNTING', 'INVOICE_REVENUE_SALES_TAX_PAYABLE_PST', '2230'),
+    ('CASH_ROUNDING', 'CASH_ROUNDING_DIFFERENCE', 'ACCOUNTING', 'CASH_ROUNDING_DIFFERENCE', '6050')
+) AS t(category, key_name, source_system, external_code, account_code)
+ON CONFLICT (tenant_id, gl_mapping_id) DO UPDATE SET
+    source_system = EXCLUDED.source_system,
+    external_code = EXCLUDED.external_code,
+    posting_category_id = EXCLUDED.posting_category_id,
+    mapping_key_id = EXCLUDED.mapping_key_id,
+    gl_account_id = EXCLUDED.gl_account_id,
+    effective_start_date = EXCLUDED.effective_start_date,
+    effective_end_date = EXCLUDED.effective_end_date,
+    dimensions = EXCLUDED.dimensions,
+    created_by = 'seed-generator';
+
+-- CAD: balance-sheet lines. Recoverable tax is money owed to the shop; typed tax collected joins 2200's line.
+INSERT INTO statement_line_mappings (mapping_id, gl_account_id, account_name, statement_type, statement_line_code, parent_line_code, line_description, display_order, operation)
+SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:STATEMENT_LINE:' || t.statement_type || ':' || t.code)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:ACCOUNT:' || t.code)::uuid, t.code, t.statement_type, t.line_code, t.parent_line_code, t.line_description, t.display_order, t.operation
+FROM (VALUES
+    ('BALANCE_SHEET', '1250', 'BS_TAX_TO_RECOVER', NULL::text, 'Sales tax you can claim back', 12, 'SUM'),
+    ('BALANCE_SHEET', '1260', 'BS_TAX_TO_RECOVER', NULL::text, 'Sales tax you can claim back', 12, 'SUM'),
+    ('BALANCE_SHEET', '2210', 'BS_SALES_TAX_COLLECTED', NULL::text, 'Sales tax collected, not yet paid', 7, 'SUM'),
+    ('BALANCE_SHEET', '2220', 'BS_SALES_TAX_COLLECTED', NULL::text, 'Sales tax collected, not yet paid', 7, 'SUM'),
+    ('BALANCE_SHEET', '2230', 'BS_SALES_TAX_COLLECTED', NULL::text, 'Sales tax collected, not yet paid', 7, 'SUM')
+) AS t(statement_type, code, line_code, parent_line_code, line_description, display_order, operation)
+ON CONFLICT (tenant_id, mapping_id) DO UPDATE SET
+    gl_account_id = EXCLUDED.gl_account_id,
+    account_name = EXCLUDED.account_name,
+    statement_type = EXCLUDED.statement_type,
+    statement_line_code = EXCLUDED.statement_line_code,
+    parent_line_code = EXCLUDED.parent_line_code,
+    line_description = EXCLUDED.line_description,
+    display_order = EXCLUDED.display_order,
+    operation = EXCLUDED.operation;
+
+-- CAD: petty-expense categories' tax recovery (item 3; AW20, AW30). PLACEHOLDERS (OI-4): every S15 category at
+-- 100 %, Staff meals at 50 % (expense leg 6295).
+INSERT INTO petty_expense_category_tax_setting (tax_setting_id, petty_expense_category_id, code, tax_recoverable, recoverable_percent, version, created_at, created_by, modified_at, modified_by)
+SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:PETTY_EXPENSE_TAX_RECOVERY:' || t.code)::uuid, md5('accounting-template:01900000-0000-7000-8000-000000000000:PETTY_EXPENSE_CATEGORY:' || t.code)::uuid, t.code, TRUE, t.percent, 0, NOW(), 'seed-generator', NOW(), 'seed-generator'
+FROM (VALUES
+    ('SHOP_SUPPLIES', 100.00),
+    ('SMALL_TOOLS', 100.00),
+    ('OFFICE_SUPPLIES', 100.00),
+    ('BUILDING_REPAIRS', 100.00),
+    ('EQUIPMENT_REPAIRS', 100.00),
+    ('POSTAGE_SHIPPING', 100.00),
+    ('CLEANING_JANITORIAL', 100.00),
+    ('STAFF_MEALS', 50.00),
+    ('VEHICLE_FUEL', 100.00)
+) AS t(code, percent)
+ON CONFLICT (tenant_id, code) DO UPDATE SET
+    petty_expense_category_id = EXCLUDED.petty_expense_category_id,
+    tax_recoverable = EXCLUDED.tax_recoverable,
+    recoverable_percent = EXCLUDED.recoverable_percent,
+    modified_at = NOW(),
+    modified_by = 'seed-generator';
+
+-- CAD: which of the template's entries above are CAD's. Every entry key of this section, and only these.
+INSERT INTO accounting_template_currency_entry (currency_entry_id, entry_key, currency_code)
+SELECT md5('accounting-template:01900000-0000-7000-8000-000000000000:CURRENCY_ENTRY:' || t.entry_key)::uuid, t.entry_key, 'CAD'
+FROM (VALUES
+    ('ACCOUNT:1250'),
+    ('ACCOUNT:1260'),
+    ('ACCOUNT:2210'),
+    ('ACCOUNT:2220'),
+    ('ACCOUNT:2230'),
+    ('ACCOUNT:6050'),
+    ('CATEGORY:CASH_ROUNDING'),
+    ('MAPPING_KEY:REGISTER_CASH_MOVEMENT/INPUT_TAX_GST_HST'),
+    ('MAPPING_KEY:REGISTER_CASH_MOVEMENT/INPUT_TAX_QST'),
+    ('MAPPING_KEY:VENDOR_BILL/TAX_RECOVERABLE_GST_HST'),
+    ('MAPPING_KEY:VENDOR_BILL/TAX_RECOVERABLE_QST'),
+    ('MAPPING_KEY:INVOICE_REVENUE/SALES_TAX_PAYABLE_GST'),
+    ('MAPPING_KEY:INVOICE_REVENUE/SALES_TAX_PAYABLE_HST'),
+    ('MAPPING_KEY:INVOICE_REVENUE/SALES_TAX_PAYABLE_QST'),
+    ('MAPPING_KEY:INVOICE_REVENUE/SALES_TAX_PAYABLE_PST'),
+    ('MAPPING_KEY:CASH_ROUNDING/CASH_ROUNDING_DIFFERENCE'),
+    ('GL_MAPPING:REGISTER_CASH_MOVEMENT/INPUT_TAX_GST_HST'),
+    ('GL_MAPPING:REGISTER_CASH_MOVEMENT/INPUT_TAX_QST'),
+    ('GL_MAPPING:VENDOR_BILL/TAX_RECOVERABLE_GST_HST'),
+    ('GL_MAPPING:VENDOR_BILL/TAX_RECOVERABLE_QST'),
+    ('GL_MAPPING:INVOICE_REVENUE/SALES_TAX_PAYABLE_GST'),
+    ('GL_MAPPING:INVOICE_REVENUE/SALES_TAX_PAYABLE_HST'),
+    ('GL_MAPPING:INVOICE_REVENUE/SALES_TAX_PAYABLE_QST'),
+    ('GL_MAPPING:INVOICE_REVENUE/SALES_TAX_PAYABLE_PST'),
+    ('GL_MAPPING:CASH_ROUNDING/CASH_ROUNDING_DIFFERENCE'),
+    ('STATEMENT_LINE:BALANCE_SHEET:1250'),
+    ('STATEMENT_LINE:BALANCE_SHEET:1260'),
+    ('STATEMENT_LINE:BALANCE_SHEET:2210'),
+    ('STATEMENT_LINE:BALANCE_SHEET:2220'),
+    ('STATEMENT_LINE:BALANCE_SHEET:2230'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:SHOP_SUPPLIES'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:SMALL_TOOLS'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:OFFICE_SUPPLIES'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:BUILDING_REPAIRS'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:EQUIPMENT_REPAIRS'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:POSTAGE_SHIPPING'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:CLEANING_JANITORIAL'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:STAFF_MEALS'),
+    ('PETTY_EXPENSE_TAX_RECOVERY:VEHICLE_FUEL')
+) AS t(entry_key)
+ON CONFLICT (tenant_id, entry_key) DO UPDATE SET
+    currency_code = EXCLUDED.currency_code;

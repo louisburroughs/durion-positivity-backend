@@ -149,7 +149,9 @@ paths:
 
         No events are emitted and no state changes; every rule is configuration held for expert advice,
 
-        so source is always STUB, and amounts are in the returned currency.
+        so source is always STUB, and amounts are in the returned currency; supplierRegistrationRegime
+
+        names the regime whose registration a supplier''s number is, or null when the country names none.
 
         A caller that cannot obtain the rules retries or holds, and never treats them as absent.
 
@@ -1768,6 +1770,12 @@ components:
           description: Origin of the answer; always STUB, because every value is a placeholder
           example: STUB
           type: string
+        supplierRegistrationRegime:
+          description: Regime whose registration a supplier's number is, the registration a SUPPLIER_REGISTRATION_NUMBER rule asks the supplier to hold; null when the country names none
+          example: REGIME_1
+          type:
+          - string
+          - 'null'
       required:
       - asOf
       - countryCode

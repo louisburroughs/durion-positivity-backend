@@ -73,8 +73,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       AP_BILL_SELF_APPROVAL}, or 400 {@code JUSTIFICATION_REQUIRED} for an exception use without one); the vendor's
  *       creator on its first bill is refused the same way, reason {@code VENDOR_CREATOR_FIRST_BILL} (CAP:550 S24);
  *   <li>the bill's content ({@link #readyContent}, {@link #requireClassified}, {@link #purchaseTax}): 422 {@code
- *       AP_BILL_ZERO_TOTAL}, {@code AP_BILL_TOTALS_UNRECONCILED} (AW47), {@code AP_BILL_UNCLASSIFIED}, then, after
- *       {@code requireClassified}, the hold for tax on goods for resale, {@code AP_BILL_TAX_ON_RESALE_GOODS} (CAP:550
+ *       AP_BILL_ZERO_TOTAL}, {@code AP_BILL_TOTALS_UNRECONCILED} (AW47), {@code AP_BILL_UNCLASSIFIED}, S32d's {@code
+ *       AP_BILL_TAX_SPLIT_MISMATCH}, then, last, the hold for tax on goods for resale, {@code AP_BILL_TAX_ON_RESALE_GOODS} (CAP:550
  *       S43, AW44), whose purchase-tax rules are read from pos-tax inside this step;
  *   <li>the posting: first the self-assessed ({@code USE}) tax quote, once per decision (S43), then {@link
  *       VendorBillPostingService#post}: {@code PERIOD_CLOSED}, {@code PERIOD_HARD_LOCKED}, {@code
@@ -151,6 +151,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
     private final ApLockTimeout lockTimeout;
     private final SupplierVendorCopies vendorCopies;
     private final VendorBillPurchaseTax purchaseTax;
+    private final VendorBillStatedTax statedTax;
     private final TransactionTemplate commandTransaction;
     private final TransactionTemplate refusalTransaction;
 
@@ -171,6 +172,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             ApLockTimeout lockTimeout,
             SupplierVendorCopies vendorCopies,
             VendorBillPurchaseTax purchaseTax,
+            VendorBillStatedTax statedTax,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.bills = bills;
@@ -188,6 +190,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         this.lockTimeout = lockTimeout;
         this.vendorCopies = vendorCopies;
         this.purchaseTax = purchaseTax;
+        this.statedTax = statedTax;
         this.commandTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction = new TransactionTemplate(transactionManager);
         this.refusalTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -248,6 +251,9 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             // 5. content (the purchase-tax hold last), 6. the posting
             readyContent(bill, difference);
             requireClassified(bill, classification, difference, actor);
+            // S32d item 10 (AW51): the tax by type copied from the document replaces what the bill states.
+            statedTax.replaceFromApproval(bill, command.taxByType());
+            // The purchase-tax hold stays the last content check (S43, after S32d's split check).
             PurchaseTaxDecision tax =
                     purchaseTax(bill, classification, actor, command.taxOnResaleOverrideJustification());
             Decision decision = new Decision(tier, settings, exception);
@@ -260,6 +266,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     override,
                     AUDIT_APPROVE,
                     null,
+                    VendorBillStatedTax.auditOf(command.taxByType()),
                     decision,
                     tax);
             return reader.read(bill);
@@ -314,6 +321,9 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                     String exception = creatorRule(bill, settings, actor, reason, "reason");
                     readyContent(bill, difference);
                     requireClassified(bill, classification, difference, actor);
+                    // S32d item 10 (AW51): the tax by type copied from the document replaces what the bill states.
+                    statedTax.replaceFromApproval(bill, command.taxByType());
+                    // The purchase-tax hold stays the last content check (S43, after S32d's split check).
                     PurchaseTaxDecision tax =
                             purchaseTax(bill, classification, actor, command.taxOnResaleOverrideJustification());
                     approveAndPost(
@@ -325,6 +335,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
                             override,
                             AUDIT_RESOLVE,
                             "ACCEPT",
+                            VendorBillStatedTax.auditOf(command.taxByType()),
                             new Decision(tier, settings, exception),
                             tax);
                 }
@@ -605,6 +616,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
             @Nullable String override,
             String operation,
             @Nullable String resolution,
+            @Nullable String taxByType,
             Decision decision,
             PurchaseTaxDecision tax) {
         // 6. the posting's first act (CAP:550 S43): the self-assessed tax quote, once per decision. pos-tax giving no
@@ -638,16 +650,20 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
         bill.setModifiedBy(actor);
         bills.save(bill);
         String details = differenceDetails(bill);
+        // S32d item 10: the split and what the posting recovered (S12's approval audit records both).
+        String recovery = postingService.recoveryAudit(bill.getVendorBillId());
         audit(
                 bill,
                 operation,
                 actor,
                 justification,
-                (resolution == null ? "" : "action=" + resolution + ";") + "journalEntryId="
-                        + posting.getJournalEntryId() + ";postingDate=" + posting.getPostingDate()
+                (resolution == null ? "" : "action=" + resolution + ";")
+                        + (taxByType == null ? "" : taxByType + ";")
+                        + "journalEntryId=" + posting.getJournalEntryId() + ";postingDate=" + posting.getPostingDate()
                         + ";postingDateRule=" + posting.getPostingDateRule() + ";roundingAdjustment="
                         + posting.getRoundingAdjustment().toPlainString()
                         + (details == null ? "" : ";" + details)
+                        + (recovery == null ? "" : ";" + recovery)
                         + (override == null ? "" : ";periodOverride=true")
                         + purchaseTaxDetails(tax.override(), useTax),
                 decision);

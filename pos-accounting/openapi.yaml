@@ -34,6 +34,8 @@ tags:
   name: Settlement Reconciliation
 - description: 'AR customer credits: balances, application to invoices, and refunds'
   name: Customer Credits
+- description: Which indirect tax the shop paid may be claimed back
+  name: Accounting Input-Tax Recovery
 - description: Read-only location Labor & Overhead Cost Report (CAP-316)
   name: Location Cost Reporting
 - description: Indirect-tax registrations the company holds
@@ -3135,9 +3137,9 @@ paths:
 
         Required inputs: originalInvoiceId (UUID), creditAmount (min 0.01) and reasonCode (max 50 chars, kept for the audit trail); justificationNote (max 1000 chars) is optional.
 
-        Emits an ACCOUNTING_CREDIT_MEMO_CREATE event and posts the reversing GL entries.
+        Emits an ACCOUNTING_CREDIT_MEMO_CREATE event and posts the reversing GL entries; a tenant whose currency template maps tax-payable keys by tax type reverses the tax by type, in the share the invoice collected each type.
 
-        Returns 404 when the invoice is not found, 409 when the amount exceeds the outstanding balance or the invoice is not finalized, and 401 when no authenticated user is present.
+        Returns 404 when the invoice is not found, 409 when the amount exceeds the outstanding balance or the invoice is not finalized, 422 TAX_TYPE_MISSING when such a tenant''s invoice carries tax without a tax type or a type without a mapped key (nothing is stored), and 401 when no authenticated user is present.
 
         '
       operationId: createCreditMemo
@@ -3181,6 +3183,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Business rule violation - amount exceeds balance or invoice not finalized
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: TAX_TYPE_MISSING - the tenant posts output tax by type and the invoice's tax cannot be reversed by type
       security:
       - bearerAuth:
         - accounting:credit-memo:create
@@ -3238,7 +3246,7 @@ paths:
       - accounting:credit-memo:read
   /v1/accounting/credit-memos/{creditMemoId}/void:
     post:
-      description: 'Voids a POSTED credit memo by posting the mirror GL entry (debit AR, credit Revenue and Sales-Tax Payable) dated at void time, restoring the invoice''s outstanding balance.
+      description: 'Voids a POSTED credit memo by posting the mirror GL entry (debit AR, credit Revenue and Sales-Tax Payable, by tax type where the memo reversed by type) dated at void time, restoring the invoice''s outstanding balance.
 
         Use this tool to back out a memo issued in error; do not use createCreditMemo, which issues new credit, and note that APPLIED memos have been consumed and cannot be voided.
 
@@ -5514,6 +5522,47 @@ paths:
       - Vendor Directory API
       x-required-permissions:
       - accounting:ap:view
+  /v1/accounting/input-tax-recovery:
+    get:
+      description: 'Returns the tenant''s input-tax recovery settings: one row per regime it holds a registration for (country, regime, whether recovery is on today, the registration in effect and the account recovered tax posts to), the evidence rules of each registered country, every petty-expense category''s recoverable flag and share with its version, the change history (date, actor and role, old to new, reason) and asOf.
+
+        Use this tool to show what the shop can claim back and from which receipts; do not use listTaxRegistrations, which lists the registrations without recovery, accounts or shares.
+
+        Preconditions: caller holds accounting:mapping-key:view; the tenant''s accounting time zone is set (422 ACCOUNTING_TIME_ZONE_UNSET otherwise). Read-only and idempotent.
+
+        Required inputs: none. A tenant without a registration, every USD tenant today, gets an empty regimes list.
+
+        The read never fails because of the tax service: evidenceRules is then null and enabled is null, meaning it cannot be determined now, never false. Emits an ACCOUNTING_INPUT_TAX_RECOVERY_VIEW event and returns 200.
+
+        '
+      operationId: getInputTaxRecovery
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InputTaxRecoveryResponse'
+          description: The settings
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:mapping-key:view
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'ACCOUNTING_TIME_ZONE_UNSET: the tenant''s accounting time zone is not set, so today cannot be dated'
+      security:
+      - bearerAuth:
+        - accounting:mapping-key:view
+      summary: Get Input-Tax Recovery Settings
+      tags:
+      - Accounting Input-Tax Recovery
+      x-required-permissions:
+      - accounting:mapping-key:view
   /v1/accounting/invoice-revenue/reconcile:
     post:
       description: 'Posts revenue to the general ledger for every finalized invoice in the accounting replica that has no open revenue posting yet, using the same entries the live invoice event path creates (Dr Accounts Receivable / Cr Service Revenue / Cr Sales Tax Payable, dated at the invoice''s finalization).
@@ -7869,6 +7918,102 @@ paths:
       - Accounting Petty-Expense Categories
       x-required-permissions:
       - accounting:mapping-key:deactivate
+  /v1/accounting/petty-expense-categories/{code}/tax-recovery:
+    put:
+      description: 'Sets whether the tax stated on a petty-expense category''s receipts is recovered, and which share, from now on; a movement already recorded keeps the share in force when it was recorded.
+
+        Use this tool when the accountant decides how much of a category''s stated tax may be claimed; do not use updatePettyExpenseCategory, which changes only the label and examples.
+
+        Preconditions: caller holds accounting:mapping-key:edit; the category exists (404); recovery under at least one regime is on today (422 INPUT_TAX_RECOVERY_NOT_ENABLED); version is the one last read, 0 for a category never set (409 OPTIMISTIC_LOCK); the tax service answers whether a regime''s recovery is on (503 SERVICE_UNAVAILABLE with Retry-After when it cannot).
+
+        Required inputs: code (path), taxRecoverable, recoverablePercent in (0, 100] when recoverable and absent otherwise, version, justification (at least 10 characters) and requestId (a replay returns the first result with 200; the same requestId with another body is 409 IDEMPOTENCY_CONFLICT).
+
+        Emits an ACCOUNTING_PETTY_CATEGORY_TAX_RECOVERY_UPDATE event, writes a history row naming the caller and role, queues accounting.petty-expense-category.changed with the new values, and returns 200 with the setting.
+
+        '
+      operationId: setPettyExpenseCategoryTaxRecovery
+      parameters:
+      - description: Permanent category code
+        example: STAFF_MEALS
+        in: path
+        name: code
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Half recoverable:
+                description: Half recoverable
+                value:
+                  justification: Meals are half recoverable under the regime
+                  recoverablePercent: 50.0
+                  requestId: 019a0000-0000-7000-8000-000000000107
+                  taxRecoverable: true
+                  version: 0
+            schema:
+              $ref: '#/components/schemas/PettyExpenseCategoryTaxRecoveryRequest'
+        description: Whether the category's stated tax is recovered, which share, and why
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PettyExpenseCategoryTaxRecoveryResponse'
+          description: The recovery was set, or a replayed requestId
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or invalid field (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks accounting:mapping-key:edit
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No such category (PETTY_EXPENSE_CATEGORY_NOT_FOUND)
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: OPTIMISTIC_LOCK or IDEMPOTENCY_CONFLICT
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: INPUT_TAX_RECOVERY_NOT_ENABLED or ACCOUNTING_TIME_ZONE_UNSET
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_UNAVAILABLE: whether a regime''s recovery is on cannot be determined now (the tax service did not answer); nothing was changed, retry after Retry-After seconds'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                example: 30
+                type: integer
+              style: simple
+      security:
+      - bearerAuth:
+        - accounting:mapping-key:edit
+      summary: Set Petty-Expense Category Tax Recovery
+      tags:
+      - Accounting Petty-Expense Categories
+      x-required-permissions:
+      - accounting:mapping-key:edit
   /v1/accounting/posting-categories:
     get:
       description: 'Lists posting categories as a paginated projection, optionally filtered by active flag.
@@ -13198,19 +13343,19 @@ paths:
       - accounting:ap:view
   /v1/accounting/vendor-bills/{billId}/approve:
     post:
-      description: 'Approves a vendor bill in AWAITING_APPROVAL and posts it in the same transaction, so a bill is approved if and only if it posted (AW37): accounts payable is credited the billed gross and the debits follow the VENDOR_BILL posting category by class (receipt-matched lines 2100 at the received price with the difference in 5050, unmatched goods 2100 at the stated net with the tax in 5050, expenses the chosen EXPENSE_<CODE> key with the tax).
+      description: 'Approves a vendor bill in AWAITING_APPROVAL and posts it in the same transaction, so a bill is approved if and only if it posted (AW37): accounts payable is credited the billed gross and the debits follow the VENDOR_BILL posting category by class (receipt-matched lines 2100 at the received price with the difference in 5050, unmatched goods 2100 at the stated net with the tax in 5050, expenses the chosen EXPENSE_<CODE> key with the tax; for a tenant that recovers input tax, a recoverable tax type whose regime is registered on the bill date debits TAX_RECOVERABLE_<regime> instead, and a tax stated without its types recovers nothing).
 
         The vendor''s gross - (net + tax) within 0.01 per stated line, at most 0.05, goes on the largest debit as roundingAdjustment and a larger one where difference says (FREIGHT 5060, GOODS 2100, EXPENSE its key, PRICE_DIFFERENCE 5050); the entry is dated on the bill date when that is on or before today and its period is open, otherwise today.
 
         Use this tool for the approver''s decision on a bill sent for approval; do not use submitVendorBillForApproval, which only sends it, or resolveVendorBillMatchException with ACCEPT, which approves a bill still in MATCH_EXCEPTION.
 
-        Preconditions: in this order, the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are) and a goods-receipt bill has its invoice matched; a bill whose absolute total is over the clerk limit (requiredTier OVER_LIMIT) needs accounting:ap:approve_over_limit, one within it accounting:ap:approve; the caller did not create the bill unless the AP approval policy allows it with a justification; then the content checks, the last of them the hold for tax on goods for resale where the tax country''s purchase-tax rules (read from pos-tax) hold such tax, and the posting, whose first act is the self-assessed use-tax quote where those rules accrue it.
+        Preconditions: in this order, the bill is AWAITING_APPROVAL (CURRENCY_HOLD bills never are) and a goods-receipt bill has its invoice matched; a bill whose absolute total is over the clerk limit (requiredTier OVER_LIMIT) needs accounting:ap:approve_over_limit, one within it accounting:ap:approve; the caller did not create the bill unless the AP approval policy allows it with a justification; then the content checks and the posting.
 
-        Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one proposed at submission), difference (as submitVendorBillForApproval takes it) and overrideJustification (with accounting:period:override, to post into a CLOSED period) and taxOnResaleOverrideJustification (10-1000 characters, accepting the bill''s tax on goods for resale for this bill only) are optional.
+        Required inputs: billId (UUID) as a path parameter; justification (at least 10 characters), classification {debitClass GOODS|EXPENSE, expenseMappingKey} (each field given wins over the one proposed at submission), difference (as submitVendorBillForApproval takes it), taxByType [{taxType, amount}] copied from the document (replacing the bill''s stored tax by type) and overrideJustification (with accounting:period:override, to post into a CLOSED period) are optional.
 
         Emits ACCOUNTING_VENDOR_BILL_APPROVE and writes a VENDOR_BILL_APPROVE audit row; a refused posting writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else, and a replayed approve finds the bill APPROVED and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED (also a creator''s approval without one), VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (nextAction names accounting:ap:approve_over_limit) or AP_BILL_SELF_APPROVAL (the bill''s creator, or the vendor''s creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL), each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED (only when neither the classification, the proposal nor the vendor''s AP defaults give a class), AP_BILL_TAX_ON_RESALE_GOODS (audited as VENDOR_BILL_APPROVE_REFUSED), AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), or, relayed from pos-tax for the use-tax quote, TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED (a configuration to fix, not to retry); 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot give the rules or the quote; each leaving the bill as it was.
+        Returns 200 with the bill read, its posting included; 400 JUSTIFICATION_REQUIRED (also a creator''s approval without one), VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (nextAction names accounting:ap:approve_over_limit) or AP_BILL_SELF_APPROVAL (the bill''s creator, or the vendor''s creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL), each limit or creator refusal audited as VENDOR_BILL_APPROVE_REFUSED; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_UNCLASSIFIED (only when neither the classification, the proposal nor the vendor''s AP defaults give a class), AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, AP_BILL_TAX_SPLIT_MISMATCH (taxByType not adding up to the stated tax), AMOUNT_PRECISION_EXCEEDS_CURRENCY, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED (guided: referenceId CATEGORY/KEY and nextAction), and 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax''s tax profile cannot be read, each leaving the bill as it was.
 
         '
       operationId: approveVendorBill
@@ -13280,19 +13425,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: AP_BILL_UNCLASSIFIED, AP_BILL_TAX_ON_RESALE_GOODS (the tax country's rules hold the bill's tax on goods for resale; override with taxOnResaleOverrideJustification), AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, or relayed from pos-tax for the use-tax quote TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED (nothing written); the approval is rolled back
+          description: AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, AP_BILL_TAX_SPLIT_MISMATCH, AMOUNT_PRECISION_EXCEEDS_CURRENCY, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back
         '503':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'SERVICE_UNAVAILABLE: pos-tax cannot give the purchase-tax rules or the use-tax quote; nothing is written. Retry after the Retry-After interval.'
-          headers:
-            Retry-After:
-              description: Seconds to wait before retrying
-              schema:
-                type: integer
-              style: simple
+          description: 'SERVICE_UNAVAILABLE with Retry-After: pos-tax''s tax profile, which decides input-tax recovery, cannot be read; nothing is written'
       security:
       - bearerAuth:
         - accounting:ap:approve
@@ -13479,11 +13618,11 @@ paths:
 
         Preconditions: the bill is MATCH_EXCEPTION, and each action needs its own permission: ACCEPT and CORRECT accounting:ap:approve or accounting:ap:approve_over_limit, VOID accounting:ap:reject; ACCEPT is an approval and takes approveVendorBill''s checks in its order (no open ambiguous match, a matched invoice for a goods-receipt bill, the tier against the clerk limit, the caller not the bill''s creator with the reason as an exception''s justification, the vendor''s totals reconciled or a difference).
 
-        Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and reason (at least 10 characters); ACCEPT also takes classification, difference, overrideJustification and taxOnResaleOverrideJustification as approveVendorBill does, with its purchase-tax hold and use-tax quote, and an operatorId in the body is ignored because the actor is the caller.
+        Required inputs: billId (UUID) as a path parameter, resolutionAction (ACCEPT, CORRECT or VOID) and reason (at least 10 characters); ACCEPT also takes classification, difference, taxByType and overrideJustification as approveVendorBill does, and an operatorId in the body is ignored because the actor is the caller.
 
         Emits ACCOUNTING_VENDOR_BILL_MATCH_EXCEPTION_RESOLVE and writes a VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row; a replay finds the bill moved on and is answered 409 AP_BILL_NOT_APPROVABLE.
 
-        Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without the action''s permission, or for ACCEPT AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL (also the vendor''s creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL; audited as VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED (no class given, proposed or defaulted for the vendor), AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED or a relayed pos-tax TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED, and 503 SERVICE_UNAVAILABLE with Retry-After when pos-tax cannot answer, leaving the bill as it was.
+        Returns 200 with the bill read; 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without the action''s permission, or for ACCEPT AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL (also the vendor''s creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL; audited as VENDOR_BILL_MATCH_EXCEPTION_RESOLVE_REFUSED); 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE or, for ACCEPT, AP_BILL_AWAITING_INVOICE; for ACCEPT, 422 AP_BILL_UNCLASSIFIED (no class given, proposed or defaulted for the vendor), AP_BILL_TOTALS_UNRECONCILED, AP_BILL_TAX_SPLIT_MISMATCH, AMOUNT_PRECISION_EXCEEDS_CURRENCY, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED, and 503 SERVICE_UNAVAILABLE when pos-tax''s tax profile cannot be read, leaving the bill as it was.
 
         '
       operationId: resolveVendorBillMatchException
@@ -13551,19 +13690,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'ACCEPT only: AP_BILL_UNCLASSIFIED, AP_BILL_TAX_ON_RESALE_GOODS, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED, GL_MAPPING_NOT_CONFIGURED, or relayed from pos-tax for the use-tax quote TAX_JURISDICTION_NOT_CONFIGURED, CURRENCY_NOT_SUPPORTED or TAX_CAPABILITY_UNSUPPORTED (nothing written); the approval is rolled back'
+          description: 'ACCEPT only: AP_BILL_UNCLASSIFIED, AP_BILL_TOTALS_UNRECONCILED, AP_BILL_TAX_SPLIT_MISMATCH, AMOUNT_PRECISION_EXCEEDS_CURRENCY, AP_BILL_ZERO_TOTAL, PERIOD_CLOSED, PERIOD_HARD_LOCKED or GL_MAPPING_NOT_CONFIGURED; the approval is rolled back'
         '503':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'ACCEPT only: SERVICE_UNAVAILABLE: pos-tax cannot give the purchase-tax rules or the use-tax quote; nothing is written. Retry after the Retry-After interval.'
-          headers:
-            Retry-After:
-              description: Seconds to wait before retrying
-              schema:
-                type: integer
-              style: simple
+          description: 'ACCEPT only: SERVICE_UNAVAILABLE with Retry-After when pos-tax''s tax profile cannot be read; nothing is written'
       security:
       - bearerAuth:
         - accounting:ap:approve
@@ -13876,15 +14009,15 @@ paths:
       - accounting:ap:view
   /v1/accounting/vendors/{vendorId}/ap-settings:
     put:
-      description: 'Sets the vendor''s AP settings: defaultDebitClass and defaultExpenseMappingKey (a field left out is unchanged, null clears it), apHold {onHold, reason} (a hold stops AP payments to the vendor with 422 VENDOR_ON_AP_HOLD, never approval or posting), informationReturn {reportable, form, box, payeeTaxRegistrationScheme} (codes from listInformationReturnForms) and acceptTaxOnResaleGoods (true lets the vendor''s bills charging tax on goods for resale be approved without a per-bill override where the tax country''s purchase-tax rules hold them, from the next decision).
+      description: 'Sets the vendor''s AP settings: defaultDebitClass and defaultExpenseMappingKey (a field left out is unchanged, null clears it), apHold {onHold, reason} (a hold stops AP payments to the vendor with 422 VENDOR_ON_AP_HOLD, never approval or posting) and informationReturn {reportable, form, box, payeeTaxRegistrationScheme} (codes from listInformationReturnForms).
 
-        Each change writes an audit row: AP_VENDOR_SETTINGS_SET per default, information-return field or tax-on-resale acceptance, AP_VENDOR_HOLD_SET or AP_VENDOR_HOLD_CLEARED for the hold; nothing posts.
+        Each change writes an audit row: AP_VENDOR_SETTINGS_SET per default or information-return field, AP_VENDOR_HOLD_SET or AP_VENDOR_HOLD_CLEARED for the hold; nothing posts.
 
         Use this tool when a controller sets a vendor''s defaults, holds or releases its payments, or marks it reportable; do not use it to classify one bill, use the approval''s classification instead.
 
         Preconditions: the caller holds accounting:ap_approval_policy:manage and the vendor is in the copy; an inactive vendor may be set, held or released.
 
-        Required inputs: justification (at least 10 characters) and requestId (a UUID generated once per change); a hold needs a reason of 10-500 characters; reportable needs form and box; apHold, informationReturn or acceptTaxOnResaleGoods sent as null, and any unknown property, is refused.
+        Required inputs: justification (at least 10 characters) and requestId (a UUID generated once per change); a hold needs a reason of 10-500 characters; reportable needs form and box; apHold or informationReturn sent as null, and any unknown property, is refused.
 
         Emits ACCOUNTING_VENDOR_AP_SETTINGS_SET; idempotent on requestId: a replay writes nothing and returns the vendor as it is.
 
@@ -13931,7 +14064,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: VALIDATION_ERROR with fieldErrors (a class outside GOODS/EXPENSE, a key that is not an active VENDOR_BILL key EXPENSE_<CODE>, EXPENSE without a key, no requestId, apHold, informationReturn or acceptTaxOnResaleGoods null, apHold or informationReturn malformed, a hold reason over 500 characters, a form, box or scheme the tax country does not configure, an unknown property named but never echoed) or JUSTIFICATION_REQUIRED (the justification, or apHold.reason under 10 characters)
+          description: VALIDATION_ERROR with fieldErrors (a class outside GOODS/EXPENSE, a key that is not an active VENDOR_BILL key EXPENSE_<CODE>, EXPENSE without a key, no requestId, apHold or informationReturn null or malformed, a hold reason over 500 characters, a form, box or scheme the tax country does not configure, an unknown property named but never echoed) or JUSTIFICATION_REQUIRED (the justification, or apHold.reason under 10 characters)
         '403':
           content:
             application/json:
@@ -19469,6 +19602,7 @@ components:
           - OPERATING_EXPENSE
           - OTHER
           - CASH_ON_HAND
+          - TAX_RECOVERABLE
           example: UNDEPOSITED_FUNDS
           type: string
         accountType:
@@ -19568,6 +19702,7 @@ components:
           - OPERATING_EXPENSE
           - OTHER
           - CASH_ON_HAND
+          - TAX_RECOVERABLE
           example: UNDEPOSITED_FUNDS
           type: string
         accountType:
@@ -19668,6 +19803,7 @@ components:
           - OPERATING_EXPENSE
           - OTHER
           - CASH_ON_HAND
+          - TAX_RECOVERABLE
           example: BANK_CASH
           type: string
         description:
@@ -20333,6 +20469,218 @@ components:
       - countryCode
       - forms
       - source
+      type: object
+    InputTaxRecoveryAccount:
+      description: An account recovered tax posts to
+      properties:
+        code:
+          description: Account number
+          example: '1250'
+          type: string
+        name:
+          description: Account name
+          example: Recoverable tax
+          type: string
+      required:
+      - code
+      - name
+      type: object
+    InputTaxRecoveryCategory:
+      description: A petty-expense category's tax recovery
+      properties:
+        code:
+          description: Permanent category code
+          example: STAFF_MEALS
+          type: string
+        label:
+          description: The category's label
+          example: Staff meals
+          type: string
+        recoverablePercent:
+          description: Share recovered; null when not recoverable
+          example: 100.0
+          type:
+          - number
+          - 'null'
+        taxRecoverable:
+          description: Whether its stated tax is recovered
+          type: boolean
+        version:
+          description: The setting's version (0 when never set), to send with a change
+          example: 0
+          format: int32
+          type: integer
+      required:
+      - code
+      - label
+      - taxRecoverable
+      - version
+      type: object
+    InputTaxRecoveryCountryEvidenceRules:
+      description: A country's evidence rules in effect today
+      properties:
+        countryCode:
+          description: ISO 3166-1 alpha-2 country
+          example: ZZ
+          type: string
+        currencyCode:
+          description: ISO 4217 currency of every threshold
+          example: EUR
+          type:
+          - string
+          - 'null'
+        rules:
+          description: Rules in effect today
+          items:
+            $ref: '#/components/schemas/InputTaxRecoveryEvidenceRule'
+          type: array
+      required:
+      - countryCode
+      - currencyCode
+      type: object
+    InputTaxRecoveryEvidenceRule:
+      description: From which total a document needs a piece of evidence
+      properties:
+        appliesTo:
+          description: Document types it applies to
+          items:
+            example: DRAWER_RECEIPT
+            type: string
+          type: array
+        rule:
+          description: Evidence required
+          example: SUPPLIER_REGISTRATION_NUMBER
+          type: string
+        threshold:
+          description: Document total, tax included, from which it applies
+          example: 100.0
+          type: number
+      required:
+      - rule
+      - threshold
+      type: object
+    InputTaxRecoveryHistoryItem:
+      description: One change to a category's tax recovery
+      properties:
+        actor:
+          description: Who made the change
+          example: controller.cfo
+          type: string
+        actorRole:
+          description: Role the actor acted in, when known
+          example: CONTROLLER
+          type:
+          - string
+          - 'null'
+        code:
+          description: Category code
+          example: STAFF_MEALS
+          type: string
+        effectiveFrom:
+          description: When it took effect
+          format: date-time
+          type: string
+        newRecoverablePercent:
+          description: Share after
+          type:
+          - number
+          - 'null'
+        newTaxRecoverable:
+          description: Recoverable after
+          type: boolean
+        oldRecoverablePercent:
+          description: Share before
+          type:
+          - number
+          - 'null'
+        oldTaxRecoverable:
+          description: Recoverable before; null for the first setting
+          type:
+          - boolean
+          - 'null'
+        reason:
+          description: Why
+          example: Meals are half recoverable under the regime
+          type: string
+      required:
+      - actor
+      - code
+      - effectiveFrom
+      - newTaxRecoverable
+      - reason
+      type: object
+    InputTaxRecoveryRegime:
+      description: One regime the tenant is registered for
+      properties:
+        account:
+          $ref: '#/components/schemas/InputTaxRecoveryAccount'
+        countryCode:
+          description: ISO 3166-1 alpha-2 country
+          example: ZZ
+          type: string
+        enabled:
+          description: 'Whether recovery is on today: a registration in effect and the country''s currency equal to the functional currency. Null means it cannot be determined now (the tax service did not answer), never false: read it as unknown, not off'
+          type:
+          - boolean
+          - 'null'
+        regime:
+          description: Regime code, as the country profile names it
+          example: REGIME_1
+          type: string
+        registration:
+          $ref: '#/components/schemas/InputTaxRecoveryRegistration'
+      required:
+      - account
+      - countryCode
+      - enabled
+      - regime
+      - registration
+      type: object
+    InputTaxRecoveryRegistration:
+      description: The registration in effect
+      properties:
+        number:
+          description: Registration number
+          example: ZZ0000000
+          type: string
+        since:
+          description: First effective date
+          example: '2026-01-01'
+          format: date
+          type: string
+      required:
+      - number
+      - since
+      type: object
+    InputTaxRecoveryResponse:
+      description: 'Input-tax recovery: regimes, evidence rules, category shares and their history'
+      properties:
+        asOf:
+          description: When the read was made
+          format: date-time
+          type: string
+        categories:
+          description: Every petty-expense category with its recovery, in code order
+          items:
+            $ref: '#/components/schemas/InputTaxRecoveryCategory'
+          type: array
+        evidenceRules:
+          description: Evidence rules per registered country; null when the tax service did not answer
+          items:
+            $ref: '#/components/schemas/InputTaxRecoveryCountryEvidenceRules'
+          type: array
+        history:
+          description: Every change to a category's recovery, oldest first
+          items:
+            $ref: '#/components/schemas/InputTaxRecoveryHistoryItem'
+          type: array
+        regimes:
+          description: One row per registered regime; empty without a registration
+          items:
+            $ref: '#/components/schemas/InputTaxRecoveryRegime'
+          type: array
+      required:
+      - asOf
       type: object
     InvoiceApplication:
       description: Single invoice application within a payment application request
@@ -22274,6 +22622,73 @@ components:
           format: int32
           type: integer
       type: object
+    PettyExpenseCategoryTaxRecoveryRequest:
+      description: 'A petty-expense category''s tax recovery: whether, and which share'
+      properties:
+        justification:
+          description: Why the setting changes (at least 10 characters); kept in its history
+          example: Meals are half recoverable under the regime
+          maxLength: 1000
+          minLength: 10
+          type: string
+        recoverablePercent:
+          description: Share of the stated tax that is recovered, in (0, 100] with at most two decimals; required when taxRecoverable is true and absent when it is false
+          example: 50.0
+          type: number
+        requestId:
+          description: Caller-generated UUIDv7 naming this request; a replay returns the first result
+          format: uuid
+          type: string
+        taxRecoverable:
+          description: Whether the tax stated on this category's receipts is recovered
+          example: true
+          type: boolean
+        version:
+          description: The setting version the caller read (0 for a category never set); another version is 409 OPTIMISTIC_LOCK
+          example: 0
+          format: int32
+          type: integer
+      required:
+      - justification
+      - requestId
+      - taxRecoverable
+      - version
+      type: object
+    PettyExpenseCategoryTaxRecoveryResponse:
+      description: A petty-expense category's tax recovery
+      properties:
+        code:
+          description: Permanent category code
+          example: STAFF_MEALS
+          type: string
+        effectiveFrom:
+          description: When these values took effect
+          format: date-time
+          type: string
+        recoverablePercent:
+          description: Share of the stated tax recovered; null when not recoverable
+          example: 50.0
+          type:
+          - number
+          - 'null'
+        replayed:
+          description: True when this answers a replayed requestId
+          type: boolean
+        taxRecoverable:
+          description: Whether the tax stated on its receipts is recovered
+          type: boolean
+        version:
+          description: The setting's version, to send with the next change
+          example: 1
+          format: int32
+          type: integer
+      required:
+      - code
+      - effectiveFrom
+      - replayed
+      - taxRecoverable
+      - version
+      type: object
     PettyExpenseCategoryUpdateRequest:
       description: A petty-expense category's new label and examples
       properties:
@@ -24130,14 +24545,14 @@ components:
       - suggestedAmount
       type: object
     TaxLiabilityReconciliation:
-      description: Reconciliation of report net tax against the Sales-Tax Payable (2200) GL account period activity
+      description: Reconciliation of report net tax against the period activity of the tax-payable GL accounts its mapping keys reach
       properties:
         drift:
           description: 'GL drift: reportNetTax - glNetActivity. Zero on a clean ledger; non-zero flags a mismatch'
           example: 0.0
           type: number
         glNetActivity:
-          description: Credit-normal net activity of account 2200 in the period (Σ credit - Σ debit of POSTED lines); zero when the account has no activity or is not seeded
+          description: Credit-normal net activity of the tax-payable accounts in the period (Σ credit - Σ debit of POSTED lines); zero when the account has no activity or is not seeded
           example: 948.75
           type: number
         reconciled:
@@ -24149,7 +24564,7 @@ components:
           example: 948.75
           type: number
         taxPayableAccountCode:
-          description: Sales-Tax Payable GL account code being reconciled against
+          description: 'The tax-payable GL account codes reconciled against, comma-separated in code order: every account a tax-payable mapping key (SALES_TAX_PAYABLE and each SALES_TAX_PAYABLE_<taxType>) maps to in the period; empty when none is mapped'
           example: '2200'
           type: string
         unattributedCredits:
@@ -24539,6 +24954,7 @@ components:
           - DEFAULT_GL_MAPPING
           - STATEMENT_LINE
           - PETTY_EXPENSE_CATEGORY
+          - PETTY_EXPENSE_TAX_RECOVERY
           example: ACCOUNT
           type: string
         reason:
@@ -25096,12 +25512,8 @@ components:
       - onHold
       type: object
     VendorApSettingsRequest:
-      description: The vendor's AP settings to change (defaults, AP hold, information-return flag, tax-on-resale acceptance), the justification and the request id. A field left out is unchanged; a default sent as null clears it.
+      description: The vendor's AP settings to change (defaults, AP hold, information-return flag), the justification and the request id. A field left out is unchanged; a default sent as null clears it.
       properties:
-        acceptTaxOnResaleGoods:
-          description: 'Optional: whether a bill of this vendor charging tax on goods for resale is approved without a per-bill override where the tax country''s purchase-tax rules hold such bills (CAP:550 S43); absent leaves it unchanged, null is refused'
-          example: true
-          type: boolean
         apHold:
           $ref: '#/components/schemas/VendorApHoldRequest'
         defaultDebitClass:
@@ -25141,10 +25553,6 @@ components:
     VendorApSettingsResponse:
       description: 'The vendor''s accounting-side settings: AP defaults (AW39), the remit-to confirmation, the AP payment hold and the information-return flag'
       properties:
-        acceptTaxOnResaleGoods:
-          description: Whether a bill of this vendor charging tax on goods for resale is approved without a per-bill override where the tax country's purchase-tax rules hold such bills (CAP:550 S43); false when not set
-          example: false
-          type: boolean
         apHold:
           $ref: '#/components/schemas/VendorApHold'
         confirmedRemitToVersion:
@@ -25174,7 +25582,6 @@ components:
           example: q.controller
           type: string
       required:
-      - acceptTaxOnResaleGoods
       - apHold
       - informationReturn
       type: object
@@ -25252,11 +25659,11 @@ components:
           maxLength: 1000
           minLength: 0
           type: string
-        taxOnResaleOverrideJustification:
-          description: 'Accepts, for this bill only, tax the vendor charged on goods for resale where the tax country''s purchase-tax rules hold such bills (check TAX_ON_RESALE_GOODS FAIL): why it is accepted, 10-1000 characters; looked at only when the hold applies (CAP:550 S43)'
-          example: Vendor resale certificate pending; tax recovered on the next statement
-          maxLength: 1000
-          type: string
+        taxByType:
+          description: The tax the vendor's document states, by tax type, copied from the document (CAP:550 S32d, AW51); replaces the tax by type stored on the bill and must add up to its stated tax, else 422 AP_BILL_TAX_SPLIT_MISMATCH. Omit it to keep what the bill states
+          items:
+            $ref: '#/components/schemas/VendorBillTaxAmount'
+          type: array
       type: object
     VendorBillAvailableAction:
       description: A decision the caller may take on the bill now
@@ -25300,7 +25707,7 @@ components:
           description: Values the message is built from
           type: object
         code:
-          description: 'MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP, OPEN_DELIVERIES_FROM_VENDOR, WITHIN_CLERK_LIMIT, VENDOR_AP_HOLD (informational: FAIL with vendorNumber, reason and since while the vendor is on AP hold, which blocks payment only) or TAX_ON_RESALE_GOODS (FAIL with taxAmount and currencyCode while the tax country''s rules hold the bill''s tax on goods for resale; PASS with acceptedBy VENDOR_SETTING or BILL; NOT_APPLICABLE, with rulesUnavailable true when the rules cannot be read)'
+          description: 'MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP, OPEN_DELIVERIES_FROM_VENDOR, WITHIN_CLERK_LIMIT or VENDOR_AP_HOLD (informational: FAIL with vendorNumber, reason and since while the vendor is on AP hold, which blocks payment only)'
           example: MATCHED_TO_DELIVERY
           type: string
         outcome:
@@ -25400,14 +25807,49 @@ components:
           - VOID
           example: ACCEPT
           type: string
-        taxOnResaleOverrideJustification:
-          description: 'ACCEPT only: accepts, for this bill only, tax the vendor charged on goods for resale where the tax country''s purchase-tax rules hold such bills, 10-1000 characters (CAP:550 S43)'
-          example: Vendor resale certificate pending; tax recovered on the next statement
-          maxLength: 1000
-          type: string
+        taxByType:
+          description: The tax the vendor's document states, by tax type, ACCEPT only, copied from the document (CAP:550 S32d, AW51); replaces the tax by type stored on the bill and must add up to its stated tax, else 422 AP_BILL_TAX_SPLIT_MISMATCH. Omit it to keep what the bill states
+          items:
+            $ref: '#/components/schemas/VendorBillTaxAmount'
+          type: array
       required:
       - reason
       - resolutionAction
+      type: object
+    VendorBillInputTaxRecovery:
+      description: What the bill's posting did with one stated tax amount
+      properties:
+        accountCode:
+          description: The account it was recovered to
+          example: '1250'
+          type: string
+        accountName:
+          description: That account's name
+          example: Recoverable tax
+          type: string
+        recoveredAmount:
+          description: The amount recovered; 0.00 when withheld
+          example: 50.0
+          type: number
+        recoveryWithheldReason:
+          description: 'Why nothing was recovered: NOT_REGISTERED, NOT_RECOVERABLE, TAX_SPLIT_MISSING or SUPPLIER_REGISTRATION_MISSING; null when recovered'
+          example: NOT_RECOVERABLE
+          type: string
+        regime:
+          description: The regime it is recovered under, when known
+          example: REGIME_1
+          type: string
+        statedAmount:
+          description: The stated amount, signed like the bill
+          example: 50.0
+          type: number
+        taxType:
+          description: The tax type; null for a tax stated without its type
+          example: TAX_TYPE_1
+          type: string
+      required:
+      - recoveredAmount
+      - statedAmount
       type: object
     VendorBillLine:
       description: A received line with what the vendor billed for it
@@ -25900,6 +26342,11 @@ components:
           example: '2026-02-14T00:00:00'
           format: date-time
           type: string
+        inputTaxRecovery:
+          description: 'What the posting did with each stated tax amount for a tenant that recovers input tax: the amount recovered and its account, or why nothing was (CAP:550 S32d); null before the posting and for a tenant without recovery, whose bill books the gross'
+          items:
+            $ref: '#/components/schemas/VendorBillInputTaxRecovery'
+          type: array
         journalEntryId:
           description: Journal entry ID (if GL posted)
           example: 01936e5e-7890-7a3d-8b6e-4d5678901234
@@ -25969,8 +26416,11 @@ components:
           description: The tax the vendor's document states, never recalculated (AW39, AW47)
           example: 70.0
           type: number
-        taxOnResaleOverride:
-          $ref: '#/components/schemas/VendorBillTaxOnResaleOverride'
+        taxByType:
+          description: The tax the vendor's document states, by tax type (CAP:550 S32d); empty when it states none by type
+          items:
+            $ref: '#/components/schemas/VendorBillTaxByType'
+          type: array
         totalAmount:
           description: Total bill amount
           example: 1200.0
@@ -25999,6 +26449,7 @@ components:
       - openCandidates
       - reissues
       - status
+      - taxByType
       - totalAmount
       - vendorBillId
       - vendorId
@@ -26200,22 +26651,46 @@ components:
       - vendorBillId
       - vendorId
       type: object
-    VendorBillTaxOnResaleOverride:
-      description: What let an approved bill charging tax on goods for resale through its tax country's hold (CAP:550 S43)
+    VendorBillTaxAmount:
+      description: One tax type the vendor's document states, with its amount
       properties:
-        justification:
-          description: The approver's justification of a BILL override; null for VENDOR_SETTING
-          example: Vendor resale certificate pending
-          type: string
-        source:
-          description: BILL (the approver, with a justification) or VENDOR_SETTING (the vendor accepts such tax)
-          enum:
-          - BILL
-          - VENDOR_SETTING
-          example: BILL
+        amount:
+          description: The amount the document states for it, positive, at most the currency's decimals
+          example: 50.0
+          minimum: 0
+          type: number
+        taxType:
+          description: The tax type as pos-tax's country profile names it (upper-case letters, digits or underscores)
+          example: TAX_TYPE_1
+          minLength: 1
+          pattern: ^[A-Z0-9_]{1,32}$
           type: string
       required:
+      - amount
+      - taxType
+      type: object
+    VendorBillTaxByType:
+      description: One tax type the vendor's document states, with its amount
+      properties:
+        amount:
+          description: The stated amount, signed like the bill's total
+          example: 50.0
+          type: number
+        source:
+          description: 'Where it came from: DOCUMENT, the bill''s own channel, or APPROVAL, copied from the document by the approver'
+          enum:
+          - DOCUMENT
+          - APPROVAL
+          example: DOCUMENT
+          type: string
+        taxType:
+          description: The tax type as pos-tax's profile names it
+          example: TAX_TYPE_1
+          type: string
+      required:
+      - amount
       - source
+      - taxType
       type: object
     VendorBillVoidRequest:
       description: Void an approved bill while nothing is allocated to it, or a goods-receipt bill no invoice will match

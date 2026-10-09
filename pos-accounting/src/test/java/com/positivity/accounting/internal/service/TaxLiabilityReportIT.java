@@ -10,15 +10,21 @@ import com.positivity.accounting.internal.entity.CreditMemo;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ExtInvoiceTax;
 import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.entity.GLMapping;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
+import com.positivity.accounting.internal.entity.MappingKey;
+import com.positivity.accounting.internal.entity.PostingCategory;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceTaxRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
+import com.positivity.accounting.internal.repository.GLMappingRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
+import com.positivity.accounting.internal.repository.MappingKeyRepository;
+import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -93,6 +99,15 @@ class TaxLiabilityReportIT {
     @Autowired
     private JournalEntryRepository journalEntryRepository;
 
+    @Autowired
+    private PostingCategoryRepository postingCategoryRepository;
+
+    @Autowired
+    private MappingKeyRepository mappingKeyRepository;
+
+    @Autowired
+    private GLMappingRepository glMappingRepository;
+
     // Test runs in a rolled-back transaction (fixtures + report share one persistence
     // context, so seeded GL accounts stay managed); no explicit cleanup needed.
 
@@ -118,6 +133,7 @@ class TaxLiabilityReportIT {
 
         GLAccount ar = account("1200");
         GLAccount taxPayable = account("2200");
+        mapSalesTaxPayable(taxPayable);
 
         // Invoice-side GL: Dr AR 255 / Cr 2200 255 (total collected tax), dated in-period.
         postBalancedEntry("JE-T8-INV", LocalDateTime.of(2026, 6, 15, 0, 0), ar, taxPayable, new BigDecimal("255.00"));
@@ -253,5 +269,47 @@ class TaxLiabilityReportIT {
         line.setCreditAmount(credit);
         line.setDescription("t8 test line");
         return line;
+    }
+
+    /**
+     * CAP:550 S32d: the reconciliation reads the accounts the tax-payable keys map to, never a literal code, so the
+     * fixture maps {@code INVOICE_REVENUE / SALES_TAX_PAYABLE} to the tax account (as the template does) when the
+     * tenant does not already.
+     */
+    private void mapSalesTaxPayable(GLAccount taxAccount) {
+        PostingCategory category = postingCategoryRepository
+                .findByCategoryName("INVOICE_REVENUE")
+                .orElseGet(() -> {
+                    PostingCategory created = new PostingCategory();
+                    created.setCategoryName("INVOICE_REVENUE");
+                    created.setDescription("Invoice revenue");
+                    created.setCreatedBy("t8-it");
+                    created.setModifiedBy("t8-it");
+                    return postingCategoryRepository.save(created);
+                });
+        MappingKey key = mappingKeyRepository
+                .findByPostingCategory_PostingCategoryIdAndKeyName(category.getPostingCategoryId(), "SALES_TAX_PAYABLE")
+                .orElseGet(() -> {
+                    MappingKey created = new MappingKey();
+                    created.setPostingCategory(category);
+                    created.setKeyName("SALES_TAX_PAYABLE");
+                    created.setDescription("SALES_TAX_PAYABLE");
+                    created.setCreatedBy("t8-it");
+                    created.setModifiedBy("t8-it");
+                    return mappingKeyRepository.save(created);
+                });
+        if (glMappingRepository
+                .findByMappingKey_MappingKeyId(key.getMappingKeyId())
+                .isEmpty()) {
+            GLMapping mapping = new GLMapping();
+            mapping.setSourceSystem("ACCOUNTING");
+            mapping.setExternalCode("INVOICE_REVENUE_SALES_TAX_PAYABLE_T8");
+            mapping.setPostingCategory(category);
+            mapping.setMappingKey(key);
+            mapping.setGlAccount(taxAccount);
+            mapping.setEffectiveStartDate(LocalDateTime.of(2020, 1, 1, 0, 0));
+            mapping.setCreatedBy("t8-it");
+            glMappingRepository.save(mapping);
+        }
     }
 }

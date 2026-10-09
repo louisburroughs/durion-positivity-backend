@@ -151,6 +151,21 @@ class KafkaFactIngestionRecorderOutcomeTest {
         verify(accountingEventRepository, never()).save(any());
     }
 
+    @Test
+    @DisplayName("CAP:550 S32d: Held is SUSPENDED with its reason and detail, outside the auto-retry loop")
+    void heldIsSuspendedTaxTypeMissing() {
+        AccountingEvent saved = record(new FactPostingOutcome.Held(
+                PostingFailureReason.TAX_TYPE_MISSING, "Invoice tax of 70.00 on rows without a tax type"));
+
+        assertThat(saved.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        assertThat(saved.getFailureReasonCode()).isEqualTo("TAX_TYPE_MISSING");
+        assertThat(saved.getFailureDetails()).contains("without a tax type");
+        assertThat(saved.getJournalEntryId()).isNull();
+        assertThat(PostingFailureReason.isExcludedFromAutoRetry("TAX_TYPE_MISSING"))
+                .isTrue();
+        assertThat(PostingFailureReason.TAX_TYPE_MISSING.isTerminalSkip()).isFalse();
+    }
+
     private AccountingEvent record(FactPostingOutcome outcome) {
         recorder.record(
                 "pos-invoice",

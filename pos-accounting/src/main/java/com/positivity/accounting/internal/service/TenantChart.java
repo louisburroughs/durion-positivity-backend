@@ -97,6 +97,18 @@ public interface TenantChart {
     UUID createPettyExpenseCategory(
             @NonNull UUID mappingKeyId, AccountingTemplate.@NonNull PettyExpenseCategory category);
 
+    /** Whether the tenant has set the tax recovery of the petty-expense category with this code (CAP:550 S32d). */
+    @NonNull
+    Optional<UUID> findPettyExpenseTaxRecovery(@NonNull String code);
+
+    /**
+     * Sets a petty-expense category's tax recovery from the template, in force from the template's date, records its
+     * history row and queues the category's fact again with the new values; returns the setting's id.
+     */
+    @NonNull
+    UUID createPettyExpenseTaxRecovery(
+            @NonNull UUID pettyExpenseCategoryId, AccountingTemplate.@NonNull PettyExpenseTaxRecovery recovery);
+
     /**
      * A tenant account as the adoption test sees it.
      *
