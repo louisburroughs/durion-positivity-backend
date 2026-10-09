@@ -152,6 +152,68 @@ class AccountingTemplateApplierTest {
         assertThat(result.attention()).contains("PETTY_EXPENSE_CATEGORY:STAFF_MEALS");
     }
 
+    private static final AccountingTemplate.PettyExpenseTaxRecovery STAFF_MEALS_RECOVERY =
+            new AccountingTemplate.PettyExpenseTaxRecovery("STAFF_MEALS", true, new java.math.BigDecimal("50.00"));
+
+    @Test
+    @DisplayName("S32d item 3: a category's tax recovery is set after the category, at the template's share")
+    void pettyExpenseTaxRecoveryComesAfterItsCategory() {
+        applier.apply(
+                TENANT,
+                AccountingTemplate.of(List.of(
+                        STAFF_MEALS_RECOVERY,
+                        STAFF_MEALS_CATEGORY,
+                        STAFF_MEALS_MAPPING,
+                        STAFF_MEALS_KEY,
+                        CASH_MOVEMENT,
+                        STAFF_MEALS)));
+
+        assertThat(chart.writes)
+                .endsWith("create PETTY_EXPENSE_CATEGORY:STAFF_MEALS", "create PETTY_EXPENSE_TAX_RECOVERY:STAFF_MEALS");
+        assertThat(chart.pettyExpenseTaxRecoveries.get("STAFF_MEALS").recoverablePercent())
+                .isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    @DisplayName("S32d item 3: a recovery the tenant has set is adopted, never rewritten")
+    void pettyExpenseTaxRecoveryIsAdopted() {
+        UUID held = UUID.randomUUID();
+        chart.pettyExpenseTaxRecoveryIds.put("STAFF_MEALS", held);
+
+        applier.apply(
+                TENANT,
+                AccountingTemplate.of(List.of(
+                        STAFF_MEALS_RECOVERY,
+                        STAFF_MEALS_CATEGORY,
+                        STAFF_MEALS_MAPPING,
+                        STAFF_MEALS_KEY,
+                        CASH_MOVEMENT,
+                        STAFF_MEALS)));
+
+        assertThat(chart.writes).doesNotContain("create PETTY_EXPENSE_TAX_RECOVERY:STAFF_MEALS");
+        assertThat(entries.get("PETTY_EXPENSE_TAX_RECOVERY:STAFF_MEALS").getTargetRowId())
+                .isEqualTo(held);
+    }
+
+    @Test
+    @DisplayName("S32d item 3: a withheld category withholds its recovery too")
+    void pettyExpenseTaxRecoveryWaitsForItsCategory() {
+        chart.holdAccount("6295", "Team lunches", AccountType.EXPENSE);
+
+        applier.apply(
+                TENANT,
+                AccountingTemplate.of(List.of(
+                        STAFF_MEALS_RECOVERY,
+                        STAFF_MEALS_CATEGORY,
+                        STAFF_MEALS_MAPPING,
+                        STAFF_MEALS_KEY,
+                        CASH_MOVEMENT,
+                        STAFF_MEALS)));
+
+        assertThat(entries.get("PETTY_EXPENSE_TAX_RECOVERY:STAFF_MEALS").getOutcome())
+                .isEqualTo(TemplateEntryOutcome.WITHHELD);
+    }
+
     @Test
     @DisplayName("an empty tenant receives every entry, in dependency order whatever order the template lists them in")
     void createsEverythingInDependencyOrder() {

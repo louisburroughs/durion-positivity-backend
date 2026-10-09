@@ -46,6 +46,9 @@ class JpaTenantChartTest {
             mock(com.positivity.accounting.internal.repository.PettyExpenseCategoryRepository.class),
             mock(com.positivity.accounting.internal.repository.PettyExpenseCategoryChangeRepository.class),
             null,
+            mock(com.positivity.accounting.internal.repository.PettyExpenseCategoryTaxSettingRepository.class),
+            mock(com.positivity.accounting.internal.repository.PettyExpenseCategoryTaxSettingChangeRepository.class),
+            mock(jakarta.persistence.EntityManager.class),
             java.time.Clock.systemUTC());
     private final GLAccount revenue = account();
 
