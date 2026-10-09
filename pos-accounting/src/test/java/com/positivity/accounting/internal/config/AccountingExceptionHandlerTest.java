@@ -144,6 +144,25 @@ class AccountingExceptionHandlerTest {
                             request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)),
                     Named.of("handleVendorBillDuplicate", (HandlerInvocation)
                             request -> handler.handleVendorBillDuplicate(vendorBillDuplicate(), request)),
+                    Named.of("handleTaxReferenceRelay", (HandlerInvocation) request -> handler.handleTaxReferenceRelay(
+                            new com.positivity.accounting.internal.exception.TaxReferenceRelayException(
+                                    400,
+                                    new com.positivity.shared.error.ApiError(
+                                            "VALIDATION_ERROR",
+                                            "countryCode must be two upper-case letters",
+                                            400,
+                                            "2026-10-08T12:00:00Z",
+                                            "pos-tax-correlation",
+                                            java.util.List.of(),
+                                            null,
+                                            null,
+                                            null)),
+                            request)),
+                    Named.of("handleTaxServiceUnavailable", (HandlerInvocation)
+                            request -> handler.handleTaxServiceUnavailable(
+                                    new com.positivity.accounting.internal.exception.TaxServiceUnavailableException(
+                                            "The tax service is unavailable"),
+                                    request)),
                     Named.of("handleInvalidDateRange", (HandlerInvocation) request ->
                             handler.handleInvalidDateRange(new InvalidDateRangeException("end before start"), request)),
                     Named.of("handleInvalidRequestParameter", (HandlerInvocation)
