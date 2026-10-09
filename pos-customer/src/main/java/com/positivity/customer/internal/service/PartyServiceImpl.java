@@ -110,15 +110,14 @@ public class PartyServiceImpl implements PartyService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "legalName is required");
         }
 
+        requireCommercialPartyType(request.getPartyType());
+
         CommercialParty party = new CommercialParty();
         party.setLegalName(request.getLegalName());
         party.setDisplayName(request.getDisplayName());
         party.setTaxId(request.getTaxId());
         party.setBillingTermsId(request.getBillingTermsId());
-        party.setPartyType(
-                StringUtils.hasText(request.getPartyType())
-                        ? PartyType.valueOf(request.getPartyType())
-                        : PartyType.COMMERCIAL);
+        party.setPartyType(PartyType.COMMERCIAL);
         party.setStatus(AccountStatus.ACTIVE);
         party.setCustomerNumber(generateCustomerNumber());
         if (request.getExternalIdentifiers() != null) {
@@ -145,6 +144,24 @@ public class PartyServiceImpl implements PartyService {
                 .createdAt(saved.getCreatedAt())
                 .duplicateCandidates(new ArrayList<>())
                 .build();
+    }
+
+    /**
+     * A commercial account is always COMMERCIAL. An individual is a person party linked to a
+     * pos-people identity (createCrmPerson); a commercial row typed PERSON has no person behind
+     * it, so it shows as an individual with no name, contact points or personId.
+     */
+    private static void requireCommercialPartyType(String partyType) {
+        if (!StringUtils.hasText(partyType) || PartyType.COMMERCIAL.name().equals(partyType)) {
+            return;
+        }
+        log.warn("CreateCommercialAccount refused: partyType '{}' is not COMMERCIAL", partyType);
+        if (PartyType.PERSON.name().equals(partyType)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "partyType PERSON is not a commercial account; create individual customers with createCrmPerson");
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "partyType must be COMMERCIAL when supplied");
     }
 
     @Override

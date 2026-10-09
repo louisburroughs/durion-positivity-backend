@@ -2,7 +2,6 @@ package com.positivity.customer.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
@@ -47,8 +46,9 @@ public class CreateCommercialAccountRequest {
 
     @Size(max = 32)
     @Schema(
-            description = "Party type (ORGANIZATION|INDIVIDUAL; default ORGANIZATION for commercial accounts)",
-            example = "ORGANIZATION",
+            description = "Party type; COMMERCIAL, the default, is the only accepted value. Create individual "
+                    + "customers with createCrmPerson.",
+            example = "COMMERCIAL",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String partyType;
 
@@ -63,27 +63,4 @@ public class CreateCommercialAccountRequest {
             example = "{\"erp\": \"CUST-00123\"}",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Map<String, String> externalIdentifiers;
-
-    @Size(max = 255)
-    @Schema(
-            description = "Primary contact first name",
-            example = "Jane",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private String contactFirstName;
-
-    @Size(max = 255)
-    @Schema(
-            description = "Primary contact last name",
-            example = "Smith",
-            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private String contactLastName;
-
-    @Email
-    @Size(max = 255)
-    @Schema(description = "Contact email", example = "jane@acme.com", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private String email;
-
-    @Size(max = 64)
-    @Schema(description = "Contact phone", example = "+1-555-123-4567", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-    private String phone;
 }

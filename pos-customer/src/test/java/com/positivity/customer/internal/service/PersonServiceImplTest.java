@@ -151,6 +151,8 @@ class PersonServiceImplTest {
             // A phone with no explicit type defaults to mobile.
             assertThat(contactPoints.getValue().get(1).contactType()).isEqualTo(ContactPointType.PHONE_MOBILE.name());
             assertThat(response.getPersonId()).isEqualTo(PERSON_ID);
+            // The party id is what every downstream customer API keys on, not the pos-people id.
+            assertThat(response.getPartyId()).isEqualTo(PERSON_PARTY_ID);
         }
 
         @Test
@@ -160,6 +162,7 @@ class PersonServiceImplTest {
             CreatePersonResponse response = service.createPerson(request().build(), USER_ID);
 
             assertThat(response.getPersonId()).isEqualTo(PERSON_ID);
+            assertThat(response.getPartyId()).isEqualTo(PERSON_PARTY_ID);
             verify(personRepository, never()).saveAndFlush(any());
             verify(personDirectoryService, never()).setContactPoints(any(), any(), any(), any());
         }

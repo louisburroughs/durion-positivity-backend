@@ -47,6 +47,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -454,6 +456,53 @@ class PartyServiceImplTest {
         assertThat(partyCaptor.getValue().getPartyType()).isEqualTo(PartyType.COMMERCIAL);
         assertThat(partyCaptor.getValue().getCustomerNumber()).isEqualTo("CUST-00000016");
         assertThat(partyCaptor.getValue().getExternalIdentifiers()).containsEntry("erp", "A-100");
+    }
+
+    @Test
+    void createCommercialAccount_refusesPartyTypePerson_pointingAtCreateCrmPerson() {
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName("Aileen Maggio");
+        request.setPartyType("PERSON");
+
+        // A commercial row typed PERSON has no pos-people person behind it: it lists as an
+        // individual whose detail page has no personId, so no name or contact points to show.
+        assertThatThrownBy(() -> service.createCommercialAccount(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("createCrmPerson");
+        verify(partyRepository, never()).getNextCustomerNumberSequence();
+        verify(partyRepository, never()).save(any(CommercialParty.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"UNKNOWN", "INDIVIDUAL", "ORGANIZATION", "commercial"})
+    void createCommercialAccount_refusesAnyPartyTypeButCommercial(String partyType) {
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName("Acme Legal");
+        request.setPartyType(partyType);
+
+        assertThatThrownBy(() -> service.createCommercialAccount(request))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("400 BAD_REQUEST")
+                .hasMessageContaining("partyType must be COMMERCIAL");
+        verify(partyRepository, never()).save(any(CommercialParty.class));
+    }
+
+    @Test
+    void createCommercialAccount_acceptsAnExplicitCommercialPartyType() {
+        CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
+        request.setLegalName("Acme Legal");
+        request.setPartyType("COMMERCIAL");
+        CommercialParty saved = party(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        saved.setCreatedAt(Instant.now(TEST_CLOCK));
+        when(partyRepository.save(any(CommercialParty.class))).thenReturn(saved);
+        when(partyRepository.getNextCustomerNumberSequence()).thenReturn(42L);
+
+        service.createCommercialAccount(request);
+
+        ArgumentCaptor<CommercialParty> partyCaptor = ArgumentCaptor.forClass(CommercialParty.class);
+        verify(partyRepository).save(partyCaptor.capture());
+        assertThat(partyCaptor.getValue().getPartyType()).isEqualTo(PartyType.COMMERCIAL);
     }
 
     @Test

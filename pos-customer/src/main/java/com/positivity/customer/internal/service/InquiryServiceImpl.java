@@ -173,10 +173,6 @@ public class InquiryServiceImpl implements InquiryService {
         CreateCommercialAccountRequest request = new CreateCommercialAccountRequest();
         request.setLegalName(legalName);
         request.setDisplayName(legalName);
-        request.setContactFirstName(firstName(inquiry.getContactName()));
-        request.setContactLastName(lastName(inquiry.getContactName()));
-        request.setEmail(inquiry.getEmail());
-        request.setPhone(inquiry.getPhone());
 
         UUID partyId =
                 UUID.fromString(partyService.createCommercialAccount(request).getPartyId());
@@ -229,18 +225,6 @@ public class InquiryServiceImpl implements InquiryService {
 
     private static boolean isBlank(@Nullable String value) {
         return value == null || value.isBlank();
-    }
-
-    private static String firstName(String contactName) {
-        String trimmed = contactName.trim();
-        int space = trimmed.indexOf(' ');
-        return space < 0 ? trimmed : trimmed.substring(0, space);
-    }
-
-    private static String lastName(String contactName) {
-        String trimmed = contactName.trim();
-        int space = trimmed.indexOf(' ');
-        return space < 0 ? trimmed : trimmed.substring(space + 1).trim();
     }
 
     private static InquiryResponse toResponse(Inquiry inquiry) {

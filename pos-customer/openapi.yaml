@@ -351,15 +351,15 @@ paths:
     post:
       description: 'Creates a commercial party record with status ACTIVE and a generated customer number of the form CUST-XXXXXXXX.
 
-        Use this tool when onboarding a new commercial customer; do not use searchParties or checkPartyDuplicates, which only look up existing parties, and run checkPartyDuplicates first to avoid creating a duplicate, because no uniqueness check is applied here.
+        Use this tool when onboarding a new commercial customer; do not use it for an individual customer, which is createCrmPerson (it links the person''s name and contact points in pos-people); do not use searchParties or checkPartyDuplicates, which only look up existing parties, and run checkPartyDuplicates first to avoid creating a duplicate, because no uniqueness check is applied here.
 
         Preconditions: none beyond authorization; the service performs no duplicate detection on legalName.
 
-        Required inputs: legalName (non-blank, max 255); partyType defaults to COMMERCIAL and must be PERSON, COMMERCIAL, or UNKNOWN when supplied; displayName, taxId, billingTermsId, and externalIdentifiers are optional.
+        Required inputs: legalName (non-blank, max 255); partyType is optional and must be COMMERCIAL when supplied; displayName, taxId, billingTermsId, and externalIdentifiers are optional.
 
         Emits a CUSTOMER_PARTY_CREATE event and publishes a party-changed customer fact.
 
-        Returns 400 when legalName is missing or blank, or when partyType is not a recognized value.
+        Returns 400 when legalName is missing or blank, or when partyType is anything other than COMMERCIAL (PERSON included: an individual is created with createCrmPerson).
 
         '
       operationId: createCrmCommercialAccount
@@ -3313,6 +3313,8 @@ paths:
 
         Emits a CRM_PERSON_CREATE event, publishes a party-changed customer fact, and writes the contact points to pos-people.
 
+        The response carries both ids: partyId is the customer party that getParty, vehicles, estimates and appointments take, and personId is the pos-people identity getPerson takes.
+
         Returns 400 when firstName, lastName, or preferredContactMethod is missing or an email value is malformed, and 409 when the supplied customerNumber already belongs to another party.
 
         '
@@ -5974,28 +5976,9 @@ components:
           description: Billing terms ID (foreign key to Billing domain)
           example: 01960003-0000-7000-8000-000000000001
           type: string
-        contactFirstName:
-          description: Primary contact first name
-          example: Jane
-          maxLength: 255
-          minLength: 0
-          type: string
-        contactLastName:
-          description: Primary contact last name
-          example: Smith
-          maxLength: 255
-          minLength: 0
-          type: string
         displayName:
           description: Display/trading name
           example: Acme Supply
-          maxLength: 255
-          minLength: 0
-          type: string
-        email:
-          description: Contact email
-          example: jane@acme.com
-          format: email
           maxLength: 255
           minLength: 0
           type: string
@@ -6013,15 +5996,9 @@ components:
           minLength: 0
           type: string
         partyType:
-          description: Party type (ORGANIZATION|INDIVIDUAL; default ORGANIZATION for commercial accounts)
-          example: ORGANIZATION
+          description: Party type; COMMERCIAL, the default, is the only accepted value. Create individual customers with createCrmPerson.
+          example: COMMERCIAL
           maxLength: 32
-          minLength: 0
-          type: string
-        phone:
-          description: Contact phone
-          example: +1-555-123-4567
-          maxLength: 64
           minLength: 0
           type: string
         taxId:
@@ -6307,6 +6284,11 @@ components:
           description: Last name
           example: Doe
           type: string
+        partyId:
+          description: 'Party id of the individual customer: the id getParty, vehicles, estimates and appointments key on (personId is the pos-people identity, not the party)'
+          example: 01960026-0000-7000-8000-000000000001
+          format: uuid
+          type: string
         personId:
           description: Unique identifier of the created person
           example: 550e8400-e29b-41d4-a716-446655440000
@@ -6326,6 +6308,7 @@ components:
       - createdAt
       - firstName
       - lastName
+      - partyId
       - personId
       - preferredContactMethod
       type: object
