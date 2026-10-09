@@ -43,16 +43,18 @@ class ManifestReplayPropagationTest {
 
     /** A manifest that claims three events; the mocked ledger holds none, so every window drifts. */
     private static final String DRIFTED_MANIFEST = """
-            {"eventId":"evt-1","eventType":"x.reconciliation.manifest",
-             "payload":{"tenantId":"%s","windowStartUtc":"%s","windowEndUtc":"%s","eventCount":3,
-               "eventIdsChecksum":"owner-checksum","eventTypeCounts":null}}
-            """.formatted(TENANT, START, END);
+        {"eventId":"evt-1","eventType":"x.reconciliation.manifest",
+         "payload":{"tenantId":"%s","windowStartUtc":"%s","windowEndUtc":"%s","eventCount":3,
+           "eventIdsChecksum":"owner-checksum","eventTypeCounts":null}}
+        """.formatted(TENANT, START, END);
 
     @SuppressWarnings("unchecked")
     private final KafkaTemplate<String, String> kafkaTemplate = mock(KafkaTemplate.class);
 
     static Stream<Class<?>> listeners() {
-        return Stream.of(new Class<?>[] {InvoiceManifestListener.class, OrderManifestListener.class});
+        return Stream.of(new Class<?>[] {
+            InvoiceManifestListener.class, OrderManifestListener.class, PeopleContactManifestListener.class
+        });
     }
 
     @ParameterizedTest(name = "{0}")

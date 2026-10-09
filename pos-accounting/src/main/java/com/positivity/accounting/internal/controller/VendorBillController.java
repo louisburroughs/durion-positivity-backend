@@ -1,12 +1,14 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
+import com.positivity.accounting.internal.dto.VendorBillExpenseCategoryListResponse;
 import com.positivity.accounting.internal.dto.VendorBillListRow;
 import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.security.AccountingPermissions;
+import com.positivity.accounting.internal.service.ApChoicesService;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.events.EmitEvent;
@@ -65,6 +67,7 @@ public class VendorBillController {
 
     private final VendorBillService vendorBillService;
     private final VendorBillApprovalService approvalService;
+    private final ApChoicesService apChoicesService;
 
     /**
      * Create a vendor bill from a goods received event.
@@ -271,6 +274,49 @@ public class VendorBillController {
         VendorBillResponse response = vendorBillService.handleVendorInvoiceReceivedEvent(event);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * The expense categories an approver may choose (AP reads #2670). The literal segment is mapped ahead of {@code
+     * /{billId}}, so it is never read as a bill id.
+     *
+     * <p>GET /v1/accounting/vendor-bills/expense-categories
+     */
+    @GetMapping("/expense-categories")
+    @EmitEvent(id = "ACCOUNTING_VENDOR_BILL_EXPENSE_CATEGORIES_VIEW", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {AccountingPermissions.AP_VIEW})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
+    @Operation(
+            operationId = "listVendorBillExpenseCategories",
+            summary = "List Vendor Bill Expense Categories",
+            description = """
+                Lists the expense categories a vendor bill may be classified under: every active VENDOR_BILL \
+                mapping key EXPENSE_<CODE>, with its label and the number and name of the account it resolves to \
+                at the start of asOf, the tenant's business date (both null when no mapping is effective that day; \
+                an approval naming that key answers 422 GL_MAPPING_NOT_CONFIGURED).
+                Categories are ordered by label (case-insensitive, a null label as its key), then by key, and the \
+                client keeps that order; an empty list is a 200.
+                The list is the one the vendor AP settings write checks defaultExpenseMappingKey against, so a key \
+                listed here is accepted there.
+                Use this tool when an approver chooses "An expense" for a bill, its difference, or a vendor's default \
+                category; do not use it to change a key, use the mapping-key administration instead.
+                Preconditions: none beyond accounting:ap:view; no request parameters or body.
+                Emits an ACCOUNTING_VENDOR_BILL_EXPENSE_CATEGORIES_VIEW audit event; no state changes.
+                Returns 401 without a valid token and 403 FORBIDDEN without accounting:ap:view.
+                """,
+            tags = {"Vendor Bill API"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "The active expense categories",
+            content = @Content(schema = @Schema(implementation = VendorBillExpenseCategoryListResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN: the caller lacks accounting:ap:view",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<VendorBillExpenseCategoryListResponse> listVendorBillExpenseCategories() {
+        return ResponseEntity.ok(apChoicesService.expenseCategories());
     }
 
     /**

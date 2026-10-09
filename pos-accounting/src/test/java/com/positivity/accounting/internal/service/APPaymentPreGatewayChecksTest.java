@@ -108,12 +108,10 @@ class APPaymentPreGatewayChecksTest {
     private APPaymentPreGatewayChecks checks(AccountingCalendarZoneResolver zoneResolver) {
         AccountingPeriodGate gate =
                 new AccountingPeriodGate(periodService, periods, configuration, auditLogs, zoneResolver);
+        LedgerCurrency usd = new LedgerCurrency("USD");
         return new APPaymentPreGatewayChecks(
-                CLOCK,
-                zoneResolver,
-                glAccounts,
-                bankAccountCurrencies,
-                new LedgerCurrency("USD"),
+                new ApPayFromAccounts(CLOCK, zoneResolver, glAccounts, bankAccountCurrencies, usd),
+                usd,
                 gate,
                 mappings,
                 glAccountService);

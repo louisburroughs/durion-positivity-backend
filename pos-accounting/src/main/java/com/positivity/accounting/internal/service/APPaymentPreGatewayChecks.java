@@ -1,11 +1,9 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.bankrec.readmodel.BankAccountCurrencies;
 import com.positivity.accounting.internal.config.IsoCurrencyCodes;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.entity.GLAccount;
-import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
@@ -13,12 +11,9 @@ import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
-import com.positivity.accounting.internal.repository.GLAccountRepository;
 import java.math.BigDecimal;
-import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -55,10 +50,9 @@ import org.springframework.transaction.annotation.Transactional;
  *       ({@code ACCOUNTS_PAYABLE} always, {@code PAYMENT_FEES} when the fee is above zero).
  * </ul>
  *
- * <p><b>Eligible bank account</b>: a {@code BANK_CASH} GL account active at the start of the execution date (the
- * instant its entry posts at: activated at or before it, not deactivated by it) and not in a foreign
- * currency ({@link BankAccountCurrencies}, {@link LedgerCurrency}). {@code bankAccountId} may be omitted only when
- * exactly one eligible account exists; inactive and foreign-currency accounts are not counted.
+ * <p><b>Eligible bank account</b>: the rule is {@link ApPayFromAccounts}, the one place it is written; the pay-from
+ * read ({@code GET /v1/accounting/ap/pay-from-accounts}, #2670) lists exactly the accounts slot 1c accepts. {@code
+ * bankAccountId} may be omitted only when exactly one eligible account exists.
  *
  * <p><b>Execution date</b>: the tenant's business date, read once ({@link #businessDate}) and fixed in slot 5. It is
  * the date the period check uses, the date the entry posts on and the date a retry posts on, never re-dated (ruling 3
@@ -82,10 +76,7 @@ public class APPaymentPreGatewayChecks {
     private static final Set<PaymentMethod> UNSUPPORTED_METHODS =
             EnumSet.of(PaymentMethod.CREDIT_CARD, PaymentMethod.OTHER);
 
-    private final Clock clock;
-    private final AccountingCalendarZoneResolver zoneResolver;
-    private final GLAccountRepository glAccounts;
-    private final BankAccountCurrencies bankAccountCurrencies;
+    private final ApPayFromAccounts payFromAccounts;
     private final LedgerCurrency ledgerCurrency;
     private final AccountingPeriodGate periodGate;
     private final GLMappingResolver glMappingResolver;
@@ -99,7 +90,7 @@ public class APPaymentPreGatewayChecks {
      * slot 5a refuses.
      */
     public @NonNull Optional<LocalDate> businessDate() {
-        return zoneResolver.find().map(zone -> LocalDate.ofInstant(clock.instant(), zone));
+        return payFromAccounts.businessDate();
     }
 
     /**
@@ -134,18 +125,18 @@ public class APPaymentPreGatewayChecks {
                     + " cannot be booked: the ledger books " + ledgerCurrency.code() + " only (ADR-0067 PC-9)");
         }
         // 1c. The bank account.
-        LocalDate date = businessDate.orElseGet(() -> LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC));
-        LocalDateTime fundingCutoff = fundingCutoff(date);
+        LocalDate date = payFromAccounts.executionDate(businessDate);
         UUID supplied = request.getBankAccountId();
         if (supplied != null) {
-            if (!isEligible(supplied, date, fundingCutoff)) {
+            if (!payFromAccounts.isEligible(supplied, date)) {
                 throw bankAccountRefused("bankAccountId is not an active " + ledgerCurrency.code()
                         + " bank account (BANK_CASH) on " + date);
             }
             return supplied;
         }
-        List<UUID> eligible = eligibleBankAccounts(date, fundingCutoff);
-        if (eligible.size() != 1) {
+        List<GLAccount> eligible = payFromAccounts.eligible(date);
+        Optional<UUID> single = payFromAccounts.defaultFor(eligible);
+        if (single.isEmpty()) {
             throw bankAccountRefused(
                     eligible.isEmpty()
                             ? "bankAccountId is required: there is no active " + ledgerCurrency.code()
@@ -153,7 +144,7 @@ public class APPaymentPreGatewayChecks {
                             : "bankAccountId is required: " + eligible.size() + " active " + ledgerCurrency.code()
                                     + " bank accounts (BANK_CASH) could pay; choose one");
         }
-        return eligible.getFirst();
+        return single.get();
     }
 
     /**
@@ -189,8 +180,7 @@ public class APPaymentPreGatewayChecks {
      * already), so the pay command's "not deactivated by now" condition does not apply to it.
      */
     public @NonNull Optional<UUID> defaultBankAccount(@NonNull LocalDate date) {
-        List<UUID> eligible = eligibleBankAccounts(date, date.atStartOfDay());
-        return eligible.size() == 1 ? Optional.of(eligible.getFirst()) : Optional.empty();
+        return payFromAccounts.replayDefault(date);
     }
 
     /**
@@ -216,56 +206,6 @@ public class APPaymentPreGatewayChecks {
 
     private void requireMapping(String mappingKey, LocalDate date) {
         resolve(mappingKey, date.atStartOfDay());
-    }
-
-    /**
-     * The instant a funding account must not be deactivated by: the later of the start of {@code date} and the pay
-     * command's own moment in the tenant's calendar, the clock and zone {@code deactivateGLAccount} stamps with
-     * (Accounting ruling of 2026-10-08, #2603 comment 6068272860). An account deactivated at any point up to the pay
-     * command cannot fund it; the entry still posts at the start of the day. Without a zone, UTC (slot 5a refuses).
-     */
-    private LocalDateTime fundingCutoff(LocalDate date) {
-        LocalDateTime now =
-                LocalDateTime.ofInstant(clock.instant(), zoneResolver.find().orElse(ZoneOffset.UTC));
-        LocalDateTime startOfDay = date.atStartOfDay();
-        return now.isAfter(startOfDay) ? now : startOfDay;
-    }
-
-    private boolean isEligible(UUID glAccountId, LocalDate date, LocalDateTime fundingCutoff) {
-        return glAccounts
-                .findById(glAccountId)
-                .filter(a -> isEligible(a, date, fundingCutoff))
-                .isPresent();
-    }
-
-    private List<UUID> eligibleBankAccounts(LocalDate date, LocalDateTime fundingCutoff) {
-        return glAccounts.findBySubtypeActiveAt(AccountSubtype.BANK_CASH, date.atStartOfDay(), fundingCutoff).stream()
-                .filter(account -> !isForeign(account))
-                .map(GLAccount::getGlAccountId)
-                .toList();
-    }
-
-    private boolean isEligible(GLAccount account, LocalDate date, LocalDateTime fundingCutoff) {
-        if (account.getAccountSubtype() != AccountSubtype.BANK_CASH) {
-            return false;
-        }
-        // Active at the start of the execution day, the instant the entry posts at (APPaymentPostingService), by the
-        // posting's own rule (GLAccountService.validateAccountForPosting): an account activated later that day cannot
-        // take the entry, so it is not eligible that day (#2641 review, MAJOR 2).
-        // And not deactivated by the pay command's own moment (fundingCutoff, never before the start of the day).
-        LocalDateTime at = date.atStartOfDay();
-        boolean active = (account.getActivationDate() == null
-                        || !account.getActivationDate().isAfter(at))
-                && (account.getDeactivationDate() == null
-                        || account.getDeactivationDate().isAfter(fundingCutoff));
-        return active && !isForeign(account);
-    }
-
-    private boolean isForeign(GLAccount account) {
-        return bankAccountCurrencies
-                .currencyOf(account.getGlAccountId())
-                .filter(ledgerCurrency::isForeign)
-                .isPresent();
     }
 
     private static VendorBillException bankAccountRefused(String message) {

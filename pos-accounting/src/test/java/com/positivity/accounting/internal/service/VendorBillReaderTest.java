@@ -103,7 +103,7 @@ class VendorBillReaderTest {
     @Test
     @DisplayName(
             "AC11 (S13): a clerk on an over-limit bill sees approve, accept and the void of an approved bill listed"
-                    + " but not allowed, with blockedReason AP_APPROVAL_LIMIT_EXCEEDED; the due date is listed in review")
+                + " but not allowed, with blockedReason AP_APPROVAL_LIMIT_EXCEEDED; the due date is listed in review")
     void clerkOverTheLimit() {
         signIn(CLERK);
         assertThat(VendorBillReader.availableActions(
@@ -553,7 +553,8 @@ class VendorBillReaderTest {
                 mock(VendorBillTaxRecoveryRepository.class),
                 mock(GLMappingResolver.class),
                 mock(GLAccountRepository.class),
-                mock(VendorBillPurchaseTax.class));
+                mock(VendorBillPurchaseTax.class),
+                mock(ActorDisplayNames.class));
         VendorBill over = billOf("3000.00", "clerk.ana");
         over.setStatus(VendorBillStatus.AWAITING_APPROVAL);
         over.setBillNumber("INV-OVER");
@@ -655,7 +656,8 @@ class VendorBillReaderTest {
                 mock(VendorBillTaxRecoveryRepository.class),
                 mock(GLMappingResolver.class),
                 mock(GLAccountRepository.class),
-                mock(VendorBillPurchaseTax.class));
+                mock(VendorBillPurchaseTax.class),
+                mock(ActorDisplayNames.class));
         UUID heldVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71");
         UUID freeVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a72");
         VendorBill heldBill = billOf("100.00", "clerk.ana");
@@ -691,6 +693,7 @@ class VendorBillReaderTest {
     private final GLMappingResolver readResolver = mock(GLMappingResolver.class);
     private final GLAccountRepository readAccounts = mock(GLAccountRepository.class);
     private final VendorBillGlPostingRepository readPostings = mock(VendorBillGlPostingRepository.class);
+    private final ActorDisplayNames readNames = mock(ActorDisplayNames.class);
 
     private VendorBillReader taxReader() {
         ApApprovalPolicy approvalPolicy = mock();
@@ -713,7 +716,8 @@ class VendorBillReaderTest {
                 readRecoveries,
                 readResolver,
                 readAccounts,
-                PurchaseTaxFixtures.off());
+                PurchaseTaxFixtures.off(),
+                readNames);
     }
 
     private VendorBill postedBill(UUID id, String net, String tax, String gross) {
@@ -853,5 +857,40 @@ class VendorBillReaderTest {
             assertThat(row.recoveredAmount()).isZero();
             assertThat(row.recoveryWithheldReason()).isEqualTo("SUPPLIER_REGISTRATION_MISSING");
         });
+    }
+
+    // ---- AP reads #2670: the actors' display names ------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2670 AC 6 and AC 7: the bill read serves approvedByName and createdByName from one lookup; SYSTEM"
+            + " and an unknown actor serve null, never the username")
+    void actorNames() {
+        UUID billId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b04");
+        VendorBillReader reader = taxReader();
+        VendorBill bill = postedBill(billId, "100.00", "0.00", "100.00");
+        bill.setSubmittedAt(java.time.Instant.parse("2026-10-01T09:00:00Z"));
+        bill.setSubmittedBy("SYSTEM");
+        bill.setApprovedAt(java.time.Instant.parse("2026-10-01T10:00:00Z"));
+        bill.setApprovedBy("controller.cfo");
+        bill.setApprovedByKind(com.positivity.accounting.internal.enums.VendorBillApproverKind.PERSON);
+        when(readTaxes.findByVendorBillIdOrderByTaxType(billId)).thenReturn(List.of());
+        when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId)).thenReturn(List.of());
+        when(readNames.namesOf(org.mockito.ArgumentMatchers.anyCollection()))
+                .thenReturn(java.util.Map.of("controller.cfo", "Dana Reyes"));
+
+        com.positivity.accounting.internal.dto.VendorBillResponse read = reader.read(bill);
+
+        assertThat(read.getApproval().approvedBy()).isEqualTo("controller.cfo");
+        assertThat(read.getApproval().approvedByName()).isEqualTo("Dana Reyes");
+        assertThat(read.getApproval().submittedBy()).isEqualTo("SYSTEM");
+        assertThat(read.getApproval().submittedByName()).isNull();
+        assertThat(read.getCreatedBy()).isEqualTo("clerk.ana");
+        assertThat(read.getCreatedByName())
+                .as("clerk.ana is not linked: null, never the username")
+                .isNull();
+        assertThat(read.getApproval().toString()).doesNotContain("Dana Reyes");
+        assertThat(read.toString()).doesNotContain("Dana Reyes");
+        org.mockito.Mockito.verify(readNames, org.mockito.Mockito.times(1))
+                .namesOf(org.mockito.ArgumentMatchers.anyCollection());
     }
 }

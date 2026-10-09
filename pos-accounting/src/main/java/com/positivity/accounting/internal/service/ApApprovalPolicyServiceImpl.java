@@ -81,6 +81,7 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
     private final AccountingAuditLogRepository auditLogRepository;
     private final FunctionalCurrency functionalCurrency;
     private final ApApprovalPolicyLock policyLock;
+    private final ActorDisplayNames actorNames;
 
     @Override
     @Transactional(readOnly = true)
@@ -91,6 +92,9 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
         Page<AccountingAuditLog> rows = auditLogRepository.findByOperation(
                 AUDIT_OPERATION,
                 PageRequest.of(page, size, Sort.by(Sort.Order.desc("timestamp"), Sort.Order.desc("auditLogId"))));
+        // One query for the page's actors (#2670), never one per row.
+        Map<String, String> names = actorNames.namesOf(
+                rows.getContent().stream().map(AccountingAuditLog::getUserId).toList());
         return new ApApprovalPolicyResponse(
                 settings.clerkApprovalLimit(),
                 settings.autoApprovalLimit(),
@@ -99,9 +103,7 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
                 settings.allowApproverPayment(),
                 settings.defaultTerms(),
                 Instant.now(clock),
-                rows.getContent().stream()
-                        .map(ApApprovalPolicyServiceImpl::historyRow)
-                        .toList(),
+                rows.getContent().stream().map(row -> historyRow(row, names)).toList(),
                 page,
                 size,
                 rows.getTotalElements());
@@ -358,13 +360,17 @@ public class ApApprovalPolicyServiceImpl implements ApApprovalPolicyService {
         };
     }
 
-    /** One history row from its audit row; see the class comment for the {@code new_value} form. */
-    static ApApprovalPolicyResponse.HistoryRow historyRow(AccountingAuditLog row) {
+    /**
+     * One history row from its audit row; see the class comment for the {@code new_value} form. {@code names} holds
+     * the page's resolved display names (#2670).
+     */
+    static ApApprovalPolicyResponse.HistoryRow historyRow(AccountingAuditLog row, Map<String, String> names) {
         Map<String, String> fields = decode(row.getNewValue());
         String roles = fields.getOrDefault(ROLES, "");
         return new ApApprovalPolicyResponse.HistoryRow(
                 row.getTimestamp(),
                 row.getUserId(),
+                ActorDisplayNames.nameOf(names, row.getUserId()),
                 roles.isEmpty()
                         ? List.of()
                         : Arrays.stream(roles.split(","))

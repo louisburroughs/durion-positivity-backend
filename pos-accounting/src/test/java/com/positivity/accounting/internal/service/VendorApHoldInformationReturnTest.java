@@ -90,6 +90,7 @@ class VendorApHoldInformationReturnTest {
     private final VendorBillRepository bills = mock();
     private final AccountingAuditLogRepository auditLogs = mock();
     private final InformationReturnFormsService forms = mock();
+    private final ActorDisplayNames actorNames = mock();
     private final List<AccountingAuditLog> saved = new ArrayList<>();
     private VendorDirectoryServiceImpl service;
     private ExtSupplierVendor vendor;
@@ -107,9 +108,9 @@ class VendorApHoldInformationReturnTest {
                 settings,
                 bills,
                 auditLogs,
-                mock(PostingCategoryRepository.class),
-                mock(MappingKeyRepository.class),
-                forms);
+                new VendorBillExpenseKeys(mock(PostingCategoryRepository.class), mock(MappingKeyRepository.class)),
+                forms,
+                actorNames);
         signIn("q.controller");
         vendor = new ExtSupplierVendor();
         vendor.setVendorId(VENDOR);

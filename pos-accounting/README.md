@@ -1651,6 +1651,62 @@ country.
 | PUT | `/v1/accounting/vendors/{vendorId}/ap-settings` `{…, acceptTaxOnResaleGoods?}` | `accounting:ap_approval_policy:manage` | a boolean: absent unchanged, null 400 `VALIDATION_ERROR` (`fieldErrors[acceptTaxOnResaleGoods]`); in the fingerprint (409 `IDEMPOTENCY_CONFLICT`); each change one `AP_VENDOR_SETTINGS_SET` row |
 | GET | `/v1/accounting/vendors/{vendorId}` | `accounting:ap:view` | `apSettings.acceptTaxOnResaleGoods` |
 
+## AP reads: expense categories, pay-from accounts and actor names (CAP:550, #2670)
+
+Ruling 6079195896 on louisburroughs/durion-positivity-frontend#464 (rows 2, 11, 15, 17; Q1 C, Q4): the server decides
+which expense keys and bank accounts an approver or payer may choose (P7), and the AP reads name people instead of
+showing sign-in names (P8, ADR-0064). Nothing here posts, and no decision, guard, permission or error code changes.
+
+| Method | Path | Permission | Response and codes |
+| --- | --- | --- | --- |
+| GET | `/v1/accounting/vendor-bills/expense-categories` (`listVendorBillExpenseCategories`) | `accounting:ap:view` | 200 `{asOf, categories: [{mappingKey, label, accountNumber, accountName}]}`; 401; 403 `FORBIDDEN` |
+| GET | `/v1/accounting/ap/pay-from-accounts` (`listApPayFromAccounts`) | `accounting:ap:pay` | 200 `{asOf, currencyCode, defaultBankAccountId, accounts: [{bankAccountId, accountNumber, accountName, bankName, accountMask}]}`; 401; 403 `FORBIDDEN` |
+
+- **Expense categories.** The active `VENDOR_BILL` keys `EXPENSE_<CODE>` (the prefix, a code after it, `isActive`),
+  tested by `VendorBillExpenseKeys`, the same test `PUT /v1/accounting/vendors/{vendorId}/ap-settings` applies to
+  `defaultExpenseMappingKey`: a listed key is accepted there, any other is 400 `fieldErrors[defaultExpenseMappingKey]`.
+  `label` is the key's description (null without one); `accountNumber` / `accountName` are the account the key's
+  category-default mapping resolves to at the start of `asOf`, the tenant's business date, both null when no mapping is
+  effective that day (the key is still listed; an approval naming it answers 422 `GL_MAPPING_NOT_CONFIGURED`). Order:
+  label case-insensitively (a null label sorts as its key), then key. The path's literal segment is mapped ahead of
+  `{billId}`. The template's nine keys carry plain labels ("Shop supplies", ..., "Vehicle fuel") in
+  `R__seed_reference_accounting.sql`; template provisioning copies them to new tenants (add-only, so a tenant
+  provisioned before keeps its own descriptions until it changes them).
+- **Pay-from accounts.** Exactly the accounts `POST /v1/accounting/ap/payments` would accept now: `ApPayFromAccounts`
+  holds the eligibility rule of slot 1c (the section above), and both the pay command and this read call it. `asOf` is
+  the business date the payment would execute on, `currencyCode` the functional currency, `defaultBankAccountId` the
+  single eligible account (the one an omitted `bankAccountId` resolves to), else null. `bankName` and `accountMask`
+  come from the bank-account profile (`BankAccountLabels`, the bank reconciliation read model), null without one; a
+  full bank account number is never served. Accounts are ordered by account number. An empty list means no account is
+  set up (a payment answers 400 `fieldErrors[bankAccountId]`). The read is informational: the payment still checks
+  eligibility when it executes.
+- **Actor names.** A nullable display name beside every AP actor: `ap-approval-policy` `history[].changedByName`; the
+  bill read's `createdByName`, `approval.submittedByName`, `approval.approvedByName` and `rejection.rejectedByName`
+  (every response built by `VendorBillReader.read`, the decision commands' included); the vendor read's
+  `apSettings.remitToConfirmedByName` and `apSettings.apHold.setByName` (`getVendorById`, `confirmVendorRemitTo`,
+  `setVendorApSettings`). The name is "First Last" with blanks dropped and trimmed (the #2481 rule), resolved at read
+  time, one query per response (`ActorDisplayNames`): username, through its `ACTIVE` link, to its person. It is null
+  when the username has no `ACTIVE` link, the person is not in the copy or was deleted, both names are blank, or the
+  actor is `SYSTEM` (a kind, rendered "Automatic"). The username is never the fallback, and stays in the API for audit.
+- **The people-contact copy** (V25, ADR-0044 §6; the pos-location / pos-customer precedent). pos-accounting never
+  joins another database and never calls pos-people-contact or pos-security-service for a name.
+  `PeopleContactEventsListener` consumes `people-contact.events.v1`
+  (`pos.accounting.kafka.people-contact-events-topic`, group `people-contact-events-consumer-group`):
+  `person.updated` / `.person.deleted` into `ext_people_contact_person (person_id, first_name, last_name)` and
+  `user-person-link.updated` / `.removed` into `ext_people_contact_user_link (link_id, person_id, username, status)`;
+  no preferred name, contact point or address (ADR-0072 minimisation). It holds no repository: `PeopleContactReplica`
+  applies each fact by aggregate id and the envelope's `aggregateVersion` (an older fact changes nothing, an equal one
+  applies), deletes on removal, and records every eventId, ignored types included, in `processed_events` (owner
+  `people-contact`). `PeopleContactManifestListener` compares each `people-contact.manifest.v1` window with that
+  ledger and sends `people-contact.outbox.replay-requested` on `people-contact.commands.v1` for a drifted tenant and
+  window. **First fill:** the events group reads from the earliest offset (`auto.offset.reset=earliest` on the
+  listener, as `TenantEventsListener` and the pos-location precedent do), so persons and links retained on the topic
+  from before the group first ran are applied once; a window the manifest finds missing is replayed by the owner. Both
+  tables are tenant-scoped under RLS (ADR-0062).
+- **Data classification (ADR-0072).** First and last names and every `…ByName` field are CONFIDENTIAL: served, never
+  logged and never a metric tag, and left out of every `toString`. `accountMask` is a CONFIDENTIAL masked derivative,
+  served and never logged. Usernames are INTERNAL, as the `…By` fields already are.
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,

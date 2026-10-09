@@ -67,8 +67,19 @@ public record ApApprovalPolicyResponse(
             @Schema(description = "When it changed", requiredMode = REQUIRED)
             Instant changedAt,
 
-            @Schema(description = "Who changed it", example = "controller.cfo", requiredMode = REQUIRED)
+            @Schema(
+                    description = "Who changed it: the sign-in name, kept for audit and never shown to a person",
+                    example = "controller.cfo",
+                    requiredMode = REQUIRED)
             String changedBy,
+
+            @Schema(
+                    description = "The display name of the person who changed it (\"First Last\"), resolved now from"
+                            + " accounting's people-contact copy; null when not known, never the sign-in name",
+                    example = "Dana Reyes",
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String changedByName,
 
             @ArraySchema(
                     arraySchema =
@@ -95,5 +106,14 @@ public record ApApprovalPolicyResponse(
                     description = "Why it changed",
                     example = "Clerks approve routine parts bills up to 2,500",
                     requiredMode = REQUIRED)
-            String justification) {}
+            String justification) {
+
+        @Override
+        public String toString() {
+            // changedByName is a person's name, CONFIDENTIAL (ADR-0072): never printed.
+            return "HistoryRow[changedAt=" + changedAt + ", changedBy=" + changedBy + ", changedByRoles="
+                    + changedByRoles + ", setting=" + setting + ", oldValue=" + oldValue + ", newValue=" + newValue
+                    + ", justification=" + justification + "]";
+        }
+    }
 }

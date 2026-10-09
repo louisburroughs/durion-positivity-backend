@@ -76,6 +76,9 @@ class VendorDirectoryServiceImplTest {
     @Mock
     private MappingKeyRepository keys;
 
+    @Mock
+    private ActorDisplayNames actorNames;
+
     private VendorDirectoryServiceImpl service;
 
     @BeforeEach
@@ -86,9 +89,9 @@ class VendorDirectoryServiceImplTest {
                 settings,
                 bills,
                 auditLogs,
-                categories,
-                keys,
-                org.mockito.Mockito.mock(InformationReturnFormsService.class));
+                new VendorBillExpenseKeys(categories, keys),
+                org.mockito.Mockito.mock(InformationReturnFormsService.class),
+                actorNames);
         UsernamePasswordAuthenticationToken caller =
                 new UsernamePasswordAuthenticationToken("q.controller", "n/a", List.of());
         caller.setDetails(java.util.Map.of(
@@ -448,5 +451,37 @@ class VendorDirectoryServiceImplTest {
 
             verify(settings).save(any());
         }
+    }
+
+    @Test
+    @DisplayName("#2670 AC 6 and AC 7: the vendor read serves remitToConfirmedByName and apHold.setByName from one"
+            + " lookup; an unknown actor serves null, never the username")
+    void actorNames() {
+        ApVendorSettings row = new ApVendorSettings();
+        row.setVendorId(VENDOR);
+        row.setConfirmedRemitToVersion(3);
+        row.setRemitToConfirmedBy("controller.cfo");
+        row.setRemitToConfirmedAt(NOW);
+        row.setApHold(true);
+        row.setApHoldReason("Disputed delivery 4471, awaiting credit");
+        row.setApHoldSetBy("controller.cfo");
+        row.setApHoldSetAt(NOW);
+        when(settings.findByVendorId(VENDOR)).thenReturn(Optional.of(row));
+        when(actorNames.namesOf(anyCollection())).thenReturn(java.util.Map.of("controller.cfo", "Dana Reyes"));
+
+        VendorResponse read = service.getVendorById(VENDOR);
+
+        assertThat(read.getApSettings().remitToConfirmedBy()).isEqualTo("controller.cfo");
+        assertThat(read.getApSettings().remitToConfirmedByName()).isEqualTo("Dana Reyes");
+        assertThat(read.getApSettings().apHold().setBy()).isEqualTo("controller.cfo");
+        assertThat(read.getApSettings().apHold().setByName()).isEqualTo("Dana Reyes");
+        assertThat(read.getApSettings().toString()).doesNotContain("Dana Reyes");
+        assertThat(read.getApSettings().apHold().toString()).doesNotContain("Dana Reyes");
+        verify(actorNames, org.mockito.Mockito.times(1)).namesOf(anyCollection());
+
+        when(actorNames.namesOf(anyCollection())).thenReturn(java.util.Map.of());
+        VendorResponse unknown = service.getVendorById(VENDOR);
+        assertThat(unknown.getApSettings().remitToConfirmedByName()).isNull();
+        assertThat(unknown.getApSettings().apHold().setByName()).isNull();
     }
 }

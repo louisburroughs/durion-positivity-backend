@@ -2,10 +2,12 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
+import com.positivity.accounting.internal.dto.ApPayFromAccountListResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.APPaymentService;
+import com.positivity.accounting.internal.service.ApChoicesService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
@@ -71,6 +73,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class APPaymentController {
 
     private final APPaymentService apPaymentService;
+    private final ApChoicesService apChoicesService;
 
     @PostMapping("/payments")
     @EmitEvent(id = "AP_PAYMENT_EXECUTE", apiVersion = "1")
@@ -258,7 +261,8 @@ public class APPaymentController {
             description =
                     "The posting is still refused: GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED (no"
                             + " overrideJustification of the caller's own), PERIOD_HARD_LOCKED or"
-                            + " ACCOUNTING_TIME_ZONE_UNSET; the payment stays GL_POST_FAILED with this code in glPostError",
+                            + " ACCOUNTING_TIME_ZONE_UNSET; the payment stays GL_POST_FAILED with this code in"
+                            + " glPostError",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @SecurityRequirement(
             name = "bearerAuth",
@@ -276,8 +280,8 @@ public class APPaymentController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Retry with an override", value = """
-                                                                {"overrideJustification":"June reopened for audit; posting the vendor payment"}
-                                                                """)))
+                                                {"overrideJustification":"June reopened for audit; posting the vendor payment"}
+                                                """)))
                     @Valid
                     @RequestBody(required = false)
                     @Nullable
@@ -401,6 +405,50 @@ public class APPaymentController {
 
         Page<VendorBillSummaryResponse> bills = apPaymentService.listEligibleBills(vendorId, pageable);
         return ResponseEntity.ok(bills);
+    }
+
+    /**
+     * The accounts a vendor payment may come from (AP reads #2670): exactly the ones {@code executeApPayment} accepts
+     * now, by the same rule.
+     *
+     * <p>GET /v1/accounting/ap/pay-from-accounts
+     */
+    @GetMapping("/pay-from-accounts")
+    @EmitEvent(id = "ACCOUNTING_AP_PAY_FROM_ACCOUNTS_VIEW", apiVersion = "1")
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {AccountingPermissions.AP_PAY})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
+    @Operation(
+            operationId = "listApPayFromAccounts",
+            summary = "List AP Pay-From Accounts",
+            description = """
+                Lists the bank accounts a vendor payment may come from today: exactly the accounts \
+                executeApPayment would accept, computed by the same rule (a BANK_CASH account active from the start \
+                of asOf, not deactivated by now, and in the functional currency currencyCode).
+                Each account carries bankAccountId (the GL account id executeApPayment takes), its number and name, \
+                and the bank name and masked number from its bank-account profile (both null without one); a full \
+                bank account number is never served, and accounts are ordered by account number.
+                defaultBankAccountId is the single eligible account an omitted bankAccountId resolves to, null when \
+                there is none or more than one; an empty list means no account is set up and a payment answers 400 \
+                fieldErrors[bankAccountId].
+                Use this tool when a payer chooses where a vendor payment comes from; do not use it to reconcile, \
+                use listBankAccounts instead.
+                The read is informational: the payment still checks eligibility when it executes.
+                Emits an ACCOUNTING_AP_PAY_FROM_ACCOUNTS_VIEW audit event; no state changes.
+                Returns 401 without a valid token and 403 FORBIDDEN without accounting:ap:pay.
+                """,
+            tags = {"AP Payments"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "The accounts a vendor payment may come from",
+            content = @Content(schema = @Schema(implementation = ApPayFromAccountListResponse.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN: the caller lacks accounting:ap:pay",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public @NonNull ResponseEntity<ApPayFromAccountListResponse> listApPayFromAccounts() {
+        return ResponseEntity.ok(apChoicesService.payFromAccounts());
     }
 
     private String maskForLog(Object value) {

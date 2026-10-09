@@ -72,7 +72,8 @@ class VendorBillReaderTaxOnResaleTest {
                 mock(VendorBillTaxRecoveryRepository.class),
                 mock(GLMappingResolver.class),
                 mock(GLAccountRepository.class),
-                PurchaseTaxFixtures.purchaseTax(client, vendorCopies, mock(VendorBillLineRepository.class)));
+                PurchaseTaxFixtures.purchaseTax(client, vendorCopies, mock(VendorBillLineRepository.class)),
+                mock(ActorDisplayNames.class));
         when(zoneResolver.today()).thenReturn(LocalDate.of(2026, 10, 8));
         when(client.purchaseRules(any(), any())).thenReturn(PurchaseTaxFixtures.HOLD_AND_SELF_ASSESS);
         bill = new VendorBill(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b02"));
