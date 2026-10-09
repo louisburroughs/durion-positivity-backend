@@ -203,7 +203,10 @@ public class RoleController {
      * {@code security:role:view} for any code, or on {@code accounting:ap_approval_policy:manage}
      * for the codes that policy governs, the second checked in the service before any read (D2).
      *
-     * <p>A literal path, so Spring prefers it over {@code GET /{id}}.
+     * <p>A literal path, so Spring prefers it over {@code GET /{id}}. {@code permission} is
+     * documented as required but bound as optional, so a missing parameter reaches the service and
+     * answers this endpoint's 400 {@code VALIDATION_ERROR} rather than the binder's
+     * {@code INVALID_REQUEST}.
      */
     @GetMapping("/permission-holders")
     @io.swagger.v3.oas.annotations.security.SecurityRequirement(
@@ -257,8 +260,9 @@ public class RoleController {
     public ResponseEntity<PermissionHoldersResponse> listPermissionHolders(
             @Parameter(
                             description = "A permission code (domain:resource:action) to report the holders of;"
-                                    + " repeat the parameter once per code, at most 20 distinct"
+                                    + " repeat the parameter once per code, at least one and at most 20 distinct"
                                     + " codes. Matched case-insensitively and answered in the catalog's spelling.",
+                            required = true,
                             example = "accounting:ap:approve")
                     @RequestParam(name = "permission", required = false)
                     List<String> permission) {
