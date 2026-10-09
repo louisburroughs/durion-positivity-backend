@@ -1148,15 +1148,17 @@ allocation (409 `AP_BILL_NOT_VOIDABLE`); (3) the tier (403 `AP_APPROVAL_LIMIT_EX
 `AP_BILL_SELF_APPROVAL`; under `AP_ALLOW_CREATOR_APPROVAL` it goes through with approve's `justification` or
 `ACCEPT`'s `reason`, audited `VENDOR_BILL_SOD_EXCEPTION`); (5) the content: 422 `AP_BILL_ZERO_TOTAL`,
 `AP_BILL_TOTALS_UNRECONCILED`, then `AP_BILL_UNCLASSIFIED` from a dry run of the entry's legs with the merged
-classification (audited `_REFUSED`; S43 adds `AP_BILL_TAX_ON_RESALE_GOODS` after it); (6) the posting
-(`PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED`). Each 403 of (3) and (4) is audited as `<operation>_REFUSED` with `code=` in a transaction of its own. Submit runs (2) and (5) only.
+classification (audited `_REFUSED`), then, after it, the hold for tax on goods for resale, 422
+`AP_BILL_TAX_ON_RESALE_GOODS` (audited `_REFUSED`; S43, below); (6) the posting, whose first act is the self-assessed
+(`USE`) tax quote when the bill accrues (S43), then `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED`. Each 403 of (3) and (4) is audited as `<operation>_REFUSED` with `code=` in a transaction of its own. Submit runs (2) and (5) only.
 
 **Automatic approval.** Only on `/match`, a HIGH match within tolerance, and only when the automatic limit is above 0
 and the absolute total is at most min(automatic, clerk) limit: the system submits, approves (`approvedBy` and
 `submittedBy` `SYSTEM`, `approvedByKind` `SYSTEM`) and posts through `VendorBillPostingService` in the match
 transaction, with the lines' own classes and no override, dated on the invoice date when its period is open, else
 today (AW42). Whatever would need a person, or would refuse the posting (`AP_BILL_ZERO_TOTAL`,
-`AP_BILL_UNCLASSIFIED`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`, `GL_MAPPING_NOT_CONFIGURED`), leaves the bill
+`AP_BILL_UNCLASSIFIED`, `AP_BILL_TAX_ON_RESALE_GOODS`, `PERIOD_CLOSED`, `PERIOD_HARD_LOCKED`,
+`GL_MAPPING_NOT_CONFIGURED`, `SERVICE_UNAVAILABLE` when pos-tax cannot answer; S43), leaves the bill
 `AWAITING_APPROVAL` with one `VENDOR_BILL_AUTO_APPROVE_SKIPPED` row naming the code; the match is kept. The posting is
 `MANDATORY` and the JPA dialect has no savepoints, so every refusal is asked first without writing (the legs in
 memory, then the period and the mappings in a `REQUIRES_NEW` transaction of its own, which takes a second pooled
@@ -1489,6 +1491,56 @@ Two more settings on `ap_vendor_settings` (V22), set through the same `PUT …/a
 | GET | `/v1/accounting/information-return-forms` | `accounting:ap:view` | 200, 503 `SERVICE_UNAVAILABLE` |
 | POST | `/v1/accounting/ap/payments` | `accounting:ap:pay` | adds 422 `VENDOR_ON_AP_HOLD` (slot 1e) |
 
+### Purchase-tax rules by country (CAP:550 S43, #2604, AW44)
+
+Two purchase-tax behaviours, each switched on per country by pos-tax's purchase-tax rules stub (`GET
+/v1/tax/purchase-rules?countryCode=&asOf=`, `{configured, taxOnResaleGoods: HOLD|ALLOW, selfAssessUntaxedExpenses}`)
+for the tax country `accounting.tax.country`. The shipped US rule (`HOLD`, `true`) is a placeholder held for expert
+advice (OI-4); a country without rules answers `configured: false`, and neither behaviour applies. No code names a
+country.
+
+- **Which bills qualify** (bill level, never a credit note). The hold: stated tax above 0.00 and at least one
+  `RECEIPT_MATCHED` or `GOODS` line with an AW39 prorated tax share above 0.00 (a header-only `GOODS` bill with tax
+  qualifies). The accrual: no stated tax (null or 0.00); each `EXPENSE` line accrues, or the header net of a
+  header-only `EXPENSE` bill. Goods lines never accrue.
+- **The hold for tax on goods for resale.** Rule `HOLD`: approve and `ACCEPT` refuse a qualifying bill with 422
+  `AP_BILL_TAX_ON_RESALE_GOODS` (the message names the bill and the tax), the last content check after
+  `requireClassified`, audited `<operation>_REFUSED`. It goes through with the vendor's AP setting
+  `acceptTaxOnResaleGoods` (override `VENDOR_SETTING`) or, for the one bill, `taxOnResaleOverrideJustification`
+  (10-1000 characters after trimming, else 400 `JUSTIFICATION_REQUIRED` / `VALIDATION_ERROR`; looked at only when the
+  hold applies, otherwise ignored and not stored; override `BILL`). `vendor_bill.tax_on_resale_override` (`BILL` |
+  `VENDOR_SETTING`) and `tax_on_resale_override_justification` (V24, with a check constraint) record it; the bill read
+  serves `taxOnResaleOverride {source, justification}` and the approval audit row adds `taxOnResaleOverride=<source>`
+  (never the justification, which is CONFIDENTIAL, ADR-0072). The overridden bill posts as AW39 says: the tax into
+  5050 for goods. Automatic approval honours the vendor setting and otherwise skips with `AP_BILL_TAX_ON_RESALE_GOODS`.
+- **The self-assessed (use) tax accrual.** `selfAssessUntaxedExpenses = true`: the posting's first act asks pos-tax
+  once per decision, `POST /v1/tax/calculate` with `calculationType = USE`, `committable = false`, the ledger currency
+  (ADR-0067 PC-11 (a)), the AW42 posting date, the bill id and `destinationAddress {country: accounting.tax.country,
+  accounting.tax.purchase-place.region-code, postal-code}` (`X-Authorities: tax:calculate`). The returned line taxes
+  above 0.00 post as returned in the approval entry: Dr the expense key, Cr `USE_TAX_PAYABLE` (2240 Use Tax Payable,
+  seeded in the generic chart), so accounts payable stays the gross; the audit row adds `useTaxAmount=…`. The void's
+  reversal mirrors it. A missing `USE_TAX_PAYABLE` mapping is 422 `GL_MAPPING_NOT_CONFIGURED`. Automatic approval
+  quotes once inside its pre-check, before the legs, and posts that same answer.
+- **pos-tax giving no answer** (unreachable, any 4xx, 5xx or 501), for the rules or the quote, is 503
+  `SERVICE_UNAVAILABLE` with `Retry-After` and writes nothing (AW49: never read as "off"); automatic approval skips
+  with `SERVICE_UNAVAILABLE`. Decisions never use a cache.
+- **The bill check `TAX_ON_RESALE_GOODS`.** FAIL `{taxAmount, currencyCode}` in review when the rule holds a qualifying
+  bill and the vendor setting is off; PASS `{acceptedBy: VENDOR_SETTING}` with it on, or `{acceptedBy}` of an approved
+  override; NOT_APPLICABLE otherwise, with `{rulesUnavailable: true}` when pos-tax gives no rules (the read still
+  succeeds). Reads cache the rules per (country, date) for `accounting.tax.purchase-rules.cache-ttl` (default
+  `PT5M`). `APPROVE` and `ACCEPT_EXCEPTION` stay allowed: the approver can override.
+- **Settings.** `accounting.tax.purchase-place` (`region-code` optional, 1-3 letters or digits; `postal-code` required,
+  at most 20 characters; env `ACCOUNTING_TAX_PURCHASE_REGION`, `ACCOUNTING_TAX_PURCHASE_POSTAL_CODE`) is a Stage A,
+  deployment-wide placeholder until bills carry a location (ADR-0044 R1); startup fails naming the property.
+
+| Method | Path | Permission | Change and codes |
+| --- | --- | --- | --- |
+| POST | `/v1/accounting/vendor-bills/{billId}/approve` `{…, taxOnResaleOverrideJustification?}` | unchanged | adds 422 `AP_BILL_TAX_ON_RESALE_GOODS`, 400 for the field, 503 `SERVICE_UNAVAILABLE` |
+| POST | `/v1/accounting/vendor-bills/{billId}/resolve-exception` (`ACCEPT`) `{…, taxOnResaleOverrideJustification?}` | unchanged | as approve |
+| GET | `/v1/accounting/vendor-bills/{billId}` (every bill read) | unchanged | check `TAX_ON_RESALE_GOODS`; `taxOnResaleOverride` |
+| PUT | `/v1/accounting/vendors/{vendorId}/ap-settings` `{…, acceptTaxOnResaleGoods?}` | `accounting:ap_approval_policy:manage` | a boolean: absent unchanged, null 400 `VALIDATION_ERROR` (`fieldErrors[acceptTaxOnResaleGoods]`); in the fingerprint (409 `IDEMPOTENCY_CONFLICT`); each change one `AP_VENDOR_SETTINGS_SET` row |
+| GET | `/v1/accounting/vendors/{vendorId}` | `accounting:ap:view` | `apSettings.acceptTaxOnResaleGoods` |
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
@@ -1508,7 +1560,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `VENDOR_REMIT_TO_SELF_CONFIRMATION` | 403 | The caller requested the vendor's current remit-to in pos-supplier and may not confirm it (S24, Accounting ruling on PR #2648) |
 | `VENDOR_INACTIVE` | 422 | A new goods-receipt bill or AP payment names an `INACTIVE` vendor; an inactive vendor's existing bills are not paid either (S24, #2517) |
 | `VENDOR_ON_AP_HOLD` | 422 | An AP payment names a vendor on AP hold (slot 1e); the message names the vendor number only, the reason is on the vendor read (#2615, ADR-0072) |
-| `SERVICE_UNAVAILABLE` | 503 | pos-tax cannot answer the information-return forms read or check an information-return change; `Retry-After` set, nothing written (#2615) |
+| `SERVICE_UNAVAILABLE` | 503 | pos-tax cannot answer the information-return forms read, check an information-return change, or give a vendor-bill decision its purchase-tax rules or use-tax quote; `Retry-After` set, nothing written (#2615, S43) |
 | `VENDOR_PAYMENT_DETAILS_CHANGED` | 409 | A bill the payment would pay was approved at another remit-to version and no one but the payer confirmed the current one; or a confirmation names a version that is not the current one (S24, #2517) |
 | `VENDOR_BILL_NOT_FOUND` | 404 | No vendor bill with that id is visible to the caller (#2509) |
 | `AP_MATCH_CANDIDATE_NOT_FOUND` | 404 | No match candidate with that id is visible to the caller (#2509) |
@@ -1518,6 +1570,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_BILL_ENTRY_NOT_REVERSIBLE` | 409 | A vendor bill's entry, or its void's reversal, reversed through the journal-entry endpoint; void the bill instead (AW42, #2509) |
 | `AP_MATCH_CANDIDATE_ALREADY_RESOLVED` | 409 | Someone else already resolved the ambiguous match (#2509) |
 | `AP_BILL_UNCLASSIFIED` | 422 | The bill (or a non-stock line) has no class and its vendor no default; the approval needs a `classification` (AW39, #2509) |
+| `AP_BILL_TAX_ON_RESALE_GOODS` | 422 | The bill charges tax on goods for resale, the tax country's purchase-tax rule holds such bills, its vendor does not accept the tax and no `taxOnResaleOverrideJustification` was given (approve, `ACCEPT`); audited `_REFUSED` (AW44, S43) |
 | `AP_BILL_TOTALS_UNRECONCILED` | 422 | The vendor's gross differs from its net + tax beyond the rounding tolerance and the send, approval or acceptance gives no `difference`; nothing is written (AW47, #2509) |
 | `AP_BILL_ZERO_TOTAL` | 422 | A bill totalling 0.00 is sent, approved or accepted; correct it or void it (#2509) |
 | `AP_APPROVAL_LIMIT_EXCEEDED` | 403 | The bill's absolute total is over the clerk limit and the caller lacks `accounting:ap:approve_over_limit` (approve, `ACCEPT`, void of an approved bill); `nextAction` names the permission (#2510) |
