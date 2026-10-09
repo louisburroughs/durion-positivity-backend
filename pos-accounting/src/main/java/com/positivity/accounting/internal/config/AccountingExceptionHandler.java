@@ -50,6 +50,8 @@ import com.positivity.accounting.internal.exception.SettlementLineNotFoundExcept
 import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
 import com.positivity.accounting.internal.exception.SettlementNotPostedException;
 import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
+import com.positivity.accounting.internal.exception.TaxReferenceRelayException;
+import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.TaxSnapshotConflictException;
 import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException;
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
@@ -99,6 +101,46 @@ public class AccountingExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", request);
+    }
+
+    /**
+     * pos-tax refused a reference read with 400, 404 or 422 (CAP:550 #2615; AW59): its status, code, message and field
+     * errors are relayed unchanged; the correlation id is this request's (ADR-0017 §4).
+     */
+    @ExceptionHandler(TaxReferenceRelayException.class)
+    public ResponseEntity<ApiError> handleTaxReferenceRelay(TaxReferenceRelayException ex, HttpServletRequest request) {
+        ApiError relayed = ex.getError();
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        ApiError error = new ApiError(
+                relayed.code(),
+                relayed.message(),
+                ex.getStatus(),
+                relayed.timestamp(),
+                correlationId,
+                relayed.fieldErrors(),
+                relayed.referenceId(),
+                relayed.nextAction(),
+                relayed.supportAction(),
+                relayed.conflicts(),
+                relayed.suggestedAlternatives());
+        return new ResponseEntity<>(error, headers, HttpStatus.valueOf(ex.getStatus()));
+    }
+
+    /**
+     * pos-tax cannot answer (CAP:550 S32c's shape, #2615): 503 {@code SERVICE_UNAVAILABLE} with {@code Retry-After}
+     * (ADR-0017); nothing was stored.
+     */
+    @ExceptionHandler(TaxServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleTaxServiceUnavailable(
+            TaxServiceUnavailableException ex, HttpServletRequest request) {
+        ResponseEntity<ApiError> built =
+                build(HttpStatus.SERVICE_UNAVAILABLE, TaxServiceUnavailableException.CODE, ex.getMessage(), request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(built.getHeaders());
+        headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(TaxServiceUnavailableException.RETRY_AFTER_SECONDS));
+        return new ResponseEntity<>(built.getBody(), headers, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     /*

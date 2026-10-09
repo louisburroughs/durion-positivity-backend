@@ -1393,6 +1393,61 @@ entity `VENDOR`, operations `REMIT_TO_CONFIRM` and `AP_VENDOR_SETTINGS_SET` (old
 `requestId`). The vendor read's `paymentDetailsChanged` is true while an approved, open bill was approved at
 another remit-to version and nobody confirmed the current one; S19's work item reads it.
 
+## Vendor AP hold and information-return flag (CAP:550 #2615; ADR-0072)
+
+Two more settings on `ap_vendor_settings` (V22), set through the same `PUT …/ap-settings` under
+`accounting:ap_approval_policy:manage`. No new permission bit.
+
+- **AP hold.** `apHold {onHold, reason?}`: `onHold: true` needs a reason of 10-500 characters once trimmed
+  (shorter, blank or missing: 400 `JUSTIFICATION_REQUIRED` naming `apHold.reason`; longer: 400 `VALIDATION_ERROR`);
+  `onHold: false` releases it, the PUT's `justification` recording why (a reason sent with it is ignored).
+  `apHold: null`, or `onHold` missing or null, is 400 `VALIDATION_ERROR`. Audit: `AP_VENDOR_HOLD_SET` (old → new
+  hold and reason) and `AP_VENDOR_HOLD_CLEARED` (the old reason), each with the actor from the security context,
+  the justification and the `requestId`; the same reason again, or releasing a vendor not held, writes none.
+- **What the hold stops.** Only `POST /v1/accounting/ap/payments`: 422 `VENDOR_ON_AP_HOLD` at **slot 1e** of the
+  pre-gateway block, right after 1d (the vendor in the copy and active) and before the plan, so nothing is saved
+  and the gateway is not called; an inactive vendor that is also held answers `VENDOR_INACTIVE`, and a payment
+  replayed by `paymentRef` still returns its first result. The refusal is logged at INFO (payment reference,
+  vendor number, code) and counted as `accounting.ap_payment.refused{code="VENDOR_ON_AP_HOLD"}`. Submit, approve,
+  `ACCEPT`, automatic approval at `/match`, EDI and goods-receipt bill creation, reject, void and the due-date PUT
+  all go ahead: approval records a debt that exists (AW37). The hold is independent of the vendor's status, takes
+  no lock (a payment past its check completes), posts nothing and changes no aged payables.
+- **Reads.** `VendorResponse.apHold` on the list and the detail read; `apSettings.apHold {onHold, reason, setBy,
+  setAt}` on the detail read; `vendorApHold` on stage rows; `vendorApHold` and `vendorApHoldReason` on
+  `GET /v1/accounting/ap/bills` rows; the informational bill check `VENDOR_AP_HOLD` (FAIL `{vendorNumber, reason,
+  since}` while held, PASS otherwise, NOT_APPLICABLE on `REJECTED`, `VOIDED` and an `APPROVED` bill with nothing
+  open). It blocks no action and sets no `blockedReason`. Each list page reads its vendors' settings in one query.
+- **Information return.** `informationReturn {reportable, form?, box?, payeeTaxRegistrationScheme?}`:
+  `reportable: true` needs a `form` and `box` configured for the tax country and an optional scheme among the
+  form's `payeeIdSchemes`; `reportable: false` needs the three absent or null and clears them. Each violation is
+  400 `VALIDATION_ERROR` with `fieldErrors[informationReturn.*]`; a country that configures no form refuses
+  `reportable: true`. pos-tax is called only when the information return changes to a reportable value; when it
+  cannot answer, the PUT is 503 `SERVICE_UNAVAILABLE` with `Retry-After` and nothing is written. Each changed
+  field writes an `AP_VENDOR_SETTINGS_SET` row (`informationReturnReportable`, `informationReturnForm`,
+  `informationReturnBox`, `informationReturnPayeeScheme`).
+- **Taxpayer numbers.** pos-accounting has no field, column or parameter for one: an unknown key such as `tin`
+  is 400 `VALIDATION_ERROR` naming the key, never its value (top level and inside both objects). The detail read's
+  `apSettings.informationReturn` adds `payeeTinOnFile` (the copy holds a registration of the chosen scheme) and
+  `payeeTinLast4`, relayed unchanged from the copy's `last4` when exactly one registration of the scheme exists,
+  else null. `last4` and the hold reason are CONFIDENTIAL (ADR-0072): never in a log line, an error message, a
+  metric tag or (for `last4`) an audit row; the request fingerprint carries the reason's SHA-256.
+- **The tax country.** `accounting.tax.country` (`TaxCountry`, shipped `US`, a placeholder) names the ISO 3166-1
+  alpha-2 country whose pos-tax configuration applies. Startup fails unless it is upper-case alpha-2 and, when the
+  JDK maps the country to a currency, that currency is `accounting.ledger.base-currency`'s. Deployment-wide in
+  Stage A; ADR-0067 A5's tenant replica replaces both. No code branches on its value.
+- **The forms front door.** `GET /v1/accounting/information-return-forms` relays pos-tax's stub for the tax
+  country, `{countryCode, source, forms: [{form, label, boxes: [{box, label}], payeeIdSchemes}]}` (ADR-0071,
+  AW59). `TaxReferenceClient` calls pos-tax on `pos.accounting.tax.base-url` as `X-User: pos-accounting`,
+  `X-Authorities: tax:rates:view`, with the tenant and `X-Correlation-Id` forwarded and bounded timeouts
+  (`pos.accounting.tax.connect-timeout` 2 s, `read-timeout` 5 s); a pos-tax 400, 404 or 422 is relayed, anything
+  else is 503 `SERVICE_UNAVAILABLE`. The forms are placeholders held for expert advice (OI-4).
+
+| Method | Path | Permission | Codes |
+| --- | --- | --- | --- |
+| PUT | `/v1/accounting/vendors/{vendorId}/ap-settings` `{…, apHold?, informationReturn?}` | `accounting:ap_approval_policy:manage` | adds 400 `JUSTIFICATION_REQUIRED` (`apHold.reason`), 400 `VALIDATION_ERROR` (`fieldErrors[apHold*]`, `fieldErrors[informationReturn.*]`, unknown keys), 503 `SERVICE_UNAVAILABLE` |
+| GET | `/v1/accounting/information-return-forms` | `accounting:ap:view` | 200, 503 `SERVICE_UNAVAILABLE` |
+| POST | `/v1/accounting/ap/payments` | `accounting:ap:pay` | adds 422 `VENDOR_ON_AP_HOLD` (slot 1e) |
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
@@ -1411,6 +1466,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `VENDOR_REPLICATION_PENDING` | 503 | A vendor read or command, a goods-receipt bill or an AP payment names a vendor not in the pos-supplier vendor copy yet; `Retry-After` set. Not-yet, never "no" (ADR-0017 §1; S24, #2517) |
 | `VENDOR_REMIT_TO_SELF_CONFIRMATION` | 403 | The caller requested the vendor's current remit-to in pos-supplier and may not confirm it (S24, Accounting ruling on PR #2648) |
 | `VENDOR_INACTIVE` | 422 | A new goods-receipt bill or AP payment names an `INACTIVE` vendor; an inactive vendor's existing bills are not paid either (S24, #2517) |
+| `VENDOR_ON_AP_HOLD` | 422 | An AP payment names a vendor on AP hold (slot 1e); the message names the vendor number only, the reason is on the vendor read (#2615, ADR-0072) |
+| `SERVICE_UNAVAILABLE` | 503 | pos-tax cannot answer the information-return forms read or check an information-return change; `Retry-After` set, nothing written (#2615) |
 | `VENDOR_PAYMENT_DETAILS_CHANGED` | 409 | A bill the payment would pay was approved at another remit-to version and no one but the payer confirmed the current one; or a confirmation names a version that is not the current one (S24, #2517) |
 | `VENDOR_BILL_NOT_FOUND` | 404 | No vendor bill with that id is visible to the caller (#2509) |
 | `AP_MATCH_CANDIDATE_NOT_FOUND` | 404 | No match candidate with that id is visible to the caller (#2509) |

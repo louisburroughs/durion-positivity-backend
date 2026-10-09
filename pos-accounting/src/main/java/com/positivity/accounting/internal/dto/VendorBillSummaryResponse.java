@@ -14,6 +14,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -69,4 +70,26 @@ public class VendorBillSummaryResponse {
     @NotNull
     @JsonProperty("status")
     private VendorBillStatus status;
+
+    /** Whether the bill's vendor is on AP hold (#2615): paying it answers 422 VENDOR_ON_AP_HOLD. */
+    @Schema(
+            description =
+                    "True while the bill's vendor is on AP hold: paying it answers 422 VENDOR_ON_AP_HOLD; the bill"
+                            + " stays listed",
+            example = "false",
+            requiredMode = REQUIRED)
+    @JsonProperty("vendorApHold")
+    private boolean vendorApHold;
+
+    /** Why the vendor is held; null when it is not. Staff free text handled as CONFIDENTIAL (ADR-0072). */
+    @Nullable
+    @Schema(
+            description =
+                    "Why the bill's vendor is on AP hold, to show beside the disabled Pay; null when the vendor is"
+                            + " not held",
+            example = "Disputed delivery 4471, awaiting credit",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("vendorApHoldReason")
+    @ToString.Exclude
+    private String vendorApHoldReason;
 }

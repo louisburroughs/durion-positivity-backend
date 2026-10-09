@@ -658,8 +658,9 @@ class APPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("S42/S24 guard order: lock timeout, slot 1 (1a-1c, then 1d the vendor), slot 2 (bill locks), slot 3"
-            + " (pay guard), slot 4 (remit-to), slot 5, then the payment row and the gateway")
+    @DisplayName(
+            "S42/S24/#2615 guard order: lock timeout, slot 1 (1a-1c, 1d the vendor, 1e the hold), slot 2 (bill locks), slot 3"
+                    + " (pay guard), slot 4 (remit-to), slot 5, then the payment row and the gateway")
     void slotsRunInTheirOrderBeforeTheGateway() {
         VendorBill bill = approvedBill("INV-S", "412.00", "bob");
         ExecuteAPPaymentRequest request =
@@ -685,6 +686,7 @@ class APPaymentServiceTest {
         order.verify(lockTimeout).apply();
         order.verify(preGatewayChecks).checkRequest(request, Optional.of(BUSINESS_DATE));
         order.verify(vendorCopies).requireForNewBusiness(testVendorId, "A payment");
+        order.verify(vendorCopies).requireNotOnHold(any(ExtSupplierVendor.class), eq(testPaymentRef));
         order.verify(billRepository).lockByVendorBillIdIn(any());
         order.verify(payGuard).check(List.of(bill), "ana", testPaymentRef);
         order.verify(vendorCopies).requireRemitToUnchanged(eq(List.of(bill)), any(), eq("ana"));
@@ -937,5 +939,159 @@ class APPaymentServiceTest {
         payment.setPaymentDate(BUSINESS_DATE);
         payment.setCreatedAt(Instant.now(TEST_CLOCK));
         return payment;
+    }
+
+    // ========================================
+    // #2615: slot 1e, the AP hold
+    // ========================================
+
+    private static VendorBillException onHold() {
+        return new VendorBillException(
+                VendorBillException.Code.VENDOR_ON_AP_HOLD,
+                "Vendor V-000001 is on AP hold; nothing was paid. The reason is on the vendor");
+    }
+
+    private void vendorHeld() {
+        org.mockito.Mockito.doThrow(onHold()).when(vendorCopies).requireNotOnHold(any(), any());
+    }
+
+    static java.util.stream.Stream<String> allocationShapes() {
+        return java.util.stream.Stream.of("explicit", "oldest-due-first", "unapplied");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.MethodSource("allocationShapes")
+    @DisplayName("#2615 AC3 [M]: a held vendor is 422 VENDOR_ON_AP_HOLD with explicit, oldest-due-first or no"
+            + " allocation: no plan, no payment row, no gateway call")
+    void heldVendorRefusedBeforeTheGateway(String shape) {
+        VendorBill bill = approvedBill("INV-H", "100.00", "bob");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("100.00"), PaymentMethod.ACH);
+        if (shape.equals("explicit")) {
+            request.setAllocations(List.of(new ExecuteAPPaymentRequest.AllocationLineRequest(
+                    bill.getVendorBillId(), new BigDecimal("100.00"))));
+        }
+        if (shape.equals("oldest-due-first")) {
+            when(billRepository.lockByVendorIdAndStatus(testVendorId, VendorBillStatus.APPROVED))
+                    .thenReturn(List.of(bill));
+        }
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        savesAssignId();
+        gatewaySucceeds();
+        vendorHeld();
+
+        assertThatThrownBy(() -> service.executePayment(request, "gm.gary"))
+                .isInstanceOfSatisfying(VendorBillException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_ON_AP_HOLD);
+                    assertThat(e.getMessage()).contains("V-000001");
+                });
+        verify(billRepository, never()).lockByVendorBillIdIn(any());
+        verify(billRepository, never()).lockByVendorIdAndStatus(any(), any());
+        verify(payGuard, never()).check(any(), any(), any());
+        verify(paymentRepository, never()).save(any());
+        verify(paymentGateway, never()).executePayment(any());
+        verify(allocationRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("#2615 AC5 [M]: inactive and held answers VENDOR_INACTIVE (1d before 1e)")
+    void inactiveBeforeHold() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("100.00"), PaymentMethod.ACH);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(vendorCopies.requireForNewBusiness(testVendorId, "A payment"))
+                .thenThrow(new VendorBillException(
+                        VendorBillException.Code.VENDOR_INACTIVE, "A payment cannot name vendor V-000001"));
+        vendorHeld();
+
+        assertThatThrownBy(() -> service.executePayment(request, "gm.gary"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_INACTIVE));
+        verify(vendorCopies, never()).requireNotOnHold(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2615 AC5 [M]: held, and the bill approved by the payer: VENDOR_ON_AP_HOLD; the pay guard never runs,"
+            + " so no VENDOR_BILL_PAYMENT_REFUSED row")
+    void holdBeforeThePayGuard() {
+        VendorBill bill = approvedBill("INV-SELF", "100.00", "gm.gary");
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("100.00"), PaymentMethod.ACH);
+        request.setAllocations(List.of(
+                new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), new BigDecimal("100.00"))));
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        org.mockito.Mockito.doThrow(selfApproved("INV-SELF")).when(payGuard).check(any(), eq("gm.gary"), any());
+        vendorHeld();
+
+        assertThatThrownBy(() -> service.executePayment(request, "gm.gary"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VENDOR_ON_AP_HOLD));
+        verify(payGuard, never()).check(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#2615 AC5: held and method CREDIT_CARD answers AP_PAYMENT_METHOD_NOT_SUPPORTED (1a first)")
+    void methodBeforeHold() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("100.00"), PaymentMethod.CREDIT_CARD);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        when(preGatewayChecks.checkRequest(any(), any()))
+                .thenThrow(new VendorBillException(
+                        VendorBillException.Code.AP_PAYMENT_METHOD_NOT_SUPPORTED, "CREDIT_CARD is not supported"));
+        vendorHeld();
+
+        assertThatThrownBy(() -> service.executePayment(request, "gm.gary"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(VendorBillException.Code.AP_PAYMENT_METHOD_NOT_SUPPORTED));
+        verify(vendorCopies, never()).requireNotOnHold(any(), any());
+    }
+
+    @Test
+    @DisplayName("#2615 AC7: a payment made before the hold replays its first result; the hold is never read")
+    void replayBeforeHold() {
+        ExecuteAPPaymentRequest request =
+                buildRequest(testPaymentRef, testVendorId, new BigDecimal("1500.00"), PaymentMethod.ACH);
+        APPayment existingPayment = buildExistingPayment(
+                TEST_PAYMENT_ID, testPaymentRef, testVendorId, new BigDecimal("1500.00"), PaymentMethod.ACH);
+        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.of(existingPayment));
+        vendorHeld();
+
+        APPaymentResponse result = service.executePayment(request, "gm.gary");
+
+        assertThat(result.getPaymentId()).isEqualTo(TEST_PAYMENT_ID);
+        verify(vendorCopies, never()).requireNotOnHold(any(), any());
+        verify(paymentGateway, never()).executePayment(any());
+    }
+
+    @Test
+    @DisplayName("#2615 AC13: payable-bill rows carry vendorApHold and the reason; held vendors' bills stay listed")
+    void listFlagsHeldVendors() {
+        UUID held = testVendorId;
+        UUID free = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        VendorBill heldBill = approvedBill("INV-HELD", "100.00", "bob");
+        VendorBill freeBill = approvedBill("INV-FREE", "50.00", "bob");
+        freeBill.setVendorId(free);
+        when(billRepository.findByStatusAndOpenAmountGreaterThan(any(), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(heldBill, freeBill)));
+        when(vendorCopies.heldVendors(java.util.Set.of(held, free)))
+                .thenReturn(java.util.Map.of(held, "Disputed delivery 4471, awaiting credit"));
+
+        var page = service.listEligibleBills(null, PageRequest.of(0, 20));
+
+        assertThat(page.getContent())
+                .extracting(VendorBillSummaryResponse::getBillNumber, VendorBillSummaryResponse::isVendorApHold)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("INV-HELD", true),
+                        org.assertj.core.groups.Tuple.tuple("INV-FREE", false));
+        assertThat(page.getContent().getFirst().getVendorApHoldReason())
+                .isEqualTo("Disputed delivery 4471, awaiting credit");
+        assertThat(page.getContent().get(1).getVendorApHoldReason()).isNull();
+        verify(vendorCopies, org.mockito.Mockito.times(1)).heldVendors(any());
     }
 }

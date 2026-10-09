@@ -1,7 +1,10 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.InformationReturnFormsResponse;
+import com.positivity.accounting.internal.dto.VendorApHoldRequest;
 import com.positivity.accounting.internal.dto.VendorApSettingsRequest;
 import com.positivity.accounting.internal.dto.VendorApSettingsResponse;
+import com.positivity.accounting.internal.dto.VendorInformationReturnRequest;
 import com.positivity.accounting.internal.dto.VendorRemitToConfirmationRequest;
 import com.positivity.accounting.internal.dto.VendorResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
@@ -18,17 +21,23 @@ import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository
 import com.positivity.accounting.internal.repository.MappingKeyRepository;
 import com.positivity.accounting.internal.repository.PostingCategoryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +54,13 @@ import org.springframework.transaction.annotation.Transactional;
  * (the version, the justification) and one {@value #AUDIT_SETTINGS_SET} row per default that changed, old to new, with
  * the {@code requestId}. A settings PUT that passes validation also writes one {@value #AUDIT_SETTINGS_REQUEST} row
  * whose entity id is the request id, so a replay finds it and writes nothing (the AP approval policy's pattern).
+ *
+ * <p><b>AP hold and information return (#2615).</b> A hold set or its reason changed writes {@value #AUDIT_HOLD_SET}
+ * (old to new hold and reason); a release writes {@value #AUDIT_HOLD_CLEARED} (the old reason); each with the actor,
+ * the justification and the {@code requestId}. Each changed information-return field writes an {@value
+ * #AUDIT_SETTINGS_SET} row. The hold reason is CONFIDENTIAL (ADR-0072): it reaches the audit rows and the reads, never
+ * a log line, an exception message or the request fingerprint, which carries its SHA-256 instead. pos-tax is called
+ * only when the information return changes to a reportable value; a refusal of either writes nothing.
  */
 @Slf4j
 @Service
@@ -58,6 +74,19 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     static final String AUDIT_REMIT_TO_CONFIRM = "REMIT_TO_CONFIRM";
     static final String AUDIT_SETTINGS_SET = "AP_VENDOR_SETTINGS_SET";
     static final String AUDIT_SETTINGS_REQUEST = "AP_VENDOR_SETTINGS_REQUEST";
+    static final String AUDIT_HOLD_SET = "AP_VENDOR_HOLD_SET";
+    static final String AUDIT_HOLD_CLEARED = "AP_VENDOR_HOLD_CLEARED";
+
+    /** The hold reason's bounds once trimmed (ruling 3 of #2615). */
+    static final int MIN_HOLD_REASON = 10;
+
+    static final int MAX_HOLD_REASON = 500;
+
+    /** Code shapes checked before pos-tax is asked (the same shapes pos-tax's startup check enforces). */
+    private static final Pattern FORM_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,31}$");
+
+    private static final Pattern BOX_CODE = Pattern.compile("^[A-Z0-9]{1,10}$");
+    private static final Pattern SCHEME_CODE = Pattern.compile("^[A-Z][A-Z_]{1,15}$");
 
     private static final int DEFAULT_LIMIT = 20;
     private static final String VENDOR_BILL_CATEGORY = VendorBillPostingService.POSTING_CATEGORY;
@@ -70,6 +99,7 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     private final AccountingAuditLogRepository auditLogs;
     private final PostingCategoryRepository postingCategories;
     private final MappingKeyRepository mappingKeys;
+    private final InformationReturnFormsService informationReturnForms;
 
     @Override
     @Transactional(readOnly = true)
@@ -89,9 +119,23 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
                     null);
         }
         List<ExtSupplierVendor> found = vendors.search(term, wanted, PageRequest.of(0, capped));
-        Set<UUID> changed = paymentDetailsChanged(found);
+        // One settings query for the page (#2615): the apHold flags and the remit-to confirmations.
+        Map<UUID, ApVendorSettings> rows = found.isEmpty()
+                ? Map.of()
+                : settings
+                        .findByVendorIdIn(found.stream()
+                                .map(ExtSupplierVendor::getVendorId)
+                                .toList())
+                        .stream()
+                        .collect(Collectors.toMap(ApVendorSettings::getVendorId, Function.identity(), (a, b) -> a));
+        Set<UUID> changed = paymentDetailsChanged(found, rows);
         return found.stream()
-                .map(v -> toResponse(v, changed.contains(v.getVendorId()), null))
+                .map(v -> toResponse(
+                        v,
+                        changed.contains(v.getVendorId()),
+                        rows.containsKey(v.getVendorId())
+                                && rows.get(v.getVendorId()).isApHold(),
+                        null))
                 .toList();
     }
 
@@ -172,12 +216,23 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         }
         VendorBillDebitClass debitClass = debitClass(request, errors);
         String key = expenseKey(request, errors);
+        HoldChange hold = holdChange(request, errors);
+        InformationReturnChange informationReturn = informationReturnChange(request, errors);
         refuse(errors);
+        if (hold != null && hold.onHold() && hold.reason() == null) {
+            // Never echoes the reason: only its field and the bounds.
+            throw new VendorBillException(
+                    VendorBillException.Code.JUSTIFICATION_REQUIRED,
+                    "apHold.reason of at least " + MIN_HOLD_REASON + " characters is required to hold a vendor",
+                    List.of(new VendorBillException.FieldError(
+                            "apHold.reason", "at least " + MIN_HOLD_REASON + " characters are required")),
+                    null);
+        }
         ExtSupplierVendor vendor =
                 vendors.lockByVendorId(vendorId).orElseThrow(() -> SupplierVendorCopies.replicationPending(vendorId));
         UUID requestId = Objects.requireNonNull(request.getRequestId());
-        String fingerprint = fingerprint(vendorId, request, debitClass, key);
-        java.util.Optional<AccountingAuditLog> recorded =
+        String fingerprint = fingerprint(vendorId, request, debitClass, key, hold, informationReturn);
+        Optional<AccountingAuditLog> recorded =
                 auditLogs.findFirstByOperationAndEntityId(AUDIT_SETTINGS_REQUEST, requestId);
         if (recorded.isPresent()) {
             if (!fingerprint.equals(fingerprintOf(recorded.get().getNewValue()))) {
@@ -193,6 +248,11 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         if (newClass == VendorBillDebitClass.EXPENSE && newKey == null) {
             refuse(List.of(new VendorBillException.FieldError(
                     "defaultExpenseMappingKey", "is required with defaultDebitClass EXPENSE")));
+        }
+        // pos-tax is asked only now, after the replay check and before anything is written, and only when the
+        // information return changes to a reportable value (a 503 or a refusal writes nothing).
+        if (informationReturn != null && informationReturn.reportable() && informationReturn.differsFrom(row)) {
+            requireConfigured(informationReturn, informationReturnForms.forms());
         }
         int changed = 0;
         if (!Objects.equals(newClass, row.getDefaultDebitClass())) {
@@ -216,6 +276,12 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
                     "defaultExpenseMappingKey=" + nullable(newKey) + ";requestId=" + requestId));
             row.setDefaultExpenseMappingKey(newKey);
             changed++;
+        }
+        if (hold != null) {
+            changed += applyHold(row, hold, vendorId, actor, justification, requestId);
+        }
+        if (informationReturn != null) {
+            changed += applyInformationReturn(row, informationReturn, vendorId, actor, justification, requestId);
         }
         if (changed > 0) {
             settings.save(row);
@@ -274,18 +340,227 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     }
 
     /**
+     * The hold a PUT asks for (#2615), or null when {@code apHold} is absent.
+     *
+     * @param onHold whether to hold
+     * @param reason the trimmed reason, null when absent, blank or under {@value #MIN_HOLD_REASON} characters
+     * @param reasonGiven the fingerprint's view of the reason: absent, null, or present
+     * @param reasonHash the SHA-256 hex of the trimmed reason as sent, null unless a string was sent
+     */
+    record HoldChange(
+            boolean onHold,
+            @Nullable String reason,
+            boolean reasonGiven,
+            @Nullable String reasonHash) {
+
+        @Override
+        public String toString() {
+            // The reason is CONFIDENTIAL (ADR-0072): never printed.
+            return "HoldChange[onHold=" + onHold + "]";
+        }
+    }
+
+    /**
+     * The information return a PUT asks for (#2615), or null when {@code informationReturn} is absent; codes trimmed and
+     * upper-cased. Each {@code *Given} records the key's presence for the fingerprint.
+     */
+    record InformationReturnChange(
+            boolean reportable,
+            @Nullable String form,
+            @Nullable String box,
+            @Nullable String scheme,
+            boolean formGiven,
+            boolean boxGiven,
+            boolean schemeGiven) {
+
+        /** Whether storing this would change {@code row}'s flag, form, box or scheme. */
+        boolean differsFrom(ApVendorSettings row) {
+            return reportable != row.isInformationReturnReportable()
+                    || !Objects.equals(form, row.getInformationReturnForm())
+                    || !Objects.equals(box, row.getInformationReturnBox())
+                    || !Objects.equals(scheme, row.getInformationReturnPayeeScheme());
+        }
+    }
+
+    /** The {@code apHold} object's shape (#2615); a reason too short is refused afterwards as JUSTIFICATION_REQUIRED. */
+    private static @Nullable HoldChange holdChange(
+            VendorApSettingsRequest request, List<VendorBillException.FieldError> errors) {
+        if (!request.hasApHold()) {
+            return null;
+        }
+        VendorApHoldRequest hold = request.getApHold();
+        if (hold == null) {
+            errors.add(new VendorBillException.FieldError(
+                    "apHold", "must be an object; send onHold false to release a hold"));
+            return null;
+        }
+        if (hold.getOnHold() == null) {
+            errors.add(new VendorBillException.FieldError("apHold.onHold", "is required: true or false"));
+            return null;
+        }
+        String trimmed = hold.getReason() == null ? null : hold.getReason().trim();
+        if (hold.getOnHold() && trimmed != null && trimmed.length() > MAX_HOLD_REASON) {
+            errors.add(new VendorBillException.FieldError(
+                    "apHold.reason", "must be at most " + MAX_HOLD_REASON + " characters"));
+            return null;
+        }
+        String reason = trimmed != null && trimmed.length() >= MIN_HOLD_REASON ? trimmed : null;
+        return new HoldChange(hold.getOnHold(), reason, hold.hasReason(), trimmed == null ? null : sha256(trimmed));
+    }
+
+    /** The {@code informationReturn} object's shape (#2615), before pos-tax is asked. */
+    private static @Nullable InformationReturnChange informationReturnChange(
+            VendorApSettingsRequest request, List<VendorBillException.FieldError> errors) {
+        if (!request.hasInformationReturn()) {
+            return null;
+        }
+        VendorInformationReturnRequest given = request.getInformationReturn();
+        if (given == null) {
+            errors.add(new VendorBillException.FieldError(
+                    "informationReturn", "must be an object; send reportable false to clear the flag"));
+            return null;
+        }
+        if (given.getReportable() == null) {
+            errors.add(
+                    new VendorBillException.FieldError("informationReturn.reportable", "is required: true or false"));
+            return null;
+        }
+        String form = code(given.getForm());
+        String box = code(given.getBox());
+        String scheme = code(given.getPayeeTaxRegistrationScheme());
+        int before = errors.size();
+        if (given.getReportable()) {
+            if (form == null) {
+                errors.add(new VendorBillException.FieldError("informationReturn.form", "is required when reportable"));
+            } else if (!FORM_CODE.matcher(form).matches()) {
+                errors.add(new VendorBillException.FieldError(
+                        "informationReturn.form", "is not a form code of the tax country's information returns"));
+            }
+            if (box == null) {
+                errors.add(new VendorBillException.FieldError("informationReturn.box", "is required when reportable"));
+            } else if (!BOX_CODE.matcher(box).matches()) {
+                errors.add(new VendorBillException.FieldError("informationReturn.box", "is not a box of the form"));
+            }
+            if (scheme != null && !SCHEME_CODE.matcher(scheme).matches()) {
+                errors.add(new VendorBillException.FieldError(
+                        "informationReturn.payeeTaxRegistrationScheme", "is not a payee-id scheme of the form"));
+            }
+        } else {
+            notWhenUnreportable(form, "informationReturn.form", errors);
+            notWhenUnreportable(box, "informationReturn.box", errors);
+            notWhenUnreportable(scheme, "informationReturn.payeeTaxRegistrationScheme", errors);
+        }
+        if (errors.size() > before) {
+            return null;
+        }
+        return new InformationReturnChange(
+                given.getReportable(),
+                given.getReportable() ? form : null,
+                given.getReportable() ? box : null,
+                given.getReportable() ? scheme : null,
+                given.hasForm(),
+                given.hasBox(),
+                given.hasPayeeTaxRegistrationScheme());
+    }
+
+    private static void notWhenUnreportable(
+            @Nullable String value, String field, List<VendorBillException.FieldError> errors) {
+        if (value != null) {
+            errors.add(new VendorBillException.FieldError(field, "must be absent or null when not reportable"));
+        }
+    }
+
+    /** A code as sent, trimmed and upper-cased; null when absent or blank. */
+    private static @Nullable String code(@Nullable String value) {
+        return value == null || value.isBlank() ? null : value.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * The information return against pos-tax's configured forms for the tax country (#2615): the form is one of them,
+     * the box one of its boxes, the scheme (when given) one of its payee-id schemes. A country with no form refuses
+     * any reportable vendor. Each violation is a 400 {@code VALIDATION_ERROR} field error; nothing is written.
+     */
+    private static void requireConfigured(InformationReturnChange change, InformationReturnFormsResponse configured) {
+        List<VendorBillException.FieldError> errors = new ArrayList<>();
+        if (configured.forms().isEmpty()) {
+            errors.add(new VendorBillException.FieldError(
+                    "informationReturn.reportable",
+                    "the tax country " + configured.countryCode() + " configures no information-return form"));
+            refuse(errors);
+        }
+        InformationReturnFormsResponse.Form form = configured.form(Objects.requireNonNull(change.form()));
+        if (form == null) {
+            errors.add(new VendorBillException.FieldError(
+                    "informationReturn.form",
+                    "is not a form configured for the tax country " + configured.countryCode()));
+        } else {
+            if (!form.hasBox(Objects.requireNonNull(change.box()))) {
+                errors.add(new VendorBillException.FieldError("informationReturn.box", "is not a box of the form"));
+            }
+            if (change.scheme() != null && !form.payeeIdSchemes().contains(change.scheme())) {
+                errors.add(new VendorBillException.FieldError(
+                        "informationReturn.payeeTaxRegistrationScheme", "is not a payee-id scheme of the form"));
+            }
+        }
+        refuse(errors);
+    }
+
+    /**
      * What a settings PUT asked for, normalised: the vendor and each field as absent ({@code ~}), null ({@code -}) or
-     * its value. Recorded on the request row so a reused requestId with another body is 409, not a silent replay.
+     * its value. Recorded on the request row so a reused requestId with another body is 409, not a silent replay. The
+     * hold reason enters as its SHA-256 hex, so free text never reaches the {@code ;}-separated form or the row. S43
+     * appends its own field the same way.
      */
     private static String fingerprint(
             UUID vendorId,
             VendorApSettingsRequest request,
             @Nullable VendorBillDebitClass debitClass,
-            @Nullable String key) {
-        return "vendorId=" + vendorId + ";defaultDebitClass="
-                + (!request.hasDefaultDebitClass() ? "~" : debitClass == null ? "-" : debitClass.name())
-                + ";defaultExpenseMappingKey="
-                + (!request.hasDefaultExpenseMappingKey() ? "~" : key == null ? "-" : key);
+            @Nullable String key,
+            @Nullable HoldChange hold,
+            @Nullable InformationReturnChange informationReturn) {
+        StringBuilder fingerprint = new StringBuilder("vendorId=")
+                .append(vendorId)
+                .append(";defaultDebitClass=")
+                .append(!request.hasDefaultDebitClass() ? "~" : debitClass == null ? "-" : debitClass.name())
+                .append(";defaultExpenseMappingKey=")
+                .append(!request.hasDefaultExpenseMappingKey() ? "~" : key == null ? "-" : key);
+        if (hold == null) {
+            fingerprint.append(";apHold=~");
+        } else {
+            fingerprint
+                    .append(";apHold.onHold=")
+                    .append(hold.onHold())
+                    .append(";apHold.reason=")
+                    .append(given(hold.reasonGiven(), hold.reasonHash()));
+        }
+        if (informationReturn == null) {
+            fingerprint.append(";informationReturn=~");
+        } else {
+            fingerprint
+                    .append(";informationReturn.reportable=")
+                    .append(informationReturn.reportable())
+                    .append(";informationReturn.form=")
+                    .append(given(informationReturn.formGiven(), informationReturn.form()))
+                    .append(";informationReturn.box=")
+                    .append(given(informationReturn.boxGiven(), informationReturn.box()))
+                    .append(";informationReturn.payeeTaxRegistrationScheme=")
+                    .append(given(informationReturn.schemeGiven(), informationReturn.scheme()));
+        }
+        return fingerprint.toString();
+    }
+
+    private static String given(boolean present, @Nullable String value) {
+        return !present ? "~" : value == null ? "-" : value;
+    }
+
+    /** The SHA-256 hex of {@code text} (UTF-8). */
+    static String sha256(String text) {
+        try {
+            return HexFormat.of()
+                    .formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is not available", e);
+        }
     }
 
     /** The fingerprint part of a request row's new value (everything before {@code ;changed=}). */
@@ -316,23 +591,58 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     // ---- reads ----------------------------------------------------------------------------------------------
 
     private VendorResponse read(ExtSupplierVendor vendor) {
-        boolean changed = paymentDetailsChanged(List.of(vendor)).contains(vendor.getVendorId());
-        VendorApSettingsResponse apSettings = settings.findByVendorId(vendor.getVendorId())
-                .map(row -> new VendorApSettingsResponse(
-                        row.getDefaultDebitClass(),
-                        row.getDefaultExpenseMappingKey(),
-                        row.getConfirmedRemitToVersion(),
-                        row.getRemitToConfirmedBy(),
-                        row.getRemitToConfirmedAt()))
+        Optional<ApVendorSettings> row = settings.findByVendorId(vendor.getVendorId());
+        boolean changed = paymentDetailsChanged(
+                        List.of(vendor),
+                        row.map(r -> Map.of(vendor.getVendorId(), r)).orElse(Map.of()))
+                .contains(vendor.getVendorId());
+        VendorApSettingsResponse apSettings = row.map(r -> new VendorApSettingsResponse(
+                        r.getDefaultDebitClass(),
+                        r.getDefaultExpenseMappingKey(),
+                        r.getConfirmedRemitToVersion(),
+                        r.getRemitToConfirmedBy(),
+                        r.getRemitToConfirmedAt(),
+                        r.isApHold()
+                                ? new VendorApSettingsResponse.ApHold(
+                                        true, r.getApHoldReason(), r.getApHoldSetBy(), r.getApHoldSetAt())
+                                : VendorApSettingsResponse.ApHold.NONE,
+                        informationReturn(r, vendor)))
                 .orElse(VendorApSettingsResponse.NONE);
-        return toResponse(vendor, changed, apSettings);
+        return toResponse(vendor, changed, apSettings.apHold().onHold(), apSettings);
+    }
+
+    /**
+     * The information-return flag as the vendor read serves it (#2615): {@code payeeTinOnFile} when the copy holds a
+     * registration of the chosen scheme, and {@code payeeTinLast4} relayed unchanged from the one such registration
+     * (null with none, several, or a null {@code last4}). Never derived here, never logged (ADR-0072).
+     */
+    static VendorApSettingsResponse.InformationReturn informationReturn(
+            ApVendorSettings row, ExtSupplierVendor vendor) {
+        if (!row.isInformationReturnReportable()) {
+            return VendorApSettingsResponse.InformationReturn.NONE;
+        }
+        String scheme = row.getInformationReturnPayeeScheme();
+        List<Map<String, String>> ofScheme = scheme == null || vendor.getTaxRegistrations() == null
+                ? List.of()
+                : vendor.getTaxRegistrations().stream()
+                        .filter(registration -> registration != null && scheme.equals(registration.get("scheme")))
+                        .toList();
+        return new VendorApSettingsResponse.InformationReturn(
+                true,
+                row.getInformationReturnForm(),
+                row.getInformationReturnBox(),
+                scheme,
+                !ofScheme.isEmpty(),
+                ofScheme.size() == 1 ? ofScheme.get(0).get("last4") : null);
     }
 
     /**
      * The vendors among {@code found} with an approved, open bill approved at another remit-to version than the
      * current one, and no confirmation of the current version (rule 8's flag; the payer is unknown at read time).
+     *
+     * @param rows the found vendors' settings rows, already read (one query per page)
      */
-    private Set<UUID> paymentDetailsChanged(List<ExtSupplierVendor> found) {
+    private Set<UUID> paymentDetailsChanged(List<ExtSupplierVendor> found, Map<UUID, ApVendorSettings> rows) {
         if (found.isEmpty()) {
             return Set.of();
         }
@@ -343,17 +653,21 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
         if (changed.isEmpty()) {
             return changed;
         }
-        for (ApVendorSettings row : settings.findByVendorIdIn(changed)) {
-            ExtSupplierVendor vendor = byId.get(row.getVendorId());
-            if (vendor != null && Objects.equals(row.getConfirmedRemitToVersion(), vendor.getRemitToVersion())) {
-                changed.remove(row.getVendorId());
-            }
-        }
+        changed.removeIf(vendorId -> {
+            ApVendorSettings row = rows.get(vendorId);
+            ExtSupplierVendor vendor = byId.get(vendorId);
+            return row != null
+                    && vendor != null
+                    && Objects.equals(row.getConfirmedRemitToVersion(), vendor.getRemitToVersion());
+        });
         return changed;
     }
 
     private static VendorResponse toResponse(
-            ExtSupplierVendor vendor, boolean paymentDetailsChanged, @Nullable VendorApSettingsResponse apSettings) {
+            ExtSupplierVendor vendor,
+            boolean paymentDetailsChanged,
+            boolean apHold,
+            @Nullable VendorApSettingsResponse apSettings) {
         return VendorResponse.builder()
                 .vendorId(vendor.getVendorId())
                 .name(vendor.getDisplayName())
@@ -361,11 +675,137 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
                 .status(vendor.getStatus())
                 .remitToVersion(vendor.getRemitToVersion())
                 .paymentDetailsChanged(paymentDetailsChanged)
+                .apHold(apHold)
                 .apSettings(apSettings)
                 .build();
     }
 
     // ---- writes ---------------------------------------------------------------------------------------------
+
+    /**
+     * Applies a hold change to {@code row} (#2615): set, a new reason, or a release, each one audit row; the same
+     * reason again, or a release of a vendor not held, changes nothing and writes none.
+     *
+     * @return 1 when the row changed, else 0
+     */
+    private int applyHold(
+            ApVendorSettings row, HoldChange hold, UUID vendorId, String actor, String justification, UUID requestId) {
+        if (hold.onHold()) {
+            String reason = Objects.requireNonNull(hold.reason());
+            if (row.isApHold() && reason.equals(row.getApHoldReason())) {
+                return 0;
+            }
+            auditLogs.save(audit(
+                    vendorId,
+                    AUDIT_HOLD_SET,
+                    actor,
+                    justification,
+                    row.isApHold() ? "apHold=true;reason=" + row.getApHoldReason() : "apHold=false",
+                    "apHold=true;reason=" + reason + ";requestId=" + requestId));
+            row.setApHold(true);
+            row.setApHoldReason(reason);
+            row.setApHoldSetBy(actor);
+            row.setApHoldSetAt(Instant.now(clock));
+            return 1;
+        }
+        if (!row.isApHold()) {
+            return 0;
+        }
+        auditLogs.save(audit(
+                vendorId,
+                AUDIT_HOLD_CLEARED,
+                actor,
+                justification,
+                "apHold=true;reason=" + row.getApHoldReason(),
+                "apHold=false;requestId=" + requestId));
+        row.setApHold(false);
+        row.setApHoldReason(null);
+        row.setApHoldSetBy(null);
+        row.setApHoldSetAt(null);
+        return 1;
+    }
+
+    /**
+     * Applies an information-return change to {@code row} (#2615): one {@value #AUDIT_SETTINGS_SET} row per field that
+     * changed, old to new.
+     *
+     * @return the number of fields that changed
+     */
+    private int applyInformationReturn(
+            ApVendorSettings row,
+            InformationReturnChange change,
+            UUID vendorId,
+            String actor,
+            String justification,
+            UUID requestId) {
+        int changed = 0;
+        if (change.reportable() != row.isInformationReturnReportable()) {
+            auditSetting(
+                    vendorId,
+                    actor,
+                    justification,
+                    requestId,
+                    "informationReturnReportable",
+                    row.isInformationReturnReportable(),
+                    change.reportable());
+            row.setInformationReturnReportable(change.reportable());
+            changed++;
+        }
+        if (!Objects.equals(change.form(), row.getInformationReturnForm())) {
+            auditSetting(
+                    vendorId,
+                    actor,
+                    justification,
+                    requestId,
+                    "informationReturnForm",
+                    row.getInformationReturnForm(),
+                    change.form());
+            row.setInformationReturnForm(change.form());
+            changed++;
+        }
+        if (!Objects.equals(change.box(), row.getInformationReturnBox())) {
+            auditSetting(
+                    vendorId,
+                    actor,
+                    justification,
+                    requestId,
+                    "informationReturnBox",
+                    row.getInformationReturnBox(),
+                    change.box());
+            row.setInformationReturnBox(change.box());
+            changed++;
+        }
+        if (!Objects.equals(change.scheme(), row.getInformationReturnPayeeScheme())) {
+            auditSetting(
+                    vendorId,
+                    actor,
+                    justification,
+                    requestId,
+                    "informationReturnPayeeScheme",
+                    row.getInformationReturnPayeeScheme(),
+                    change.scheme());
+            row.setInformationReturnPayeeScheme(change.scheme());
+            changed++;
+        }
+        return changed;
+    }
+
+    private void auditSetting(
+            UUID vendorId,
+            String actor,
+            String justification,
+            UUID requestId,
+            String setting,
+            @Nullable Object before,
+            @Nullable Object after) {
+        auditLogs.save(audit(
+                vendorId,
+                AUDIT_SETTINGS_SET,
+                actor,
+                justification,
+                setting + "=" + nullable(before),
+                setting + "=" + nullable(after) + ";requestId=" + requestId));
+    }
 
     private ApVendorSettings settingsFor(UUID vendorId) {
         return settings.findByVendorId(vendorId).orElseGet(() -> {

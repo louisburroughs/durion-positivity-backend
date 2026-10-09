@@ -531,6 +531,107 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    @DisplayName("#2615: the hold and information-return columns are tenant-isolated, and their CHECKs refuse a hold"
+            + " without a reason and a reportable vendor without a form")
+    void holdAndInformationReturnColumns() {
+        UUID tenantA = tenant();
+        UUID tenantB = tenant();
+        UUID vendorId = UUIDv7Generator.generate();
+        asTenant(tenantA, () -> {
+            ApVendorSettings row = new ApVendorSettings();
+            row.setVendorId(vendorId);
+            row.setApHold(true);
+            row.setApHoldReason("Disputed delivery 4471, awaiting credit");
+            row.setApHoldSetBy("q.controller");
+            row.setApHoldSetAt(clock.instant());
+            row.setInformationReturnReportable(true);
+            row.setInformationReturnForm("ZZ_FORM_A");
+            row.setInformationReturnBox("1");
+            row.setInformationReturnPayeeScheme("ZZ_BUSINESS_ID");
+            return settings.save(row);
+        });
+
+        assertThat(asTenant(tenantA, () -> settings.findByVendorIdIn(List.of(vendorId))))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.isApHold()).isTrue();
+                    assertThat(row.getApHoldReason()).isEqualTo("Disputed delivery 4471, awaiting credit");
+                    assertThat(row.getInformationReturnForm()).isEqualTo("ZZ_FORM_A");
+                });
+        assertThat(asTenant(tenantB, () -> settings.findByVendorIdIn(List.of(vendorId))))
+                .isEmpty();
+
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        String insert = "INSERT INTO ap_vendor_settings (tenant_id, ap_vendor_settings_id, vendor_id, version,"
+                + " created_at, updated_at, ap_hold, ap_hold_reason, ap_hold_set_by, ap_hold_set_at,"
+                + " information_return_reportable, information_return_form, information_return_box)"
+                + " VALUES (?, ?, ?, 0, now(), now(), ?, ?, ?, ?, ?, ?, ?)";
+        java.sql.Timestamp now = java.sql.Timestamp.from(clock.instant());
+        assertThatThrownBy(() -> owner.update(
+                        insert, tenantB, UUIDv7Generator.generate(), vendorId, true, null, "q", now, false, null, null))
+                .as("a hold without a reason")
+                .hasMessageContaining("ap_vendor_settings_hold_check");
+        assertThatThrownBy(() -> owner.update(
+                        insert,
+                        tenantB,
+                        UUIDv7Generator.generate(),
+                        vendorId,
+                        true,
+                        " short   ",
+                        "q",
+                        now,
+                        false,
+                        null,
+                        null))
+                .as("a hold with a reason under 10 characters once trimmed")
+                .hasMessageContaining("ap_vendor_settings_hold_check");
+        assertThatThrownBy(() -> owner.update(
+                        insert,
+                        tenantB,
+                        UUIDv7Generator.generate(),
+                        vendorId,
+                        false,
+                        "A stale reason left",
+                        null,
+                        null,
+                        false,
+                        null,
+                        null))
+                .as("a reason without a hold")
+                .hasMessageContaining("ap_vendor_settings_hold_check");
+        assertThatThrownBy(() -> owner.update(
+                        insert,
+                        tenantB,
+                        UUIDv7Generator.generate(),
+                        vendorId,
+                        false,
+                        null,
+                        null,
+                        null,
+                        true,
+                        null,
+                        "1"))
+                .as("reportable without a form")
+                .hasMessageContaining("ap_vendor_settings_information_return_check");
+        assertThatThrownBy(() -> owner.update(
+                        insert,
+                        tenantB,
+                        UUIDv7Generator.generate(),
+                        vendorId,
+                        false,
+                        null,
+                        null,
+                        null,
+                        false,
+                        "ZZ_FORM_A",
+                        null))
+                .as("a form without reportable")
+                .hasMessageContaining("ap_vendor_settings_information_return_check");
+        assertThat(count("SELECT count(*) FROM ap_vendor_settings WHERE tenant_id = ?", tenantB))
+                .isZero();
+    }
+
+    @Test
     @DisplayName(
             "paymentDetailsChanged counts only open bills: a fully paid bill approved at an older version does not")
     void paymentDetailsChangedCountsOpenBillsOnly() {

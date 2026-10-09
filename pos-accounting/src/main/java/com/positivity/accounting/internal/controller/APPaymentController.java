@@ -86,8 +86,8 @@ public class APPaymentController {
                 Preconditions: checked in this order before the gateway is called, charging nothing, the method \
                 is ACH, CHECK or WIRE, the currency is the functional currency, the bank account is eligible (active \
                 from the start of the business date, not deactivated before the payment, not in a foreign currency), the \
-                vendor is an ACTIVE pos-supplier vendor in accounting's copy, every allocated bill exists, is \
-                APPROVED, belongs to the vendor and fits the gross amount, the payer approved none of the bills paid \
+                vendor is an ACTIVE pos-supplier vendor in accounting's copy and not on AP hold, every \
+                allocated bill exists, is APPROVED, belongs to the vendor and fits the gross amount, the payer approved none of the bills paid \
                 (unless the AP approval policy allows it), every bill was approved at the vendor's current remit-to \
                 version or someone other than the payer confirmed it, the business date is not hard-locked, its period is open or overridden, \
                 and the AP_PAYMENT mappings ACCOUNTS_PAYABLE (and PAYMENT_FEES when a fee is charged) are set up.
@@ -101,7 +101,8 @@ public class APPaymentController {
                 Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation \
                 or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT, \
                 LOCK_TIMEOUT or VENDOR_PAYMENT_DETAILS_CHANGED (naming each bill and the vendor number), 422 \
-                AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, VENDOR_INACTIVE, \
+                AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, VENDOR_INACTIVE, VENDOR_ON_AP_HOLD (the \
+                message names the vendor number, the reason is on the vendor read), \
                 ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED or GL_MAPPING_NOT_CONFIGURED, and 500 \
                 PAYMENT_GATEWAY_FAILURE when the gateway fails or times out, and 503 VENDOR_REPLICATION_PENDING \
                 (Retry-After) when the vendor is not in the copy yet.
@@ -132,6 +133,7 @@ public class APPaymentController {
             responseCode = "422",
             description = "Refused before the gateway, in this order: AP_PAYMENT_METHOD_NOT_SUPPORTED (CREDIT_CARD,"
                     + " OTHER), CURRENCY_NOT_SUPPORTED (not the functional currency), VENDOR_INACTIVE,"
+                    + " VENDOR_ON_AP_HOLD (the vendor is on AP hold; its bills stay approved),"
                     + " ACCOUNTING_TIME_ZONE_UNSET,"
                     + " PERIOD_HARD_LOCKED, PERIOD_CLOSED (no overrideJustification with accounting:period:override),"
                     + " GL_MAPPING_NOT_CONFIGURED (AP_PAYMENT/ACCOUNTS_PAYABLE, or PAYMENT_FEES with a fee); nothing"
@@ -367,7 +369,8 @@ public class APPaymentController {
             summary = "List Eligible Vendor Bills",
             description = """
                 Lists vendor bills eligible for payment, meaning those in APPROVED status, ordered by due \
-                date oldest first with nulls last, then bill date, then bill id.
+                date oldest first with nulls last, then bill date, then bill id; each row carries vendorApHold and \
+                vendorApHoldReason, and a held vendor's bills stay listed but are refused at payment.
                 Use this tool to pick bills before calling executeApPayment; do not use \
                 listVendorBills on the vendor-bill API, which returns bills of every status.
                 Preconditions: none; the sort order is server-controlled and cannot be overridden.

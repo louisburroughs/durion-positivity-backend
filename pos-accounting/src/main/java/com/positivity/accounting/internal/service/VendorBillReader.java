@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -72,6 +73,7 @@ public class VendorBillReader {
     static final String CHECK_TOTALS_ADD_UP = "TOTALS_ADD_UP";
     static final String CHECK_OPEN_DELIVERIES_FROM_VENDOR = "OPEN_DELIVERIES_FROM_VENDOR";
     static final String CHECK_WITHIN_CLERK_LIMIT = "WITHIN_CLERK_LIMIT";
+    static final String CHECK_VENDOR_AP_HOLD = "VENDOR_AP_HOLD";
 
     /** {@code blockedReason} values of an action the rules block (S13, #2510); the tier wins when both apply. */
     static final String BLOCKED_LIMIT = "AP_APPROVAL_LIMIT_EXCEEDED";
@@ -136,6 +138,7 @@ public class VendorBillReader {
                 openDeliveries(bill, channel, posting.orElse(null))));
         // The limits are the functional currency's (ADR-0067 R-6), whatever the bill's.
         checks.add(withinClerkLimit(bill.getStatus(), bill.getTotalAmount(), settings, ledgerCurrency.code()));
+        checks.add(vendorApHold(bill.getStatus(), openAmount, () -> vendorCopies.apHold(bill.getVendorId())));
 
         return VendorBillResponse.builder()
                 .vendorBillId(billId)
@@ -264,9 +267,14 @@ public class VendorBillReader {
                 };
         Map<UUID, BigDecimal> allocated = allocatedBy(
                 rows.getContent().stream().map(VendorBill::getVendorBillId).toList());
-        // One policy snapshot per page (ruling 8).
+        // One policy snapshot per page (ruling 8), and one settings query for the page's held vendors (#2615).
         ApApprovalPolicy.Settings settings = policy.settings();
-        return rows.map(bill -> stageRow(bill, nz(allocated.get(bill.getVendorBillId())), settings));
+        Set<UUID> held = vendorCopies
+                .heldVendors(
+                        rows.getContent().stream().map(VendorBill::getVendorId).collect(Collectors.toSet()))
+                .keySet();
+        return rows.map(bill ->
+                stageRow(bill, nz(allocated.get(bill.getVendorBillId())), settings, held.contains(bill.getVendorId())));
     }
 
     private Page<VendorBill> donePage(int page, int size) {
@@ -313,7 +321,7 @@ public class VendorBillReader {
     }
 
     private VendorBillReview.StageRow stageRow(
-            VendorBill bill, BigDecimal allocated, ApApprovalPolicy.Settings settings) {
+            VendorBill bill, BigDecimal allocated, ApApprovalPolicy.Settings settings, boolean vendorApHold) {
         return new VendorBillReview.StageRow(
                 bill.getVendorBillId(),
                 bill.getBillNumber(),
@@ -326,7 +334,8 @@ public class VendorBillReader {
                 channelOf(bill),
                 bill.getSubmittedAt(),
                 nz(bill.getTotalAmount()).subtract(allocated),
-                REVIEW_STATUSES.contains(bill.getStatus()) ? settings.tier(bill.getTotalAmount()) : null);
+                REVIEW_STATUSES.contains(bill.getStatus()) ? settings.tier(bill.getTotalAmount()) : null,
+                vendorApHold);
     }
 
     // ---- the bill's blocks ----------------------------------------------------------------------------------
@@ -585,6 +594,36 @@ public class VendorBillReader {
                         ? VendorBillCheckOutcome.PASS
                         : VendorBillCheckOutcome.FAIL,
                 args);
+    }
+
+    /**
+     * {@code VENDOR_AP_HOLD} (#2615): FAIL with {@code vendorNumber}, {@code reason} and {@code since} while the bill's
+     * vendor is on AP hold, PASS otherwise; NOT_APPLICABLE on a {@code REJECTED} or {@code VOIDED} bill and on an
+     * {@code APPROVED} bill with nothing open, which no payment will touch. Informational: a hold stops payment only,
+     * so it blocks no action and sets no {@code blockedReason}; the settings row is not read when not applicable.
+     *
+     * @param hold the vendor's hold, read only when the check applies
+     */
+    static VendorBillReview.@NonNull Check vendorApHold(
+            @NonNull VendorBillStatus status,
+            @NonNull BigDecimal openAmount,
+            @NonNull Supplier<Optional<SupplierVendorCopies.ApHold>> hold) {
+        boolean closed = status == VendorBillStatus.REJECTED
+                || status == VendorBillStatus.VOIDED
+                || (status == VendorBillStatus.APPROVED && openAmount.signum() <= 0);
+        if (closed) {
+            return new VendorBillReview.Check(CHECK_VENDOR_AP_HOLD, VendorBillCheckOutcome.NOT_APPLICABLE, Map.of());
+        }
+        return hold.get()
+                .map(h -> {
+                    Map<String, String> args = new LinkedHashMap<>();
+                    args.put("vendorNumber", h.vendorNumber());
+                    args.put("reason", h.reason());
+                    args.put("since", h.since() == null ? null : h.since().toString());
+                    return new VendorBillReview.Check(CHECK_VENDOR_AP_HOLD, VendorBillCheckOutcome.FAIL, args);
+                })
+                .orElseGet(
+                        () -> new VendorBillReview.Check(CHECK_VENDOR_AP_HOLD, VendorBillCheckOutcome.PASS, Map.of()));
     }
 
     /**

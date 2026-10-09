@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.controller;
 import com.positivity.accounting.internal.dto.VendorApSettingsRequest;
 import com.positivity.accounting.internal.dto.VendorRemitToConfirmationRequest;
 import com.positivity.accounting.internal.dto.VendorResponse;
+import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.VendorDirectoryService;
 import com.positivity.events.EmitEvent;
@@ -71,7 +72,8 @@ public class VendorDirectoryController {
             description = """
                     Searches accounting's copy of the pos-supplier vendor master with a case-insensitive \
                     name-contains match, returning active and inactive vendors ordered by name, each with its \
-                    vendorNumber, status, current remitToVersion and paymentDetailsChanged flag.
+                    vendorNumber, status, current remitToVersion, paymentDetailsChanged flag and apHold flag (true \
+                    while AP payments to the vendor are held).
                     Use this tool to resolve a vendor name to its pos-supplier vendorId; use getVendorById instead \
                     when a vendor id is already known, and use pos-supplier's vendor endpoints to change a vendor.
                     Preconditions: the caller holds accounting:ap:view; a vendor appears once its \
@@ -120,8 +122,10 @@ public class VendorDirectoryController {
             summary = "Get Vendor By Id",
             description = """
                     Returns one vendor from accounting's copy of the pos-supplier vendor master, with its \
-                    vendorNumber, status, remitToVersion, paymentDetailsChanged and apSettings (the AP defaults \
-                    and the last remit-to confirmation).
+                    vendorNumber, status, remitToVersion, paymentDetailsChanged, apHold and apSettings: the AP \
+                    defaults, the last remit-to confirmation, apHold (onHold, reason, setBy, setAt) and \
+                    informationReturn (reportable, form, box, payeeTaxRegistrationScheme, payeeTinOnFile and the \
+                    masked payeeTinLast4; a full taxpayer number is never served).
                     Use this tool when the vendor id is already known, for example before confirming a changed \
                     remit-to; use searchVendors instead when resolving a name typed by a user.
                     Preconditions: the caller holds accounting:ap:view and the vendor has been copied from \
@@ -242,23 +246,26 @@ public class VendorDirectoryController {
             operationId = "setVendorApSettings",
             summary = "Set Vendor AP Settings",
             description = """
-                    Sets the vendor's AP defaults: defaultDebitClass (GOODS or EXPENSE) and \
-                    defaultExpenseMappingKey (an active VENDOR_BILL key EXPENSE_<CODE>); a field left out is \
-                    unchanged and a field sent as null clears it.
-                    An approval falls back to them only when neither the approver's classification nor the \
-                    proposal made at submission names a class or key; they never touch a posted entry, and each \
-                    change writes an AP_VENDOR_SETTINGS_SET audit row, old to new.
-                    Use this tool when a controller sets how a vendor's bills are classed by default; do not use \
-                    it to classify one bill, use the approval's classification instead.
+                    Sets the vendor's AP settings: defaultDebitClass and defaultExpenseMappingKey (a field left out \
+                    is unchanged, null clears it), apHold {onHold, reason} (a hold stops AP payments to the vendor \
+                    with 422 VENDOR_ON_AP_HOLD, never approval or posting) and informationReturn {reportable, form, \
+                    box, payeeTaxRegistrationScheme} (codes from listInformationReturnForms).
+                    Each change writes an audit row: AP_VENDOR_SETTINGS_SET per default or information-return field, \
+                    AP_VENDOR_HOLD_SET or AP_VENDOR_HOLD_CLEARED for the hold; nothing posts.
+                    Use this tool when a controller sets a vendor's defaults, holds or releases its payments, or \
+                    marks it reportable; do not use it to classify one bill, use the approval's classification \
+                    instead.
                     Preconditions: the caller holds accounting:ap_approval_policy:manage and the vendor is in the \
-                    copy; an inactive vendor may be set.
+                    copy; an inactive vendor may be set, held or released.
                     Required inputs: justification (at least 10 characters) and requestId (a UUID generated once \
-                    per change); EXPENSE needs a key, sent or already set.
-                    Emits ACCOUNTING_VENDOR_AP_SETTINGS_SET; the call is idempotent on requestId: a replay writes \
-                    nothing and returns the vendor as it is.
+                    per change); a hold needs a reason of 10-500 characters; reportable needs form and box; apHold \
+                    or informationReturn sent as null, and any unknown property, is refused.
+                    Emits ACCOUNTING_VENDOR_AP_SETTINGS_SET; idempotent on requestId: a replay writes nothing and \
+                    returns the vendor as it is.
                     Returns 200 with the vendor read; 400 VALIDATION_ERROR with fieldErrors or \
-                    JUSTIFICATION_REQUIRED; 403 FORBIDDEN; 409 IDEMPOTENCY_CONFLICT for a requestId already used \
-                    with another body; 503 VENDOR_REPLICATION_PENDING (Retry-After); nothing is written on a refusal.
+                    JUSTIFICATION_REQUIRED; 403; 409 IDEMPOTENCY_CONFLICT; 503 VENDOR_REPLICATION_PENDING or \
+                    SERVICE_UNAVAILABLE (pos-tax, information-return change only), with Retry-After; nothing is \
+                    written on a refusal.
                     """,
             tags = {TAG})
     @ApiResponse(
@@ -268,8 +275,10 @@ public class VendorDirectoryController {
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR with fieldErrors (a class outside GOODS/EXPENSE, a key that is not an"
-                    + " active VENDOR_BILL key EXPENSE_<CODE>, EXPENSE without a key, no requestId) or"
-                    + " JUSTIFICATION_REQUIRED",
+                    + " active VENDOR_BILL key EXPENSE_<CODE>, EXPENSE without a key, no requestId, apHold or"
+                    + " informationReturn null or malformed, a hold reason over 500 characters, a form, box or scheme"
+                    + " the tax country does not configure, an unknown property named but never echoed) or"
+                    + " JUSTIFICATION_REQUIRED (the justification, or apHold.reason under 10 characters)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
@@ -281,9 +290,9 @@ public class VendorDirectoryController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description =
-                    "VENDOR_REPLICATION_PENDING: the vendor is not in accounting's copy of the pos-supplier vendor"
-                            + " master yet. Not-yet, not no: retry after the Retry-After interval.",
+            description = "VENDOR_REPLICATION_PENDING: the vendor is not in accounting's copy of the pos-supplier"
+                    + " vendor master yet; or SERVICE_UNAVAILABLE: pos-tax cannot check an information-return change."
+                    + " Not-yet, not no: retry after the Retry-After interval.",
             headers =
                     @Header(
                             name = "Retry-After",
@@ -304,6 +313,8 @@ public class VendorDirectoryController {
                                             examples = @ExampleObject(name = "Shop supplies by default", value = """
                                                 {"defaultDebitClass":"EXPENSE",
                                                  "defaultExpenseMappingKey":"EXPENSE_SHOP_SUPPLIES",
+                                                 "apHold":{"onHold":true,
+                                                           "reason":"Disputed delivery 4471, awaiting credit"},
                                                  "justification":"Header-only bills of this vendor are shop supplies",
                                                  "requestId":"0199c0de-7a1b-7c2d-8e3f-4a5b6c7d8e9f"}
                                                 """)))
@@ -311,6 +322,25 @@ public class VendorDirectoryController {
                     @RequestBody
                     @NonNull
                     VendorApSettingsRequest request) {
+        refuseUnknown(request.unknownProperties());
         return ResponseEntity.ok(vendorDirectoryService.setApSettings(vendorId, request));
+    }
+
+    /**
+     * 400 {@code VALIDATION_ERROR} naming each unknown property of the body (#2615), top-level or inside {@code apHold}
+     * or {@code informationReturn}; its value was dropped at binding, so it is never echoed or logged (a {@code tin}
+     * is refused like any other key).
+     */
+    static void refuseUnknown(List<String> unknown) {
+        if (unknown.isEmpty()) {
+            return;
+        }
+        throw new VendorBillException(
+                VendorBillException.Code.VALIDATION_ERROR,
+                "The vendor AP settings request has unknown properties: " + String.join(", ", unknown),
+                unknown.stream()
+                        .map(name -> new VendorBillException.FieldError(name, "is not a property of this request"))
+                        .toList(),
+                null);
     }
 }
