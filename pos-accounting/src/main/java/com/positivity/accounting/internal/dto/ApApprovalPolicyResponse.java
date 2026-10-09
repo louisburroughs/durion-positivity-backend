@@ -75,7 +75,7 @@ public record ApApprovalPolicyResponse(
 
             @Schema(
                     description = "The display name of the person who changed it (\"First Last\"), resolved now from"
-                            + " accounting's people-contact copy; null when not known, never the sign-in name",
+                            + " accounting's people-contact copy; absent when not known, never the sign-in name",
                     example = "Dana Reyes",
                     requiredMode = NOT_REQUIRED)
             @Nullable

@@ -427,9 +427,9 @@ public class APPaymentController {
                 executeApPayment would accept, computed by the same rule (a BANK_CASH account active from the start \
                 of asOf, not deactivated by now, and in the functional currency currencyCode).
                 Each account carries bankAccountId (the GL account id executeApPayment takes), its number and name, \
-                and the bank name and masked number from its bank-account profile (both null without one); a full \
+                and the bank name and masked number from its bank-account profile (both absent without one); a full \
                 bank account number is never served, and accounts are ordered by account number.
-                defaultBankAccountId is the single eligible account an omitted bankAccountId resolves to, null when \
+                defaultBankAccountId is the single eligible account an omitted bankAccountId resolves to, absent when \
                 there is none or more than one; an empty list means no account is set up and a payment answers 400 \
                 fieldErrors[bankAccountId], and the read is informational, since the payment still checks \
                 eligibility when it executes.

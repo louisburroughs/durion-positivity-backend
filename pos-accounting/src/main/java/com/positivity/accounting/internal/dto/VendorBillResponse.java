@@ -120,7 +120,7 @@ public class VendorBillResponse {
 
     @Schema(
             description = "The display name of the person who created the bill (\"First Last\"), resolved now from"
-                    + " accounting's people-contact copy; null when not known or created by the system, never the"
+                    + " accounting's people-contact copy; absent when not known or created by the system, never the"
                     + " sign-in name",
             example = "Ben Okafor",
             requiredMode = NOT_REQUIRED)

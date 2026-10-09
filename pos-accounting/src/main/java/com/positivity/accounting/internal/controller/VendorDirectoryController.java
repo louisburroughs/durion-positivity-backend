@@ -123,7 +123,7 @@ public class VendorDirectoryController {
                     Returns one vendor from accounting's copy of the pos-supplier vendor master, with its \
                     vendorNumber, status, remitToVersion, paymentDetailsChanged, apHold and apSettings: the AP \
                     defaults, the last remit-to confirmation (remitToConfirmedBy and remitToConfirmedByName), apHold \
-                    (onHold, reason, setBy, setByName, setAt; each name field the person's display name, null when \
+                    (onHold, reason, setBy, setByName, setAt; each name field the person's display name, absent when \
                     not known) and \
                     informationReturn (reportable, form, box, payeeTaxRegistrationScheme, payeeTinOnFile and the \
                     masked payeeTinLast4; a full taxpayer number is never served).
@@ -181,7 +181,7 @@ public class VendorDirectoryController {
                     Required inputs: remitToVersion (the vendor's current version) and justification (at least 10 \
                     characters).
                     Emits ACCOUNTING_VENDOR_REMIT_TO_CONFIRM and writes a REMIT_TO_CONFIRM audit row; the answer \
-                    is the vendor read, with remitToConfirmedByName and apHold.setByName (null when not known).
+                    is the vendor read, with remitToConfirmedByName and apHold.setByName (absent when not known).
                     Returns 200 with the vendor read; 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED; 403 \
                     VENDOR_REMIT_TO_SELF_CONFIRMATION when the caller requested this remit-to in pos-supplier; 409 \
                     VENDOR_PAYMENT_DETAILS_CHANGED when the version is not the current one; 503 \
@@ -258,7 +258,7 @@ public class VendorDirectoryController {
                     Each change writes an audit row: AP_VENDOR_SETTINGS_SET per default, information-return field or \
                     tax-on-resale acceptance, \
                     AP_VENDOR_HOLD_SET or AP_VENDOR_HOLD_CLEARED for the hold; nothing posts, and the answer is the \
-                    vendor read, with remitToConfirmedByName and apHold.setByName (null when not known).
+                    vendor read, with remitToConfirmedByName and apHold.setByName (absent when not known).
                     Use this tool when a controller sets a vendor's defaults, holds or releases its payments, or \
                     marks it reportable; do not use it to classify one bill, use the approval's classification \
                     instead.

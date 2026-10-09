@@ -86,7 +86,7 @@ public class VendorBillApprovalController {
                 idempotency key, so a replay finds the bill AWAITING_APPROVAL and is answered 409 \
                 AP_BILL_NOT_APPROVABLE.
                 Returns 200 with the bill read (each actor with its display name: createdByName, \
-                submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM); 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID; \
+                submittedByName, approvedByName and rejectedByName, absent when not known or SYSTEM); 400 JUSTIFICATION_REQUIRED, VALIDATION_ERROR or ARGUMENT_NOT_VALID; \
                 401 without a valid token; 403 FORBIDDEN without accounting:ap:approve or \
                 accounting:ap:approve_over_limit; 404 VENDOR_BILL_NOT_FOUND; 409 AP_BILL_NOT_APPROVABLE naming the \
                 status or an open ambiguous match, or AP_BILL_AWAITING_INVOICE; 422 AP_BILL_ZERO_TOTAL or \
@@ -191,7 +191,7 @@ public class VendorBillApprovalController {
                 writes one VENDOR_BILL_APPROVE_REFUSED row and changes nothing else, and a replayed approve finds \
                 the bill APPROVED and is answered 409 AP_BILL_NOT_APPROVABLE.
                 Returns 200 with the bill read (each actor with its display name: createdByName, \
-                submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), its posting included; 400 JUSTIFICATION_REQUIRED (also a creator's \
+                submittedByName, approvedByName and rejectedByName, absent when not known or SYSTEM), its posting included; 400 JUSTIFICATION_REQUIRED (also a creator's \
                 approval without one), VALIDATION_ERROR or ARGUMENT_NOT_VALID; 401 without a valid token; 403 \
                 FORBIDDEN, AP_APPROVAL_LIMIT_EXCEEDED (nextAction names accounting:ap:approve_over_limit) or \
                 AP_BILL_SELF_APPROVAL (the bill's creator, or the vendor's creator on its first bill, reason \
@@ -299,7 +299,7 @@ public class VendorBillApprovalController {
                 Emits ACCOUNTING_VENDOR_BILL_REJECT and writes a VENDOR_BILL_REJECT audit row; a replay finds the \
                 bill REJECTED and is answered 409 AP_BILL_NOT_APPROVABLE.
                 Returns 200 with the bill read (each actor with its display name: createdByName, \
-                submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), 400 JUSTIFICATION_REQUIRED for a missing or short reason or \
+                submittedByName, approvedByName and rejectedByName, absent when not known or SYSTEM), 400 JUSTIFICATION_REQUIRED for a missing or short reason or \
                 ARGUMENT_NOT_VALID for one over 1000 characters, 401 without a valid token, 403 FORBIDDEN without \
                 accounting:ap:reject, 404 VENDOR_BILL_NOT_FOUND, and 409 AP_BILL_NOT_APPROVABLE naming the bill's \
                 status.
@@ -382,7 +382,7 @@ public class VendorBillApprovalController {
                 VENDOR_BILL_MATCH_EXCEPTION_RESOLVE audit row; a replay finds the bill moved on and is answered 409 \
                 AP_BILL_NOT_APPROVABLE.
                 Returns 200 with the bill read (each actor with its display name: createdByName, \
-                submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM); 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED \
+                submittedByName, approvedByName and rejectedByName, absent when not known or SYSTEM); 400 VALIDATION_ERROR for an unknown action, JUSTIFICATION_REQUIRED \
                 for a missing or short reason, or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN \
                 without the action's permission, or for ACCEPT AP_APPROVAL_LIMIT_EXCEEDED or AP_BILL_SELF_APPROVAL \
                 (also the vendor's creator on its first bill, reason VENDOR_CREATOR_FIRST_BILL; audited as \
@@ -485,7 +485,7 @@ public class VendorBillApprovalController {
                 audit row, plus a VENDOR_BILL_MATCH_CANDIDATE_RELEASE row for a bill released; a replay is answered \
                 409 AP_MATCH_CANDIDATE_ALREADY_RESOLVED.
                 Returns 200 with the bill read (each actor with its display name: createdByName, \
-                submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), 401 without a valid token, 403 FORBIDDEN without \
+                submittedByName, approvedByName and rejectedByName, absent when not known or SYSTEM), 401 without a valid token, 403 FORBIDDEN without \
                 accounting:ap:approve or accounting:ap:approve_over_limit, 404 AP_MATCH_CANDIDATE_NOT_FOUND, 409 \
                 AP_MATCH_CANDIDATE_ALREADY_RESOLVED when someone else resolved the set, 409 AP_BILL_NOT_APPROVABLE \
                 naming the chosen bill's status, 409 AP_BILL_AWAITING_INVOICE for a candidate that kept no invoice, \
@@ -554,7 +554,7 @@ public class VendorBillApprovalController {
                 (VOID_APPROVED or VOID_UNMATCHED); a replay finds the bill VOIDED and is answered 409 \
                 AP_BILL_NOT_VOIDABLE.
                 Returns 200 with the bill read (each actor with its display name: createdByName, \
-                submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), an approved bill's posting with its reversalReference; 400 \
+                submittedByName, approvedByName and rejectedByName, absent when not known or SYSTEM), an approved bill's posting with its reversalReference; 400 \
                 JUSTIFICATION_REQUIRED or ARGUMENT_NOT_VALID; 401 without a valid token; 403 FORBIDDEN without \
                 accounting:ap:reject, or for an approved bill without an approve permission, or \
                 AP_APPROVAL_LIMIT_EXCEEDED over the clerk limit (audited as VENDOR_BILL_VOID_REFUSED); 404 \
@@ -637,7 +637,7 @@ public class VendorBillApprovalController {
                 because the actor is the caller.
                 Emits ACCOUNTING_VENDOR_BILL_DUE_DATE_SET; the same date again writes nothing.
                 Returns 200 with the bill read (each actor with its display name: createdByName, \
-                submittedByName, approvedByName and rejectedByName, null when not known or SYSTEM), 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED, 401 without a \
+                submittedByName, approvedByName and rejectedByName, absent when not known or SYSTEM), 400 VALIDATION_ERROR or JUSTIFICATION_REQUIRED, 401 without a \
                 valid token, 403 FORBIDDEN without accounting:ap:approve, 404 VENDOR_BILL_NOT_FOUND, and 409 \
                 AP_BILL_NOT_APPROVABLE for any other status, CURRENCY_HOLD and APPROVED included.
                 """,

@@ -38,7 +38,7 @@ public record ApPayFromAccountListResponse(
         String currencyCode,
 
         @Schema(
-                description = "The single eligible account, which an omitted bankAccountId resolves to; null when"
+                description = "The single eligible account, which an omitted bankAccountId resolves to; absent when"
                         + " there is none or more than one",
                 example = "0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f1000",
                 requiredMode = NOT_REQUIRED)
@@ -81,7 +81,7 @@ public record ApPayFromAccountListResponse(
             String accountName,
 
             @Schema(
-                    description = "The bank's name from the bank-account profile; null without a profile",
+                    description = "The bank's name from the bank-account profile; absent without a profile",
                     example = "First National",
                     requiredMode = NOT_REQUIRED)
             @Nullable
@@ -89,7 +89,7 @@ public record ApPayFromAccountListResponse(
 
             @Schema(
                     description = "The masked last digits of the bank account number from the profile, display only;"
-                            + " null without a profile. A full account number is never served",
+                            + " absent without a profile. A full account number is never served",
                     example = "4321",
                     requiredMode = NOT_REQUIRED)
             @Nullable

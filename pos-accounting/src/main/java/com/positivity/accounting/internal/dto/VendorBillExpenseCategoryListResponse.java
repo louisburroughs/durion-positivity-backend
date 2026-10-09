@@ -55,14 +55,14 @@ public record VendorBillExpenseCategoryListResponse(
             String mappingKey,
 
             @Schema(
-                    description = "The key's label, its description; null when it has none",
+                    description = "The key's label, its description; absent when it has none",
                     example = "Shop supplies",
                     requiredMode = NOT_REQUIRED)
             @Nullable
             String label,
 
             @Schema(
-                    description = "The number of the account the key resolves to on asOf; null when no mapping is"
+                    description = "The number of the account the key resolves to on asOf; absent when no mapping is"
                             + " effective that day (an approval naming it answers 422 GL_MAPPING_NOT_CONFIGURED)",
                     example = "6340",
                     requiredMode = NOT_REQUIRED)
@@ -70,7 +70,7 @@ public record VendorBillExpenseCategoryListResponse(
             String accountNumber,
 
             @Schema(
-                    description = "The name of that account; null when no mapping is effective that day",
+                    description = "The name of that account; absent when no mapping is effective that day",
                     example = "Shop Supplies & Consumables",
                     requiredMode = NOT_REQUIRED)
             @Nullable

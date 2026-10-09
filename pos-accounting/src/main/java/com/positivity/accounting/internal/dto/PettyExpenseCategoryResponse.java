@@ -70,7 +70,7 @@ public record PettyExpenseCategoryResponse(
 
             @Schema(
                     description = "The display name of the person who made it (\"First Last\"), resolved when the"
-                            + " response is built from accounting's people-contact copy; null when not known or"
+                            + " response is built from accounting's people-contact copy; absent when not known or"
                             + " SYSTEM, never the sign-in name",
                     example = "Dana Reyes",
                     requiredMode = Schema.RequiredMode.NOT_REQUIRED)
