@@ -26,10 +26,10 @@ public interface PermissionHolderService {
      * registration (422). The scope check runs before anything is read, so a scoped caller can
      * neither see holders outside its scope nor probe which codes exist.
      *
-     * @param requested         the raw {@code permission} values; trimmed, lower-cased and
-     *                          de-duplicated in first-seen order
+     * @param requested         the raw {@code permission} values; trimmed, matched against the
+     *                          catalog ignoring case, and de-duplicated in first-seen order
      * @param callerAuthorities the caller's authority codes
-     * @return one entry per distinct code, in request order
+     * @return one entry per distinct code, in request order, each in the catalog's spelling
      * @throws com.positivity.securityservice.internal.exception.PermissionHolderQueryInvalidException
      *         no code, more than {@link #MAX_CODES} distinct codes, or a code that is not
      *         {@code domain:resource:action}

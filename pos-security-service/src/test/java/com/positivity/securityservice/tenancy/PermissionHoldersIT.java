@@ -232,6 +232,22 @@ class PermissionHoldersIT extends PostgresTenancyTestBase {
     }
 
     @Test
+    @DisplayName("a camelCase catalog code is found whatever the case asked and answered in the catalog's spelling")
+    void aCamelCaseCodeIsAnsweredInTheCatalogsSpelling() {
+        String code = "people:timeEntry:approve";
+        List<PermissionHolderRole> truth = grantsInDatabase(t1, List.of(code)).get(code);
+        assertThat(truth).as("the seed grants %s to at least ADMIN", code).isNotEmpty();
+
+        for (String asked : List.of(code, "PEOPLE:TIMEENTRY:APPROVE", "people:timeentry:approve")) {
+            PermissionHoldersResponse answer = answerFor(t1, List.of(asked));
+            assertThat(answer.permissions())
+                    .extracting(PermissionHolders::permission)
+                    .containsExactly(code);
+            assertThat(rolesOf(answer, code)).as("asked as %s", asked).containsExactlyElementsOf(truth);
+        }
+    }
+
+    @Test
     @DisplayName("AC 11: a grant revoked between two calls is gone from the second (no cache)")
     void aFreshRead() {
         assertThat(rolesOf(answerFor(t1, List.of(APPROVE)), APPROVE))

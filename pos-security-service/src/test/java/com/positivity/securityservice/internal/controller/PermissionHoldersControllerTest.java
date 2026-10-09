@@ -109,8 +109,8 @@ class PermissionHoldersControllerTest {
     }
 
     private void allRegistered() {
-        when(permissionRepository.findRegisteredNames(anyCollection()))
-                .thenAnswer(inv -> new HashSet<String>(inv.getArgument(0)));
+        when(permissionRepository.findNamesIgnoreCase(anyCollection()))
+                .thenAnswer(inv -> List.copyOf(inv.<java.util.Collection<String>>getArgument(0)));
     }
 
     private static MockHttpServletRequestBuilder holders(List<String> codes) {
@@ -246,9 +246,28 @@ class PermissionHoldersControllerTest {
 
     @Test
     @WithMockUser(authorities = "security:role:view")
+    @DisplayName("a camelCase catalog code → 200, answered in the catalog's spelling")
+    void aCamelCaseCodeIsAnswered() throws Exception {
+        when(permissionRepository.findNamesIgnoreCase(List.of("people:timeentry:approve")))
+                .thenReturn(List.of("people:timeEntry:approve"));
+        when(roleRepository.findHolderRowsByPermissionNames(List.of("people:timeEntry:approve")))
+                .thenReturn(List.of(new PermissionHolderRow(
+                        "people:timeEntry:approve", "SHOP_MANAGER", "SHOP_MANAGER", LocationScope.LOCATION)));
+
+        mockMvc.perform(holders(List.of("people:timeEntry:approve")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissions[0].permission").value("people:timeEntry:approve"))
+                .andExpect(jsonPath("$.permissions[0].roles[0].name").value("SHOP_MANAGER"));
+        mockMvc.perform(holders(List.of("PEOPLE:TIMEENTRY:APPROVE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissions[0].permission").value("people:timeEntry:approve"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "security:role:view")
     @DisplayName("an unregistered code → 422 PERMISSION_NOT_REGISTERED naming it")
     void anUnregisteredCodeIsUnprocessable() throws Exception {
-        when(permissionRepository.findRegisteredNames(anyCollection())).thenReturn(Set.of());
+        when(permissionRepository.findNamesIgnoreCase(anyCollection())).thenReturn(List.of());
 
         mockMvc.perform(holders(List.of("accounting:ap:aprove")))
                 .andExpect(status().isUnprocessableContent())

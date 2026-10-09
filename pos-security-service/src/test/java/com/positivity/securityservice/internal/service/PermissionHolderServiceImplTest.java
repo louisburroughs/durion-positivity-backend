@@ -17,7 +17,6 @@ import com.positivity.securityservice.internal.exception.PermissionHolderScopeDe
 import com.positivity.securityservice.internal.exception.PermissionNotRegisteredException;
 import com.positivity.securityservice.internal.repository.PermissionRepository;
 import com.positivity.securityservice.internal.repository.RoleRepository;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -43,6 +42,7 @@ class PermissionHolderServiceImplTest {
     private static final String REJECT = "accounting:ap:reject";
     private static final String PAY = "accounting:ap:pay";
     private static final String POLICY = "accounting:ap_approval_policy:manage";
+    private static final String TIME_ENTRY_APPROVE = "people:timeEntry:approve";
     private static final List<String> AP_CODES = List.of(APPROVE, OVER_LIMIT, REJECT, PAY, POLICY);
 
     private static final Set<String> ROLE_VIEWER = Set.of("security:role:view");
@@ -62,8 +62,8 @@ class PermissionHolderServiceImplTest {
     }
 
     private void allRegistered() {
-        when(permissionRepository.findRegisteredNames(anyCollection()))
-                .thenAnswer(inv -> new HashSet<String>(inv.getArgument(0)));
+        when(permissionRepository.findNamesIgnoreCase(anyCollection()))
+                .thenAnswer(inv -> List.copyOf(inv.<java.util.Collection<String>>getArgument(0)));
     }
 
     private static PermissionHolderRow row(String permission, String role, String templateKey, LocationScope scope) {
@@ -104,7 +104,27 @@ class PermissionHolderServiceImplTest {
         }
 
         @Test
-        @DisplayName("trims, lower-cases and de-duplicates in first-seen order")
+        @DisplayName("a camelCase catalog code is matched ignoring case and answered in the catalog's spelling")
+        void aCamelCaseCodeIsAnsweredInTheCatalogsSpelling() {
+            when(permissionRepository.findNamesIgnoreCase(List.of("people:timeentry:approve")))
+                    .thenReturn(List.of(TIME_ENTRY_APPROVE));
+            when(roleRepository.findHolderRowsByPermissionNames(List.of(TIME_ENTRY_APPROVE)))
+                    .thenReturn(
+                            List.of(row(TIME_ENTRY_APPROVE, "SHOP_MANAGER", "SHOP_MANAGER", LocationScope.LOCATION)));
+
+            for (String asked : List.of(TIME_ENTRY_APPROVE, "PEOPLE:TIMEENTRY:APPROVE", "people:timeentry:approve")) {
+                PermissionHoldersResponse response = service.listPermissionHolders(List.of(asked), ROLE_VIEWER);
+                assertThat(response.permissions())
+                        .as("asked as %s", asked)
+                        .containsExactly(new PermissionHolders(
+                                TIME_ENTRY_APPROVE,
+                                List.of(new PermissionHolderRole(
+                                        "SHOP_MANAGER", "SHOP_MANAGER", LocationScope.LOCATION))));
+            }
+        }
+
+        @Test
+        @DisplayName("trims, matches ignoring case and de-duplicates in first-seen order")
         void normalisesAndDeduplicatesInFirstSeenOrder() {
             allRegistered();
             when(roleRepository.findHolderRowsByPermissionNames(List.of(APPROVE, PAY)))
@@ -202,6 +222,19 @@ class PermissionHolderServiceImplTest {
         }
 
         @Test
+        @DisplayName(
+                "the scope is compared ignoring case: ACCOUNTING:AP:PAY is in scope and answered as accounting:ap:pay")
+        void theScopeIsComparedIgnoringCase() {
+            allRegistered();
+            when(roleRepository.findHolderRowsByPermissionNames(List.of(PAY))).thenReturn(List.of());
+
+            assertThat(service.listPermissionHolders(List.of("ACCOUNTING:AP:PAY"), POLICY_MANAGER)
+                            .permissions())
+                    .extracting(PermissionHolders::permission)
+                    .containsExactly(PAY);
+        }
+
+        @Test
         @DisplayName("a policy manager asking about security:role:edit is refused, naming it, and nothing is read")
         void aPolicyManagerOutsideItsScopeIsRefusedBeforeAnyRead() {
             assertThatThrownBy(
@@ -253,15 +286,15 @@ class PermissionHolderServiceImplTest {
         @Test
         @DisplayName("an unregistered code is refused, not answered empty, and no holder is read")
         void anUnregisteredCodeIsRefusedNotAnsweredEmpty() {
-            when(permissionRepository.findRegisteredNames(List.of(APPROVE, "accounting:ap:aprove")))
-                    .thenReturn(Set.of(APPROVE));
+            when(permissionRepository.findNamesIgnoreCase(List.of(APPROVE, "accounting:ap:aprove")))
+                    .thenReturn(List.of(APPROVE));
 
             assertThatThrownBy(
                             () -> service.listPermissionHolders(List.of(APPROVE, "accounting:ap:aprove"), ROLE_VIEWER))
                     .isInstanceOf(PermissionNotRegisteredException.class)
                     .satisfies(ex -> assertThat(((PermissionNotRegisteredException) ex).unregistered())
                             .containsExactly("accounting:ap:aprove"));
-            verify(permissionRepository).findRegisteredNames(List.of(APPROVE, "accounting:ap:aprove"));
+            verify(permissionRepository).findNamesIgnoreCase(List.of(APPROVE, "accounting:ap:aprove"));
             verifyNoInteractions(roleRepository);
         }
     }

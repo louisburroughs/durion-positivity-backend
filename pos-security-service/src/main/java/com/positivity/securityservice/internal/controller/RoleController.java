@@ -227,7 +227,8 @@ public class RoleController {
                     accounting:ap:approve_over_limit, accounting:ap:reject, accounting:ap:pay and \
                     accounting:ap_approval_policy:manage.
                     Required inputs: permission, repeated once per code, 1 to 20 distinct domain:resource:action \
-                    codes; codes are trimmed and lower-cased, and duplicates are answered once in first-seen order.
+                    codes; codes are trimmed, matched case-insensitively and answered in the catalog's spelling, \
+                    and duplicates are answered once in first-seen order.
                     No events are emitted and no state changes; the grants are read live for the caller's tenant \
                     with no cache, so a token issued before a grant change keeps its old permissions until it is \
                     reissued.
@@ -256,7 +257,8 @@ public class RoleController {
     public ResponseEntity<PermissionHoldersResponse> listPermissionHolders(
             @Parameter(
                             description = "A permission code (domain:resource:action) to report the holders of;"
-                                    + " repeat the parameter once per code, at most 20 distinct codes.",
+                                    + " repeat the parameter once per code, at most 20 distinct"
+                                    + " codes. Matched case-insensitively and answered in the catalog's spelling.",
                             example = "accounting:ap:approve")
                     @RequestParam(name = "permission", required = false)
                     List<String> permission) {

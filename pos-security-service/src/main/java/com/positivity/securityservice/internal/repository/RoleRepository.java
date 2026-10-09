@@ -99,7 +99,7 @@ public interface RoleRepository extends JpaRepository<Role, UUID> {
      * as for every read here (ADR-0062): there is no tenant parameter, and only the bound tenant's
      * roles and grants are visible. It reads the configured grants at call time; nothing is cached.
      *
-     * @param codes permission codes, already normalised to lower case
+     * @param codes permission codes, already resolved to the catalog's spelling
      * @return one row per (permission, role) grant; empty when no role holds any of the codes
      */
     @Query("""

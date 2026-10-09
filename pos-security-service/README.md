@@ -324,9 +324,12 @@ accounting workspace's Approval limits page. Through the gateway it is
   under row-level security (ADR-0062), with no cache. A token issued before a grant change keeps
   its `perm_bits` until it is reissued.
 - **Input.** `permission`, repeated, 1–20 distinct `domain:resource:action` codes (each part
-  `[a-z][a-z0-9_-]*`, at most 255 characters); trimmed, lower-cased, de-duplicated in first-seen
-  order. One response entry per code, in request order; a registered code no role holds answers
-  `roles: []`.
+  `[A-Za-z][A-Za-z0-9_-]*`, at most 255 characters); trimmed, matched case-insensitively and
+  answered in the catalog's spelling (`people:timeEntry:approve` is found as
+  `PEOPLE:TIMEENTRY:APPROVE` and answered as `people:timeEntry:approve`), de-duplicated ignoring
+  case in first-seen order. One response entry per code, in request order; a registered code no
+  role holds answers `roles: []`. The OpenAPI parameter is marked required; the binding is
+  optional only so that a missing parameter answers this endpoint's 400 `VALIDATION_ERROR`.
 - **Gate.** `@PreAuthorize(hasAnyAuthority('security:role:view', 'accounting:ap_approval_policy:manage'))`
   plus a scope check in `PermissionHolderService`:
 
