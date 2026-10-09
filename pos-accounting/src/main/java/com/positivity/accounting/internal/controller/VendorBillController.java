@@ -99,7 +99,8 @@ public class VendorBillController {
                 vendorName and dimensions are optional.
                 Emits an ACCOUNTING_VENDOR_BILL_CREATE event and posts nothing (a bill posts once, at \
                 approval).
-                Returns 201 with the created (or already-existing) bill, 400 when the payload fails \
+                Returns 201 with the created (or already-existing) bill (createdByName, the creator's display \
+                name, null when not known), 400 when the payload fails \
                 validation, 422 VENDOR_INACTIVE, and 503 VENDOR_REPLICATION_PENDING with Retry-After when \
                 the vendor is not in the copy yet.
                 Returns 409 AP_BILL_DUPLICATE when a live bill (any status except VOIDED or REJECTED) \
@@ -207,7 +208,8 @@ public class VendorBillController {
                 Required inputs: eventId, organizationId and vendorId (UUIDs), invoiceReference, invoiceDate and \
                 lineItems; dueDate is optional.
                 Emits an ACCOUNTING_VENDOR_BILL_MATCH event and writes a VENDOR_BILL_MATCH_ROUTED audit row; the \
-                returned bill's status conveys the outcome, APPROVED included.
+                returned bill's status conveys the outcome, APPROVED included, and each of its actors carries a \
+                display name (createdByName, submittedByName, approvedByName), null when not known or SYSTEM.
                 Returns 400 when no pending receipt matches the invoice or the payload fails validation (a missing \
                 invoiceDate included), 409 AP_BILL_DUPLICATE when another live bill (any status except VOIDED or \
                 REJECTED) of the vendor already holds the invoiceReference on the invoiceDate, compared ignoring \
@@ -395,7 +397,8 @@ public class VendorBillController {
             summary = "Get Vendor Bill By Origin Event",
             description = """
                 Returns the vendor bill created from a specific goods-received event, using the event id \
-                recorded at bill creation.
+                recorded at bill creation, each actor with its display name (createdByName, submittedByName, \
+                approvedByName, rejectedByName), null when not known or SYSTEM.
                 Use this tool to check whether a goods-received event was already billed, for example \
                 before replaying it; use getVendorBillById instead when the bill id is known.
                 Preconditions: a bill must have been created from the event.
