@@ -194,7 +194,8 @@ logging:
     org.hibernate.internal.util.EntityPrinter: INFO
     # Hibernate 7 logs that listing through its core logger.
     org.hibernate.orm.core: INFO
-    # At TRACE the bind logger prints every bound parameter, the tax_registrations JSON (last4) included.
+    # At TRACE the bind logger prints every bound parameter, the tax_registrations JSON (last4) included, and the
+    # supplier's registration number a petty expense's recovery keeps as evidence (CAP:550 S32d).
     org.hibernate.orm.jdbc.bind: INFO
     com:
       positivity:
