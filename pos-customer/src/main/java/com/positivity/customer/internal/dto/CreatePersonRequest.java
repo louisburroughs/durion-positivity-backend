@@ -1,5 +1,6 @@
 package com.positivity.customer.internal.dto;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.positivity.customer.internal.enums.ContactPointType;
 import com.positivity.customer.internal.enums.PreferredContactMethod;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -65,7 +66,11 @@ public class CreatePersonRequest {
      */
     @Data
     @Builder
-    @NoArgsConstructor
+    // Jackson 3 treats the all-args constructor as a property-based creator, whose isPrimary
+    // parameter never matches the published "primary" property; the primitive then binds null and
+    // every body carrying a contact point is refused. Naming the no-args constructor as the creator
+    // binds through setPrimary instead, and an omitted flag stays false.
+    @NoArgsConstructor(onConstructor_ = @JsonCreator)
     @AllArgsConstructor
     @Schema(description = "Email address input")
     public static class EmailInput {
@@ -90,7 +95,8 @@ public class CreatePersonRequest {
      */
     @Data
     @Builder
-    @NoArgsConstructor
+    // Same creator choice as EmailInput: bind through the setters so "primary" maps.
+    @NoArgsConstructor(onConstructor_ = @JsonCreator)
     @AllArgsConstructor
     @Schema(description = "Phone number input")
     public static class PhoneInput {

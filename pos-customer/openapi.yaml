@@ -3327,12 +3327,12 @@ paths:
                 description: Individual with email and mobile
                 value:
                   emails:
-                  - isPrimary: true
+                  - primary: true
                     value: dana.ortiz@example.com
                   firstName: Dana
                   lastName: Ortiz
                   phones:
-                  - isPrimary: true
+                  - primary: true
                     type: PHONE_MOBILE
                     value: '+15125550142'
                   preferredContactMethod: EMAIL
