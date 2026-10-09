@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.repository.VendorBillReissueRepository
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
+import com.positivity.domainevents.supplier.SupplierInvoiceTax;
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
@@ -168,6 +169,7 @@ public class SupplierEventsListener {
     private final VendorBillDuplicateGuard duplicateGuard;
     private final VendorBillReissueRepository reissues;
     private final VendorBillLocks locks;
+    private final VendorBillStatedTax statedTax;
     private final @Nullable MeterRegistry meterRegistry;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
@@ -185,6 +187,7 @@ public class SupplierEventsListener {
             VendorBillDuplicateGuard duplicateGuard,
             VendorBillReissueRepository reissues,
             VendorBillLocks locks,
+            VendorBillStatedTax statedTax,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
@@ -198,6 +201,7 @@ public class SupplierEventsListener {
         this.duplicateGuard = duplicateGuard;
         this.reissues = reissues;
         this.locks = locks;
+        this.statedTax = statedTax;
         this.meterRegistry = meterRegistry.getIfAvailable();
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -624,6 +628,8 @@ public class SupplierEventsListener {
             }
             throw e;
         }
+        // S32d item 10 (closes G11): every bill keeps the tax its document states by type, signed like its total.
+        statedTax.storeFromDocument(bill, taxByType(fact));
         record(eventId, bill, fact, FactPostingOutcome.nothingToPost());
         log.info(
                 "Created vendor bill from supplier invoice {} ({} {}) for vendor {} status={}",
@@ -633,6 +639,18 @@ public class SupplierEventsListener {
                 vendor.getVendorNumber(),
                 bill.getStatus());
         return bill.getVendorBillId();
+    }
+
+    /** The fact's tax by type, signed like the bill's total; a type stated twice is added up. Null when none. */
+    private static @Nullable Map<String, BigDecimal> taxByType(SupplierInvoiceReceivedV1 fact) {
+        if (fact.taxes() == null || fact.taxes().isEmpty()) {
+            return null;
+        }
+        Map<String, BigDecimal> byType = new LinkedHashMap<>();
+        for (SupplierInvoiceTax tax : fact.taxes()) {
+            byType.merge(tax.taxType(), signed(fact, tax.amount()), BigDecimal::add);
+        }
+        return byType;
     }
 
     private static String inactive(ExtSupplierVendor vendor) {

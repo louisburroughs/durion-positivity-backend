@@ -468,7 +468,8 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                             tenant,
                             () -> approvals.approve(
                                     awaiting.getVendorBillId(),
-                                    new VendorBillCommands.Approve("Checked against the delivery", null, null, null))))
+                                    new VendorBillCommands.Approve(
+                                            "Checked against the delivery", null, null, null, null))))
                     .isInstanceOfAny(
                             PessimisticLockingFailureException.class,
                             LockTimeoutException.class,
@@ -527,7 +528,7 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                     tenant,
                     () -> approvals.approve(
                             another.getVendorBillId(),
-                            new VendorBillCommands.Approve("Checked against the delivery", null, null, null)));
+                            new VendorBillCommands.Approve("Checked against the delivery", null, null, null, null)));
             assertThat(approved.getStatus())
                     .as("no period lock is held across the gateway call: the approval posts at once")
                     .isEqualTo(VendorBillStatus.APPROVED);
@@ -670,7 +671,7 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                     tenant,
                     () -> approvals.approve(
                             bill.getVendorBillId(),
-                            new VendorBillCommands.Approve("Checked against the delivery", null, null, null)));
+                            new VendorBillCommands.Approve("Checked against the delivery", null, null, null, null)));
             assertThat(approved.getStatus()).isEqualTo(VendorBillStatus.APPROVED);
             return approved;
         } finally {

@@ -23,6 +23,7 @@ import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.SupplierEventsListener;
 import com.positivity.accounting.internal.service.VendorBillDuplicateGuard;
 import com.positivity.accounting.internal.service.VendorBillLocks;
+import com.positivity.accounting.internal.service.VendorBillStatedTax;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.testing.TenantTestSupport;
@@ -98,6 +99,9 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
     private VendorBillLocks locks;
 
     @Autowired
+    private VendorBillStatedTax statedTax;
+
+    @Autowired
     private ObjectProvider<MeterRegistry> meters;
 
     @Autowired
@@ -122,6 +126,7 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
                 duplicateGuard,
                 reissues,
                 locks,
+                statedTax,
                 meters,
                 transactionManager);
         accountingLogger = (Logger) LoggerFactory.getLogger("com.positivity.accounting");
@@ -627,6 +632,7 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
                 duplicateGuard,
                 reissues,
                 locks,
+                statedTax,
                 meters,
                 transactionManager);
 

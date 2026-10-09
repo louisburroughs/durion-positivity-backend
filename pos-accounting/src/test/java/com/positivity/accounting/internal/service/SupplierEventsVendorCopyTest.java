@@ -115,6 +115,7 @@ class SupplierEventsVendorCopyTest {
                 new VendorBillDuplicateGuard(bills, noMeters),
                 reissues,
                 locks,
+                mock(VendorBillStatedTax.class),
                 registry,
                 mock(PlatformTransactionManager.class));
         when(processed.existsById(any())).thenReturn(false);

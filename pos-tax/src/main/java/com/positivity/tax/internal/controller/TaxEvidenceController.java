@@ -70,7 +70,8 @@ public class TaxEvidenceController {
                     calls from pos-order and pos-accounting with the service authority, never through pos-api-gateway.
                     Required inputs: countryCode, two upper-case letters; asOf (ISO-8601 date) defaults to today.
                     No events are emitted and no state changes; every rule is configuration held for expert advice,
-                    so source is always STUB, and amounts are in the returned currency.
+                    so source is always STUB, and amounts are in the returned currency; supplierRegistrationRegime
+                    names the regime whose registration a supplier's number is, or null when the country names none.
                     A caller that cannot obtain the rules retries or holds, and never treats them as absent.
                     Returns 200 with an empty list for a country without a rule, and 400 VALIDATION_ERROR when
                     countryCode or asOf is missing or malformed.
