@@ -51,7 +51,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Setter
 @NoArgsConstructor
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString(exclude = {"journalEntry"})
+@ToString(exclude = {"journalEntry", "taxOnResaleOverrideJustification"})
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(
@@ -243,7 +243,6 @@ public class VendorBill extends TenantScopedEntity {
      * The approver's justification of a {@code BILL} override, 10-1000 characters; null otherwise. Staff free text
      * handled as CONFIDENTIAL (ADR-0072): never in toString or a log.
      */
-    @ToString.Exclude
     @Column(name = "tax_on_resale_override_justification", length = 1000)
     private String taxOnResaleOverrideJustification;
 
