@@ -315,6 +315,8 @@ class TypedOutputTaxTest {
         private final GLPostingService glPosting = mock(GLPostingService.class);
         private final InvoiceGlPostingRepository postings = mock(InvoiceGlPostingRepository.class);
         private final JournalEntryRepository journalEntries = mock(JournalEntryRepository.class);
+        private final com.positivity.accounting.internal.repository.ExtInvoiceRepository invoices =
+                mock(com.positivity.accounting.internal.repository.ExtInvoiceRepository.class);
         private final ObjectMapper objectMapper =
                 JsonMapper.builder().findAndAddModules().build();
         private InvoiceRevenuePostingService postingService;
@@ -336,7 +338,9 @@ class TypedOutputTaxTest {
                     typedOutputTax,
                     journalEntries);
             reprocessor = new InvoiceRevenueReprocessor(
-                    postingService, journalEntries, objectMapper, mock(PlatformTransactionManager.class));
+                    postingService, invoices, journalEntries, objectMapper, mock(PlatformTransactionManager.class));
+            // The replica holds the invoice as the held fact states it, until a test changes it (A4).
+            replica("FINALIZED", Instant.parse("2026-10-08T10:00:00Z"));
             when(resolver.resolveGLAccount(eq("INVOICE_REVENUE"), eq("ACCOUNTS_RECEIVABLE"), any()))
                     .thenReturn(AR);
             when(resolver.resolveGLAccount(eq("INVOICE_REVENUE"), eq("SERVICE_REVENUE"), any()))
@@ -344,6 +348,54 @@ class TypedOutputTaxTest {
             when(postings.findByInvoiceIdAndReversalJournalEntryIdIsNull(INVOICE))
                     .thenReturn(Optional.empty());
             when(postings.save(any(InvoiceGlPosting.class))).thenAnswer(call -> call.getArgument(0));
+        }
+
+        private void replica(String status, Instant finalizedAt) {
+            com.positivity.accounting.internal.entity.ExtInvoice invoice =
+                    new com.positivity.accounting.internal.entity.ExtInvoice();
+            invoice.setInvoiceId(INVOICE);
+            invoice.setInvoiceNumber("INV-CA-1");
+            invoice.setPartyId("party-1");
+            invoice.setStatus(status);
+            invoice.setSubtotal(new BigDecimal("1000.00"));
+            invoice.setTax(new BigDecimal("120.00"));
+            invoice.setTotal(new BigDecimal("1120.00"));
+            invoice.setAdjustmentsAmount(BigDecimal.ZERO);
+            invoice.setInvoiceCreatedAt(Instant.parse("2026-10-07T20:00:00Z"));
+            invoice.setFinalizedAt(finalizedAt);
+            when(invoices.findById(INVOICE)).thenReturn(Optional.of(invoice));
+        }
+
+        @Test
+        @DisplayName("#2664 A4: held, then the invoice is cancelled: the reprocess posts nothing (superseded)")
+        void heldThenCancelledPostsNothing() {
+            rows(row("GST", "50.00"), row(null, "70.00"));
+            postingService.postRevenue(finalized());
+            rows(row("GST", "50.00"), row("PST", "70.00"));
+            replica("CANCELLED", Instant.parse("2026-10-08T10:00:00Z"));
+
+            InvoiceRevenueReprocessor.Result result =
+                    reprocessor.reprocess(objectMapper.convertValue(finalized(), Map.class));
+
+            assertThat(result.status()).isEqualTo(AccountingEventStatus.SKIPPED);
+            assertThat(result.reason()).isEqualTo("NOT_POSTABLE");
+            verify(glPosting, never())
+                    .postInvoiceRevenueByTaxType(any(), any(), any(), any(), any(), any(), any(), any());
+            verify(postings, never()).save(any(InvoiceGlPosting.class));
+        }
+
+        @Test
+        @DisplayName("#2664 A4: held, then finalized again: the stale held fact posts nothing")
+        void heldThenRefinalizedPostsNothing() {
+            rows(row("GST", "50.00"), row("PST", "70.00"));
+            replica("FINALIZED", Instant.parse("2026-10-09T10:00:00Z"));
+
+            InvoiceRevenueReprocessor.Result result =
+                    reprocessor.reprocess(objectMapper.convertValue(finalized(), Map.class));
+
+            assertThat(result.status()).isEqualTo(AccountingEventStatus.SKIPPED);
+            verify(glPosting, never())
+                    .postInvoiceRevenueByTaxType(any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         private InvoiceUpdatedV1 finalized() {

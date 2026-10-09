@@ -201,6 +201,35 @@ class InputTaxRecoveryServiceTest {
     }
 
     @Test
+    @DisplayName("#2664 A5: a first stored setting reads as version 1, so a second writer that read 'never set' (0) is"
+            + " 409 OPTIMISTIC_LOCK; the category is locked before the setting is read")
+    void firstSettingIsNotNeverSet() {
+        when(flags.anyEnabled(TODAY)).thenReturn(true);
+        PettyExpenseCategoryTaxRecoveryResponse first =
+                service.setCategoryRecovery("STAFF_MEALS", request(true, "50.00", "Meals are half recoverable", 0));
+        assertThat(first.version()).isEqualTo(1);
+        ArgumentCaptor<PettyExpenseCategoryTaxSetting> stored =
+                ArgumentCaptor.forClass(PettyExpenseCategoryTaxSetting.class);
+        verify(settings).saveAndFlush(stored.capture());
+        when(settings.findByCode("STAFF_MEALS")).thenReturn(Optional.of(stored.getValue()));
+
+        PettyExpenseCategoryTaxRecoveryRequest stale = new PettyExpenseCategoryTaxRecoveryRequest(
+                true,
+                new BigDecimal("60.00"),
+                "Second writer read never set",
+                UUID.fromString("019a0000-0000-7000-8000-000000000108"),
+                0);
+        assertThatThrownBy(() -> service.setCategoryRecovery("STAFF_MEALS", stale))
+                .isInstanceOfSatisfying(
+                        CashSetupException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(CashSetupException.Code.OPTIMISTIC_LOCK));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(entityManager, settings);
+        order.verify(entityManager).lock(meals, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
+        order.verify(settings).findByCode("STAFF_MEALS");
+    }
+
+    @Test
     @DisplayName("AC 14: an unknown category is 404")
     void unknownCategory() {
         assertThatThrownBy(() ->

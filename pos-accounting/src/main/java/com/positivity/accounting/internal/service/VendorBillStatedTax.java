@@ -137,7 +137,9 @@ public class VendorBillStatedTax {
         return text.toString();
     }
 
-    private static BigDecimal scaled(@Nullable BigDecimal amount) {
-        return amount == null ? BigDecimal.ZERO.setScale(2) : amount.setScale(2, RoundingMode.HALF_UP);
+    /** {@code amount} at the ledger currency's minor unit (ADR-0067 PC-6; #2664 review A6); null is zero. */
+    private BigDecimal scaled(@Nullable BigDecimal amount) {
+        int scale = functionalCurrency.fractionDigits();
+        return amount == null ? BigDecimal.ZERO.setScale(scale) : amount.setScale(scale, RoundingMode.HALF_UP);
     }
 }

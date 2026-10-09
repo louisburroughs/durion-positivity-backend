@@ -656,8 +656,11 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
                 .as("V5 recorded the default tenant's choice")
                 .isTrue();
         assertThat(status.counts().created() + status.counts().adopted())
-                .as("the default tenant holds the whole template, add-on included")
-                .isEqualTo(templateReader.snapshot().entries().size());
+                .as("the default tenant holds the whole template, add-on included, but no other currency's data"
+                        + " (CAP:550 S32d)")
+                .isEqualTo((int) templateReader.snapshot().entries().stream()
+                        .filter(entry -> !templateReader.currencyEntries().containsKey(entry.entryKey()))
+                        .count());
         assertThat(codes(TENANT_A)).contains("1000", "1200", "4000").containsAll(RetreadPlantAddOnSource.ACCOUNT_CODES);
         assertThat(owner.queryForList(
                         "SELECT row_to_json(a)::text FROM gl_account a WHERE tenant_id = ? AND gl_account_id::text"

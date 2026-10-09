@@ -79,6 +79,17 @@ public class InputTaxRecoveryService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    /** The version a category never set reads as; a stored setting always reads higher (#2664 review A5). */
+    static final int NEVER_SET = 0;
+
+    /**
+     * The version a stored setting reads as: its row version plus one, so a first stored setting (row version 0) is
+     * never mistaken for a category never set.
+     */
+    static int publicVersion(@NonNull PettyExpenseCategoryTaxSetting setting) {
+        return (setting.getVersion() == null ? 0 : setting.getVersion()) + 1;
+    }
+
     /** The mapping key a regime's recovered drawer tax posts to. */
     public static @NonNull String inputTaxKey(@NonNull String regime) {
         return INPUT_TAX_KEY_PREFIX + regime;
@@ -100,7 +111,7 @@ public class InputTaxRecoveryService {
                             category.getLabel(),
                             setting != null && setting.isTaxRecoverable(),
                             setting == null ? null : setting.getRecoverablePercent(),
-                            setting == null ? 0 : setting.getVersion());
+                            setting == null ? NEVER_SET : publicVersion(setting));
                 })
                 .toList();
         List<InputTaxRecoveryResponse.HistoryItem> history =
@@ -145,9 +156,13 @@ public class InputTaxRecoveryService {
                     CashSetupException.Code.INPUT_TAX_RECOVERY_NOT_ENABLED,
                     "No regime's input-tax recovery is on today, so a category's recovery cannot be set");
         }
+        // #2664 review A5: the category row is locked before the setting is read, so two first settings serialise here
+        // and the second meets the first's version (a clean 409 OPTIMISTIC_LOCK) instead of a unique-key violation. The
+        // lock raises the category's version too, which the fact below carries (ADR-0044 §3).
+        entityManager.lock(category, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
         Optional<PettyExpenseCategoryTaxSetting> existing = settings.findByCode(code);
         int currentVersion =
-                existing.map(PettyExpenseCategoryTaxSetting::getVersion).orElse(0);
+                existing.map(InputTaxRecoveryService::publicVersion).orElse(NEVER_SET);
         if (request.version() != currentVersion) {
             throw new CashSetupException(
                     CashSetupException.Code.OPTIMISTIC_LOCK,
@@ -186,12 +201,10 @@ public class InputTaxRecoveryService {
         change.setRequestId(request.requestId());
         change.setRequestHash(hash);
         PettyExpenseCategoryTaxRecoveryResponse response = new PettyExpenseCategoryTaxRecoveryResponse(
-                code, saved.isTaxRecoverable(), saved.getRecoverablePercent(), saved.getVersion(), now, false);
+                code, saved.isTaxRecoverable(), saved.getRecoverablePercent(), publicVersion(saved), now, false);
         change.setResponseJson(objectMapper.writeValueAsString(response));
         settingChanges.saveAndFlush(change);
 
-        // The fact carries the category's version: raised here so pos-order's copy takes the new values (ADR-0044 §3).
-        entityManager.lock(category, LockModeType.PESSIMISTIC_FORCE_INCREMENT);
         facts.changed(category, actor);
         log.info(
                 "Petty-expense category tax recovery set | code={} | taxRecoverable={} | recoverablePercent={}"
@@ -199,7 +212,7 @@ public class InputTaxRecoveryService {
                 code,
                 saved.isTaxRecoverable(),
                 saved.getRecoverablePercent(),
-                saved.getVersion());
+                publicVersion(saved));
         return response;
     }
 

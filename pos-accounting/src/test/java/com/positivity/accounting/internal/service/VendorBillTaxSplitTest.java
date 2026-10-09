@@ -49,7 +49,12 @@ class VendorBillTaxSplitTest {
     private final TaxProfileClient taxProfiles = mock();
     private final VendorBillTaxRepository billTaxes = mock();
     private final ExtSupplierVendorRepository vendorCopies = mock();
-    private final VendorBillTaxSplit split = new VendorBillTaxSplit(flags, taxProfiles, billTaxes, vendorCopies);
+    private final VendorBillTaxSplit split = new VendorBillTaxSplit(
+            flags,
+            taxProfiles,
+            billTaxes,
+            vendorCopies,
+            new com.positivity.accounting.internal.config.LedgerCurrency("CAD"));
 
     private static TaxProfileClient.TaxTypes profile() {
         return new TaxProfileClient.TaxTypes(
@@ -394,5 +399,19 @@ class VendorBillTaxSplitTest {
         when(flags.regimes(LocalDate.of(2026, 9, 14))).thenReturn(List.of());
 
         assertThat(split.plan(bill)).isSameAs(VendorBillTaxSplit.Plan.NONE);
+    }
+
+    @Test
+    @DisplayName("#2664 A6: amounts are taken at the ledger currency's minor unit, three decimals for KWD")
+    void positiveUsesTheLedgerMinorUnit() {
+        VendorBillTaxSplit kwd = new VendorBillTaxSplit(
+                flags,
+                taxProfiles,
+                billTaxes,
+                vendorCopies,
+                new com.positivity.accounting.internal.config.LedgerCurrency("KWD"));
+
+        assertThat(kwd.positive(new BigDecimal("-1.234"))).isEqualTo(new BigDecimal("1.234"));
+        assertThat(split.positive(new BigDecimal("1.235"))).isEqualTo(new BigDecimal("1.24"));
     }
 }

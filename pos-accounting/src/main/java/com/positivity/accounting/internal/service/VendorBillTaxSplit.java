@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.client.TaxProfileClient;
+import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
@@ -10,6 +11,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Currency;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,12 +65,11 @@ public class VendorBillTaxSplit {
     /** The evidence rule that asks for the supplier's registration. */
     static final String SUPPLIER_REGISTRATION_RULE = "SUPPLIER_REGISTRATION_NUMBER";
 
-    private static final int SCALE = 2;
-
     private final InputTaxRecoveryFlags flags;
     private final TaxProfileClient taxProfiles;
     private final VendorBillTaxRepository billTaxes;
     private final ExtSupplierVendorRepository vendorCopies;
+    private final LedgerCurrency ledgerCurrency;
 
     /** Why a stated amount was not recovered. */
     public enum Withheld {
@@ -277,8 +278,13 @@ public class VendorBillTaxSplit {
                 .noneMatch(registration -> regime.equals(registration.get("scheme")));
     }
 
-    /** {@code amount} as a positive amount at the cent; null is zero. */
-    static @NonNull BigDecimal positive(@Nullable BigDecimal amount) {
-        return amount == null ? BigDecimal.ZERO.setScale(SCALE) : amount.abs().setScale(SCALE, RoundingMode.HALF_UP);
+    /**
+     * {@code amount} as a positive amount at the ledger currency's minor unit (ADR-0067 PC-6; #2664 review A6); null is
+     * zero.
+     */
+    @NonNull
+    BigDecimal positive(@Nullable BigDecimal amount) {
+        int scale = Math.max(0, Currency.getInstance(ledgerCurrency.code()).getDefaultFractionDigits());
+        return amount == null ? BigDecimal.ZERO.setScale(scale) : amount.abs().setScale(scale, RoundingMode.HALF_UP);
     }
 }

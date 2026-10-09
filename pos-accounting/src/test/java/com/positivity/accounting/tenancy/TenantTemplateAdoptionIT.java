@@ -148,7 +148,10 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
         assertThat(chartRows(owner))
                 .as("the new seed wrote no default-tenant row")
                 .isEqualTo(before);
-        int templateEntries = templateReader.snapshot().entries().size();
+        // The currency-conditional entries (CAP:550 S32d, the CAD data) never reach this USD tenant.
+        int templateEntries = (int) templateReader.snapshot().entries().stream()
+                .filter(entry -> !templateReader.currencyEntries().containsKey(entry.entryKey()))
+                .count();
 
         AccountingTemplateStartupSweep sweep =
                 new AccountingTemplateStartupSweep(tenantIterator, templateReader, provisioner, meterRegistry);

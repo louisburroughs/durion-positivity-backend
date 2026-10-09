@@ -64,6 +64,11 @@ public class InputTaxRecoveryController {
             responseCode = "403",
             description = "Caller lacks accounting:mapping-key:view",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "ACCOUNTING_TIME_ZONE_UNSET: the tenant's accounting time zone is not set, so today cannot be"
+                    + " dated",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_INPUT_TAX_RECOVERY_VIEW", apiVersion = "1")
     public ResponseEntity<InputTaxRecoveryResponse> read() {
         return ResponseEntity.ok(service.read());

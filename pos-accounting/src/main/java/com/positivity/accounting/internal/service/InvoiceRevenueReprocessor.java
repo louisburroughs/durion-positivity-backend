@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
@@ -8,9 +9,12 @@ import com.positivity.accounting.internal.exception.AccountingPeriodClosedExcept
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -26,7 +30,10 @@ import tools.jackson.databind.ObjectMapper;
  * AW50) through invoice revenue recognition's own path, never the posting engine: no posting rule set exists for an
  * invoice fact, and the engine would post neither by tax type nor under the invoice's posting record.
  *
- * <p>The stored fact is posted again with {@link InvoiceRevenuePostingService#postRevenue}, which re-reads the
+ * <p>The invoice is read from the {@code ext_invoice} replica first: when it is no longer in a posting status, or
+ * was finalized again since, the held fact is superseded and resolves {@code SKIPPED / NOT_POSTABLE} with nothing
+ * posted (#2664 review A4). Otherwise the replica is posted with {@link InvoiceRevenuePostingService#postRevenue},
+ * which re-reads the
  * invoice's tax rows ({@code ext_invoice_tax}, which a later typed fact may have replaced) and the tenant's typed keys
  * (which a person may have mapped):
  *
@@ -49,16 +56,19 @@ import tools.jackson.databind.ObjectMapper;
 public class InvoiceRevenueReprocessor {
 
     private final InvoiceRevenuePostingService postingService;
+    private final ExtInvoiceRepository invoices;
     private final JournalEntryRepository journalEntryRepository;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate postingTransaction;
 
     public InvoiceRevenueReprocessor(
             InvoiceRevenuePostingService postingService,
+            ExtInvoiceRepository invoices,
             JournalEntryRepository journalEntryRepository,
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager) {
         this.postingService = postingService;
+        this.invoices = invoices;
         this.journalEntryRepository = journalEntryRepository;
         this.objectMapper = objectMapper;
         this.postingTransaction = new TransactionTemplate(transactionManager);
@@ -115,9 +125,32 @@ public class InvoiceRevenueReprocessor {
                     null,
                     IdempotencyOutcome.NEW);
         }
+        // #2664 review A4: the held fact may be stale. The invoice as the replica holds it now decides: cancelled,
+        // reverted or finalized again since, the held fact is superseded and posts nothing; otherwise the replica is
+        // posted, the way the reconciliation does.
+        Optional<ExtInvoice> current = invoices.findById(fact.invoiceId());
+        if (current.isEmpty()
+                || !InvoiceRevenuePostingService.POSTING_STATUSES.contains(
+                        current.get().getStatus())
+                || !Objects.equals(current.get().getFinalizedAt(), fact.finalizedAt())) {
+            return new Result(
+                    AccountingEventStatus.SKIPPED,
+                    PostingFailureReason.NOT_POSTABLE.name(),
+                    "The held invoice fact is superseded: the invoice is now "
+                            + current.map(ExtInvoice::getStatus).orElse("unknown")
+                            + (current.isPresent()
+                                            && current.get().getFinalizedAt() != null
+                                            && !current.get().getFinalizedAt().equals(fact.finalizedAt())
+                                    ? ", finalized again at " + current.get().getFinalizedAt()
+                                    : "")
+                            + "; nothing posted",
+                    null,
+                    IdempotencyOutcome.NEW);
+        }
+        InvoiceUpdatedV1 replica = InvoiceRevenueReconciliationService.toPayload(current.get());
         FactPostingOutcome outcome;
         try {
-            outcome = postingTransaction.execute(_ -> postingService.postRevenue(fact));
+            outcome = postingTransaction.execute(_ -> postingService.postRevenue(replica));
         } catch (AccountingPeriodClosedException e) {
             return held(
                     PostingFailureReason.PERIOD_CLOSED,

@@ -918,4 +918,26 @@ class SupplierEventsListenerTest {
 
         verify(statedTax).storeFromDocument(any(VendorBill.class), org.mockito.ArgumentMatchers.isNull());
     }
+
+    @Test
+    @DisplayName("#2664 A1: a label that is not a tax type never blocks the bill: it is created, unsplit, and the"
+            + " label is never logged")
+    void nonConformingLabelStillCreatesTheBill() {
+        listener.onSupplierEvent(withTaxes(
+                event(EVENT_1, "INV-1", "INVOICE", "USD", "2026-08-14", "1120.00", "1000.00", "120.00", "[]"),
+                "[{\"taxType\":\"gst\",\"amount\":50.00},{\"taxType\":\"VAT 20%\",\"amount\":70.00}]"));
+
+        assertThat(captured().getTotalAmount()).isEqualByComparingTo("1120.00");
+        verify(statedTax).storeFromDocument(any(VendorBill.class), org.mockito.ArgumentMatchers.isNull());
+    }
+
+    @Test
+    @DisplayName("#2664 A1: a label that only needs trimming and upper-casing is kept as its tax type")
+    void labelIsNormalised() {
+        listener.onSupplierEvent(withTaxes(
+                event(EVENT_1, "INV-1", "INVOICE", "USD", "2026-08-14", "1120.00", "1000.00", "120.00", "[]"),
+                "[{\"taxType\":\" gst \",\"amount\":50.00},{\"taxType\":\"Pst\",\"amount\":70.00}]"));
+
+        assertThat(storedTaxByType().keySet()).containsExactly("GST", "PST");
+    }
 }

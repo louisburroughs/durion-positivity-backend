@@ -45,7 +45,7 @@ import tools.jackson.databind.ObjectMapper;
  * <p>Requires Docker.
  */
 @DisplayName("S32d input-tax recovery on a CAD ledger (real Postgres)")
-@TestPropertySource(properties = "accounting.ledger.base-currency=CAD")
+@TestPropertySource(properties = {"accounting.ledger.base-currency=CAD", "accounting.tax.country=CA"})
 class InputTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
 
     private static final UUID LOCATION = UUID.fromString("019a0000-0000-7000-8000-00000000b032");

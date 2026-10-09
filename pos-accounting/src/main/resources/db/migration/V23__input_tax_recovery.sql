@@ -213,8 +213,8 @@ ALTER TABLE ONLY public.vendor_bill_tax
 ALTER TABLE ONLY public.vendor_bill_tax
     ADD CONSTRAINT uq_vendor_bill_tax_type UNIQUE (tenant_id, vendor_bill_id, tax_type);
 ALTER TABLE ONLY public.vendor_bill_tax
-    ADD CONSTRAINT vendor_bill_tax_bill_fk FOREIGN KEY (vendor_bill_id)
-        REFERENCES public.vendor_bill(vendor_bill_id);
+    ADD CONSTRAINT vendor_bill_tax_bill_fk FOREIGN KEY (tenant_id, vendor_bill_id)
+        REFERENCES public.vendor_bill(tenant_id, vendor_bill_id);
 CREATE INDEX vendor_bill_tax_tenant_idx ON public.vendor_bill_tax USING btree (tenant_id);
 
 ALTER TABLE public.vendor_bill_tax ENABLE ROW LEVEL SECURITY;
@@ -251,8 +251,12 @@ ALTER TABLE ONLY public.vendor_bill_tax_recovery
 ALTER TABLE ONLY public.vendor_bill_tax_recovery
     ADD CONSTRAINT vendor_bill_tax_recovery_tenant_key UNIQUE (tenant_id, vendor_bill_tax_recovery_id);
 ALTER TABLE ONLY public.vendor_bill_tax_recovery
-    ADD CONSTRAINT vendor_bill_tax_recovery_posting_fk FOREIGN KEY (vendor_bill_gl_posting_id)
-        REFERENCES public.vendor_bill_gl_posting(vendor_bill_gl_posting_id);
+    ADD CONSTRAINT vendor_bill_tax_recovery_posting_fk FOREIGN KEY (tenant_id, vendor_bill_gl_posting_id)
+        REFERENCES public.vendor_bill_gl_posting(tenant_id, vendor_bill_gl_posting_id);
+-- ADR-0062 §9: foreign keys between tenant tables carry the tenant, since a FK check bypasses RLS.
+ALTER TABLE ONLY public.vendor_bill_tax_recovery
+    ADD CONSTRAINT vendor_bill_tax_recovery_bill_fk FOREIGN KEY (tenant_id, vendor_bill_id)
+        REFERENCES public.vendor_bill(tenant_id, vendor_bill_id);
 CREATE INDEX vendor_bill_tax_recovery_tenant_idx ON public.vendor_bill_tax_recovery USING btree (tenant_id);
 CREATE INDEX vendor_bill_tax_recovery_bill_idx
     ON public.vendor_bill_tax_recovery USING btree (tenant_id, vendor_bill_id);

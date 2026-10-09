@@ -177,4 +177,17 @@ class VendorBillStatedTaxTest {
                 .isEqualTo("taxByType=GST:50.00,PST:70.00");
         assertThat(VendorBillStatedTax.auditOf(null)).isNull();
     }
+
+    @Test
+    @DisplayName("#2664 A6: a 3-decimal ledger compares the split at its own minor unit: 1.234 matches 1.234")
+    void threeDecimalCurrencyMatchesAtItsMinorUnit() {
+        VendorBillStatedTax kwd =
+                new VendorBillStatedTax(billTaxes, new FunctionalCurrency(new LedgerCurrency("KWD")), CLOCK);
+
+        kwd.replaceFromApproval(bill("11.234", "1.234"), List.of(tax("GST", "1.234")));
+
+        assertThat(saved())
+                .extracting(VendorBillTax::getTaxType, VendorBillTax::getAmount)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("GST", new BigDecimal("1.234")));
+    }
 }

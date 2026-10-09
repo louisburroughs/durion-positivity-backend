@@ -258,8 +258,9 @@ public class InvoiceRevenuePostingService {
         String description = "Invoice revenue reversal (" + payload.status() + ") - INV#" + displayNumber(payload);
 
         UUID reversalJournalEntryId;
-        if (!typedOutputTax.typedAccounts(transactionDate).isEmpty()) {
-            // A tenant posting by tax type: release exactly the accounts the recognition reached (ADR-0047).
+        if (posting.isTaxPostedByType()) {
+            // An entry posted by tax type is released exactly as it posted (ADR-0047; #2664 review A3), whatever the
+            // tenant's keys are now: a key end-dated since must not send the reversal to the untyped account.
             reversalJournalEntryId = glPostingService.postMirror(
                     JournalEntrySourceTypes.INVOICE_REVENUE_REVERSAL,
                     toReversalSourceEventId(invoiceId, posting.getFinalizedAt()),
