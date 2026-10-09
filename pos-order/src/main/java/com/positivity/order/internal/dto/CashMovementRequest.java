@@ -6,6 +6,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 import com.positivity.tax.common.validation.IsoCurrencyCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import lombok.Data;
 import lombok.ToString;
@@ -76,4 +77,27 @@ public class CashMovementRequest {
             requiredMode = NOT_REQUIRED)
     @ToString.Exclude
     private String approvalToken;
+
+    @Schema(
+            description = "Supplier on the receipt, for PETTY_EXPENSE only; required when any tax amount is stated,"
+                    + " trimmed, at most 200 characters",
+            example = "Corner Hardware",
+            maxLength = 200,
+            requiredMode = NOT_REQUIRED)
+    @ToString.Exclude
+    private String supplierName;
+
+    @Schema(
+            description = "Tax stated on the receipt, one entry per regime the category offers, for PETTY_EXPENSE only;"
+                    + " absent and empty both mean none. The drawer still counts the movement's whole amount",
+            requiredMode = NOT_REQUIRED)
+    private List<CashMovementStatedTax> statedTaxes;
+
+    @Schema(
+            description = "Supplier's indirect-tax registration number as printed, for PETTY_EXPENSE with at least one"
+                    + " stated amount; checked by pos-tax, stored normalised, and never returned or logged",
+            example = "000000000RT0001",
+            requiredMode = NOT_REQUIRED)
+    @ToString.Exclude
+    private String supplierRegistrationNumber;
 }

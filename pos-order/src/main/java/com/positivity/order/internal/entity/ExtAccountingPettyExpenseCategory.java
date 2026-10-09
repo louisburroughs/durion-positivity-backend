@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -53,6 +54,17 @@ public class ExtAccountingPettyExpenseCategory extends TenantScopedEntity {
 
     @Column(name = "account_name")
     private String accountName;
+
+    /**
+     * Whether the tax stated on this category's receipts may be recovered (CAP:550 S32d item 4): the only flag
+     * pos-order decides on, to offer regimes. A fact without it maps to false.
+     */
+    @Column(name = "tax_recoverable", nullable = false)
+    private boolean taxRecoverable;
+
+    /** The recovered share, for display only (AW52): pos-accounting reads the share in force from its own history. */
+    @Column(name = "recoverable_percent", precision = 5, scale = 2)
+    private BigDecimal recoverablePercent;
 
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;

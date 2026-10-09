@@ -3,6 +3,7 @@ package com.positivity.order.internal.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Schema(description = "A drawer cash movement")
@@ -57,7 +58,40 @@ public record CashMovementResponse(
         UUID approvedBy,
 
         @Schema(description = "When the movement was recorded")
-        Instant occurredAt) {
+        Instant occurredAt,
+
+        @Schema(description = "Supplier on a petty-expense receipt, or null", example = "Corner Hardware")
+        String supplierName,
+
+        @Schema(description = "Tax the receipt states, one entry per regime; empty when none")
+        List<CashMovementStatedTax> statedTaxes,
+
+        @Schema(
+                description = "Whether the supplier's registration number was recorded; the number itself is never"
+                        + " returned",
+                example = "true")
+        boolean supplierRegistrationNumberProvided,
+
+        @Schema(
+                description = "pos-tax's answer on the stated tax; null when no check was made",
+                example = "PLAUSIBLE",
+                allowableValues = {"PLAUSIBLE", "RATE_UNAVAILABLE"},
+                nullable = true)
+        String taxPlausibility,
+
+        @Schema(
+                description = "Whether an evidence rule asked for the supplier's number; null when no check was made",
+                example = "false",
+                nullable = true)
+        Boolean supplierRegistrationRequired) {
+
+    /** Never prints the supplier's name. */
+    @Override
+    public String toString() {
+        return "CashMovementResponse[movementId=" + movementId + ", reason=" + reason + ", amount=" + amount
+                + ", statedTaxes=" + statedTaxes + ", supplierNameProvided=" + (supplierName != null)
+                + ", supplierRegistrationNumberProvided=" + supplierRegistrationNumberProvided + "]";
+    }
 
     public static CashMovementResponse from(CashMovementSummary m) {
         return new CashMovementResponse(
@@ -76,6 +110,11 @@ public record CashMovementResponse(
                 m.clerkId(),
                 m.clerkUserId(),
                 m.approvedBy(),
-                m.occurredAt());
+                m.occurredAt(),
+                m.supplierName(),
+                m.statedTaxes(),
+                m.supplierRegistrationNumberProvided(),
+                m.taxPlausibility(),
+                m.supplierRegistrationRequired());
     }
 }

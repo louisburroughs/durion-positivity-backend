@@ -727,6 +727,19 @@ class OrderExceptionHandlerTest {
                                 request -> handler.handleStepUpUnavailable(
                                         new com.positivity.order.internal.exception.StepUpUnavailableException(
                                                 "down", null),
+                                        request)),
+                        Named.of("handleCashMovementTaxRefused", (HandlerInvocation)
+                                request -> handler.handleCashMovementTaxRefused(
+                                        new com.positivity.order.internal.exception.CashMovementTaxRefusedException(
+                                                com.positivity.order.internal.exception.CashMovementTaxRefusedException
+                                                        .Code.TAX_REGIME_NOT_OFFERED,
+                                                "not offered",
+                                                List.of()),
+                                        request)),
+                        Named.of("handleTaxCheckUnavailable", (HandlerInvocation)
+                                request -> handler.handleTaxCheckUnavailable(
+                                        new com.positivity.order.internal.exception.TaxCheckUnavailableException(
+                                                "down"),
                                         request)));
             }
 

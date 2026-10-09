@@ -2,6 +2,7 @@ package com.positivity.order.internal.dto;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -25,6 +26,12 @@ import org.jspecify.annotations.Nullable;
  * @param clerkUserId the cashier's user id, when the sign-in carried one
  * @param approvedBy user id of the approving manager, or null
  * @param occurredAt when the movement was recorded
+ * @param supplierName the supplier on a petty-expense receipt (CAP:550 S32d); CONFIDENTIAL
+ * @param statedTaxes the tax the receipt states, per regime; empty when none
+ * @param supplierRegistrationNumberProvided whether the supplier's number was recorded; the number itself never is
+ *     part of a read
+ * @param taxPlausibility {@code PLAUSIBLE} or {@code RATE_UNAVAILABLE}; null when no check was made
+ * @param supplierRegistrationRequired whether an evidence rule asked for the number; null when no check was made
  */
 public record CashMovementSummary(
         @NonNull UUID movementId,
@@ -42,4 +49,20 @@ public record CashMovementSummary(
         @NonNull String clerkId,
         @Nullable UUID clerkUserId,
         @Nullable UUID approvedBy,
-        @NonNull Instant occurredAt) {}
+        @NonNull Instant occurredAt,
+        @Nullable String supplierName,
+        @NonNull List<CashMovementStatedTax> statedTaxes,
+        boolean supplierRegistrationNumberProvided,
+        @Nullable String taxPlausibility,
+        @Nullable Boolean supplierRegistrationRequired) {
+
+    /** Never prints the supplier's name. */
+    @Override
+    public String toString() {
+        return "CashMovementSummary[movementId=" + movementId + ", sessionId=" + sessionId + ", reason=" + reason
+                + ", amount=" + amount + ", currencyCode=" + currencyCode + ", categoryCode=" + categoryCode
+                + ", statedTaxes=" + statedTaxes + ", supplierNameProvided=" + (supplierName != null)
+                + ", supplierRegistrationNumberProvided=" + supplierRegistrationNumberProvided
+                + ", taxPlausibility=" + taxPlausibility + "]";
+    }
+}

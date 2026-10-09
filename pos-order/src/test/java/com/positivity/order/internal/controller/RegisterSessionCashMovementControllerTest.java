@@ -82,7 +82,12 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                 "cashier",
                 UUID.fromString("01900000-0000-7000-8000-00000000c001"),
                 UUID.fromString("01900000-0000-7000-8000-00000000b001"),
-                Instant.parse("2026-10-07T12:00:00Z"));
+                Instant.parse("2026-10-07T12:00:00Z"),
+                null,
+                List.of(),
+                false,
+                null,
+                null);
     }
 
     @Test
@@ -300,7 +305,9 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                                 new BigDecimal("55.0000"),
                                 false,
                                 List.of("categoryCode", "receiptReference", "note"))),
-                        List.of(new CashMovementOptions.CategoryOption("SHOP_SUPPLIES", "Shop supplies", "rags"))));
+                        List.of(new CashMovementOptions.CategoryOption(
+                                "SHOP_SUPPLIES", "Shop supplies", "rags", List.of())),
+                        null));
 
         mockMvc.perform(withGatewayAuth(
                         get("/v1/orders/sessions/{sessionId}/cash-movement-options", SESSION_ID), CASH_MOVEMENT))

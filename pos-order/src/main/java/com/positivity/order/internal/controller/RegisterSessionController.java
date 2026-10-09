@@ -23,6 +23,7 @@ import com.positivity.order.internal.service.model.OpenSessionCommand;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -84,7 +85,12 @@ public class RegisterSessionController {
             + " CASH_MOVEMENT_TYPE_NOT_ALLOWED (the reason's type is switched off in the drawer policy),"
             + " PETTY_EXPENSE_CATEGORY_UNKNOWN (not an ACTIVE petty-expense category) or FLOAT_CHANGE_NOT_RECORDED"
             + " (the amount does not close the gap between the configured float and the drawer's float) or"
-            + " CURRENCY_NOT_SUPPORTED (an amount in a currency other than the functional currency)";
+            + " CURRENCY_NOT_SUPPORTED (an amount in a currency other than the functional currency);"
+            + " AMOUNT_PRECISION_EXCEEDS_CURRENCY (the amount or a stated tax amount has more decimals than the"
+            + " currency allows, never rounded), TAX_REGIME_NOT_OFFERED (a stated regime the category does not offer"
+            + " here and today), TAX_AMOUNT_IMPLAUSIBLE (a stated amount, or their sum, at or above the amount, or above"
+            + " pos-tax's maximum) or SUPPLIER_REGISTRATION_NOT_ACCEPTED (a supplier's number for a country that names"
+            + " no supplier regime); fieldErrors name each offending field";
 
     private final RegisterSessionService registerSessionService;
     private final CashMovementApprovalService cashMovementApprovalService;
@@ -225,23 +231,31 @@ public class RegisterSessionController {
                     requestCashMovementApproval first when a manager must approve, and do not use \
                     beginSessionClose, which records the final counted drawer instead.
                     Preconditions: the session must exist and be OPEN; the reason's type must be allowed by the \
-                    tenant's drawer policy; a petty expense needs an ACTIVE category; a float movement must match \
+                    tenant's drawer policy; a petty expense needs an ACTIVE category, and each regime it states tax \
+                    for must be one the category's offeredRegimes lists; a float movement must match \
                     the difference between the register's configured float and the drawer's float. Above the \
                     cashier limit on the session's running total of the reason, and for every float change, the \
                     request must carry a manager's approvalToken whose approver is not the caller; a caller whose \
                     grant is location-scoped must have the session's location within reach (ADR-0061).
                     Required inputs: requestId (UUIDv7, the idempotency key), reason, a positive amount and its \
                     currencyCode (ISO 4217, the functional currency); \
-                    categoryCode, receiptReference and note for PETTY_EXPENSE; vendorId for VENDOR_COD; bagNumber \
+                    categoryCode, receiptReference and note for PETTY_EXPENSE, which may also carry statedTaxes (one \
+                    amount per regime, each and their sum below the amount), a supplierName (required once any tax \
+                    is stated) and a supplierRegistrationNumber that pos-tax checks and that is never returned \
+                    (supplierRegistrationNumberProvided instead); vendorId for VENDOR_COD; bagNumber \
                     for BANK_DROP. The cashier is the caller; a clerkId in the body is ignored.
-                    Emits an ORDER_SESSION_CASH_MOVEMENT event.
+                    Emits an ORDER_SESSION_CASH_MOVEMENT event; with stated tax it first asks pos-tax's plausibility \
+                    check, and any refusal records nothing and leaves the approval token unspent, so the register \
+                    may resend the same requestId with a corrected payload.
                     Returns 201 with the recorded movement and 200 with the first result when the requestId was \
-                    already recorded with the same payload; 400 REGISTER_SESSION_INVALID_ARGUMENT for a missing or \
-                    malformed field (VALIDATION_ERROR for a non-ISO currencyCode), 403 for the approval rules or \
-                    LOCATION_SCOPE_DENIED, 404 when the session does not exist, 409 \
+                    already recorded with the same payload; 400 REGISTER_SESSION_INVALID_ARGUMENT with fieldErrors \
+                    for a missing or malformed field (VALIDATION_ERROR for a non-ISO currencyCode), 403 for the \
+                    approval rules or LOCATION_SCOPE_DENIED, 404 when the session does not exist, 409 \
                     REGISTER_SESSION_CONFLICT when the session is not OPEN or IDEMPOTENCY_CONFLICT when the \
-                    requestId was used for another movement, and 422 for a drawer rule or CURRENCY_NOT_SUPPORTED \
-                    for a currency other than the functional currency.
+                    requestId was used for another movement, 422 for a drawer rule, CURRENCY_NOT_SUPPORTED, \
+                    AMOUNT_PRECISION_EXCEEDS_CURRENCY, TAX_REGIME_NOT_OFFERED, TAX_AMOUNT_IMPLAUSIBLE or \
+                    SUPPLIER_REGISTRATION_NOT_ACCEPTED, and 503 TAX_CHECK_UNAVAILABLE with Retry-After when the \
+                    supplier's number was sent and pos-tax cannot check it.
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "201", description = "Cash movement recorded.")
@@ -267,6 +281,17 @@ public class RegisterSessionController {
             responseCode = "422",
             description = CASH_MOVEMENT_422_DESCRIPTION,
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "TAX_CHECK_UNAVAILABLE: the supplier's registration number was sent and pos-tax could not"
+                    + " check it; nothing was recorded. Retry after Retry-After seconds, or resend the same requestId"
+                    + " without the number.",
+            headers =
+                    @Header(
+                            name = "Retry-After",
+                            description = "Seconds to wait before retrying",
+                            schema = @Schema(type = "integer", example = "5")),
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{sessionId}/cash-movements")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_CASH_MOVEMENT + "')")
     @EmitEvent(id = "ORDER_SESSION_CASH_MOVEMENT", apiVersion = "1")
@@ -288,6 +313,18 @@ public class RegisterSessionController {
                                                                      "categoryCode":"SHOP_SUPPLIES",
                                                                      "receiptReference":"R-1001",
                                                                      "note":"Rags and gloves for bay 2"}
+                                                                    """),
+                                                @ExampleObject(name = "Petty expense with stated tax", value = """
+                                                                    {"requestId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac3",
+                                                                     "reason":"PETTY_EXPENSE",
+                                                                     "amount":40.00,
+                                                                     "currencyCode":"EUR",
+                                                                     "categoryCode":"SHOP_SUPPLIES",
+                                                                     "receiptReference":"R-1002",
+                                                                     "note":"Shop towels",
+                                                                     "supplierName":"Corner Hardware",
+                                                                     "statedTaxes":[{"regime":"REGIME_1","amount":4.60}],
+                                                                     "supplierRegistrationNumber":"000000000RT0001"}
                                                                     """),
                                                 @ExampleObject(name = "Bank drop", value = """
                                                                     {"requestId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4ac2",
@@ -311,7 +348,16 @@ public class RegisterSessionController {
                 request.getBagNumber(),
                 request.getReceiptReference(),
                 request.getNote(),
-                request.getApprovalToken()));
+                request.getApprovalToken(),
+                request.getSupplierName(),
+                request.getStatedTaxes() == null
+                        ? null
+                        : request.getStatedTaxes().stream()
+                                .map(tax -> tax == null
+                                        ? new CashMovementCommand.StatedTax(null, null)
+                                        : new CashMovementCommand.StatedTax(tax.regime(), tax.amount()))
+                                .toList(),
+                request.getSupplierRegistrationNumber()));
         return ResponseEntity.status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
                 .body(CashMovementResponse.from(result.movement()));
     }
@@ -416,8 +462,10 @@ public class RegisterSessionController {
             description = """
                     Returns what the register may offer the cashier for a session: per fixed reason whether it is \
                     allowed now, its cashier limit, the session's running total, whether a manager is always \
-                    needed and the fields it requires; and the ACTIVE petty-expense categories (code, label, \
-                    examples).
+                    needed and the fields it requires; the ACTIVE petty-expense categories (code, label, \
+                    examples, and the offeredRegimes whose tax a receipt may state, from local copies only); and \
+                    the evidenceRule threshold from which the supplier's number is asked for, null when pos-tax \
+                    does not answer, which never fails this read.
                     Use this tool to build the drawer cash in/out screen; use getSessionPolicy instead to read or \
                     manage the tenant's policy.
                     Amounts are in the functional currency, stated as currencyCode.
@@ -455,8 +503,14 @@ public class RegisterSessionController {
                                 r.requiredFields()))
                         .toList(),
                 options.categories().stream()
-                        .map(c -> new CashMovementOptionsResponse.CategoryOption(c.code(), c.label(), c.examples()))
-                        .toList()));
+                        .map(c -> new CashMovementOptionsResponse.CategoryOption(
+                                c.code(), c.label(), c.examples(), c.offeredRegimes()))
+                        .toList(),
+                options.evidenceRule() == null
+                        ? null
+                        : new CashMovementOptionsResponse.EvidenceRule(
+                                options.evidenceRule().threshold(),
+                                options.evidenceRule().currencyCode())));
     }
 
     @Operation(
