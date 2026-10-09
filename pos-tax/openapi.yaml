@@ -483,13 +483,23 @@ paths:
 
         over one plus r rounded up to the minor unit plus a configured tolerance, where r is the regime''s
 
-        rate in the region; RATE_UNAVAILABLE means the region has no rate row and only the total applied.
+        row rate in the region, or 0 when the regime does not cover the region; a regime that covers the
 
-        Returns 400 VALIDATION_ERROR for a missing or malformed field, a negative amount, another currency
+        region but has no row there is unrated, gets no rate bound, and makes the outcome RATE_UNAVAILABLE
 
-        or an undeclared or repeated regime, and 422 TAX_AMOUNT_IMPLAUSIBLE with each offending amount''s
+        when its amount is above zero.
 
-        maximum in fieldErrors.
+        Returns 400 VALIDATION_ERROR when a field is missing or malformed, an amount is negative or a
+
+        regime is repeated, and then, in this order with the first failing step listing all its fieldErrors,
+
+        422 TAX_JURISDICTION_NOT_CONFIGURED when the country has no tax profile, CURRENCY_NOT_SUPPORTED when
+
+        currencyCode is not the profile''s, AMOUNT_PRECISION_EXCEEDS_CURRENCY when an amount is finer than
+
+        the currency''s minor unit, TAX_REGIME_NOT_DECLARED when the country does not declare a regime, and
+
+        TAX_AMOUNT_IMPLAUSIBLE when an amount is implausible, with each offending amount''s maximum.
 
         '
       operationId: checkTaxPlausibility
@@ -525,13 +535,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Missing or malformed field, negative amount, another currency, or an undeclared or repeated regime (VALIDATION_ERROR)
+          description: Missing or malformed field, negative amount, or a repeated regime (VALIDATION_ERROR)
         '422':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: A stated amount is implausible for the receipt total (TAX_AMOUNT_IMPLAUSIBLE)
+          description: The country has no tax profile (TAX_JURISDICTION_NOT_CONFIGURED), currencyCode is not the profile's currency (CURRENCY_NOT_SUPPORTED), an amount is finer than the currency's minor unit (AMOUNT_PRECISION_EXCEEDS_CURRENCY), a regime is not declared for the country (TAX_REGIME_NOT_DECLARED), or a stated amount is implausible (TAX_AMOUNT_IMPLAUSIBLE); fieldErrors name each offending field
       security:
       - bearerAuth:
         - tax:rates:view
@@ -1402,10 +1412,10 @@ components:
       properties:
         appliesTo:
           description: Document types the rule applies to
-          example:
-          - DRAWER_RECEIPT
-          - VENDOR_BILL
           items:
+            enum:
+            - DRAWER_RECEIPT
+            - VENDOR_BILL
             type: string
           type: array
         effectiveFrom:
@@ -1624,7 +1634,7 @@ components:
         receiptTotal:
           description: Receipt total, tax included, above zero and at most the currency's decimals
           example: 150.0
-          minimum: 0
+          exclusiveMinimum: 0
           type: number
         regionCode:
           description: Region (subdivision) of the receipt, 1 to 3 letters or digits
@@ -1642,7 +1652,8 @@ components:
           - array
           - 'null'
         supplierRegistrationNumber:
-          description: Supplier's registration number as printed; it is checked against the country's supplier regime shape and is never echoed, logged or stored
+          description: Supplier's registration number as printed; it is checked against the country's supplier regime shape and is never echoed, logged or stored. A value longer than 128 characters is never well formed
+          maxLength: 128
           type:
           - string
           - 'null'
@@ -1662,19 +1673,19 @@ components:
           format: date
           type: string
         maximums:
-          description: Each stated regime's plausible maximum; empty when no rate is available
+          description: Plausible maximum of each rated or not-levied stated regime (a not-levied regime has r = 0, so its maximum is the tolerance); an unrated regime has none
           items:
             $ref: '#/components/schemas/TaxPlausibilityMaximum'
           type: array
         outcome:
-          description: PLAUSIBLE, or RATE_UNAVAILABLE when the region has no rate row on asOf; a caller never reads RATE_UNAVAILABLE as plausible for recovery
+          description: RATE_UNAVAILABLE when a stated amount above zero is unrated (its regime covers the region but has no rate row on asOf), otherwise PLAUSIBLE; a caller never reads RATE_UNAVAILABLE as plausible for recovery
           enum:
           - PLAUSIBLE
           - RATE_UNAVAILABLE
           example: PLAUSIBLE
           type: string
         ratesUsed:
-          description: Rate row behind each stated regime the region levies; empty when no rate is available
+          description: Rate row behind each rated stated regime (a row of the regime is in effect in the region on asOf); an unrated or not-levied regime has none
           items:
             $ref: '#/components/schemas/TaxPlausibilityRateUsed'
           type: array
