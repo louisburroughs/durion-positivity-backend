@@ -69,7 +69,9 @@ public record CashMovementOptionsResponse(
                     example = "[\"REGIME_1\"]")
             List<String> offeredRegimes) {}
 
-    @Schema(description = "The drawer receipt's evidence threshold for the supplier's registration number")
+    @Schema(
+            name = "CashMovementEvidenceRule",
+            description = "The drawer receipt's evidence threshold for the supplier's registration number")
     public record EvidenceRule(
             @Schema(description = "Receipt total, tax included, from which the number is asked for", example = "100.00")
             BigDecimal threshold,
