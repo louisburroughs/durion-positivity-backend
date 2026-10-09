@@ -97,8 +97,8 @@ public class VendorDirectoryServiceImpl implements VendorDirectoryService {
     private final VendorBillRepository bills;
     private final AccountingAuditLogRepository auditLogs;
     private final VendorBillExpenseKeys expenseKeys;
-    private final ActorDisplayNames actorNames;
     private final InformationReturnFormsService informationReturnForms;
+    private final ActorDisplayNames actorNames;
 
     @Override
     @Transactional(readOnly = true)
