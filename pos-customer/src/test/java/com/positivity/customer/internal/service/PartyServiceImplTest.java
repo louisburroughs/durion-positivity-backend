@@ -484,7 +484,8 @@ class PartyServiceImplTest {
         assertThatThrownBy(() -> service.createCommercialAccount(request))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining("400 BAD_REQUEST")
-                .hasMessageContaining("partyType must be COMMERCIAL");
+                .hasMessageContaining("partyType must be COMMERCIAL")
+                .hasMessageContaining("createCrmPerson");
         verify(partyRepository, never()).save(any(CommercialParty.class));
     }
 

@@ -156,12 +156,9 @@ public class PartyServiceImpl implements PartyService {
             return;
         }
         log.warn("CreateCommercialAccount refused: partyType '{}' is not COMMERCIAL", partyType);
-        if (PartyType.PERSON.name().equals(partyType)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "partyType PERSON is not a commercial account; create individual customers with createCrmPerson");
-        }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "partyType must be COMMERCIAL when supplied");
+        throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "partyType must be COMMERCIAL when supplied; create individual customers with createCrmPerson");
     }
 
     @Override
