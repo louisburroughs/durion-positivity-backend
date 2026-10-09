@@ -251,11 +251,6 @@ public class VendorBillApprovalController {
                             description = "Seconds to wait before retrying",
                             schema = @Schema(type = "integer")),
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @ApiResponse(
-            responseCode = "503",
-            description = "SERVICE_UNAVAILABLE with Retry-After: pos-tax's tax profile, which decides input-tax"
-                    + " recovery, cannot be read; nothing is written",
-            content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<VendorBillResponse> approve(
             @Parameter(description = BILL_ID, example = BILL_ID_EXAMPLE) @NonNull @PathVariable UUID billId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
