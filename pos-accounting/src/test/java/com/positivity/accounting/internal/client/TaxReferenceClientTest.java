@@ -15,6 +15,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.positivity.accounting.internal.dto.InformationReturnFormsResponse;
 import com.positivity.accounting.internal.dto.TaxPurchaseRules;
+import com.positivity.accounting.internal.dto.TaxTypesReference;
 import com.positivity.accounting.internal.dto.TaxUseQuote;
 import com.positivity.accounting.internal.exception.TaxQuoteRefusedException;
 import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
@@ -317,5 +318,60 @@ class TaxReferenceClientTest {
                         .body("{\"code\":\"TAX_JURISDICTION_NOT_CONFIGURED\"}"));
         assertThatThrownBy(() -> client.purchaseRules("ZZ", LocalDate.of(2026, 10, 1)))
                 .isInstanceOf(TaxServiceUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("#2659: the tax-types read sends the country with tax:rates:view, the tenant and the correlation id,"
+            + " and reads the types and regimes as configured")
+    void readsTheTaxTypes() {
+        MockHttpServletRequest inbound = new MockHttpServletRequest();
+        inbound.addHeader("X-Correlation-Id", "corr-2659");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(inbound));
+        server.expect(requestTo(BASE + "/v1/tax/tax-types?countryCode=ZZ"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-User", "pos-accounting"))
+                .andExpect(header("X-Authorities", "tax:rates:view"))
+                .andExpect(header("X-Tenant-Id", TENANT.toString()))
+                .andExpect(header("X-Correlation-Id", "corr-2659"))
+                .andRespond(withSuccess("""
+                        {"countryCode":"ZZ","currency":"XTS","source":"STUB",
+                         "taxTypes":[{"taxType":"ZZ_LEVY","regime":"ZZ_REGIME_1","jurisdictionType":"COUNTRY",
+                                      "inputTaxRecoverable":true,"futureField":1},
+                                     {"taxType":"ZZ_LOCAL","regime":null,"jurisdictionType":"CITY",
+                                      "inputTaxRecoverable":false}],
+                         "regimes":[{"regime":"ZZ_REGIME_1","regions":["R1"]}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        TaxTypesReference answer = client.taxTypes("ZZ");
+
+        assertThat(answer.countryCode()).isEqualTo("ZZ");
+        assertThat(answer.source()).isEqualTo("STUB");
+        assertThat(answer.taxTypes())
+                .containsExactly(
+                        new TaxTypesReference.TaxType("ZZ_LEVY", "ZZ_REGIME_1", "COUNTRY", true),
+                        new TaxTypesReference.TaxType("ZZ_LOCAL", null, "CITY", false));
+        assertThat(answer.regimes()).containsExactly(new TaxTypesReference.Regime("ZZ_REGIME_1", List.of("R1")));
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("#2659: any pos-tax 4xx or 5xx, or no body, on the tax-types read is 503, never relayed")
+    void taxTypesNotAnAnswerIsUnavailable() {
+        for (HttpStatus status : new HttpStatus[] {
+            HttpStatus.BAD_REQUEST, HttpStatus.NOT_FOUND, HttpStatus.UNPROCESSABLE_CONTENT, HttpStatus.BAD_GATEWAY
+        }) {
+            client = client();
+            server.expect(requestTo(BASE + "/v1/tax/tax-types?countryCode=ZZ"))
+                    .andRespond(withStatus(status)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body("{\"code\":\"VALIDATION_ERROR\"}"));
+            assertThatThrownBy(() -> client.taxTypes("ZZ"))
+                    .as("%s", status)
+                    .isInstanceOf(TaxServiceUnavailableException.class);
+        }
+
+        client = client();
+        server.expect(requestTo(BASE + "/v1/tax/tax-types?countryCode=ZZ")).andRespond(withSuccess());
+        assertThatThrownBy(() -> client.taxTypes("ZZ")).isInstanceOf(TaxServiceUnavailableException.class);
     }
 }

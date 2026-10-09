@@ -84,7 +84,8 @@ public final class EventTypes {
      * ACCOUNTING_REPORT_EXPORT_LIST, +2 from the vendor directory
      * (Issue #816): ACCOUNTING_VENDOR_SEARCH, ACCOUNTING_VENDOR_GET, +2 vendor commands (CAP:550 S24, #2517):
      * ACCOUNTING_VENDOR_REMIT_TO_CONFIRM, ACCOUNTING_VENDOR_AP_SETTINGS_SET, +1 information-return forms read (CAP:550
-     * #2615): ACCOUNTING_INFORMATION_RETURN_FORMS_VIEW, +3
+     * #2615): ACCOUNTING_INFORMATION_RETURN_FORMS_VIEW, +1 configured tax regimes read (CAP:550 #2659):
+     * ACCOUNTING_TAX_REGIMES_VIEW, +3
      * from accounting period lifecycle (Story B1, Issue #937):
      * ACCOUNTING_PERIOD_LIST, ACCOUNTING_PERIOD_CLOSE,
      * ACCOUNTING_PERIOD_REOPEN, +2 previously emitted but unregistered
@@ -478,6 +479,11 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_INFORMATION_RETURN_FORMS_VIEW",
                                 "List the tax country's information-return forms, boxes and payee-id schemes")
+                        .build(),
+                // TaxRegimesController — a country's configured tax regimes (CAP:550 #2659)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_TAX_REGIMES_VIEW",
+                                "List a country's configured tax regimes with their regions and tax types")
                         .build(),
 
                 // AccountingPeriodController — 3 events (Story B1, Issue #937)
