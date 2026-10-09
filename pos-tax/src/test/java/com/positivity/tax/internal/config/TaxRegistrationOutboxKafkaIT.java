@@ -54,7 +54,18 @@ import tools.jackson.databind.ObjectMapper;
 @DisplayName("Tax registration outbox to Kafka (CAP:550 S32c)")
 class TaxRegistrationOutboxKafkaIT {
 
-    private static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.9.0");
+    /**
+     * A Docker host reported as {@code 0.0.0.0} (some build hosts) would become the broker's advertised listener,
+     * which Kafka refuses; the broker is then advertised, and reached, on {@code localhost}.
+     */
+    private static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:3.9.0") {
+        @Override
+        public String getHost() {
+            String host = super.getHost();
+            return "0.0.0.0".equals(host) ? "localhost" : host;
+        }
+    };
+
     private static final String TOPIC = "tax.events.v1";
 
     @DynamicPropertySource

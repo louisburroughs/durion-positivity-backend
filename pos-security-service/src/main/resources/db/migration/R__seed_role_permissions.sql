@@ -374,6 +374,11 @@ SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', 
 -- * CAP:550 S13 (#2510, SPEC-accounting-workspace §4.3, §5.5, AW4/AW5/AW33, Security sign-off OI-5, AW31): the AP
 --   approval policy (clerk and automatic limits, separation-of-duties switches, default AP terms) is new (bit 559).
 --     accounting:ap_approval_policy:manage -> ADMIN, CONTROLLER, GENERAL_MANAGER
+-- * CAP:550 S32c (#2638, ADR-0071 §5, AW59): the accounting front door to pos-tax's tenant tax registrations
+--   (bits 561-562), granted like the mapping-key family. SUPPORT's row is hand-added: generate-permissions.py's
+--   SEED_GRANT_ROLES drops it (#2625); RolePermissionBaselineTest#taxRegistrationHolders pins it.
+--     accounting:tax_registration:view   -> ADMIN, CONTROLLER, SUPPORT (the accounting:mapping-key:view holders)
+--     accounting:tax_registration:manage -> ADMIN, CONTROLLER (the accounting:mapping-key:edit holders)
 --
 -- IDEMPOTENCY
 -- Every statement below is ON CONFLICT DO NOTHING, and role/permission ids are
@@ -480,6 +485,8 @@ FROM (VALUES
     ('accounting:reconciliation:view', 'accounting', 'reconciliation', 'view', 385),
     ('accounting:report:export', 'accounting', 'report', 'export', 303),
     ('accounting:tax-snapshot:freeze', 'accounting', 'tax-snapshot', 'freeze', 392),
+    ('accounting:tax_registration:manage', 'accounting', 'tax_registration', 'manage', 561),
+    ('accounting:tax_registration:view', 'accounting', 'tax_registration', 'view', 562),
     ('accounting:time:export', 'accounting', 'time', 'export', 304),
     ('appointments:cancel', 'appointments', '', 'cancel', 162),
     ('appointments:create', 'appointments', '', 'create', 159),
@@ -1057,6 +1064,8 @@ FROM (VALUES
     ('ADMIN', 'accounting:reconciliation:view'),
     ('ADMIN', 'accounting:report:export'),
     ('ADMIN', 'accounting:tax-snapshot:freeze'),
+    ('ADMIN', 'accounting:tax_registration:manage'),
+    ('ADMIN', 'accounting:tax_registration:view'),
     ('ADMIN', 'accounting:time:export'),
     ('ADMIN', 'appointments:cancel'),
     ('ADMIN', 'appointments:create'),
@@ -1531,6 +1540,8 @@ FROM (VALUES
     ('CONTROLLER', 'accounting:reconciliation:approve'),
     ('CONTROLLER', 'accounting:reconciliation:view'),
     ('CONTROLLER', 'accounting:tax-snapshot:freeze'),
+    ('CONTROLLER', 'accounting:tax_registration:manage'),
+    ('CONTROLLER', 'accounting:tax_registration:view'),
     ('CONTROLLER', 'accounting:time:export'),
     ('CONTROLLER', 'invoice:billing-rules'),
     ('CONTROLLER', 'mcp:chat:execute'),
@@ -1747,6 +1758,7 @@ FROM (VALUES
     ('SUPPORT', 'accounting:posting-category:view'),
     ('SUPPORT', 'accounting:posting_rules:view'),
     ('SUPPORT', 'accounting:reconciliation:view'),
+    ('SUPPORT', 'accounting:tax_registration:view'),
     ('SUPPORT', 'bulkImport:status:read'),
     ('SUPPORT', 'catalog:catalog_grouping:view'),
     ('SUPPORT', 'catalog:item_cost:read'),
@@ -1970,6 +1982,8 @@ BEGIN
         ('accounting:reconciliation:view'),
         ('accounting:report:export'),
         ('accounting:tax-snapshot:freeze'),
+        ('accounting:tax_registration:manage'),
+        ('accounting:tax_registration:view'),
         ('accounting:time:export'),
         ('appointments:cancel'),
         ('appointments:create'),

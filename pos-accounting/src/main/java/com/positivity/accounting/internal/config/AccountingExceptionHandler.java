@@ -50,6 +50,8 @@ import com.positivity.accounting.internal.exception.SettlementLineNotFoundExcept
 import com.positivity.accounting.internal.exception.SettlementLineNotUnmatchedException;
 import com.positivity.accounting.internal.exception.SettlementNotPostedException;
 import com.positivity.accounting.internal.exception.SettlementWriteOffThresholdExceededException;
+import com.positivity.accounting.internal.exception.TaxRegistrationRelayException;
+import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.exception.TaxSnapshotConflictException;
 import com.positivity.accounting.internal.exception.TaxSnapshotNotFoundException;
 import com.positivity.accounting.internal.exception.TaxSnapshotPeriodNotClosedException;
@@ -99,6 +101,36 @@ public class AccountingExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
         return build(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", request);
+    }
+
+    /**
+     * pos-tax refused a tax-registration write with 400, 404 or 409 (CAP:550 S32c; AW59): its status and its error
+     * envelope are relayed unchanged, correlation id included.
+     */
+    @ExceptionHandler(TaxRegistrationRelayException.class)
+    public ResponseEntity<ApiError> handleTaxRegistrationRelay(
+            TaxRegistrationRelayException ex, HttpServletRequest request) {
+        ApiError error = ex.getError();
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(
+                X_CORRELATION_ID,
+                error.correlationId() != null ? error.correlationId() : resolveCorrelationId(request));
+        return new ResponseEntity<>(error, headers, HttpStatus.valueOf(ex.getStatus()));
+    }
+
+    /**
+     * pos-tax cannot take a tax-registration write (CAP:550 S32c): 503 {@code SERVICE_UNAVAILABLE} with
+     * {@code Retry-After} (ADR-0017); nothing was stored.
+     */
+    @ExceptionHandler(TaxServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleTaxServiceUnavailable(
+            TaxServiceUnavailableException ex, HttpServletRequest request) {
+        ResponseEntity<ApiError> built =
+                build(HttpStatus.SERVICE_UNAVAILABLE, TaxServiceUnavailableException.CODE, ex.getMessage(), request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(built.getHeaders());
+        headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(TaxServiceUnavailableException.RETRY_AFTER_SECONDS));
+        return new ResponseEntity<>(built.getBody(), headers, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     /*

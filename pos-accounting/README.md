@@ -465,6 +465,8 @@ holder sets are:
 | `accounting:ap:reject` | `ACCOUNTING_CLERK`, `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — reject, void a match exception; with the approval tier, void an approved bill (S12; reinstated, bit 263) |
 | `accounting:ap:approve_over_limit` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — approve, `ACCEPT` or void an approved bill over the clerk limit (default 0: every bill) (S12, catalog v102, bit 558) |
 | `accounting:ap_approval_policy:manage` | `ADMIN`, `CONTROLLER`, `GENERAL_MANAGER` — read and change the AP approval policy (S13, #2510; catalog v103, bit 559) |
+| `accounting:tax_registration:view` | `ADMIN`, `CONTROLLER`, `SUPPORT` (the `accounting:mapping-key:view` holders) — read the tenant's tax registrations (S32c, #2638; catalog v105, bit 562) |
+| `accounting:tax_registration:manage` | `ADMIN`, `CONTROLLER` (the `accounting:mapping-key:edit` holders) — record and change them through the front door to pos-tax (S32c; catalog v105, bit 561) |
 
 `accounting:payment:assign-customer` (catalog v97, bit 548; `AccountingPermissions.PAYMENT_ASSIGN_CUSTOMER`)
 is registered ahead of its endpoint — assigning a customer, once and with a justification, to a payment
@@ -708,6 +710,34 @@ defect); and any CASH `needsAttention.amount` carried over more than one busines
 party-fact replay: run `POST /v1/crm/accounts/facts/replay` once after deploying V9 (equal versions apply,
 `ReplicaVersionGuard`). Location time zones fill on pos-location's next fact or replay the same way. Until
 then the read answers `houseAccountKnown = false`, and the UTC fallback applies.
+
+## Tax registrations: the front door to pos-tax (CAP:550 S32c, #2638)
+
+pos-tax owns the tenant's indirect-tax registrations (ADR-0071 §7); pos-accounting is their only front door (AW59,
+ADR-0071 §5). Nothing here names a country or a regime: they come from pos-tax's configured profiles.
+
+| Method · path | Permission | Codes |
+| --- | --- | --- |
+| `GET /v1/accounting/tax-registrations[?asOf=]` | `accounting:tax_registration:view` | 200; 403 |
+| `POST /v1/accounting/tax-registrations` | `accounting:tax_registration:manage` | 201; 200 (replayed `requestId`); 400; 403; 409 relayed; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
+| `PUT /v1/accounting/tax-registrations/{registrationId}` | `accounting:tax_registration:manage` | 200; 400; 403; 404 relayed; 409 relayed; 503 `SERVICE_UNAVAILABLE` + `Retry-After` |
+
+- **Writes.** The front door checks the justification (10 to 1000 characters) and the `requestId` (400
+  `VALIDATION_ERROR`), then calls pos-tax (`TaxRegistrationClient`, ADR-0044 R2) with its per-caller secret
+  (`pos.accounting.tax.front-door-secret`, env `POS_TAX_ACCOUNTING_SECRET`, never in code), the actor exactly as the
+  gateway forwarded it in `X-User-Id` (a body field never names the actor; a request without a person's id is 403)
+  and the bound tenant. pos-tax's 400, 404 and 409 (`TAX_REGISTRATION_OVERLAP`, `OPTIMISTIC_LOCK`, and
+  `VALIDATION_ERROR` with `fieldErrors[registrationNumber]` for a number that does not match its regime's shape) are
+  relayed unchanged. pos-tax unreachable or failing, a blank secret here or a 401 there is 503
+  `SERVICE_UNAVAILABLE` with `Retry-After`; nothing is stored here either way. pos-tax is never reached from a
+  screen.
+- **Replica.** `ext_tax_registration` (V21) is written only by pos-tax's `tax.registration.changed` on
+  `tax.events.v1` (`TaxRegistrationEventsListener`), keyed by the registration id and guarded by its version
+  (`ReplicaVersionGuard`), so a redelivery or the manifest's re-send applies once. `TaxManifestListener` compares
+  each `tax.manifest.v1` window with `processed_events` (owner `tax`) and asks pos-tax to replay a drifted window on
+  `tax.commands.v1`. The GET reads it, every row or those in effect on `asOf` (both ends inclusive, AW49); a status
+  is derived on `asOf`, else today in UTC. A write appears in the GET once its fact arrives.
+- **Data.** The copy keeps the shape-checked, normalised number: INTERNAL under ADR-0072 Decision 1. Nothing logs it.
 
 ## Location scope (ADR-0061, #1885)
 

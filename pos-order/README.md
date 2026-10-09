@@ -174,6 +174,21 @@ pos-order reconciles `order.events.v1` the way every other fact owner does:
 - **Consumer.** pos-accounting (`OrderManifestListener`) compares each manifest with the `order` rows its
   `OrderEventsListener` records, which records every order fact it reads, not only the session facts it posts.
 
+## Tax registrations replica (CAP:550 S32c, #2638)
+
+pos-order keeps its own copy of the tenant's indirect-tax registrations, `ext_tax_registration` (V8), to decide which
+drawer fields to show; it never calls pos-tax for registrations (ADR-0071 §7, AW58).
+
+- `TaxRegistrationEventsListener` applies pos-tax's `tax.registration.changed` from `tax.events.v1`, keyed by the
+  registration id and guarded by its version (`ReplicaVersionGuard`): a redelivery or the manifest's re-send applies
+  once, an older version changes nothing. Every eventId is recorded in `processed_events` (owner `tax`).
+- `TaxManifestListener` compares each `tax.manifest.v1` window with those rows and sends `tax.outbox.replay-requested`
+  on `tax.commands.v1` for a drifted one.
+- `TaxRegistrationReplica.inEffectOn(countryCode, regime, businessDate)` is the as-of read (both ends inclusive,
+  AW49). An empty answer means the copy holds none in effect that day; a caller that must act on absence (S32d)
+  retries or holds rather than reading "not registered" from a copy that may not have caught up.
+- The copy keeps no registration number: the drawer needs only whether a regime is registered on a date.
+
 ## Purchase order transmission timeline (issue #1638)
 
 - `GET /v1/orders/purchase-orders/{poId}/transmission-events` (`listPurchaseOrderTransmissionEvents`,

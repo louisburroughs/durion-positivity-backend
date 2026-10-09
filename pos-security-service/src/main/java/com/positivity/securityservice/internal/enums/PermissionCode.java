@@ -1060,13 +1060,16 @@ public enum PermissionCode {
     // ── Accounting (new) ───────────────────────────────────────────────────────
     ACCOUNTING__AP_APPROVAL_POLICY__MANAGE(559, "accounting:ap_approval_policy:manage"),
     // ── Supplier (new) ─────────────────────────────────────────────────────────
-    SUPPLIER__VENDOR_TAX_ID__REVEAL(560, "supplier:vendor_tax_id:reveal");
+    SUPPLIER__VENDOR_TAX_ID__REVEAL(560, "supplier:vendor_tax_id:reveal"),
+    // ── Accounting (new) ───────────────────────────────────────────────────────
+    ACCOUNTING__TAX_REGISTRATION__MANAGE(561, "accounting:tax_registration:manage"),
+    ACCOUNTING__TAX_REGISTRATION__VIEW(562, "accounting:tax_registration:view");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 104;
+    public static final int CATALOG_VERSION = 105;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

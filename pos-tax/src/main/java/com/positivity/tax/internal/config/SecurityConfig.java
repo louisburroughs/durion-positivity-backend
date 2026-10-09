@@ -1,9 +1,11 @@
 package com.positivity.tax.internal.config;
 
+import com.positivity.security.common.GatewayAuthoritiesFilter;
 import com.positivity.security.common.GatewaySecurityConfig;
 import com.positivity.tax.internal.security.FrontDoorSecretFilter;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -52,5 +54,21 @@ public class SecurityConfig {
                         new FrontDoorSecretFilter(accountingSecret, clock, objectMapper),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    /**
+     * Keeps {@link GatewayAuthoritiesFilter} inside the gateway chain only. As a {@code @Bean} it would also be
+     * registered as a plain servlet filter, running after the security chains; on a front-door request, which carries
+     * no gateway headers, it would clear the authentication the front-door chain set, and the controller's
+     * {@code @PreAuthorize} would then refuse the call. The gateway chain adds the filter itself, so nothing else
+     * changes.
+     */
+    @Bean
+    public FilterRegistrationBean<GatewayAuthoritiesFilter> gatewayAuthoritiesFilterServletRegistration(
+            GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
+        FilterRegistrationBean<GatewayAuthoritiesFilter> registration =
+                new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 }
