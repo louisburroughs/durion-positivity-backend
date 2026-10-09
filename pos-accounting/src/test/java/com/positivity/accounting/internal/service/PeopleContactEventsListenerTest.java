@@ -191,25 +191,72 @@ class PeopleContactEventsListenerTest {
     }
 
     @Test
-    @DisplayName("AC 9: user-person-link.removed deletes the link, and person.deleted the person")
-    void removalsDelete() {
+    @DisplayName("AC 9 / review B5: user-person-link.removed tombstones the link (REMOVED, its version) and"
+            + " person.deleted tombstones the person (deleted, names cleared, its version); nothing is hard-deleted")
+    void removalsTombstone() {
         ExtPeopleContactUserLink link = ExtPeopleContactUserLink.builder()
                 .linkId(LINK)
                 .personId(PERSON)
                 .username("controller.cfo")
                 .status("ACTIVE")
+                .aggregateVersion(1)
                 .build();
-        ExtPeopleContactPerson person =
-                ExtPeopleContactPerson.builder().personId(PERSON).build();
+        ExtPeopleContactPerson person = ExtPeopleContactPerson.builder()
+                .personId(PERSON)
+                .firstName(FIRST)
+                .lastName(LAST)
+                .aggregateVersion(1)
+                .build();
         when(links.findById(LINK)).thenReturn(Optional.of(link));
         when(persons.findById(PERSON)).thenReturn(Optional.of(person));
 
         listener.onPeopleContactEvent(linkRemoved("e-r"));
         listener.onPeopleContactEvent(personDeleted("e-d"));
 
-        verify(links).delete(link);
-        verify(persons).delete(person);
+        verify(links, never()).delete(any());
+        verify(persons, never()).delete(any());
+        verify(links).save(link);
+        verify(persons).save(person);
+        assertThat(link.getStatus()).isEqualTo(ExtPeopleContactUserLink.REMOVED);
+        assertThat(link.getAggregateVersion()).isEqualTo(5);
+        assertThat(person.isDeleted()).isTrue();
+        assertThat(person.getFirstName()).isNull();
+        assertThat(person.getLastName()).isNull();
+        assertThat(person.getAggregateVersion()).isEqualTo(9);
         verify(processed, times(2)).save(any());
+    }
+
+    @Test
+    @DisplayName("review B5: removed at v5, then a late user-person-link.updated at v4, leaves no ACTIVE link")
+    void lateUpdateAfterRemovalDoesNotRevive() {
+        // The removal arrives first, for a link the copy never saw: the tombstone is still written.
+        listener.onPeopleContactEvent(linkRemoved("e-r5"));
+        ArgumentCaptor<ExtPeopleContactUserLink> tombstone = ArgumentCaptor.forClass(ExtPeopleContactUserLink.class);
+        verify(links).save(tombstone.capture());
+        assertThat(tombstone.getValue().getStatus()).isEqualTo(ExtPeopleContactUserLink.REMOVED);
+        assertThat(tombstone.getValue().getAggregateVersion()).isEqualTo(5);
+        when(links.findById(LINK)).thenReturn(Optional.of(tombstone.getValue()));
+
+        listener.onPeopleContactEvent(linkUpdated("e-u4", 4, "controller.cfo", "ACTIVE"));
+
+        verify(links, times(1)).save(any());
+        assertThat(tombstone.getValue().getStatus()).isEqualTo(ExtPeopleContactUserLink.REMOVED);
+    }
+
+    @Test
+    @DisplayName("review B5: deleted at v9, then a late person.updated at v8, leaves the person deleted and nameless")
+    void lateUpdateAfterDeletionDoesNotRevive() {
+        listener.onPeopleContactEvent(personDeleted("e-d9"));
+        ArgumentCaptor<ExtPeopleContactPerson> tombstone = ArgumentCaptor.forClass(ExtPeopleContactPerson.class);
+        verify(persons).save(tombstone.capture());
+        assertThat(tombstone.getValue().isDeleted()).isTrue();
+        when(persons.findById(PERSON)).thenReturn(Optional.of(tombstone.getValue()));
+
+        listener.onPeopleContactEvent(personUpdated("e-u8", 8, FIRST, LAST));
+
+        verify(persons, times(1)).save(any());
+        assertThat(tombstone.getValue().isDeleted()).isTrue();
+        assertThat(tombstone.getValue().getFirstName()).isNull();
     }
 
     @Test

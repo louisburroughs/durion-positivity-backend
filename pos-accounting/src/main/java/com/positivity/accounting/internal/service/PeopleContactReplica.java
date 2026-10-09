@@ -31,7 +31,9 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>Each fact applies by its aggregate id and the envelope's {@code aggregateVersion} ({@link ReplicaVersionGuard}):
  * an older fact changes nothing, an equal one applies, so a manifest-driven replay repairs a row. A deleted person and
- * a removed link are deleted from the copy, so the next read serves a null name. Every eventId on the topic is recorded
+ * a removed link become tombstones (the person's names cleared and {@code deleted} set; the link's status {@value
+ * ExtPeopleContactUserLink#REMOVED}), each with the fact's version, so the next read serves a null name and a late,
+ * older update cannot bring either back (#2676 review B5). Every eventId on the topic is recorded
  * in {@code processed_events} with owner {@value #OWNER}, the types this copy ignores included, because the owner's
  * manifest counts every fact.
  *
@@ -119,6 +121,7 @@ public class PeopleContactReplica {
         copy.setPersonId(fact.personId());
         copy.setFirstName(fact.firstName());
         copy.setLastName(fact.lastName());
+        copy.setDeleted(false);
         copy.setAggregateVersion(version);
         copy.setUpdatedAt(Instant.now(clock));
         persons.save(copy);
@@ -126,7 +129,25 @@ public class PeopleContactReplica {
 
     private void personDeleted(JsonNode envelope) {
         PersonDeletedV1 fact = objectMapper.treeToValue(envelope.path("payload"), PersonDeletedV1.class);
-        persons.findById(fact.personId()).ifPresent(persons::delete);
+        long version = aggregateVersion(envelope);
+        ExtPeopleContactPerson existing = persons.findById(fact.personId()).orElse(null);
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), version)) {
+            log.debug(
+                    "Ignoring stale people-contact.person.deleted person={} held={} incoming={}",
+                    fact.personId(),
+                    existing.getAggregateVersion(),
+                    version);
+            return;
+        }
+        // A tombstone, never a hard delete: the names go (minimisation), the version stays.
+        ExtPeopleContactPerson tombstone = existing != null ? existing : new ExtPeopleContactPerson();
+        tombstone.setPersonId(fact.personId());
+        tombstone.setFirstName(null);
+        tombstone.setLastName(null);
+        tombstone.setDeleted(true);
+        tombstone.setAggregateVersion(version);
+        tombstone.setUpdatedAt(Instant.now(clock));
+        persons.save(tombstone);
     }
 
     private void linkUpdated(JsonNode envelope) {
@@ -155,6 +176,24 @@ public class PeopleContactReplica {
     private void linkRemoved(JsonNode envelope) {
         UserPersonLinkRemovedV1 fact =
                 objectMapper.treeToValue(envelope.path("payload"), UserPersonLinkRemovedV1.class);
-        links.findById(fact.linkId()).ifPresent(links::delete);
+        long version = aggregateVersion(envelope);
+        ExtPeopleContactUserLink existing = links.findById(fact.linkId()).orElse(null);
+        if (existing != null && ReplicaVersionGuard.isStale(existing.getAggregateVersion(), version)) {
+            log.debug(
+                    "Ignoring stale people-contact.user-person-link.removed link={} held={} incoming={}",
+                    fact.linkId(),
+                    existing.getAggregateVersion(),
+                    version);
+            return;
+        }
+        // A tombstone, never a hard delete: an older user-person-link.updated then finds a newer row.
+        ExtPeopleContactUserLink tombstone = existing != null ? existing : new ExtPeopleContactUserLink();
+        tombstone.setLinkId(fact.linkId());
+        tombstone.setPersonId(fact.personId());
+        tombstone.setUsername(fact.username());
+        tombstone.setStatus(ExtPeopleContactUserLink.REMOVED);
+        tombstone.setAggregateVersion(version);
+        tombstone.setUpdatedAt(Instant.now(clock));
+        links.save(tombstone);
     }
 }

@@ -19,7 +19,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Accounting's copy of one pos-people-contact user-person link (AP reads #2670; ADR-0044 §6), written only by {@code
- * people-contact.user-person-link.updated} and removed by {@code .removed}, guarded by the fact's {@code
+ * people-contact.user-person-link.updated} and tombstoned ({@value #REMOVED}) by {@code .removed}, guarded by the fact's {@code
  * aggregateVersion}. A username resolves to a person only through a link whose status is {@value #ACTIVE}. The
  * username is INTERNAL (ADR-0072), as the AP actor fields that carry it already are.
  */
@@ -35,6 +35,9 @@ public class ExtPeopleContactUserLink extends TenantScopedEntity {
 
     /** The only status through which a username names a person. */
     public static final String ACTIVE = "ACTIVE";
+
+    /** The status a {@code user-person-link.removed} leaves: a tombstone that an older update cannot revive. */
+    public static final String REMOVED = "REMOVED";
 
     @Id
     @EqualsAndHashCode.Include

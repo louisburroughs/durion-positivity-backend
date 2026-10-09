@@ -9,6 +9,11 @@
 -- manifest-driven replay repairs a row. A link carries no foreign key to its person: the two arrive as separate facts,
 -- in either order, and a person may be deleted while a link still names it (the name is then null).
 --
+-- Removal is a tombstone, never a hard delete (#2676 review B5): person.deleted keeps the person's row with deleted =
+-- true, its names cleared and the fact's version; user-person-link.removed keeps the link with status REMOVED and the
+-- fact's version. A late, older person.updated or user-person-link.updated then finds a newer row and changes nothing,
+-- so a removed user is never named again. A name resolves only through an ACTIVE link to a person not deleted.
+--
 -- Follows TENANCY_SCHEMA.md "Adding a table" (ADR-0062): tenant_id first, the (tenant_id, <pk>) key, the tenant index
 -- and the tenant_isolation policy. No SQL clock (ADR-0024).
 
@@ -17,6 +22,7 @@ CREATE TABLE public.ext_people_contact_person (
     person_id uuid NOT NULL,
     first_name character varying(255),
     last_name character varying(255),
+    deleted boolean DEFAULT false NOT NULL,
     aggregate_version bigint NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL
 );

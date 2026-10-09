@@ -21,7 +21,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * Accounting's copy of one pos-people-contact person (AP reads #2670; ADR-0044 §6), written only by {@code
  * people-contact.person.updated} and removed by {@code .person.deleted}, guarded by the fact's {@code
- * aggregateVersion}. It holds the first and last name and nothing else (ADR-0072 minimisation): enough to put a name
+ * aggregateVersion}; a deletion leaves a tombstone ({@code deleted}, names cleared). It holds the first and last name
+ * and nothing else (ADR-0072 minimisation): enough to put a name
  * beside an AP actor's username. The names are CONFIDENTIAL, so {@code toString} leaves them out.
  */
 @Entity
@@ -48,6 +49,10 @@ public class ExtPeopleContactPerson extends TenantScopedEntity {
     @ToString.Exclude
     @Column(name = "last_name", length = 255)
     private String lastName;
+
+    /** A tombstone of {@code person.deleted}: names cleared, kept so an older fact cannot bring the person back. */
+    @Column(name = "deleted", nullable = false)
+    private boolean deleted;
 
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;

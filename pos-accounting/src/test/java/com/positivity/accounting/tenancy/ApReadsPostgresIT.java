@@ -205,10 +205,21 @@ class ApReadsPostgresIT extends PostgresTenancyTestBase {
     }
 
     private static String linkUpdated(UUID linkId, UUID personId, String username) {
+        return linkUpdated(linkId, personId, username, 1, "ACTIVE");
+    }
+
+    private static String linkUpdated(UUID linkId, UUID personId, String username, long version, String status) {
         return """
             {"eventId":"%s","eventType":"people-contact.user-person-link.updated","aggregateId":"%s",
-             "aggregateVersion":1,"payload":{"linkId":"%s","personId":"%s","username":"%s","status":"ACTIVE"}}
-            """.formatted(UUIDv7Generator.generate(), linkId, linkId, personId, username);
+             "aggregateVersion":%d,"payload":{"linkId":"%s","personId":"%s","username":"%s","status":"%s"}}
+            """.formatted(UUIDv7Generator.generate(), linkId, version, linkId, personId, username, status);
+    }
+
+    private static String personDeleted(UUID personId, long version) {
+        return """
+            {"eventId":"%s","eventType":"people-contact.person.deleted","aggregateId":"%s",
+             "aggregateVersion":%d,"payload":{"personId":"%s"}}
+            """.formatted(UUIDv7Generator.generate(), personId, version, personId);
     }
 
     private static String linkRemoved(UUID linkId, UUID personId, String username) {
@@ -269,11 +280,68 @@ class ApReadsPostgresIT extends PostgresTenancyTestBase {
                 .as("no ACTIVE link: null, never the username")
                 .isNull();
         assertThat(owner().queryForObject(
+                                "SELECT status FROM ext_people_contact_user_link WHERE tenant_id = ? AND link_id = ?",
+                                String.class,
+                                tenant,
+                                link))
+                .as("the removal is a tombstone, not a delete")
+                .isEqualTo("REMOVED");
+        assertThat(owner().queryForObject(
                                 "SELECT count(*) FROM processed_events WHERE tenant_id = ? AND owner ="
                                         + " 'people-contact'",
                                 Integer.class,
                                 tenant))
                 .isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("review B1 (AC 7): an INACTIVE link (v2) and a deleted person with an ACTIVE link each serve a null"
+            + " changedByName through the real query, changedBy unchanged; a late older fact revives neither")
+    void inactiveLinkAndDeletedPerson() {
+        UUID tenant = tenantWithZone();
+        tenants.add(tenant);
+        PeopleContactEventsListener listener = new PeopleContactEventsListener(objectMapper, replica);
+        UUID person = UUIDv7Generator.generate();
+        UUID link = UUIDv7Generator.generate();
+        policyChangedBy(tenant, "controller.cfo");
+        asTenant(tenant, () -> {
+            listener.onPeopleContactEvent(personUpdated(person, 100, "Dana", "Reyes"));
+            listener.onPeopleContactEvent(linkUpdated(link, person, "controller.cfo", 1, "ACTIVE"));
+        });
+        assertThat(changedByName(tenant)).isEqualTo("Dana Reyes");
+
+        asTenant(
+                tenant,
+                () -> listener.onPeopleContactEvent(linkUpdated(link, person, "controller.cfo", 2, "INACTIVE")));
+        assertThat(changedByName(tenant)).as("an INACTIVE link names nobody").isNull();
+        assertThat(asTenant(tenant, () -> approvalPolicy.get(0, 20))
+                        .history()
+                        .getFirst()
+                        .changedBy())
+                .isEqualTo("controller.cfo");
+
+        // Active again, then the person is deleted while the link stays ACTIVE.
+        asTenant(tenant, () -> listener.onPeopleContactEvent(linkUpdated(link, person, "controller.cfo", 3, "ACTIVE")));
+        assertThat(changedByName(tenant)).isEqualTo("Dana Reyes");
+        asTenant(tenant, () -> listener.onPeopleContactEvent(personDeleted(person, 200)));
+        assertThat(changedByName(tenant)).as("a deleted person names nobody").isNull();
+        asTenant(tenant, () -> listener.onPeopleContactEvent(personUpdated(person, 150, "Dana", "Reyes")));
+        assertThat(changedByName(tenant))
+                .as("a late older person.updated does not undo the deletion")
+                .isNull();
+        assertThat(owner().queryForObject(
+                                "SELECT deleted FROM ext_people_contact_person WHERE tenant_id = ? AND person_id = ?",
+                                Boolean.class,
+                                tenant,
+                                person))
+                .isTrue();
+    }
+
+    private String changedByName(UUID tenant) {
+        return asTenant(tenant, () -> approvalPolicy.get(0, 20))
+                .history()
+                .getFirst()
+                .changedByName();
     }
 
     @Test

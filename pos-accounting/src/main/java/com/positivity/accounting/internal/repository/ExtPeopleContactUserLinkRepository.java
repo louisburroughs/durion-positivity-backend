@@ -31,12 +31,13 @@ public interface ExtPeopleContactUserLinkRepository extends JpaRepository<ExtPeo
 
     /**
      * The names of the persons {@code usernames} are linked to by an ACTIVE link, in one query: a response's actors
-     * resolve together, never one query per row. A username without an ACTIVE link, or whose person is not in the copy,
-     * has no row.
+     * resolve together, never one query per row. A username without an ACTIVE link, or whose person is not in the copy
+     * or is deleted (a tombstone), has no row.
      */
     @Query("select l.username as username, p.firstName as firstName, p.lastName as lastName"
             + " from ExtPeopleContactUserLink l, ExtPeopleContactPerson p"
             + " where p.personId = l.personId and l.status = '" + ExtPeopleContactUserLink.ACTIVE + "'"
+            + " and p.deleted = false"
             + " and l.username in :usernames"
             + " order by l.username, l.linkId")
     @NonNull
