@@ -15,6 +15,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap-approval-policy
   /v1/accounting/ap/bills:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1bills
+  /v1/accounting/ap/pay-from-accounts:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1pay-from-accounts
   /v1/accounting/ap/payments:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments
   /v1/accounting/ap/payments/by-ref/{paymentRef}:
@@ -329,6 +331,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1lines~1{lineId}~1write-off
   /v1/accounting/settlements/{settlementId}/lines:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1settlements~1{settlementId}~1lines
+  /v1/accounting/tax-regimes:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tax-regimes
   /v1/accounting/tax-registrations:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1tax-registrations
   /v1/accounting/tax-registrations/{registrationId}:
@@ -347,6 +351,8 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1by-stage
   /v1/accounting/vendor-bills/event/{eventId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1event~1{eventId}
+  /v1/accounting/vendor-bills/expense-categories:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1expense-categories
   /v1/accounting/vendor-bills/match:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1vendor-bills~1match
   /v1/accounting/vendor-bills/match-candidates/{candidateId}/select:
@@ -1231,40 +1237,6 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}~1reject
   /v1/returns/{returnOrderId}/retry:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1returns~1{returnOrderId}~1retry
-  /v1/organizations/{organizationId}/postal-address:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1organizations~1{organizationId}~1postal-address
-  /v1/people:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people
-  /v1/people/by-ids:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1by-ids
-  /v1/people/me:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1me
-  /v1/people/resolve:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1resolve
-  /v1/people/user-links:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1user-links
-  /v1/people/user-links/{personId}:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1user-links~1{personId}
-  /v1/people/users/link:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1users~1link
-  /v1/people/users/{username}/link:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1users~1{username}~1link
-  /v1/people/users/{username}/person:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1users~1{username}~1person
-  /v1/people/{personId}:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}
-  /v1/people/{personId}/contact-points:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1contact-points
-  /v1/people/{personId}/postal-address:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1postal-address
-  /v1/people/{personId}/users:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1users
-  /v1/people/{personUuid}/access/assignments:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personUuid}~1access~1assignments
-  /v1/people/{personUuid}/access/assignments/{roleCode}:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personUuid}~1access~1assignments~1{roleCode}
-  /v1/people/{personUuid}/access/roles:
-    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personUuid}~1access~1roles
   /v1/people/availability:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1availability
   /v1/people/bulk-ingest:
@@ -1361,6 +1333,40 @@ paths:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1primary-location
   /v1/people/{personId}/staffing/assignments:
     $ref: ../../pos-people/openapi.yaml#/paths/~1v1~1people~1{personId}~1staffing~1assignments
+  /v1/organizations/{organizationId}/postal-address:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1organizations~1{organizationId}~1postal-address
+  /v1/people:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people
+  /v1/people/by-ids:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1by-ids
+  /v1/people/me:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1me
+  /v1/people/resolve:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1resolve
+  /v1/people/user-links:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1user-links
+  /v1/people/user-links/{personId}:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1user-links~1{personId}
+  /v1/people/users/link:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1users~1link
+  /v1/people/users/{username}/link:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1users~1{username}~1link
+  /v1/people/users/{username}/person:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1users~1{username}~1person
+  /v1/people/{personId}:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}
+  /v1/people/{personId}/contact-points:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1contact-points
+  /v1/people/{personId}/postal-address:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1postal-address
+  /v1/people/{personId}/users:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personId}~1users
+  /v1/people/{personUuid}/access/assignments:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personUuid}~1access~1assignments
+  /v1/people/{personUuid}/access/assignments/{roleCode}:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personUuid}~1access~1assignments~1{roleCode}
+  /v1/people/{personUuid}/access/roles:
+    $ref: ../../pos-people-contact/openapi.yaml#/paths/~1v1~1people~1{personUuid}~1access~1roles
   /v1/labor-rate-adjustments/bulk-ingest:
     $ref: ../../pos-price/openapi.yaml#/paths/~1v1~1labor-rate-adjustments~1bulk-ingest
   /v1/labor-rates:
@@ -1992,10 +1998,10 @@ tags:
   description: Operations served by pos-mcp-server
 - name: pos-order
   description: Operations served by pos-order
-- name: pos-people-contact
-  description: Operations served by pos-people-contact
 - name: pos-people
   description: Operations served by pos-people
+- name: pos-people-contact
+  description: Operations served by pos-people-contact
 - name: pos-price
   description: Operations served by pos-price
 - name: pos-security-service
@@ -2030,8 +2036,8 @@ x-aggregated-modules:
 - pos-marketing
 - pos-mcp-server
 - pos-order
-- pos-people-contact
 - pos-people
+- pos-people-contact
 - pos-price
 - pos-security-service
 - pos-shop-manager
