@@ -268,6 +268,9 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
 
     private static void removePlatformTemplate(JdbcTemplate owner) {
         for (String table : List.of(
+                "accounting_template_currency_entry",
+                "petty_expense_category_tax_setting_change",
+                "petty_expense_category_tax_setting",
                 "petty_expense_category_change",
                 "petty_expense_category",
                 "statement_line_mappings",
