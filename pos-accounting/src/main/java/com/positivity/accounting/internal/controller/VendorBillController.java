@@ -302,7 +302,8 @@ public class VendorBillController {
                 listed here is accepted there.
                 Use this tool when an approver chooses "An expense" for a bill, its difference, or a vendor's default \
                 category; do not use it to change a key, use the mapping-key administration instead.
-                Preconditions: none beyond accounting:ap:view; no request parameters or body.
+                Preconditions: none beyond accounting:ap:view.
+                Required inputs: none; there are no request parameters and no request body.
                 Emits an ACCOUNTING_VENDOR_BILL_EXPENSE_CATEGORIES_VIEW audit event; no state changes.
                 Returns 401 without a valid token and 403 FORBIDDEN without accounting:ap:view.
                 """,
@@ -338,7 +339,9 @@ public class VendorBillController {
             summary = "Get Vendor Bill By Id",
             description = """
                 Returns one vendor bill as the review screen reads it: status, amounts (with the vendor's net and \
-                tax) and open amount, channel, the submission and (once approved) the approval, the rejection, the \
+                tax) and open amount, channel, the submission and (once approved) the approval, the rejection \
+                (each actor with its display name: createdByName, approval.submittedByName, approval.approvedByName \
+                and rejection.rejectedByName, null when not known or SYSTEM), the \
                 status explanation, the latest match evidence, the open candidates of an ambiguous match (each \
                 with candidateId and invoiceEventId), re-issues held against it, the received lines with what was \
                 billed, the checks (MATCHED_TO_DELIVERY, WITHIN_PRICE_TOLERANCE, TOTALS_ADD_UP and, on an EDI bill \

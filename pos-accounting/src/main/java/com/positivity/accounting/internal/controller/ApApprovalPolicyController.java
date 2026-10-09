@@ -55,7 +55,8 @@ public class ApApprovalPolicyController {
                 Returns the tenant's effective AP approval policy: clerkApprovalLimit and autoApprovalLimit (in the \
                 functional currency, currencyCode), allowCreatorApproval, allowApproverPayment and defaultTerms, \
                 with asOf and one page of the change history, newest first, each row naming who changed which \
-                setting, their roles, the old and new value and the justification.
+                setting (changedBy, and changedByName, the person's display name, null when not known), their \
+                roles, the old and new value and the justification.
                 A setting never written reads as its default: limits 0.00 (every bill goes to an over-limit \
                 approver, nothing is approved automatically), both switches false, defaultTerms NET30; a stored \
                 value that cannot be read shows as that default too.
@@ -106,8 +107,9 @@ public class ApApprovalPolicyController {
                 limit with it (a clerk limit of 0 turns automatic approval off).
                 Only a setting whose effective value changes is written, with one AP_APPROVAL_POLICY_SET audit row \
                 recording old and new value, the caller and their roles, the justification and the requestId; a \
-                new limit applies to the next decision at once, waiting bills included, and approved bills are \
-                never re-evaluated.
+                new limit applies to the next decision at once, waiting bills included, approved bills are \
+                never re-evaluated, and the answer is the policy as getApApprovalPolicy reads it, history \
+                changedByName included (null when not known).
                 Use this tool when a controller or general manager changes the approval limits, the switches or \
                 the default terms; do not use it to read the policy, use getApApprovalPolicy instead.
                 Preconditions: the caller holds accounting:ap_approval_policy:manage.

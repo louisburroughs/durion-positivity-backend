@@ -431,10 +431,12 @@ public class APPaymentController {
                 bank account number is never served, and accounts are ordered by account number.
                 defaultBankAccountId is the single eligible account an omitted bankAccountId resolves to, null when \
                 there is none or more than one; an empty list means no account is set up and a payment answers 400 \
-                fieldErrors[bankAccountId].
+                fieldErrors[bankAccountId], and the read is informational, since the payment still checks \
+                eligibility when it executes.
                 Use this tool when a payer chooses where a vendor payment comes from; do not use it to reconcile, \
                 use listBankAccounts instead.
-                The read is informational: the payment still checks eligibility when it executes.
+                Preconditions: none beyond accounting:ap:pay.
+                Required inputs: none; there are no request parameters and no request body.
                 Emits an ACCOUNTING_AP_PAY_FROM_ACCOUNTS_VIEW audit event; no state changes.
                 Returns 401 without a valid token and 403 FORBIDDEN without accounting:ap:pay.
                 """,
