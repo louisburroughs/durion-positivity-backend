@@ -17,12 +17,12 @@
     <description>Tax stubs that let pos-accounting stories begin: placeholder rates and rules, not tax law, held for expert advice (see the stub register in README.md)</description>
 
     <properties>
-        <!-- Coverage ratchet: measured 83.2% line / 77.8% branch by the gate's own
+        <!-- Coverage ratchet: measured 92.0% line / 81.1% branch by the gate's own
              command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.80</jacoco.line.min>
-        <jacoco.branch.min>0.74</jacoco.branch.min>
+        <jacoco.line.min>0.89</jacoco.line.min>
+        <jacoco.branch.min>0.78</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 
