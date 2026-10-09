@@ -105,6 +105,23 @@ public class TaxExceptionHandler {
                 request);
     }
 
+    /**
+     * A tax-registration write that overlaps another registration or read a stale version (CAP:550 S32c): 409 with
+     * {@code TAX_REGISTRATION_OVERLAP} or {@code OPTIMISTIC_LOCK}, which the pos-accounting front door relays.
+     */
+    @ExceptionHandler(TaxRegistrationConflictException.class)
+    public ResponseEntity<ApiError> handleRegistrationConflict(
+            TaxRegistrationConflictException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), request);
+    }
+
+    /** No registration with the path's id for the bound tenant (CAP:550 S32c): 404. */
+    @ExceptionHandler(TaxRegistrationNotFoundException.class)
+    public ResponseEntity<ApiError> handleRegistrationNotFound(
+            TaxRegistrationNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, TaxRegistrationNotFoundException.CODE, ex.getMessage(), request);
+    }
+
     /** {@code @Validated} query-parameter constraint failures (e.g. an invalid countryCode). */
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ApiError> handleConstraintViolation(

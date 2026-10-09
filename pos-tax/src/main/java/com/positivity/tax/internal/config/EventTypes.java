@@ -39,6 +39,14 @@ public final class EventTypes {
                         .build(),
                 EventTypeRegistration.write("TAX_VOID", "Void provider tax document")
                         .description("Voids the provider tax document when its invoice reverts to DRAFT (story T6).")
+                        .build(),
+                EventTypeRegistration.write("TAX_REGISTRATION_CREATE", "Record tax registration")
+                        .description(
+                                "Records a tenant's indirect-tax registration through the pos-accounting front door and queues tax.registration.changed (CAP:550 S32c).")
+                        .build(),
+                EventTypeRegistration.write("TAX_REGISTRATION_UPDATE", "Change tax registration")
+                        .description(
+                                "Changes a tenant's indirect-tax registration number or dates through the pos-accounting front door and queues tax.registration.changed (CAP:550 S32c).")
                         .build());
     }
 }

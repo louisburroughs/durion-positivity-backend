@@ -92,6 +92,28 @@
             <artifactId>pos-tenancy-common</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- CAP:550 S32c: tax.registration.changed by transactional outbox, the tax.manifest.v1 manifest and the
+             tax.commands.v1 replay (ADR-0071 §7, ADR-0044 §4). pos-tax's first Kafka rails. -->
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-kafka-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.positivity</groupId>
+            <artifactId>pos-domain-events</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+        <!-- Testcontainers Kafka: the outbox publishing a registration fact to a real broker (S32c) -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Testcontainers Postgres for the tenancy isolation and schema-conformance ITs (plan R-B7) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

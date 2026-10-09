@@ -8,8 +8,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.tax.common.enums.ExemptionReasonCode;
 import com.positivity.tax.internal.entity.ExemptionCertificate;
+import com.positivity.tax.internal.entity.TaxRegistration;
 import com.positivity.tax.internal.enums.ExemptionCertificateStatus;
 import com.positivity.tax.internal.repository.ExemptionCertificateRepository;
+import com.positivity.tax.internal.repository.TaxRegistrationRepository;
 import com.positivity.tenancy.TenantContext;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -32,6 +34,9 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Autowired
     private ExemptionCertificateRepository rows;
+
+    @Autowired
+    private TaxRegistrationRepository registrations;
 
     @Autowired
     private DataSource dataSource;
@@ -79,6 +84,39 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                 () -> assertThat(rows.findById(id).orElseThrow().getCustomerId())
                         .as("tenant B's UPDATE touched nothing")
                         .isEqualTo("cust-1"));
+    }
+
+    @Test
+    @DisplayName("CAP:550 S32c AC 1: tenant B never sees tenant A's tax registration, nor can it end it")
+    void aTaxRegistrationIsInvisibleToAnotherTenant() {
+        UUID id = asTenant(
+                TENANT_A,
+                () -> registrations
+                        .saveAndFlush(TaxRegistration.builder()
+                                .countryCode("ZZ")
+                                .regime("R_1")
+                                .registrationNumber("ZZ12345")
+                                .jurisdictionCode("ZZ")
+                                .effectiveFrom(LocalDate.of(2026, 1, 1))
+                                .createdBy("01990000-0000-7000-8000-0000000000e1")
+                                .updatedBy("01990000-0000-7000-8000-0000000000e1")
+                                .build())
+                        .getId());
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        asTenant(
+                TENANT_A,
+                () -> assertThat(registrations.findByCountryCodeAndRegime("ZZ", "R_1"))
+                        .extracting(TaxRegistration::getId)
+                        .containsExactly(id));
+        asTenant(TENANT_B, () -> {
+            assertThat(registrations.findById(id)).isEmpty();
+            assertThat(registrations.findByCountryCodeAndRegime("ZZ", "R_1")).isEmpty();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM tax_registration WHERE id = ?", Integer.class, id))
+                    .isZero();
+            assertThat(jdbc.update("UPDATE tax_registration SET effective_to = DATE '2026-01-31' WHERE id = ?", id))
+                    .isZero();
+        });
     }
 
     private static ExemptionCertificate certificate() {

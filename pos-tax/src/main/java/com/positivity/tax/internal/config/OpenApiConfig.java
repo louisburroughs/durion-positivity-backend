@@ -1,5 +1,6 @@
 package com.positivity.tax.internal.config;
 
+import com.positivity.tax.internal.security.FrontDoorSecretFilter;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
@@ -28,7 +29,16 @@ public class OpenApiConfig {
                                 new SecurityScheme()
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
-                                        .bearerFormat("JWT")));
+                                        .bearerFormat("JWT"))
+                        // CAP:550 S32c: the tax-registration writes take pos-accounting's per-caller secret.
+                        .addSecuritySchemes(
+                                "accountingFrontDoorSecret",
+                                new SecurityScheme()
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                                        .name(FrontDoorSecretFilter.SECRET_HEADER)
+                                        .description("pos-accounting's front-door secret,"
+                                                + " pos.tax.front-doors.accounting-secret")));
     }
 
     /**
