@@ -89,6 +89,14 @@ class InputTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
     private OrderEventsListener listener;
     private Instant closedAt;
 
+    /**
+     * The base class provisions the shared default tenant before every test. On this CAD ledger that would give it the
+     * CAD data in the database every Postgres IT shares, so the USD ITs would then find it there. This IT provisions
+     * only its own tenants.
+     */
+    @Override
+    void provisionDefaultTenant() {}
+
     @BeforeEach
     void setUp() {
         listener = new OrderEventsListener(

@@ -232,7 +232,8 @@ class TenantTemplateAdoptionIT extends PostgresCommittingTestBase {
                         "SELECT count(*) FROM gl_account WHERE tenant_id = ?", Integer.class, PlatformTenant.ID))
                 .as("the template stays in the platform tenant")
                 // 62 + 1080, 3000, 3900, 6295, 6375, 6380 (6040 took 6115's place) + 2100, 5050, 5060 (#2509)
-                .isEqualTo(71);
+                // + the CAD data's 1250, 1260, 2210, 2220, 2230, 6050 (#2639)
+                .isEqualTo(77);
 
         List<String> recordsAfterFirst = templateRows(owner);
         sweep.run(new DefaultApplicationArguments());
