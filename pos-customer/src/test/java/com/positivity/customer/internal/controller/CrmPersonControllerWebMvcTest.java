@@ -72,7 +72,9 @@ class CrmPersonControllerWebMvcTest {
     @Test
     void createCrmPerson_withEmailsAndPhones_returnsCreated() throws Exception {
         when(personService.createPerson(any(), any()))
-                .thenReturn(CreatePersonResponse.builder().personId(UUID.randomUUID()).build());
+                .thenReturn(CreatePersonResponse.builder()
+                        .personId(UUID.randomUUID())
+                        .build());
 
         mockMvc.perform(post("/v1/crm/persons")
                         .header("X-Authorities", CrmPermissionRegistry.PERSON_CREATE)
