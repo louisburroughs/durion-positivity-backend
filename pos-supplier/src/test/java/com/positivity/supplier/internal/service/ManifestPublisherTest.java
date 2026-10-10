@@ -38,6 +38,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -51,7 +52,11 @@ import tools.jackson.databind.ObjectMapper;
  * pos-supplier's reconciliation manifest of {@code supplier.events.v1} (CAP:550 S24, #2517; ADR-0044 §4, ADR-0062
  * §3): one manifest per active tenant per closed window, counting every fact the tenant published in it by eventId
  * timestamp, on {@code supplier.manifest.v1}, stamped with the tenant on the envelope and the record header.
+ *
+ * <p>{@code @Isolated}: the log capture holds logback's shared loggers, and a Spring context starting in a
+ * concurrent class resets them, which would leave the capture empty and the no-leak assertion vacuous.
  */
+@Isolated
 @DisplayName("pos-supplier ManifestPublisher — reconciliation manifest windows (S24, #2517)")
 class ManifestPublisherTest {
 

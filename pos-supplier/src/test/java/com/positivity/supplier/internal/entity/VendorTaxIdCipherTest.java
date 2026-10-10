@@ -14,12 +14,17 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.springframework.mock.env.MockEnvironment;
 
 /**
  * The vendor tax-registration number cipher (#2621; Security ruling on #2617, ruling 3): the shared envelope,
  * the row-bound AAD, the fail-closed key policy, its own key, and rotation. Numbers are obviously fake.
+ *
+ * <p>{@code @Isolated}: the ephemeral-key WARN is captured on logback's shared loggers, and a Spring context
+ * starting in a concurrent class resets them, which would leave the capture empty.
  */
+@Isolated
 @DisplayName("VendorTaxIdCipher (#2621)")
 class VendorTaxIdCipherTest {
 
