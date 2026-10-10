@@ -7,6 +7,25 @@ x-pos-security-client-env: &pos-security-client-env
   POS_SECURITY_API_SECRET: ${POS_SECURITY_API_SECRET}
   POS_SECURITY_METRICS_SCRAPE_USERNAME: ${POS_SECURITY_METRICS_SCRAPE_USERNAME:-prometheus_scraper}
   POS_SECURITY_METRICS_SCRAPE_PASSWORD: ${POS_SECURITY_METRICS_SCRAPE_PASSWORD:-durion-local-prom-scrape-password}
+
+# Hikari pool tiers: every service with a database merges exactly one. All pools share the one
+# Postgres below, so the tiers are sized against its max_connections (200): 8 primary x 10 +
+# 7 standard x 5 + 9 small x 3 = 142 when every pool is full, which leaves room for Flyway's owner
+# connections at startup, postgres-exporter and an operator's psql. Primary is the busy Kafka
+# consumers whose handlers nest REQUIRES_NEW transactions (two connections per thread, #2344,
+# #2501); a pool of 3 queued them behind each other. Put a new service in a tier and keep the
+# sum under max_connections. docs/OPERATIONS_RUNBOOK.md, "Database connection pools".
+x-db-pool-primary: &db-pool-primary
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 10
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
+  SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: 30000
+
+x-db-pool-standard: &db-pool-standard
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 5
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
+  SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: 30000
+
+x-db-pool-small: &db-pool-small
   SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: 3
   SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 1
   SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT: 30000
@@ -198,7 +217,9 @@ services:
   postgres:
     image: timescale/timescaledb:2.17.2-pg16
     container_name: postgres-positivity
-    command: [ "postgres", "-c", "shared_preload_libraries=timescaledb" ]
+    # max_connections is set here, not left to the image: the service pools (x-db-pool-* above) take
+    # up to 142, and the command line also wins over whatever timescaledb-tune wrote at volume init.
+    command: [ "postgres", "-c", "shared_preload_libraries=timescaledb", "-c", "max_connections=200" ]
     ports:
       - "127.0.0.1:5432:5432"
     environment:
@@ -612,7 +633,7 @@ services:
       POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_REVENUE_ACCOUNT_ID}
       POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_TAX_PAYABLE_ACCOUNT_ID}
       POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID: ${POS_ACCOUNTING_CREDIT_MEMO_AR_ACCOUNT_ID}
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -648,7 +669,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       # Sibling-service targets resolve via Eureka service ids (#641); the
       # POS_*_SERVICE_ID env vars exist for override but the yml defaults are correct.
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -686,7 +707,7 @@ services:
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       # ADR-0044 #899: inventory availability/lead-time replica feed from inventory.events.v1
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-standard ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -725,7 +746,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -770,7 +791,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-standard ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -806,7 +827,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -870,7 +891,7 @@ services:
       # Kafka consumers/outbox (location/workorder/warranty replicas, outbox) are tier-1, always on
       # outside dev/test (ADR-0044 §4, #2195): no flag.
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -904,7 +925,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -940,7 +961,7 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8091
@@ -1027,7 +1048,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-standard ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1070,7 +1091,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1113,7 +1134,7 @@ services:
       POS_MCP_DB_PASSWORD: ${POS_APP_PASSWORD:-${POSTGRES_PASSWORD}}
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       # Role persona sync (#1613). The listener removes the staleness window on a persona edit;
       # the startup pull, on-miss fetch, and scheduled re-pull keep personas correct without it,
@@ -1296,7 +1317,7 @@ services:
       # ADR-0049 #1334: pos-order owns the purchase-order aggregate and publishes
       # purchaseorder.updated on order.events.v1 (read by pos-inventory's ext_purchase_order
       # replicas). Kafka is tier-1, always on outside dev/test (ADR-0044 §4, #2463): no flag.
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       # ADR-0067 R-2 (CAP:550 S16): drawer money's functional currency, required (no default in the
       # service). Stage A interim until step A5 reads the tenant's functional currency.
       POS_ORDER_FUNCTIONAL_CURRENCY: USD
@@ -1339,7 +1360,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1376,7 +1397,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1412,7 +1433,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-standard ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1466,7 +1487,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-standard ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1509,7 +1530,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1575,7 +1596,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1706,7 +1727,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-standard ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1764,7 +1785,7 @@ services:
       SUPPLIER_VENDOR_TAXID_ENC_KEY: ${SUPPLIER_VENDOR_TAXID_ENC_KEY}
       SUPPLIER_VENDOR_TAXID_ENC_KEY_ID: ${SUPPLIER_VENDOR_TAXID_ENC_KEY_ID:-k1}
       SUPPLIER_VENDOR_TAXID_ENC_PREVIOUS_KEYS: ${SUPPLIER_VENDOR_TAXID_ENC_PREVIOUS_KEYS:-}
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-standard ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1804,7 +1825,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1847,7 +1868,7 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
       # Security env carries the Prometheus scrape credentials GatewaySecurityConfig checks.
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1897,7 +1918,7 @@ services:
       SPRING_FLYWAY_USER: ${POSTGRES_USER}
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
-      <<: [ *pos-security-client-env, *pos-events-client-env ]
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080

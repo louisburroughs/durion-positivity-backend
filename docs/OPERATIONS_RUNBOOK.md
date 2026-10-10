@@ -152,6 +152,33 @@ those modules. Rotating it is two config syncs: change the
 entry, recreate `pos-tenant`, then the consumers (their `RemoteTenantRegistry` keeps the last good
 snapshot while the values disagree, logging one WARN per module until the next refresh succeeds).
 
+### Database connection pools
+
+Every service with a database runs a Hikari pool against the one Postgres container, so the pools
+are sized together, in `docker-compose.yml` (locally and on alpha alike): each such service merges
+one of three `x-db-pool-*` anchors, and the `postgres` service sets `max_connections=200` on its
+command line.
+
+| Tier | Max / min idle | Services |
+| --- | --- | --- |
+| `db-pool-primary` | 10 / 2 | accounting, workorder, order, inventory, shop-manager, customer, invoice, people |
+| `db-pool-standard` | 5 / 1 | catalog, location, security-service, supplier, warranty, price, event-receiver |
+| `db-pool-small` | 3 / 1 | bulk-loader, image, tax, tenant, mcp-server, people-contact, vehicle-inventory, marketing, platform-sender |
+
+All tiers return idle connections after 30s. With every pool full the services hold 142
+connections; the rest of the 200 covers Flyway's owner connections while services start,
+postgres-exporter and an operator's `psql`. The primary tier is the modules with the most Kafka
+listeners, whose handlers open a nested `REQUIRES_NEW` transaction and so hold two connections per
+consumer thread (#2344, #2501). On a pool of 3 a burst queued them behind each other for up to
+Hikari's 30s connection timeout.
+
+A pool that is too small shows as `hikaricp_connections_pending` above zero and
+`hikaricp_connections_acquire_seconds` climbing while Postgres itself is idle. Move that service up
+a tier rather than raising one pool by hand, and keep the sum of the tiers under `max_connections`.
+If `pg_stat_activity` shows the active count well above the host's 8 vCPUs, Postgres is the limit
+and a larger pool only makes the queue longer. Changing `max_connections` restarts Postgres on the
+next deploy, because Compose recreates the container when its command changes.
+
 ### Health and Readiness Checks
 
 ```bash
