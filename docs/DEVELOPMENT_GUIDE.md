@@ -228,7 +228,9 @@ export POS_TEST_PG_URL=jdbc:postgresql://localhost:5433/postgres
 Two things to weigh before doing that routinely. The test databases live on the same server as the
 alpha services' databases, so a run adds load and connections there: the `pg` profile caps each cached
 Spring context's pool at 8 connections with 1 idle, and one pos-accounting JVM holds up to a dozen such
-contexts, so budget for around 100 connections at peak against the server's `max_connections`. And
+contexts, so budget for around 100 connections at peak. The alpha server allows 200
+(`max_connections` in `docker-compose.yml`), and the services' own pools take up to 142 of them under
+load, so a test run during heavy alpha traffic can be refused connections. And
 the tunnel puts staging credentials on the developer machine. A local server has neither cost; alpha is
 the fallback when none is at hand. Never point these variables at a production server.
 

@@ -41,9 +41,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>A goods-receipt bill takes its number under the tenant's {@code accounting_sequence} row lock
  * and keeps that lock until its transaction ends, so writers in one tenant queue on it, each holding
  * a pooled connection. Anything the lock holder does on a <em>second</em> connection while it holds
- * the lock therefore waits behind the writers that are waiting for it: with a pool the size the
- * service runs with under Compose ({@code maximum-pool-size 3}) the holder gets no connection until
- * the pool's timeout, and for that long nobody in any tenant does. The retired vendor-directory write
+ * the lock therefore waits behind the writers that are waiting for it: with a pool smaller than the
+ * writers ({@code maximum-pool-size 3} here) the holder gets no connection until the pool's timeout,
+ * and for that long nobody in any tenant does. The retired vendor-directory write
  * ran in a {@code REQUIRES_NEW} transaction of its own and was such a call (S24 replaced it with a read
  * of the vendor copy, made before the number is drawn). The same defect was removed from the counter's
  * own bootstrap in #2342.
@@ -56,7 +56,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DisplayName("Goods-receipt bills on a pool smaller than the number of writers (#2501, real Postgres)")
 class VendorBillGoodsReceiptSmallPoolIT extends PostgresCommittingTestBase {
 
-    /** The pool size pos-accounting runs with under docker-compose. */
+    /** Smaller than {@link #WRITERS}, so writers queue for connections as a burst does on any pool it outgrows. */
     private static final int POOL_SIZE = 3;
 
     private static final int WRITERS = 2 * POOL_SIZE;

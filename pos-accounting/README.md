@@ -1427,7 +1427,7 @@ counts, `PAID` and `CURRENCY_HOLD` included.
   bill's transaction, so creates in one tenant queue on it, each holding a pooled connection. The create
   therefore asks for no second connection while it holds the lock: the vendor is read from the copy before
   the number is drawn (S24), and the former vendor-directory write is retired with `ap_vendor`. Before, on a
-  pool as small as Compose's (`maximum-pool-size 3`), three concurrent creates left the lock holder waiting
+  pool of 3 (`maximum-pool-size 3`, Compose's size at the time), three concurrent creates left the lock holder waiting
   for a fourth connection until the pool's timeout (`VendorBillGoodsReceiptSmallPoolIT`). Nothing else between
   the number and the commit leaves the bill's connection: the GL posting hook and event ingestion join the
   transaction. One bounded exception: a create that loses the race under the unique index *inside a caller's
