@@ -8,7 +8,7 @@
         <version>${revision}</version>
     </parent>
 
-    
+
     <artifactId>pos-accounting</artifactId>
     <name>pos-accounting</name>
     <description>POS Accounting module</description>
@@ -18,8 +18,8 @@
              command, `verify -DskipITs` (../durion/docs/architecture/TEST_COVERAGE_POLICY.md §6.1).
              Floors sit 3 points under. Re-derive them ONLY from a -DskipITs run — an
              IT-inclusive measurement describes coverage the gate cannot see. -->
-        <jacoco.line.min>0.83</jacoco.line.min>
-        <jacoco.branch.min>0.71</jacoco.branch.min>
+        <jacoco.line.min>0.86</jacoco.line.min>
+        <jacoco.branch.min>0.75</jacoco.branch.min>
     </properties>
     <packaging>jar</packaging>
 
