@@ -137,7 +137,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .subtotalMinor(subtotalMinor)
                 .taxMinor(taxMinor)
                 .grandTotalMinor(grandTotalMinor)
-                .openBalanceMinor(grandTotalMinor)
+                // Ex-tax (#2633): the balance is what is owed for the goods, the basis every receipt's
+                // accrual comes off. Tax on purchases is a bill matter, not a receiving one.
+                .openBalanceMinor(subtotalMinor)
                 .shipToLocationId(request.getShipToLocationId())
                 .paymentTermsId(request.getPaymentTermsId())
                 .poDate(request.getPoDate())
@@ -189,7 +191,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .subtotalMinor(totalsAndLines.subtotalMinor())
                 .taxMinor(totalsAndLines.taxMinor())
                 .grandTotalMinor(grandTotalMinor)
-                .openBalanceMinor(grandTotalMinor)
+                .openBalanceMinor(totalsAndLines.subtotalMinor())
                 .shipToLocationId(request.getShipToLocationId())
                 .paymentTermsId(request.getPaymentTermsId())
                 .poDate(request.getPoDate())
@@ -398,9 +400,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setSubtotalMinor(totalsAndLines.subtotalMinor());
         po.setTaxMinor(totalsAndLines.taxMinor());
         po.setGrandTotalMinor(totalsAndLines.subtotalMinor() + totalsAndLines.taxMinor());
-        po.setOpenBalanceMinor(totalsAndLines.lines().stream()
-                .mapToLong(line -> safeLong(line.getLineTotalMinor()) + safeLong(line.getTaxMinor()))
-                .sum());
+        po.setOpenBalanceMinor(totalsAndLines.subtotalMinor());
 
         po.getLines().clear();
         totalsAndLines.lines().forEach(line -> {

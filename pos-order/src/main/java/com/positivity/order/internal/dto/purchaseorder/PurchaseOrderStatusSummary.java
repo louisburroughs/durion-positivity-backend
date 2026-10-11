@@ -36,5 +36,5 @@ public record PurchaseOrderStatusSummary(
         @Schema(description = "Sum of order grand totals, in minor currency units", requiredMode = REQUIRED)
         long grandTotalMinor,
 
-        @Schema(description = "Sum of order open balances, in minor currency units", requiredMode = REQUIRED)
+        @Schema(description = "Sum of order open balances (ex-tax), in minor currency units", requiredMode = REQUIRED)
         long openBalanceMinor) {}

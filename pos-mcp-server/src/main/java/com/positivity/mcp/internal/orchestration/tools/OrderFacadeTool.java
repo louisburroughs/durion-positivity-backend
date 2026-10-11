@@ -94,7 +94,8 @@ public class OrderFacadeTool {
     @Tool(
             description = "Totals across ALL purchase orders matching the filter — the whole population, not a "
                     + "page. Returns orderCount, lineCount, unitsOrdered, unitsOpen (ordered but NOT yet "
-                    + "received), unitsReceived, grandTotalMinor and openBalanceMinor, plus the same figures per "
+                    + "received), unitsReceived, grandTotalMinor and openBalanceMinor (ex-tax value of goods not "
+                    + "yet received; tax is billed separately), plus the same figures per "
                     + "status in byStatus. Use this for every aggregate question about purchase orders: how "
                     + "many units are still on order, how much is outstanding with a vendor, how many orders "
                     + "are open. 'Still on order' / 'not yet received' is unitsOpen, NOT unitsOrdered — both are "

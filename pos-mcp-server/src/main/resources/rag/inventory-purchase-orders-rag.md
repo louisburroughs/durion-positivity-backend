@@ -85,19 +85,21 @@ anyone. Transmitting puts the order in front of the vendor.
 ## Lifecycle rules
 
 - **Create.** The order starts in `DRAFT` with a generated PO number and version number 1. Totals are computed in
-  minor currency units and the open balance starts equal to the grand total. The currency must be an ISO 4217 code;
+  minor currency units. The open balance is ex-tax: it starts equal to the subtotal (the sum of the line totals), and
+  the tax is part of the grand total, not of what is open. The currency must be an ISO 4217 code;
   anything else is refused with 400 `PURCHASE_ORDER_BAD_REQUEST`.
 - **Approve.** Only a `DRAFT` order can be approved. Any other status is refused with 409
   `PURCHASE_ORDER_INVALID_STATE`. Approval records the approver, the approval time and the optional approval notes.
 - **Revise.** The service applies no status check. A revision adds 1 to the version number, overwrites the header
-  fields, replaces every line, recomputes the totals and resets the open balance to the value of the new lines. It
+  fields, replaces every line, recomputes the totals and resets the open balance to the subtotal of the new lines. It
   does not change the status.
 - **Cancel.** An order that is `FULLY_RECEIVED` or `CLOSED` cannot be cancelled; the request is refused with 409
   `PURCHASE_ORDER_INVALID_STATE`. An order in any other status, including `DRAFT`, moves to `CANCELLED`. Cancelling
   does not set the open quantity of the lines to zero.
 - **Receive.** No pos-order endpoint receives goods. `PARTIALLY_RECEIVED` and `FULLY_RECEIVED` are reached only when
   pos-order applies a `goodsreceipt.recorded` fact from pos-inventory. Each receipt line reduces the open quantity of
-  the order line it names, and the receipt's accrued amount reduces the open balance; neither goes below zero. The
+  the order line it names, and the receipt's accrued amount, which is ex-tax like the balance, reduces the open
+  balance; neither goes below zero. A taxed order received in full at its ordered cost reaches a balance of zero. The
   status is decided from the lines, not from the balance.
 - Every one of these changes publishes a `purchaseorder.updated` fact that carries the order's full state.
 - A purchase order that does not exist is answered with 404 `PURCHASE_ORDER_NOT_FOUND`.
@@ -107,7 +109,8 @@ anyone. Transmitting puts the order in front of the vendor.
 - The list endpoint returns one page of orders. Its optional filters are `vendorId`, `status`, `currency` (matched
   without regard to case) and `locationId` (the ship-to location).
 - The summary endpoint returns totals over every matching order: order and line counts, units ordered, units still
-  open, units received, grand total and open balance, with the same figures per status. Its optional filters are
+  open, units received, grand total and open balance (ex-tax: the value of goods not yet received, without tax), with
+  the same figures per status. Its optional filters are
   `vendorId` and `status`. Without a `status` filter it counts only `APPROVED` and `PARTIALLY_RECEIVED` orders.
 - Use the summary endpoint for any total. A sum over one page of the list endpoint is partial.
 
