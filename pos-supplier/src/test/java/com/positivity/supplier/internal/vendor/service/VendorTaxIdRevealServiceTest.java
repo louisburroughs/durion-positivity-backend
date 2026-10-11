@@ -44,6 +44,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Isolated;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -61,7 +62,11 @@ import tools.jackson.databind.json.JsonMapper;
  * ruling 4): the audit row is written in the reveal's transaction, an unreadable number is still recorded,
  * a ciphertext moved to another row does not open, the audit read is tenant-isolated, and no log line
  * carries a number. Every number is obviously fake.
+ *
+ * <p>{@code @Isolated}: the log capture holds logback's shared loggers, and a Spring context starting in a
+ * concurrent class resets them (appenders detached, levels re-applied), which leaves the capture empty.
  */
+@Isolated
 @Import({
     JpaConfig.class,
     TestClockConfig.class,
