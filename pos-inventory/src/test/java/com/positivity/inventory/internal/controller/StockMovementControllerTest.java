@@ -1,5 +1,6 @@
 package com.positivity.inventory.internal.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -35,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -126,6 +128,11 @@ class StockMovementControllerTest {
         return LocationScope.of(Set.of(), Set.of(), Optional.of(Set.of(nodes)), true, RESOLVER);
     }
 
+    private static String createJsonWithReason(String reasonCode) {
+        return "{\"productSku\":\"SKU-10042\",\"locationId\":\"" + SHOP + "\",\"quantity\":-3,\"reasonCode\":\""
+                + reasonCode + "\"}";
+    }
+
     private static AdjustmentRequestResponse pendingResponse() {
         return AdjustmentRequestResponse.builder()
                 .adjustmentRequestId(REQUEST_ID)
@@ -200,6 +207,40 @@ class StockMovementControllerTest {
                     .andExpect(jsonPath("$.fieldErrors[0].message").value("must not be zero"));
 
             verify(stockMovementService, never()).createAdjustmentRequest(any(), any());
+        }
+
+        @Test
+        @DisplayName("reason over 100 characters: 400 VALIDATION_ERROR with a field error on reasonCode (#2628)")
+        void reasonOverLimit_returns400WithFieldError() throws Exception {
+            mockMvc.perform(post(ADJUSTMENTS)
+                            .with(caller("manager", scopedTo(InventoryPermissionRegistry.ADJUSTMENT_CREATE, SITE)))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(createJsonWithReason("R".repeat(101))))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.fieldErrors.length()").value(1))
+                    .andExpect(jsonPath("$.fieldErrors[0].field").value("reasonCode"));
+
+            verify(stockMovementService, never()).createAdjustmentRequest(any(), any());
+        }
+
+        @Test
+        @DisplayName("reason of exactly 100 characters: 201, passed to the service unchanged (#2628)")
+        void reasonAtLimit_returns201() throws Exception {
+            String reason = "VENDOR_RETURN:RMA-2026-0042:GR-000123:" + "X".repeat(62);
+            when(stockMovementService.createAdjustmentRequest(any(CreateAdjustmentRequestDto.class), eq("manager")))
+                    .thenReturn(pendingResponse());
+
+            mockMvc.perform(post(ADJUSTMENTS)
+                            .with(caller("manager", scopedTo(InventoryPermissionRegistry.ADJUSTMENT_CREATE, SITE)))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(createJsonWithReason(reason)))
+                    .andExpect(status().isCreated());
+
+            ArgumentCaptor<CreateAdjustmentRequestDto> captor =
+                    ArgumentCaptor.forClass(CreateAdjustmentRequestDto.class);
+            verify(stockMovementService).createAdjustmentRequest(captor.capture(), eq("manager"));
+            assertThat(captor.getValue().getReasonCode()).hasSize(100).isEqualTo(reason);
         }
 
         @Test

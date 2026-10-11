@@ -23,6 +23,7 @@ import com.positivity.inventory.internal.enums.AdjustmentRequestStatus;
 import com.positivity.inventory.internal.enums.InventoryLedgerEventType;
 import com.positivity.inventory.internal.enums.MovementType;
 import com.positivity.inventory.internal.exception.InsufficientStockException;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.exception.ZeroQuantityAdjustmentException;
 import com.positivity.inventory.internal.repository.ExtStorageLocationReplicaRepository;
 import com.positivity.inventory.internal.repository.InventoryAdjustmentRequestRepository;
@@ -361,6 +362,58 @@ class StockMovementServiceImplTest {
     }
 
     @Test
+    @DisplayName("#2628: a reason over 100 characters is refused before any write (bulk ingest skips bean validation)")
+    void createAdjustmentRequest_reasonOverLimit_isRefusedBeforeAnyWrite() {
+        CreateAdjustmentRequestDto request = baseAdjustmentRequest(5);
+        request.setReasonCode("R".repeat(CreateAdjustmentRequestDto.REASON_CODE_MAX_LENGTH + 1));
+
+        assertThatThrownBy(() -> service.createAdjustmentRequest(request, "requestor-1"))
+                .isInstanceOf(InventoryValidationException.class)
+                .hasMessage("reasonCode must be at most 100 characters");
+        verify(adjustmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2628: a reason of exactly 100 characters is stored and returned unchanged")
+    void createAdjustmentRequest_reasonAtLimit_isStoredUnchanged() {
+        setupClock();
+        stubAdjustmentSaveReturnsRequest();
+        String reason = vendorReturnReasonAtLimit();
+        CreateAdjustmentRequestDto request = baseAdjustmentRequest(-2);
+        request.setReasonCode(reason);
+
+        AdjustmentRequestResponse result = service.createAdjustmentRequest(request, "requestor-1");
+
+        ArgumentCaptor<InventoryAdjustmentRequest> captor = ArgumentCaptor.forClass(InventoryAdjustmentRequest.class);
+        verify(adjustmentRepository).save(captor.capture());
+        assertThat(captor.getValue().getReasonCode()).isEqualTo(reason);
+        assertThat(result.getReasonCode()).isEqualTo(reason);
+    }
+
+    @Test
+    @DisplayName("#2628: a 100-character reason reaches the ledger row and InventoryAdjustedV1 unchanged")
+    void approveAdjustmentRequest_reasonAtLimit_reachesLedgerRowAndFactUnchanged() {
+        setupClock();
+        stubLedgerSaveReturnsEntry();
+        stubAdjustmentSaveReturnsRequest();
+        String reason = vendorReturnReasonAtLimit();
+        InventoryAdjustmentRequest request = pendingAdjustmentRequest(-2);
+        request.setReasonCode(reason);
+        when(adjustmentRepository.findById(request.getAdjustmentRequestId())).thenReturn(Optional.of(request));
+        when(ledgerRepository.calculateOnHandQuantityAtLocation(request.getProductSku(), request.getLocationId()))
+                .thenReturn(new BigDecimal("10"));
+
+        service.approveAdjustmentRequest(request.getAdjustmentRequestId(), "approver-1");
+
+        ArgumentCaptor<InventoryLedgerEntry> posted = ArgumentCaptor.forClass(InventoryLedgerEntry.class);
+        verify(ledgerPostingService).post(posted.capture());
+        assertThat(posted.getValue().getReasonCode()).isEqualTo(reason);
+        ArgumentCaptor<InventoryAdjustedV1> fact = ArgumentCaptor.forClass(InventoryAdjustedV1.class);
+        verify(inventoryFactPublisher).recordInventoryAdjusted(fact.capture());
+        assertThat(fact.getValue().reasonCode()).isEqualTo(reason);
+    }
+
+    @Test
     void approveAdjustmentRequest_positiveQuantity_savesAdjustmentInLedgerEntry() {
         setupClock();
         stubLedgerSaveReturnsEntry();
@@ -676,6 +729,12 @@ class StockMovementServiceImplTest {
                 .reasonCode("CYCLE_COUNT")
                 .unitOfMeasure("EACH")
                 .build();
+    }
+
+    /** The vendor-return interim reason (#2598), padded to exactly the 100-character limit. */
+    private static String vendorReturnReasonAtLimit() {
+        String reason = "VENDOR_RETURN:RMA-2026-0042:GR-000123:";
+        return reason + "X".repeat(CreateAdjustmentRequestDto.REASON_CODE_MAX_LENGTH - reason.length());
     }
 
     private InventoryAdjustmentRequest pendingAdjustmentRequest(int quantity) {

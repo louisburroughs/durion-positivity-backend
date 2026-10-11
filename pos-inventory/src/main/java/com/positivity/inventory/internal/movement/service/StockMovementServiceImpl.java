@@ -162,6 +162,14 @@ public class StockMovementServiceImpl implements StockMovementService {
         if (request.getQuantity() != null && request.getQuantity().signum() == 0) {
             throw new InventoryValidationException("quantity must not be zero");
         }
+        // #2628: the same holds for the reason's @Size. Past it the insert fails at the column
+        // (SQLSTATE 22001): a 500 over HTTP, or an INTERNAL_ERROR row on bulk ingest, rather than
+        // a refusal of the caller's input.
+        if (request.getReasonCode() != null
+                && request.getReasonCode().length() > CreateAdjustmentRequestDto.REASON_CODE_MAX_LENGTH) {
+            throw new InventoryValidationException(
+                    "reasonCode must be at most " + CreateAdjustmentRequestDto.REASON_CODE_MAX_LENGTH + " characters");
+        }
         InventoryAdjustmentRequest adjustmentRequest = InventoryAdjustmentRequest.builder()
                 .productSku(request.getProductSku())
                 .locationId(request.getLocationId())

@@ -47,9 +47,15 @@ import org.jspecify.annotations.Nullable;
  *                             rather than treated as arriving today
  * @param currency             ISO 4217 currency of the order's monetary figures
  * @param grandTotalMinor      order total in minor units, when priced
- * @param openBalanceMinor     value still outstanding in minor units. Carried so receiving can
- *                             tell a receipt that exceeds what is owed before accepting it,
- *                             rather than finding out once the order rejects the fact
+ * @param openBalanceMinor     value of the goods still outstanding in minor units, ex-tax: it
+ *                             starts at the subtotal (the sum of the line totals) and each goods
+ *                             receipt takes off its {@code totalAccruedAmountMinor}, which carries
+ *                             no tax either, floored at zero (#2633). Tax on purchases is a bill
+ *                             matter, so an order received in full at its ordered cost reaches
+ *                             zero whatever its tax.
+ *                             Carried so receiving can tell a receipt that exceeds what is owed
+ *                             before accepting it, rather than finding out once the order rejects
+ *                             the fact
  * @param occurredAt           when this state was reached
  * @param lines                the order's lines; empty only for an order that has none
  */

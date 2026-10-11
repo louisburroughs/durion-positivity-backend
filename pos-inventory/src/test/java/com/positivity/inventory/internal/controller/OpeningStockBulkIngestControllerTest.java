@@ -17,6 +17,7 @@ import com.positivity.inventory.config.TestSecurityConfig;
 import com.positivity.inventory.internal.dto.AdjustmentRequestResponse;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.OpeningStockBulkIngestRecord;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.movement.service.StockMovementService;
 import com.positivity.inventory.internal.service.InventoryAvailabilityService;
 import java.math.BigDecimal;
@@ -184,6 +185,25 @@ class OpeningStockBulkIngestControllerTest {
                 .andExpect(jsonPath("$.results[0].errorCode").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.results[0].correlationId").value("corr-from-caller"))
                 .andExpect(jsonPath("$.results[0].errorMessage", not(containsString("not pending"))));
+    }
+
+    @Test
+    void bulkIngest_whenTheServiceRefusesTheRecord_theRowIsRejectedWithItsReason() throws Exception {
+        // #2628: createAdjustmentRequest refuses a reason over 100 characters. That is the caller's
+        // row to fix, so it carries this endpoint's code and the message, not INTERNAL_ERROR.
+        when(stockMovementService.createAdjustmentRequest(any(), anyString()))
+                .thenThrow(new InventoryValidationException("reasonCode must be at most 100 characters"));
+
+        mockMvc.perform(post("/v1/inventory/opening-stock/bulk-ingest")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request(new BigDecimal("24")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.successCount").value(0))
+                .andExpect(jsonPath("$.failureCount").value(1))
+                .andExpect(jsonPath("$.results[0].errorCode").value("OPENING_STOCK_INGEST_FAILED"))
+                .andExpect(jsonPath("$.results[0].errorMessage").value("reasonCode must be at most 100 characters"));
+
+        verify(stockMovementService, never()).approveAdjustmentRequest(any(), anyString());
     }
 
     @Test

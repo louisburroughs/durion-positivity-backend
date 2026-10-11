@@ -37,7 +37,8 @@ public class InventoryBulkIngestRecord {
     private BigDecimal quantity;
 
     @Schema(
-            description = "Optional reason code explaining the ingest",
+            description = "Optional reason code explaining the ingest, at most 100 characters; a longer one fails"
+                    + " the row",
             example = "CYCLE_COUNT",
             requiredMode = NOT_REQUIRED)
     private String reasonCode;

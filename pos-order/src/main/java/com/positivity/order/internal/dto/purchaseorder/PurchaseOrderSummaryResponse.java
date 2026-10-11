@@ -62,7 +62,7 @@ public class PurchaseOrderSummaryResponse {
     @Schema(description = "Sum of order grand totals, in minor currency units", requiredMode = REQUIRED)
     private long grandTotalMinor;
 
-    @Schema(description = "Sum of order open balances, in minor currency units", requiredMode = REQUIRED)
+    @Schema(description = "Sum of order open balances (ex-tax), in minor currency units", requiredMode = REQUIRED)
     private long openBalanceMinor;
 
     @Schema(
