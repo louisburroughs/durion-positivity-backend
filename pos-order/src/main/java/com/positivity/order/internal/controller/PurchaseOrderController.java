@@ -364,20 +364,21 @@ public class PurchaseOrderController {
                     Use this tool to change quantities, costs or delivery terms on an order; do not use \
                     createPurchaseOrder, which starts a new order, and use cancelPurchaseOrder instead when the \
                     order should be terminated rather than changed.
-                    Preconditions: the purchase order must exist; the service applies no status gate outside a \
-                    vendor change, so a \
-                    revision replaces lines and open balance in any lifecycle status, discarding received-quantity \
-                    bookkeeping on the replaced lines.
+                    Preconditions: the purchase order must exist and be DRAFT, or APPROVED with nothing received \
+                    on any line (every line's open quantity still equals its ordered quantity), because a revision \
+                    replaces every line with new line ids; from PARTIALLY_RECEIVED on, and on CLOSED or CANCELLED \
+                    orders, revise is refused and nothing changes.
                     Required inputs: poId (UUIDv7) path parameter plus poDate, revisionReason and the full \
                     replacement lines list, because every line is replaced rather than merged; paymentTermsId, \
                     expectedDeliveryDate, shipToLocationId, requestedBy and comment overwrite the stored values \
                     even when omitted, while an optional vendorId changes the vendor of a DRAFT order only.
                     Emits an ORDER_PURCHASE_ORDER_REVISE event carrying the field-level delta and the \
                     revision reason.
-                    Returns 404 when the purchase order does not exist, 409 when vendorId changes the vendor of an \
-                    order past DRAFT, 422 VENDOR_INACTIVE for an inactive new vendor or when a line's documentUom \
-                    has no conversion path to the product's base UoM, and 503 VENDOR_REPLICATION_PENDING with \
-                    Retry-After when the new vendor has not reached the copy yet.
+                    Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_INVALID_STATE when the \
+                    order is not DRAFT or APPROVED or has received goods on any line, or when vendorId changes the \
+                    vendor of an order past DRAFT, 422 VENDOR_INACTIVE for an inactive new vendor or when a line's \
+                    documentUom has no conversion path to the product's base UoM, and 503 \
+                    VENDOR_REPLICATION_PENDING with Retry-After when the new vendor has not reached the copy yet.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(
@@ -401,7 +402,9 @@ public class PurchaseOrderController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Purchase order is in a conflicting state",
+            description =
+                    "PURCHASE_ORDER_INVALID_STATE: the order is not DRAFT or APPROVED, has received goods on any line,"
+                            + " or a vendor change was asked of an order past DRAFT",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

@@ -102,7 +102,7 @@ class GoodsReceiptStatusGuardTest {
     @DisplayName("a receipt for an order outside the receiving lifecycle (cancelled, closed, draft) keeps its status")
     void receiptOutsideReceivingLifecycle_keepsStatus(PurchaseOrderStatus status) {
         PurchaseOrderEntity order = order(status);
-        when(orders.findById(ORDER)).thenReturn(Optional.of(order));
+        when(orders.findByIdForUpdate(ORDER)).thenReturn(Optional.of(order));
 
         listener.onInventoryEvent(receipt(RECEIPT, LINE_1, "4", 40_000L));
 
@@ -143,7 +143,7 @@ class GoodsReceiptStatusGuardTest {
             // Line 1 receiving all 10 is then the last open quantity on the order.
             line(order, LINE_2).setOpenQuantityDecimal(BigDecimal.ZERO);
         }
-        when(orders.findById(ORDER)).thenReturn(Optional.of(order));
+        when(orders.findByIdForUpdate(ORDER)).thenReturn(Optional.of(order));
 
         listener.onInventoryEvent(receipt(RECEIPT, LINE_1, lineTwoSettled ? "10" : "4", 40_000L));
 
@@ -158,7 +158,7 @@ class GoodsReceiptStatusGuardTest {
         PurchaseOrderEntity order = order(PurchaseOrderStatus.FULLY_RECEIVED);
         order.getLines().forEach(line -> line.setOpenQuantityDecimal(BigDecimal.ZERO));
         order.setOpenBalanceMinor(0L);
-        when(orders.findById(ORDER)).thenReturn(Optional.of(order));
+        when(orders.findByIdForUpdate(ORDER)).thenReturn(Optional.of(order));
 
         listener.onInventoryEvent(receipt(UUID.randomUUID(), LINE_1, "1", 10_000L));
 
@@ -172,7 +172,7 @@ class GoodsReceiptStatusGuardTest {
     @DisplayName("receive, cancel, then a late receipt: the order stays CANCELLED and out of open supply")
     void receiveThenCancelThenLateReceipt_staysCancelled() {
         PurchaseOrderEntity order = order(PurchaseOrderStatus.APPROVED);
-        when(orders.findById(ORDER)).thenReturn(Optional.of(order));
+        when(orders.findByIdForUpdate(ORDER)).thenReturn(Optional.of(order));
 
         listener.onInventoryEvent(receipt(UUID.randomUUID(), LINE_1, "4", 40_000L));
         assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.PARTIALLY_RECEIVED);

@@ -384,7 +384,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Transactional
     public @NonNull PurchaseOrderResponse revisePurchaseOrder(
             @NonNull UUID poId, @NonNull RevisePurchaseOrderRequest request, @NonNull String actorId) {
-        PurchaseOrderEntity po = getPoOrThrow(poId);
+        PurchaseOrderEntity po = purchaseOrderRepository
+                .findByIdForUpdate(poId)
+                .orElseThrow(() -> new PurchaseOrderNotFoundException(poId));
+        requireRevisable(po);
         reviseVendor(po, request.getVendorId());
         int priorVersion = po.getVersionNumber() == null ? 1 : po.getVersionNumber();
 
@@ -429,6 +432,37 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         // domain, rather than pos-order emitting an inventory fact it does not own.
         purchaseOrderFactPublisher.publish(saved, saved.getLines());
         return toResponse(saved);
+    }
+
+    /**
+     * The revise gate (#2632). A revision replaces every line with new line ids and resets the open quantities and
+     * the balance, so it is allowed only before anything was received: a {@code DRAFT} order, or an {@code APPROVED}
+     * one on which no line has an open quantity below its ordered quantity. Past that, a receipt or vendor return
+     * naming a replaced line would be skipped, and the units already received would be expected again. Judged on
+     * the lines read under the order's row lock ({@link PurchaseOrderRepository#findByIdForUpdate}), not on an
+     * earlier read. From {@code PARTIALLY_RECEIVED} on, the order's quantities are left to the per-line actions of
+     * #2635; until those exist, they cannot be changed.
+     */
+    private static void requireRevisable(@NonNull PurchaseOrderEntity po) {
+        PurchaseOrderStatus status = po.getStatus();
+        if (status != PurchaseOrderStatus.DRAFT && status != PurchaseOrderStatus.APPROVED) {
+            throw new PurchaseOrderStateConflictException(
+                    "Only a DRAFT or APPROVED purchase order with nothing received can be revised; this order is "
+                            + status);
+        }
+        for (PurchaseOrderLineEntity line : po.getLines()) {
+            if (hasReceived(line)) {
+                throw new PurchaseOrderStateConflictException("Purchase order " + po.getPoNumber()
+                        + " has received goods on line " + line.getLineNumber() + " and can no longer be revised");
+            }
+        }
+    }
+
+    /** Something arrived against the line: its open quantity is below what was ordered. */
+    private static boolean hasReceived(@NonNull PurchaseOrderLineEntity line) {
+        BigDecimal open = line.getOpenQuantityDecimal();
+        BigDecimal ordered = line.getQuantityDecimal();
+        return open != null && ordered != null && open.compareTo(ordered) < 0;
     }
 
     /**

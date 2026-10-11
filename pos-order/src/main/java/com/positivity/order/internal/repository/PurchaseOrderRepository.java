@@ -3,11 +3,13 @@ package com.positivity.order.internal.repository;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusRollup;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.tenancy.TenantAudited;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -22,6 +24,15 @@ public interface PurchaseOrderRepository
         extends JpaRepository<PurchaseOrderEntity, UUID>, JpaSpecificationExecutor<PurchaseOrderEntity> {
 
     Optional<PurchaseOrderEntity> findByPoNumber(String poNumber);
+
+    /**
+     * The order, row-locked for the rest of the transaction (#2632). Revise and the goods-receipt consumer both read
+     * the order through it, so the two take turns: a receipt that holds the lock commits before revise reads the
+     * lines, and a receipt that arrives during a revision waits for it to commit and then reads the revised order.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select po from PurchaseOrderEntity po where po.purchaseOrderId = :purchaseOrderId")
+    Optional<PurchaseOrderEntity> findByIdForUpdate(@Param("purchaseOrderId") UUID purchaseOrderId);
 
     /**
      * Next value of the purchase-order number sequence.

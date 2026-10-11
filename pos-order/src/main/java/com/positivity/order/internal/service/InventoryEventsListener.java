@@ -297,8 +297,11 @@ public class InventoryEventsListener {
     private void apply(JsonNode envelope) {
         GoodsReceiptRecordedV1 receipt = objectMapper.treeToValue(envelope.path(PAYLOAD), GoodsReceiptRecordedV1.class);
 
-        PurchaseOrderEntity order =
-                purchaseOrderRepository.findById(receipt.purchaseOrderId()).orElse(null);
+        // Row-locked, as revise reads it (#2632): a receipt and a revision of the same order take
+        // turns, so neither writes over the other from a stale read.
+        PurchaseOrderEntity order = purchaseOrderRepository
+                .findByIdForUpdate(receipt.purchaseOrderId())
+                .orElse(null);
         if (order == null) {
             // Receiving validated the order against its replica, so this means the receipt arrived
             // for an order this module has never held — a data problem, not a race worth retrying.

@@ -119,6 +119,8 @@ class PurchaseOrderOpenBalanceBasisTest {
             return saved;
         });
         when(orders.findById(PO_ID)).thenAnswer(_ -> Optional.ofNullable(stored.get()));
+        // Revise and the goods-receipt consumer read the order row-locked (#2632).
+        when(orders.findByIdForUpdate(PO_ID)).thenAnswer(_ -> Optional.ofNullable(stored.get()));
         doAnswer(invocation -> {
                     PurchaseOrderEntity order = invocation.getArgument(0);
                     // createRequested persists through the mocked EntityManager, which assigns no ids.
