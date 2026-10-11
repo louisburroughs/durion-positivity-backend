@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class PurchaseOrderOpenBalanceExTaxMigrationIT {
 
     private static final UUID TENANT = UUID.fromString("00000000-0000-7000-8000-0000000c2633");
+    private static final UUID OTHER_TENANT = UUID.fromString("00000000-0000-7000-8000-0000000d2633");
 
     @Test
     @DisplayName("the tax comes off every non-cancelled balance, floored at zero")
@@ -41,6 +42,8 @@ class PurchaseOrderOpenBalanceExTaxMigrationIT {
         UUID cancelled = order(jdbc, "CANCELLED", 100_000L, 10_000L, 110_000L);
         UUID untaxedDraft = order(jdbc, "DRAFT", 50_000L, 0L, 50_000L);
         UUID noBalance = order(jdbc, "DRAFT", 50_000L, 5_000L, null);
+        // Flyway runs as the owner with no tenant bound, so every tenant's rows move, not one.
+        UUID otherTenantApproved = order(jdbc, OTHER_TENANT, "APPROVED", 100_000L, 10_000L, 110_000L);
 
         Flyway.configure()
                 .placeholders(Map.of("functional_currency", "USD"))
@@ -60,6 +63,7 @@ class PurchaseOrderOpenBalanceExTaxMigrationIT {
                 .isEqualTo(110_000L);
         assertThat(balance(jdbc, untaxedDraft)).isEqualTo(50_000L);
         assertThat(balance(jdbc, noBalance)).isNull();
+        assertThat(balance(jdbc, OTHER_TENANT, otherTenantApproved)).isEqualTo(100_000L);
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM purchase_order WHERE tenant_id = ? AND grand_total_minor <> subtotal_minor"
                                 + " + tax_minor",
@@ -71,13 +75,18 @@ class PurchaseOrderOpenBalanceExTaxMigrationIT {
 
     private static UUID order(
             JdbcTemplate jdbc, String status, long subtotalMinor, long taxMinor, Long openBalanceMinor) {
+        return order(jdbc, TENANT, status, subtotalMinor, taxMinor, openBalanceMinor);
+    }
+
+    private static UUID order(
+            JdbcTemplate jdbc, UUID tenantId, String status, long subtotalMinor, long taxMinor, Long openBalanceMinor) {
         UUID id = UUID.randomUUID();
         jdbc.update(
                 "INSERT INTO purchase_order (tenant_id, purchase_order_id, po_number, vendor_id, status, version_number,"
                         + " currency, subtotal_minor, tax_minor, grand_total_minor, open_balance_minor, created_by,"
                         + " created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, 'USD', ?, ?, ?, ?, 'buyer',"
                         + " TIMESTAMPTZ '2026-10-01 09:00:00+00', TIMESTAMPTZ '2026-10-01 09:00:00+00')",
-                TENANT,
+                tenantId,
                 id,
                 "PO-" + id,
                 UUID.randomUUID(),
@@ -90,10 +99,14 @@ class PurchaseOrderOpenBalanceExTaxMigrationIT {
     }
 
     private static Long balance(JdbcTemplate jdbc, UUID purchaseOrderId) {
+        return balance(jdbc, TENANT, purchaseOrderId);
+    }
+
+    private static Long balance(JdbcTemplate jdbc, UUID tenantId, UUID purchaseOrderId) {
         return jdbc.queryForObject(
                 "SELECT open_balance_minor FROM purchase_order WHERE tenant_id = ? AND purchase_order_id = ?",
                 Long.class,
-                TENANT,
+                tenantId,
                 purchaseOrderId);
     }
 }

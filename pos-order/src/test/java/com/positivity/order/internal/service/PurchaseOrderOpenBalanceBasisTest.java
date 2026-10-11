@@ -3,7 +3,7 @@ package com.positivity.order.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,6 +66,12 @@ class PurchaseOrderOpenBalanceBasisTest {
     /** The one order this test works on, as the repository would hold it. */
     private final AtomicReference<PurchaseOrderEntity> stored = new AtomicReference<>();
 
+    /**
+     * Each fact as it was queued, mapped at publish time: the order is one mutable entity, so mapping
+     * it afterwards would only repeat its current state.
+     */
+    private final List<PurchaseOrderUpdatedV1> published = new ArrayList<>();
+
     private PurchaseOrderServiceImpl service;
     private InventoryEventsListener listener;
 
@@ -113,6 +119,15 @@ class PurchaseOrderOpenBalanceBasisTest {
             return saved;
         });
         when(orders.findById(PO_ID)).thenAnswer(_ -> Optional.ofNullable(stored.get()));
+        doAnswer(invocation -> {
+                    PurchaseOrderEntity order = invocation.getArgument(0);
+                    // createRequested persists through the mocked EntityManager, which assigns no ids.
+                    assignLineIds(order);
+                    published.add(PurchaseOrderFactPublisher.toFact(order, invocation.getArgument(1), NOW));
+                    return null;
+                })
+                .when(publisher)
+                .publish(any(), anyList());
     }
 
     /** What the database would do on insert: every line gets an id, which receipts name. */
@@ -158,7 +173,9 @@ class PurchaseOrderOpenBalanceBasisTest {
         assertThat(created.getTaxMinor()).isEqualTo(10_000L);
         assertThat(created.getGrandTotalMinor()).isEqualTo(110_000L);
         assertThat(created.getOpenBalanceMinor()).isEqualTo(100_000L);
-        assertThat(lastFact().openBalanceMinor()).isEqualTo(100_000L);
+        assertThat(published)
+                .extracting(PurchaseOrderUpdatedV1::openBalanceMinor)
+                .containsExactly(100_000L);
     }
 
     @Test
@@ -200,22 +217,17 @@ class PurchaseOrderOpenBalanceBasisTest {
         listener.onInventoryEvent(receipt(lines.subList(0, 3)));
         assertThat(stored.get().getStatus()).isEqualTo(PurchaseOrderStatus.PARTIALLY_RECEIVED);
         assertThat(stored.get().getOpenBalanceMinor()).isEqualTo(70_000L);
-        assertThat(lastFact().openBalanceMinor()).isEqualTo(70_000L);
 
         listener.onInventoryEvent(receipt(lines.subList(3, 10)));
         assertThat(stored.get().getStatus()).isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
         assertThat(stored.get().getOpenBalanceMinor()).isZero();
         assertThat(stored.get().getGrandTotalMinor()).isEqualTo(110_000L);
         assertThat(stored.get().getTaxMinor()).isEqualTo(10_000L);
-        assertThat(lastFact().openBalanceMinor()).isZero();
-    }
 
-    /** The last fact queued for the order, through the mapping production publishes with. */
-    private PurchaseOrderUpdatedV1 lastFact() {
-        ArgumentCaptor<PurchaseOrderEntity> published = ArgumentCaptor.forClass(PurchaseOrderEntity.class);
-        verify(publisher, atLeastOnce()).publish(published.capture(), anyList());
-        PurchaseOrderEntity order = published.getValue();
-        return PurchaseOrderFactPublisher.toFact(order, order.getLines(), NOW);
+        // Create, approve, then one fact per receipt, each with the ex-tax remainder at that moment.
+        assertThat(published)
+                .extracting(PurchaseOrderUpdatedV1::openBalanceMinor)
+                .containsExactly(100_000L, 100_000L, 70_000L, 0L);
     }
 
     /**
