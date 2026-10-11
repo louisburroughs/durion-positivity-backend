@@ -65,7 +65,8 @@ public class PurchaseOrderController {
             summary = "Create Purchase Order",
             description = """
                     Creates a DRAFT purchase order with a generated PO number, computing subtotal, tax and grand \
-                    total in minor currency units and initialising the open balance to the grand total.
+                    total in minor currency units and initialising the open balance to the subtotal, since the \
+                    open balance is ex-tax.
                     Use this tool when ordering stock from a vendor manually; do not use revisePurchaseOrder, \
                     which replaces the lines of an existing order, and do not use convertPurchaseSuggestions, \
                     which turns accepted replenishment suggestions into orders.
@@ -358,8 +359,8 @@ public class PurchaseOrderController {
             summary = "Revise Purchase Order",
             description = """
                     Revises an existing purchase order in place: the version number increments, the header fields \
-                    and every line are replaced, totals are recomputed, and the open balance resets to the value \
-                    of the new lines.
+                    and every line are replaced, totals are recomputed, and the open balance resets to the \
+                    ex-tax value (subtotal) of the new lines.
                     Use this tool to change quantities, costs or delivery terms on an order; do not use \
                     createPurchaseOrder, which starts a new order, and use cancelPurchaseOrder instead when the \
                     order should be terminated rather than changed.

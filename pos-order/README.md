@@ -213,6 +213,29 @@ pos-supplier (ADR-0044 R1): it reads its own copy of the vendor master.
   `supplier.outbox.replay-requested` on `supplier.commands.v1` with the tenant header; a manifest without a tenant is
   skipped and counted as `replica.manifest.skipped`.
 
+## Purchase order open balance: ex-tax (#2633)
+
+A purchase order's `openBalanceMinor` is the value of the goods still outstanding, **ex-tax**, on one
+basis from creation through receipt:
+
+- create (`createPurchaseOrder`, and a requested order from `purchaseorder.requested`) and revise set
+  it to the subtotal, the sum of the line totals;
+- each `goodsreceipt.recorded` takes off its `totalAccruedAmountMinor`, floored at zero. Inventory
+  accrues quantity × unit cost with no tax, and AW38 books exactly that to 2100, so a taxed order
+  received in full reaches zero.
+
+`taxMinor` and `grandTotalMinor` are unchanged: they describe the document, not what is still open.
+Tax on purchases is a bill matter (AW39), not a receiving one. The same basis is what
+`purchaseorder.updated.openBalanceMinor` publishes (Inventory's over-receipt guard compares against
+it) and what `GET /v1/orders/purchase-orders/summary` sums.
+
+Before this, the balance started at the grand total, so a fully received taxed order kept its tax as
+an outstanding balance, and Inventory admitted a receipt up to that amount over the order without
+`inventory:goods_receipt:override`. Flyway `V10__purchase_order_open_balance_ex_tax.sql` moved existing
+rows onto the ex-tax basis: it takes `tax_minor` off `open_balance_minor`, floored at zero, on every
+order that is not `CANCELLED`. It republishes nothing, so Inventory's copy of an order's balance
+follows on the order's next `purchaseorder.updated`.
+
 ## Tax registrations replica (CAP:550 S32c, #2638)
 
 pos-order keeps its own copy of the tenant's indirect-tax registrations, `ext_tax_registration` (V8), to decide which
@@ -467,7 +490,8 @@ NULL` index the reconciliation manifest and its replay read `event_outbox` throu
 `V8__ext_tax_registration.sql` (CAP:550 S32c — the tax-registration copy), and `V9__drawer_stated_tax.sql` (CAP:550
 S32d — the supplier and plausibility columns on `cash_movement`, the tenant table `cash_movement_stated_tax` with
 UNIQUE `(tenant_id, movement_id, regime)` and `amount > 0`, and `tax_recoverable` / `recoverable_percent` on
-`ext_accounting_petty_expense_category`; no backfill).
+`ext_accounting_petty_expense_category`; no backfill), and `V10__purchase_order_open_balance_ex_tax.sql` (#2633 —
+data only: takes `tax_minor` off `open_balance_minor`, floored at zero, on every purchase order not `CANCELLED`).
 
 ## Development
 

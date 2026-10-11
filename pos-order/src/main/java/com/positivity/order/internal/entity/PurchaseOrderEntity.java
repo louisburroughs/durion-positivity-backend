@@ -86,6 +86,11 @@ public class PurchaseOrderEntity extends TenantScopedEntity {
     @Column(nullable = false)
     private Long grandTotalMinor;
 
+    /**
+     * Value of the goods still outstanding, ex-tax (#2633): the subtotal at create and revise, less each
+     * goods receipt's accrual, floored at zero. {@code taxMinor} and {@code grandTotalMinor} describe the
+     * document; this is what is still open.
+     */
     private Long openBalanceMinor;
 
     private UUID shipToLocationId;
