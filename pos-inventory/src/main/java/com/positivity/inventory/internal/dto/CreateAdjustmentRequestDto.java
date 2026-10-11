@@ -61,7 +61,7 @@ public class CreateAdjustmentRequestDto {
             maxLength = REASON_CODE_MAX_LENGTH,
             requiredMode = REQUIRED)
     @NotBlank
-    @Size(max = REASON_CODE_MAX_LENGTH)
+    @Size(min = 1, max = REASON_CODE_MAX_LENGTH)
     String reasonCode;
 
     @Schema(
