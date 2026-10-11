@@ -20,7 +20,9 @@ import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -61,6 +63,17 @@ import tools.jackson.databind.ObjectMapper;
  * real work rather than merely avoiding wasted effort — unlike a full-state fact, this one is not
  * naturally idempotent.
  *
+ * <h2>A receipt never reopens a cancelled or closed order (#2634)</h2>
+ *
+ * The receipt's status rule applies only while the order is being received: {@code APPROVED},
+ * {@code PARTIALLY_RECEIVED} or {@code FULLY_RECEIVED}. Any other order keeps its status. A receipt
+ * reaches a {@code CANCELLED} order when the cancellation and the receipt cross: receiving gates on
+ * its replica, which trails this module, and the fact describes goods already on the shelf, so it
+ * cannot be refused (ADR-0044 §4). Its quantities and value are still recorded and the order's
+ * fact is republished with the status unchanged, so the replica's figures match while the order
+ * stays out of incoming supply. Recomputing the status here would make a cancelled order
+ * {@code PARTIALLY_RECEIVED}, which is open supply, and receiving would accept more against it.
+ *
  * <h2>A receipt that cannot be attributed to a line</h2>
  *
  * Its value still comes off the outstanding balance, but no quantity moves. Guessing which line it
@@ -92,6 +105,10 @@ import tools.jackson.databind.ObjectMapper;
 @KafkaRails
 public class InventoryEventsListener {
     private static final String PAYLOAD = "payload";
+
+    /** Statuses a receipt may move along the receiving lifecycle; every other status is kept (#2634). */
+    private static final Set<PurchaseOrderStatus> RECEIVING_STATUSES = EnumSet.of(
+            PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED, PurchaseOrderStatus.FULLY_RECEIVED);
 
     /** Producing domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "inventory";
@@ -316,7 +333,16 @@ public class InventoryEventsListener {
 
         long openBalance = order.getOpenBalanceMinor() == null ? 0L : order.getOpenBalanceMinor();
         order.setOpenBalanceMinor(Math.max(0L, openBalance - receipt.totalAccruedAmountMinor()));
-        order.setStatus(nextStatus(order));
+        if (RECEIVING_STATUSES.contains(order.getStatus())) {
+            order.setStatus(nextStatus(order));
+        } else {
+            log.warn(
+                    "Goods receipt {} applied to purchase order {} in status {}: quantities and balance recorded, "
+                            + "status kept",
+                    receipt.receiptId(),
+                    order.getPurchaseOrderId(),
+                    order.getStatus());
+        }
         order.setVersionNumber(order.getVersionNumber() == null ? 1 : order.getVersionNumber() + 1);
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(order);
@@ -333,7 +359,8 @@ public class InventoryEventsListener {
     }
 
     /**
-     * Fully received only when every line is settled.
+     * Fully received only when every line is settled. Applied only to an order in
+     * {@link #RECEIVING_STATUSES}.
      *
      * <p>Deliberately decided from the lines rather than from the balance reaching zero. A price
      * concession can zero the balance while goods are still owed, and an order closed on that basis
