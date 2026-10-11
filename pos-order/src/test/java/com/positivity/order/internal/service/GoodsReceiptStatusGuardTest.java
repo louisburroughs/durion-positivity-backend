@@ -56,6 +56,7 @@ class GoodsReceiptStatusGuardTest {
     private static final UUID ORDER = UUID.fromString("019a0000-0000-7000-8000-000000002634");
     private static final UUID LINE_1 = UUID.fromString("019a0000-0000-7000-8000-0000000026a1");
     private static final UUID LINE_2 = UUID.fromString("019a0000-0000-7000-8000-0000000026a2");
+    private static final UUID RECEIPT = UUID.fromString("019a0000-0000-7000-8000-0000000026e1");
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private ProcessedEventRepository processedEvents;
@@ -92,16 +93,18 @@ class GoodsReceiptStatusGuardTest {
         listenerLogger.detachAppender(logs);
     }
 
+    /** Every status outside the receiving lifecycle, so a status added later is covered too. */
     @ParameterizedTest(name = "{0}: status kept, quantities and balance recorded, fact republished")
     @EnumSource(
             value = PurchaseOrderStatus.class,
-            names = {"CANCELLED", "CLOSED"})
-    @DisplayName("a receipt for a cancelled or closed order keeps its status")
-    void receiptForTerminalOrder_keepsStatus(PurchaseOrderStatus status) {
+            mode = EnumSource.Mode.EXCLUDE,
+            names = {"APPROVED", "PARTIALLY_RECEIVED", "FULLY_RECEIVED"})
+    @DisplayName("a receipt for an order outside the receiving lifecycle (cancelled, closed, draft) keeps its status")
+    void receiptOutsideReceivingLifecycle_keepsStatus(PurchaseOrderStatus status) {
         PurchaseOrderEntity order = order(status);
         when(orders.findById(ORDER)).thenReturn(Optional.of(order));
 
-        listener.onInventoryEvent(receipt(LINE_1, "4", 40_000L));
+        listener.onInventoryEvent(receipt(RECEIPT, LINE_1, "4", 40_000L));
 
         assertThat(order.getStatus()).isEqualTo(status);
         assertThat(line(order, LINE_1).getOpenQuantityDecimal()).isEqualByComparingTo("6");
@@ -122,37 +125,31 @@ class GoodsReceiptStatusGuardTest {
                 .filteredOn(event -> event.getLevel() == Level.WARN)
                 .singleElement()
                 .satisfies(event -> assertThat(event.getFormattedMessage())
-                        .contains(ORDER.toString(), status.name(), "status kept"));
+                        .contains(RECEIPT.toString(), ORDER.toString(), status.name(), "status kept"));
     }
 
-    @ParameterizedTest(name = "{0} + receipt of {1} on line 1 -> {2}")
+    @ParameterizedTest(name = "{0}, line 2 already settled: {1} -> {2}")
     @CsvSource({
-        "APPROVED, 4, PARTIALLY_RECEIVED",
-        "PARTIALLY_RECEIVED, 4, PARTIALLY_RECEIVED",
+        "APPROVED, false, PARTIALLY_RECEIVED",
+        "PARTIALLY_RECEIVED, false, PARTIALLY_RECEIVED",
+        "APPROVED, true, FULLY_RECEIVED",
+        "PARTIALLY_RECEIVED, true, FULLY_RECEIVED",
     })
     @DisplayName("an order being received moves along the receiving lifecycle as before")
     void receiptForReceivingOrder_recomputesStatus(
-            PurchaseOrderStatus status, String quantity, PurchaseOrderStatus expected) {
+            PurchaseOrderStatus status, boolean lineTwoSettled, PurchaseOrderStatus expected) {
         PurchaseOrderEntity order = order(status);
+        if (lineTwoSettled) {
+            // Line 1 receiving all 10 is then the last open quantity on the order.
+            line(order, LINE_2).setOpenQuantityDecimal(BigDecimal.ZERO);
+        }
         when(orders.findById(ORDER)).thenReturn(Optional.of(order));
 
-        listener.onInventoryEvent(receipt(LINE_1, quantity, 40_000L));
+        listener.onInventoryEvent(receipt(RECEIPT, LINE_1, lineTwoSettled ? "10" : "4", 40_000L));
 
         assertThat(order.getStatus()).isEqualTo(expected);
         assertThat(publishedFact().status()).isEqualTo(expected.name());
         assertThat(logs.list).noneMatch(event -> event.getLevel() == Level.WARN);
-    }
-
-    @Test
-    @DisplayName("an approved order whose last open quantity arrives becomes FULLY_RECEIVED")
-    void approvedOrder_lastReceipt_becomesFullyReceived() {
-        PurchaseOrderEntity order = order(PurchaseOrderStatus.APPROVED);
-        line(order, LINE_2).setOpenQuantityDecimal(BigDecimal.ZERO);
-        when(orders.findById(ORDER)).thenReturn(Optional.of(order));
-
-        listener.onInventoryEvent(receipt(LINE_1, "10", 100_000L));
-
-        assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
     }
 
     @Test
@@ -163,7 +160,7 @@ class GoodsReceiptStatusGuardTest {
         order.setOpenBalanceMinor(0L);
         when(orders.findById(ORDER)).thenReturn(Optional.of(order));
 
-        listener.onInventoryEvent(receipt(LINE_1, "1", 10_000L));
+        listener.onInventoryEvent(receipt(UUID.randomUUID(), LINE_1, "1", 10_000L));
 
         assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
         assertThat(line(order, LINE_1).getOpenQuantityDecimal()).isEqualByComparingTo("0");
@@ -177,13 +174,13 @@ class GoodsReceiptStatusGuardTest {
         PurchaseOrderEntity order = order(PurchaseOrderStatus.APPROVED);
         when(orders.findById(ORDER)).thenReturn(Optional.of(order));
 
-        listener.onInventoryEvent(receipt(LINE_1, "4", 40_000L));
+        listener.onInventoryEvent(receipt(UUID.randomUUID(), LINE_1, "4", 40_000L));
         assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.PARTIALLY_RECEIVED);
 
         // What cancelPurchaseOrder does: the status changes and every open quantity stays in place.
         order.setStatus(PurchaseOrderStatus.CANCELLED);
 
-        listener.onInventoryEvent(receipt(LINE_2, "3", 30_000L));
+        listener.onInventoryEvent(receipt(UUID.randomUUID(), LINE_2, "3", 30_000L));
 
         assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.CANCELLED);
         assertThat(line(order, LINE_1).getOpenQuantityDecimal()).isEqualByComparingTo("6");
@@ -239,12 +236,12 @@ class GoodsReceiptStatusGuardTest {
                 .build();
     }
 
-    private String receipt(UUID poLineId, String quantity, long accruedMinor) {
+    private String receipt(UUID receiptId, UUID poLineId, String quantity, long accruedMinor) {
         String payload = """
                 {"receiptId":"%s","receiptNumber":"GR-2634","purchaseOrderId":"%s","locationId":null,
                  "totalAccruedAmountMinor":%d,"occurredAt":"%s",
                  "lines":[{"poLineId":"%s","sku":"SKU","quantityReceived":%s,"accruedAmountMinor":%d}]}
-                """.formatted(UUID.randomUUID(), ORDER, accruedMinor, NOW, poLineId, quantity, accruedMinor);
+                """.formatted(receiptId, ORDER, accruedMinor, NOW, poLineId, quantity, accruedMinor);
         return """
                 {"eventId":"%s","eventType":"%s","schemaVersion":1,"aggregateId":"%s","aggregateVersion":0,
                  "occurredAtUtc":"%s","sourceService":"pos-inventory","payload":%s}

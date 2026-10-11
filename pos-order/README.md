@@ -293,7 +293,7 @@ republished. A receipt is a delta, so the `processed_events` mark commits with i
 `PARTIALLY_RECEIVED` or `FULLY_RECEIVED` the status is recomputed from the lines: `FULLY_RECEIVED`
 when every line is settled, otherwise `PARTIALLY_RECEIVED`. Any other status is kept. A receipt
 reaches a `CANCELLED` order when a cancel and a receipt cross (receiving gates on its replica, which
-trails this module), and later the same holds for `CLOSED`. The fact describes goods already on the
+trails this module); `CLOSED`, once something sets it, is treated the same. The fact describes goods already on the
 shelf and is not refused (ADR-0044 §4), so for such an order:
 
 - the quantities and the balance are still recorded, and the event is marked processed;
@@ -302,7 +302,7 @@ shelf and is not refused (ADR-0044 §4), so for such an order:
 - a WARN names the receipt, the order and its status.
 
 Before this rule, a receipt recomputed the status unconditionally, so a cancelled order became
-`PARTIALLY_RECEIVED`, counted as supply again, and receiving accepted further receipts against it.
+`PARTIALLY_RECEIVED` (or `FULLY_RECEIVED`), counted as supply again, and receiving accepted further receipts against it.
 
 ## Purchase order transmission timeline (issue #1638)
 
