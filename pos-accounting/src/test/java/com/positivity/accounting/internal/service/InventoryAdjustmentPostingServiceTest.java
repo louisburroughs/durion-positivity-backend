@@ -125,6 +125,7 @@ class InventoryAdjustmentPostingServiceTest {
         verify(glPostingService)
                 .postInventoryAdjustment(any(), any(), any(), any(), any(), any(), description.capture(), any());
         assertThat(reason).hasSize(100);
+        // 500 is journal_entry.description's width (JournalEntry#description).
         assertThat(description.getValue()).contains("(reason " + reason + ",").hasSizeLessThanOrEqualTo(500);
     }
 

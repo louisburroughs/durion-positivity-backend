@@ -262,9 +262,10 @@ description, none of which truncates it. A longer reason is refused before anyth
 
 - over HTTP, bean validation answers `400 VALIDATION_ERROR` with a `fieldErrors` entry on
   `reasonCode`;
-- on bulk ingest (`POST /v1/inventory/bulk-ingest`), which builds the request without bean
-  validation, `StockMovementServiceImpl.createAdjustmentRequest` refuses it with
-  `InventoryValidationException`, and only that row fails.
+- on bulk ingest (`POST /v1/inventory/bulk-ingest` and `POST /v1/inventory/opening-stock/bulk-ingest`),
+  which build the request without bean validation, `StockMovementServiceImpl.createAdjustmentRequest`
+  refuses it with `InventoryValidationException`. Only that row fails, with `INVENTORY_INGEST_FAILED`
+  or `OPENING_STOCK_INGEST_FAILED` and the message naming the limit.
 
 Before this, a 101-character reason passed validation and failed at the insert (SQLSTATE `22001`),
 which surfaced as `500 INTERNAL_ERROR`.

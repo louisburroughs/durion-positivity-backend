@@ -159,9 +159,9 @@ public class InventoryBulkIngestController extends AbstractBulkIngestController<
     }
 
     /**
-     * The one refusal {@code StockMovementService#createAdjustmentRequest} makes is a zero quantity
-     * (#2201), raised as {@link InventoryValidationException}; that row is the caller\'s and its
-     * message is echoed. Anything else on this path is a persistence fault and belongs behind a
+     * The refusals {@code StockMovementService#createAdjustmentRequest} makes, a zero quantity
+     * (#2201) and a reason over 100 characters (#2628), are raised as
+     * {@link InventoryValidationException}; that row is the caller\'s and its message is echoed. Anything else on this path is a persistence fault and belongs behind a
      * correlation id (issue #1718). Bare {@code IllegalArgumentException} is deliberately not named
      * even though this module\'s advice answers it 400: it is equally what Hibernate and the JDK
      * raise, and its message is the kind that fix exists to stop echoing.

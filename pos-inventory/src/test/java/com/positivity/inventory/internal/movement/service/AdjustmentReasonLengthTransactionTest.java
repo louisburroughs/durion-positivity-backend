@@ -24,7 +24,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * #2628 against the real columns: a manual adjustment's reason of exactly 100 characters is stored on
+ * #2628 against the stored columns (entity-mapped, the same width as the V1 baseline): a manual adjustment's reason of exactly 100 characters is stored on
  * the request and copied to the ledger row untruncated, and a longer one (the bulk-ingest path, which
  * skips bean validation) is refused before anything is written instead of failing at the insert.
  */
