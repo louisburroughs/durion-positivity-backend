@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
+import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.repository.ExtInventoryAvailabilityRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
@@ -97,6 +98,7 @@ class GoodsReceiptRecordedConsumerTest {
         verify(orders).save(order);
         assertThat(order.getLines().getFirst().getOpenQuantityDecimal()).isEqualByComparingTo("6");
         assertThat(order.getOpenBalanceMinor()).isEqualTo(60_000L);
+        assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.PARTIALLY_RECEIVED);
     }
 
     private static PurchaseOrderEntity order() {
@@ -105,8 +107,10 @@ class GoodsReceiptRecordedConsumerTest {
                 .quantityDecimal(new BigDecimal("10"))
                 .openQuantityDecimal(new BigDecimal("10"))
                 .build();
+        // APPROVED: the receiving path, where these facts land (#2634 keeps other statuses as they are).
         return PurchaseOrderEntity.builder()
                 .purchaseOrderId(ORDER)
+                .status(PurchaseOrderStatus.APPROVED)
                 .openBalanceMinor(100_000L)
                 .lines(new ArrayList<>(List.of(line)))
                 .build();

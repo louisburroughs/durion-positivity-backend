@@ -304,6 +304,29 @@ token unspent, so the register may resend the same `requestId` with a corrected 
 - **Category copy.** `accounting.petty-expense-category.changed` now carries `taxRecoverable` and
   `recoverablePercent`; a fact without them maps to not recoverable. pos-order decides only on `taxRecoverable`.
 
+## Consumed inventory facts: goods receipts on a purchase order
+
+`InventoryEventsListener` is the module's one consumer of `inventory.events.v1`. For
+`goodsreceipt.recorded` it applies the receipt to the purchase order it names: each line's open
+quantity drops by the quantity received (floored at zero), the open balance drops by
+`totalAccruedAmountMinor` (floored at zero), and the order's `purchaseorder.updated` fact is
+republished. A receipt is a delta, so the `processed_events` mark commits with it.
+
+**The status moves only while the order is being received (#2634).** From `APPROVED`,
+`PARTIALLY_RECEIVED` or `FULLY_RECEIVED` the status is recomputed from the lines: `FULLY_RECEIVED`
+when every line is settled, otherwise `PARTIALLY_RECEIVED`. Any other status is kept. A receipt
+reaches a `CANCELLED` order when a cancel and a receipt cross (receiving gates on its replica, which
+trails this module); `CLOSED`, once something sets it, is treated the same. The fact describes goods already on the
+shelf and is not refused (ADR-0044 §4), so for such an order:
+
+- the quantities and the balance are still recorded, and the event is marked processed;
+- the status stays `CANCELLED` (or `CLOSED`), and the fact is republished with it, so the replica's
+  figures match while the order stays out of `OPEN_SUPPLY_STATUSES`;
+- a WARN names the receipt, the order and its status.
+
+Before this rule, a receipt recomputed the status unconditionally, so a cancelled order became
+`PARTIALLY_RECEIVED` (or `FULLY_RECEIVED`), counted as supply again, and receiving accepted further receipts against it.
+
 ## Purchase order transmission timeline (issue #1638)
 
 - `GET /v1/orders/purchase-orders/{poId}/transmission-events` (`listPurchaseOrderTransmissionEvents`,
