@@ -133,11 +133,11 @@ public class StockMovementController {
                     Preconditions: none are checked at creation; the SKU, location and quantity are validated for \
                     shape only, not against on-hand.
                     Required inputs: productSku, locationId (UUID), quantity (integer — positive adds stock, \
-                    negative removes it) and reasonCode; unitOfMeasure is optional.
+                    negative removes it) and reasonCode (at most 100 characters); unitOfMeasure is optional.
                     Emits an INVENTORY_ADJUSTMENT_REQUEST_CREATE event; no ledger entry is written and \
                     availability is unchanged until approval.
                     Returns 201 with the PENDING request, 400 when productSku, locationId, quantity or \
-                    reasonCode is missing, and 403 with LOCATION_SCOPE_DENIED when the caller holds \
+                    reasonCode is missing, quantity is zero or reasonCode is longer than 100 characters, and 403 with LOCATION_SCOPE_DENIED when the caller holds \
                     inventory:adjustment:create but the token scopes it to locations that do not cover \
                     locationId (ADR-0061).
                     """,
