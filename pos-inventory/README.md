@@ -252,6 +252,28 @@ method cost: it leaves the running average unchanged under `AVERAGE` and does no
 latest-receipt memo under `STANDARD`. Both paths also queue the `InventoryAvailabilityUpdatedV1` and
 `StorageLocationOnHandUpdatedV1` snapshots for the stock item and location they moved.
 
+### A manual adjustment's reason is at most 100 characters (#2628)
+
+`POST /v1/inventory/adjustments` takes a free-text `reasonCode` of at most 100 characters
+(`maxLength: 100` in the OpenAPI schema). That is the width of `reason_code` on the request and on
+the `ADJUSTMENT_IN`/`ADJUSTMENT_OUT` ledger row it is copied to at approval, so it is also the
+end-to-end limit for the reason on `InventoryAdjustedV1` and in pos-accounting's journal-entry
+description, none of which truncates it. A longer reason is refused before anything is written:
+
+- over HTTP, bean validation answers `400 VALIDATION_ERROR` with a `fieldErrors` entry on
+  `reasonCode`;
+- on bulk ingest (`POST /v1/inventory/bulk-ingest`), which builds the request without bean
+  validation, `StockMovementServiceImpl.createAdjustmentRequest` refuses it with
+  `InventoryValidationException`, and only that row fails.
+
+Before this, a 101-character reason passed validation and failed at the insert (SQLSTATE `22001`),
+which surfaced as `500 INTERNAL_ERROR`.
+
+**Interim vendor-return convention (#2598, OI-20).** Until vendor returns have their own flow, the
+stock-out is recorded as a manual adjustment whose reason carries the vendor's RMA and the receipt
+it returns against: `VENDOR_RETURN:<RMA>:<receipt number>`. The request has no notes field, so this
+reason is the only place for them, and the whole string must fit in the 100 characters.
+
 ### Receipt cost (#2203, ADR-0048 IMP-002)
 
 Every `GOODS_RECEIPT` row carries a document cost per base unit, which the costing engine blends

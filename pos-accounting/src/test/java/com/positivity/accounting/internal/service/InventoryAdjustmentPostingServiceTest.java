@@ -102,6 +102,33 @@ class InventoryAdjustmentPostingServiceTest {
     }
 
     @Test
+    @DisplayName("#2628: a manual adjustment's 100-character reason reaches the description unchanged")
+    void reasonAtInventoryLimitReachesDescriptionUnchanged() {
+        String reason = "VENDOR_RETURN:RMA-2026-0042:GR-000123:" + "X".repeat(62);
+        InventoryAdjustedV1 manual = new InventoryAdjustedV1(
+                ADJUSTMENT_ID,
+                InventoryAdjustedV1.KIND_MANUAL_ADJUSTMENT,
+                "ADJUSTMENT_OUT",
+                UUID.fromString("00000000-0000-0000-0000-0000000000a2"),
+                "BRAKE-PAD-22",
+                null,
+                null,
+                reason,
+                new BigDecimal("-2"),
+                new BigDecimal("7.25"),
+                "AVERAGE",
+                OCCURRED_AT);
+
+        service.postAdjustment(manual);
+
+        ArgumentCaptor<String> description = ArgumentCaptor.forClass(String.class);
+        verify(glPostingService)
+                .postInventoryAdjustment(any(), any(), any(), any(), any(), any(), description.capture(), any());
+        assertThat(reason).hasSize(100);
+        assertThat(description.getValue()).contains("(reason " + reason + ",").hasSizeLessThanOrEqualTo(500);
+    }
+
+    @Test
     @DisplayName("Gain posts Dr INVENTORY_ASSET / Cr ADJUSTMENT_GAIN")
     void gainRoutesToInventory() {
         service.postAdjustment(fact("2.5", "10.00"));

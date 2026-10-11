@@ -7,6 +7,7 @@ import com.positivity.inventory.internal.validation.NonZero;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
@@ -25,6 +26,13 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class CreateAdjustmentRequestDto {
+
+    /**
+     * Longest reason the adjustment accepts (#2628): the width of {@code reason_code} on the request
+     * and on the ledger row it is copied to at approval, so it is the end-to-end limit for the reason
+     * carried on {@code InventoryAdjustedV1} and into accounting's journal-entry description.
+     */
+    public static final int REASON_CODE_MAX_LENGTH = 100;
 
     @Schema(description = "Stock-keeping unit of the product to adjust", example = "SKU-10042", requiredMode = REQUIRED)
     @NotBlank
@@ -45,12 +53,15 @@ public class CreateAdjustmentRequestDto {
     @NonZero
     BigDecimal quantity;
 
-    /** Mandatory reason code explaining the adjustment. */
+    /** Mandatory reason code explaining the adjustment, at most {@value #REASON_CODE_MAX_LENGTH} characters. */
     @Schema(
-            description = "Mandatory reason code explaining the adjustment",
+            description = "Mandatory reason code explaining the adjustment, at most 100 characters; a longer"
+                    + " reason is refused with 400 VALIDATION_ERROR and a field error on reasonCode",
             example = "CYCLE_COUNT",
+            maxLength = REASON_CODE_MAX_LENGTH,
             requiredMode = REQUIRED)
     @NotBlank
+    @Size(max = REASON_CODE_MAX_LENGTH)
     String reasonCode;
 
     @Schema(
