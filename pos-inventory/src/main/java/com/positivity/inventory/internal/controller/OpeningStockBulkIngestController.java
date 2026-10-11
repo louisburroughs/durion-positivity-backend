@@ -8,6 +8,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.inventory.internal.dto.AvailabilityView;
 import com.positivity.inventory.internal.dto.CreateAdjustmentRequestDto;
 import com.positivity.inventory.internal.dto.OpeningStockBulkIngestRecord;
+import com.positivity.inventory.internal.exception.InventoryValidationException;
 import com.positivity.inventory.internal.movement.service.StockMovementService;
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.InventoryAvailabilityService;
@@ -21,6 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -219,12 +221,19 @@ public class OpeningStockBulkIngestController extends AbstractBulkIngestControll
     }
 
     /**
-     * No rejection types: this row creates an adjustment request and immediately approves it, and
-     * neither call refuses anything about the record — the create only saves, and the approve\'s
-     * own guard is an invariant on the request this method just made, so tripping it is a server
-     * defect. A ledger posting failure is likewise ours. All of it reports generically against a
-     * correlation id (issue #1718).
+     * The one refusal that reaches this row is the reason's length (#2628):
+     * {@code createAdjustmentRequest} refuses a {@code reasonCode} over 100 characters with
+     * {@link InventoryValidationException}, the caller's to fix, so that row is rejected with its
+     * message. Its other refusal, a zero quantity, cannot get here: the record's {@code @DecimalMin}
+     * refuses it with the whole envelope. The approve's own guard is an invariant on the request
+     * this method just made, so tripping it is a server defect, and a ledger posting failure is
+     * likewise ours: both report generically against a correlation id (issue #1718).
      */
+    @Override
+    protected Collection<Class<? extends Throwable>> rowRejectionTypes() {
+        return List.of(InventoryValidationException.class);
+    }
+
     @Override
     protected String rowRejectionCode() {
         return INGEST_FAILED;

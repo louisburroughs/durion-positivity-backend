@@ -41,7 +41,8 @@ public class OpeningStockBulkIngestRecord {
     private String unitOfMeasure;
 
     @Schema(
-            description = "Ledger reason code; defaults to OPENING_BALANCE when omitted",
+            description = "Ledger reason code, at most 100 characters (a longer one fails the row); defaults to"
+                    + " OPENING_BALANCE when omitted",
             example = "OPENING_BALANCE",
             requiredMode = NOT_REQUIRED)
     private String reasonCode;
