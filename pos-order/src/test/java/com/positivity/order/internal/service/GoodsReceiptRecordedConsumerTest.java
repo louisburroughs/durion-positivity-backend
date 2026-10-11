@@ -65,7 +65,7 @@ class GoodsReceiptRecordedConsumerTest {
     @DisplayName("a fact with currencyCode and the per-line cost basis settles the line and the balance as before")
     void factWithTheNewFieldsApplies() {
         PurchaseOrderEntity order = order();
-        when(orders.findById(ORDER)).thenReturn(Optional.of(order));
+        when(orders.findByIdForUpdate(ORDER)).thenReturn(Optional.of(order));
 
         listener.onInventoryEvent(envelope("""
                 {"receiptId":"%s","receiptNumber":"GR-1","purchaseOrderId":"%s","locationId":null,
@@ -83,7 +83,7 @@ class GoodsReceiptRecordedConsumerTest {
     @DisplayName("a fact published before the fields existed still applies")
     void factWithoutTheNewFieldsApplies() {
         PurchaseOrderEntity order = order();
-        when(orders.findById(ORDER)).thenReturn(Optional.of(order));
+        when(orders.findByIdForUpdate(ORDER)).thenReturn(Optional.of(order));
 
         listener.onInventoryEvent(envelope("""
                 {"receiptId":"%s","receiptNumber":"GR-1","purchaseOrderId":"%s","locationId":null,

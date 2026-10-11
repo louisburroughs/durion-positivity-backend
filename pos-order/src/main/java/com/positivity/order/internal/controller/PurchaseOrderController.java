@@ -374,8 +374,8 @@ public class PurchaseOrderController {
                     Emits an ORDER_PURCHASE_ORDER_REVISE event carrying the field-level delta and the \
                     revision reason.
                     Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_INVALID_STATE when the \
-                    order is past APPROVED or has received goods on any line, or when vendorId changes the vendor \
-                    of an order past DRAFT, 422 VENDOR_INACTIVE for an inactive new vendor or when a line's \
+                    order is not DRAFT or APPROVED or has received goods on any line, or when vendorId changes the \
+                    vendor of an order past DRAFT, 422 VENDOR_INACTIVE for an inactive new vendor or when a line's \
                     documentUom has no conversion path to the product's base UoM, and 503 \
                     VENDOR_REPLICATION_PENDING with Retry-After when the new vendor has not reached the copy yet.
                     """,
@@ -401,8 +401,9 @@ public class PurchaseOrderController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "PURCHASE_ORDER_INVALID_STATE: the order is past APPROVED, has received goods on any line,"
-                    + " or a vendor change was asked of an order past DRAFT",
+            description =
+                    "PURCHASE_ORDER_INVALID_STATE: the order is not DRAFT or APPROVED, has received goods on any line,"
+                            + " or a vendor change was asked of an order past DRAFT",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

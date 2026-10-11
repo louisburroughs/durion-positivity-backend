@@ -355,13 +355,15 @@ received would be expected again. So revise is allowed only on:
 | `PARTIALLY_RECEIVED`, `FULLY_RECEIVED`, `CLOSED`, `CANCELLED` | No: 409 | No |
 
 "Nothing received" means every line's open quantity still equals its ordered quantity. It is judged on the lines read
-under the order's row lock (`PurchaseOrderRepository.findByIdForUpdate`), not from an earlier read. Every goods
-receipt writes the order row, so a receipt either commits before the check or waits until the revision commits. A
-refused revise answers `409 PURCHASE_ORDER_INVALID_STATE`, changes nothing and publishes no fact. From
-`PARTIALLY_RECEIVED` on, quantities change only through the per-line actions (#2635). Still open:
+under the order's row lock (`PurchaseOrderRepository.findByIdForUpdate`), not from an earlier read. The
+`goodsreceipt.recorded` consumer reads the order through the same lock, so a receipt and a revision take turns: a
+receipt that holds the lock commits before the check reads the lines, and one that arrives during a revision waits
+for it and then reads the revised order. A refused revise answers `409 PURCHASE_ORDER_INVALID_STATE`, changes nothing
+and publishes no fact. From `PARTIALLY_RECEIVED` on, the order's quantities are left to the per-line actions of #2635;
+until those exist, they cannot be changed. Still open:
 
-- A receipt already in flight against an `APPROVED` order that is then revised names a replaced line and is skipped.
-  Only stable line ids across revisions close that window.
+- A receipt recorded against an `APPROVED` order before a revision, but applied after it, names a replaced line and
+  is skipped (its value still comes off the balance). Only stable line ids across revisions close that window.
 - Whether revising an `APPROVED` order should send it back to `DRAFT` for re-approval is a policy question that is not
   decided yet. Today it stays `APPROVED`.
 
@@ -404,7 +406,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_INVALID_STATE_TRANSITION` | 409 | The requested status transition is not allowed from the order's current status |
 | `ORDER_CONFLICT` | 409 | The order was modified concurrently; retry with fresh state |
 | `ORDER_VOID_BLOCKED` | 409 | A void was requested on an order that already has settled payments; use cancellation so the money is reversed |
-| `PURCHASE_ORDER_INVALID_STATE` | 409 | The purchase order's status does not allow the operation, including a revise of an order past `APPROVED` or with goods received on any line (#2632) |
+| `PURCHASE_ORDER_INVALID_STATE` | 409 | The purchase order's status does not allow the operation, including a revise of an order that is not `DRAFT` or `APPROVED`, or has goods received on any line (#2632) |
 | `REGISTER_SESSION_CONFLICT` | 409 | A second open on a terminal that already has an OPEN session, a cash movement or close against a non-OPEN session, or a confirm-close before begin-close |
 | `SESSION_CLOSE_BLOCKED` | 409 | The register session cannot close while one or more of its orders are still in PENDING_PAYMENT |
 | `RETURN_INVALID_STATE` | 409 | The return order's status does not allow the operation |

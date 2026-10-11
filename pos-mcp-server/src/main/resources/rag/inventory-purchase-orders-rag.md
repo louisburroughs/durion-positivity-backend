@@ -89,7 +89,10 @@ anyone. Transmitting puts the order in front of the vendor.
   anything else is refused with 400 `PURCHASE_ORDER_BAD_REQUEST`.
 - **Approve.** Only a `DRAFT` order can be approved. Any other status is refused with 409
   `PURCHASE_ORDER_INVALID_STATE`. Approval records the approver, the approval time and the optional approval notes.
-- **Revise.** The service applies no status check. A revision adds 1 to the version number, overwrites the header
+- **Revise.** Only a `DRAFT` order, or an `APPROVED` order on which nothing has been received (every line's open
+  quantity still equals its ordered quantity), can be revised. Any other order, including `PARTIALLY_RECEIVED`,
+  `FULLY_RECEIVED`, `CLOSED` and `CANCELLED`, is refused with 409 `PURCHASE_ORDER_INVALID_STATE` and nothing changes;
+  a vendor change is allowed on a `DRAFT` order only. A revision adds 1 to the version number, overwrites the header
   fields, replaces every line, recomputes the totals and resets the open balance to the value of the new lines. It
   does not change the status.
 - **Cancel.** An order that is `FULLY_RECEIVED` or `CLOSED` cannot be cancelled; the request is refused with 409

@@ -26,9 +26,9 @@ public interface PurchaseOrderRepository
     Optional<PurchaseOrderEntity> findByPoNumber(String poNumber);
 
     /**
-     * The order, row-locked for the rest of the transaction (#2632). Revise reads whether anything was received
-     * under this lock: every goods receipt writes the order row, so a receipt either commits before the check
-     * reads the lines or waits until the revision commits.
+     * The order, row-locked for the rest of the transaction (#2632). Revise and the goods-receipt consumer both read
+     * the order through it, so the two take turns: a receipt that holds the lock commits before revise reads the
+     * lines, and a receipt that arrives during a revision waits for it to commit and then reads the revised order.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select po from PurchaseOrderEntity po where po.purchaseOrderId = :purchaseOrderId")

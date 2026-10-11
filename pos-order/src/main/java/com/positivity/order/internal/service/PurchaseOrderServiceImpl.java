@@ -440,7 +440,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
      * one on which no line has an open quantity below its ordered quantity. Past that, a receipt or vendor return
      * naming a replaced line would be skipped, and the units already received would be expected again. Judged on
      * the lines read under the order's row lock ({@link PurchaseOrderRepository#findByIdForUpdate}), not on an
-     * earlier read. From {@code PARTIALLY_RECEIVED} on, quantities change only through the per-line actions.
+     * earlier read. From {@code PARTIALLY_RECEIVED} on, the order's quantities are left to the per-line actions of
+     * #2635; until those exist, they cannot be changed.
      */
     private static void requireRevisable(@NonNull PurchaseOrderEntity po) {
         PurchaseOrderStatus status = po.getStatus();
