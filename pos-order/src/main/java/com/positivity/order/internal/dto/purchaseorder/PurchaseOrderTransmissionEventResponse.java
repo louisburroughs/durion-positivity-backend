@@ -16,7 +16,7 @@ import org.jspecify.annotations.Nullable;
 @Schema(
         name = "PurchaseOrderTransmissionEvent",
         description = "One entry on a purchase order's vendor transmission timeline: a confirmation, rejection,"
-                + " status observation or review escalation. Entries are ordered by the vendor's clock"
+                + " status observation, review escalation or not-dispatched notice. Entries are ordered by the vendor's clock"
                 + " (observedAt), with ties broken by platform receipt time (recordedAt) and then by event id,"
                 + " so the sequence is stable across reads.")
 public record PurchaseOrderTransmissionEventResponse(

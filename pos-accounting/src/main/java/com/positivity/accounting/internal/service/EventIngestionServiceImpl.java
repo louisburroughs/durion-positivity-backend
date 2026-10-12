@@ -296,9 +296,9 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     }
 
     /**
-     * Reprocesses a suspended accounting event.
+     * Reprocesses a {@code SUSPENDED} or {@code FAILED} accounting event.
      * Distinct from retry: reprocess is for business-rule mapping failures that
-     * require manual intervention.
+     * require manual intervention, is audited, and may pin a mapping version.
      *
      * Business Rules (BR-3: Idempotency):
      * - Reprocessing MUST be idempotent
@@ -311,13 +311,13 @@ public class EventIngestionServiceImpl implements EventIngestionService {
      * @param triggeredByUserId the authenticated caller (or system job) recorded in the audit trail
      * @return updated accounting event response
      * @throws EventNotFoundException if event not found
-     * @throws IllegalStateException  if event is not SUSPENDED or already
-     *                                PROCESSED
+     * @throws IllegalStateException  if event is already PROCESSED or is
+     *                                neither SUSPENDED nor FAILED
      */
     @Override
     public AccountingEventResponse reprocessEvent(
             @NonNull UUID eventId, @NonNull ReprocessEventRequest request, @NonNull String triggeredByUserId) {
-        log.info("Reprocessing suspended event {} triggered by user {}", eventId, triggeredByUserId);
+        log.info("Reprocessing event {} triggered by user {}", eventId, triggeredByUserId);
 
         // Load the accounting event
         AccountingEvent event = accountingEventRepository

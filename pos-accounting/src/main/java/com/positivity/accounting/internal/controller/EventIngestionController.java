@@ -297,7 +297,7 @@ public class EventIngestionController {
                 original payload and the current rules; the event ends PROCESSED, FAILED, SUSPENDED or SKIPPED (the engine's terminal \
                 outcome for an event that posts nothing, e.g. no amount).
                 Use this tool for transient failures; do not use reprocessSuspendedEvent, which is the \
-                audited path for SUSPENDED events after a mapping or rule correction.
+                audited path for SUSPENDED or FAILED events after a mapping or rule correction.
                 Preconditions: the event must exist and be in status FAILED; any other status is \
                 rejected and the event is left unchanged. The previous failure detail stays on the \
                 event until the new outcome replaces it.
@@ -341,14 +341,15 @@ public class EventIngestionController {
     @PreAuthorize("hasAuthority('" + AccountingPermissions.EVENTS_REPROCESS + "')")
     @Operation(
             operationId = "reprocessSuspendedEvent",
-            summary = "Reprocess Suspended Event",
+            summary = "Reprocess Suspended or Failed Event",
             description = """
-                Reprocesses a SUSPENDED accounting event after a mapping or rule correction, recording an \
-                audited reprocessing attempt with the authenticated caller as the triggering user.
+                Reprocesses a SUSPENDED or FAILED accounting event after a mapping or rule correction, \
+                recording an audited reprocessing attempt with the authenticated caller as the triggering user.
                 Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, \
-                which is the unaudited retry for transient failures.
-                Preconditions: the event must exist and be SUSPENDED; an event already PROCESSED is \
-                rejected to preserve idempotency. A fact held for its currency (failureReasonCode \
+                which is the unaudited retry for transient failures (FAILED events only, no mapping-version pin).
+                Preconditions: the event must exist and be SUSPENDED or FAILED; an event already PROCESSED is \
+                rejected to preserve idempotency, and any other status (RECEIVED, PROCESSING, SKIPPED) is \
+                rejected as not reprocessable. A fact held for its currency (failureReasonCode \
                 CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still \
                 not the ledger's it stays SUSPENDED with that reason and nothing is posted.
                 Required inputs: eventId (UUID) as a path parameter; the body is optional and may carry mappingVersionToUse \
@@ -357,7 +358,7 @@ public class EventIngestionController {
                 Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 \
                 with status PROCESSED while 202 means processing continues.
                 Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already \
-                PROCESSED, and 400 when the request is invalid.
+                PROCESSED or is neither SUSPENDED nor FAILED, and 400 when the request is invalid.
                 """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Reprocessing accepted")
@@ -371,7 +372,7 @@ public class EventIngestionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Event already PROCESSED (idempotency violation)",
+            description = "Event already PROCESSED (idempotency violation), or neither SUSPENDED nor FAILED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_REPROCESS", apiVersion = "1")
     public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(

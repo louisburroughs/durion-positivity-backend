@@ -9,7 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO for reprocessing a suspended accounting event.
+ * DTO for reprocessing a suspended or failed accounting event.
  *
  * @see <a href=
  *      "domains/accounting/.business-rules/BACKEND_CONTRACT_GUIDE.md">Backend
@@ -20,8 +20,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Schema(
-        description = "Request to reprocess a suspended accounting event. The triggering user is the authenticated"
-                + " caller and is never taken from the body.")
+        description = "Request to reprocess a SUSPENDED or FAILED accounting event. The triggering user is the"
+                + " authenticated caller and is never taken from the body.")
 public class ReprocessEventRequest {
 
     /**
@@ -30,6 +30,7 @@ public class ReprocessEventRequest {
      */
     @Schema(
             description = "Specific mapping version (UUID) to use; defaults to latest when omitted",
+            format = "uuid",
             example = "0198a1b2-7c3d-7e4f-8a9b-0c1d2e3f4a5c",
             requiredMode = NOT_REQUIRED)
     private String mappingVersionToUse;
