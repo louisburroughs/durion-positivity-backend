@@ -186,7 +186,7 @@ Platform sources (repository-relative):
 - `pos-order/src/main/java/com/positivity/order/internal/service/PurchaseOrderTransmissionService.java`
 - `pos-order/src/main/java/com/positivity/order/internal/service/InventoryEventsListener.java`
 - `pos-order/src/main/java/com/positivity/order/internal/service/PurchaseOrderFactPublisher.java`
-- `pos-order/src/main/java/com/positivity/order/internal/service/PurchaseOrderCommandListener.java`
+- `pos-order/src/main/java/com/positivity/order/internal/service/OrderCommandListener.java`
 - `pos-order/src/main/java/com/positivity/order/internal/enums/PurchaseOrderStatus.java`
 - `pos-order/src/main/java/com/positivity/order/internal/enums/TransmissionState.java`
 - `pos-order/src/main/java/com/positivity/order/internal/security/PurchaseOrderPermissions.java`

@@ -45,7 +45,7 @@ import tools.jackson.databind.ObjectMapper;
  * eventId it reads. The commands this module queues on the same outbox for other owners ({@code
  * supplier.commands.v1}) are not facts and are not counted. Consumers recompute the summary from their
  * processed-events log and request an outbox replay over {@code order.commands.v1} on drift ({@code
- * PurchaseOrderCommandListener}). Every active tenant of the {@link TenantRegistry} gets a manifest each
+ * OrderCommandListener}). Every active tenant of the {@link TenantRegistry} gets a manifest each
  * window, zero-count when it published nothing (ADR-0062 §3).
  *
  * <p>Manifests are sent directly (no outbox): a lost manifest is self-healing — the next run re-publishes

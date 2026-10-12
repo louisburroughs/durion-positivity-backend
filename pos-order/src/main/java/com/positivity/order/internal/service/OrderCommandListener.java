@@ -79,7 +79,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @KafkaRails
-public class PurchaseOrderCommandListener {
+public class OrderCommandListener {
 
     /** Requesting domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "inventory";
@@ -103,7 +103,7 @@ public class PurchaseOrderCommandListener {
     /** The event's handler work and its processed mark, in a transaction of their own; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
-    public PurchaseOrderCommandListener(
+    public OrderCommandListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
@@ -267,7 +267,7 @@ public class PurchaseOrderCommandListener {
         request.setRequestedBy(command.requestedBy());
         request.setComment(command.comment());
         request.setLines(command.lines().stream()
-                .map(PurchaseOrderCommandListener::toLineRequest)
+                .map(OrderCommandListener::toLineRequest)
                 .toList());
 
         purchaseOrderService.createRequested(

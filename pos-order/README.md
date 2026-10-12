@@ -166,13 +166,16 @@ pos-order reconciles `order.events.v1` the way every other fact owner does:
   global outbox) and sends directly, not through the outbox; a failed window is retried next poll.
 - **Replay.** A consumer whose processed-events log disagrees with a window sends
   `{"commandType":"order.outbox.replay-requested","payload":{"since":…,"until":…}}` on `order.commands.v1`.
-  `PurchaseOrderCommandListener`, the topic's single consumer, dispatches it before the event-id guard and
+  `OrderCommandListener`, the topic's single consumer, dispatches it before the event-id guard and
   re-queues that tenant's published `order.events.v1` rows of `[since, until)` (everything since `since` without
   an `until`), widened by a second; the outbox publisher re-sends them with their original event ids, which
   consumers dedupe. A window starting more than `pos.order.outbox.replay.max-lookback` (`P30D`) ago, or without a
   parsable `since`, is dropped; a transient database failure is retried by the container.
-- **Consumer.** pos-accounting (`OrderManifestListener`) compares each manifest with the `order` rows its
-  `OrderEventsListener` records, which records every order fact it reads, not only the session facts it posts.
+- **Consumers.** Every `order.events.v1` consumer compares each manifest with the rows its events listener records
+  under its own owner, every order fact it reads included, each in a manifest consumer group of its own:
+  pos-accounting (`OrderManifestListener`, owner `order`), pos-inventory (`OrderManifestListener`, one check for
+  `OrderEventsListener`, owner `order`, and one for `PurchaseOrderProjectionListener`, owner
+  `order:purchase-order-projection`) and pos-workorder (`OrderManifestListener`, owner `order`) (#2596).
 
 ## Vendor copy and the purchase-order vendor guard (CAP:550 S24, #2517)
 

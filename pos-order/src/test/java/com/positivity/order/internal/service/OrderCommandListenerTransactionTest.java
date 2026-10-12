@@ -44,8 +44,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@DisplayName("PurchaseOrderCommandListener transaction shape")
-class PurchaseOrderCommandListenerTransactionTest {
+@DisplayName("OrderCommandListener transaction shape")
+class OrderCommandListenerTransactionTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -59,14 +59,14 @@ class PurchaseOrderCommandListenerTransactionTest {
     @Autowired
     private FailingPurchaseOrderService failingService;
 
-    private PurchaseOrderCommandListener listener;
+    private OrderCommandListener listener;
     private String eventId;
 
     @BeforeEach
     void setUp() {
         TenantContext.bind(TenantTestSupport.TENANT_A);
         eventId = UUID.randomUUID().toString();
-        listener = new PurchaseOrderCommandListener(
+        listener = new OrderCommandListener(
                 Clock.systemUTC(),
                 new ObjectMapper(),
                 processedEventRepository,

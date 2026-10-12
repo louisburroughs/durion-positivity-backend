@@ -159,6 +159,13 @@ pos:
       # Purchase-order projection (CAP-320) reads the same topic. It needs a group of its own: two
       # listeners in one group split the partitions, so each order event reached only one of them (#2176).
       purchase-order-projection-consumer-group: ${POS_INVENTORY_PURCHASE_ORDER_PROJECTION_CONSUMER_GROUP:pos-inventory-purchase-order-projection}
+      # Reconciliation of both order.events.v1 consumers (ADR-0044 §4, #2596): one manifest check per
+      # consumer, each in a group of its own so every manifest reaches both; drift asks pos-order to
+      # replay the window on order-commands-topic.
+      order-manifest-topic: ${POS_INVENTORY_ORDER_MANIFEST_TOPIC:order.manifest.v1}
+      order-manifest-consumer-group: ${POS_INVENTORY_ORDER_MANIFEST_CONSUMER_GROUP:pos-inventory-order-manifests}
+      purchase-order-projection-manifest-consumer-group: ${POS_INVENTORY_PURCHASE_ORDER_PROJECTION_MANIFEST_CONSUMER_GROUP:pos-inventory-purchase-order-projection-manifests}
+      order-commands-topic: ${POS_INVENTORY_ORDER_COMMANDS_TOPIC:order.commands.v1}
       # Supplier stock-report snapshots consumed as availability hints (CAP-322, #1312;
       # producer #1228). The PRICAT feed shares this topic and belongs to pos-catalog, so
       # this consumer group is its own and unrelated types are skipped, not applied.

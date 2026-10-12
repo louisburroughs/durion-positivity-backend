@@ -150,6 +150,10 @@ workorder:
     # order transitions the workorder to COMPLETED via its own state machine.
     order-events-topic: ${WORKORDER_ORDER_EVENTS_TOPIC:order.events.v1}
     order-events-consumer-group: ${WORKORDER_ORDER_EVENTS_CONSUMER_GROUP:pos-workorder-order-events}
+    # Its reconciliation (ADR-0044 §4, #2596): drift asks pos-order to replay the window.
+    order-manifest-topic: ${WORKORDER_ORDER_MANIFEST_TOPIC:order.manifest.v1}
+    order-manifest-consumer-group: ${WORKORDER_ORDER_MANIFEST_CONSUMER_GROUP:pos-workorder-order-manifests}
+    order-commands-topic: ${WORKORDER_ORDER_COMMANDS_TOPIC:order.commands.v1}
     command-send-timeout-ms: ${WORKORDER_COMMAND_SEND_TIMEOUT_MS:10000}
     commands-topic: ${WORKORDER_KAFKA_COMMANDS_TOPIC:workorder.commands.v1}
     consumer-group: ${WORKORDER_KAFKA_CONSUMER_GROUP:${spring.application.name}-commands}

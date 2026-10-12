@@ -27,8 +27,8 @@ import tools.jackson.databind.ObjectMapper;
  * drifted window of the requesting tenant's order facts, in the same command shape and with the same
  * window, look-back and failure rules as the other owners' command listeners.
  */
-@DisplayName("PurchaseOrderCommandListener — order.outbox.replay-requested")
-class PurchaseOrderCommandListenerReplayTest {
+@DisplayName("OrderCommandListener — order.outbox.replay-requested")
+class OrderCommandListenerReplayTest {
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-07T12:00:00Z"), ZoneOffset.UTC);
 
@@ -36,7 +36,7 @@ class PurchaseOrderCommandListenerReplayTest {
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final PurchaseOrderServiceImpl purchaseOrderService = mock(PurchaseOrderServiceImpl.class);
 
-    private final PurchaseOrderCommandListener listener = new PurchaseOrderCommandListener(
+    private final OrderCommandListener listener = new OrderCommandListener(
             CLOCK,
             new ObjectMapper(),
             processedEvents,

@@ -104,7 +104,7 @@
   Pin the shape with a Spring-backed test that uses a real transaction
   manager, runs the listener inside an enclosing transaction, and makes a `@Transactional` handler throw; a mock
   transaction manager cannot see the defect. Test template: `pos-inventory`'s
-  `InventoryCommandListenerTransactionTest`; listener exemplar: `pos-order`'s `PurchaseOrderCommandListener`.
+  `InventoryCommandListenerTransactionTest`; listener exemplar: `pos-order`'s `OrderCommandListener`.
 - Permission registries: assert **enforcement → catalog**, never a bidirectional match. A module's
   `{Module}PermissionRegistry` constants and its `src/main/resources/permissions.yaml` catalog are not
   the same set and are not meant to be — `pos-inventory` currently has 57 catalog entries against 54
