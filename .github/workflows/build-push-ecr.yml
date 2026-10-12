@@ -508,6 +508,10 @@ jobs:
           # CAP:550 S32c: pos-accounting's front-door secret for pos-tax's registration writes (ADR-0071 §6).
           # deploy-backend.sh persists it; unset, the copy already on the box stays.
           POS_TAX_ACCOUNTING_SECRET: ${{ secrets.POS_TAX_ACCOUNTING_SECRET }}
+          # #2584: the internal step-up check's own secret (pos-security-service and pos-order only).
+          # Optional: deploy-backend.sh persists it when set, keeps the box's copy when not, and
+          # generates one on the box when neither exists.
+          POS_SECURITY_STEP_UP_SECRET: ${{ secrets.POS_SECURITY_STEP_UP_SECRET }}
           # Only a manual dispatch can ask for the alpha schema reset (drop every backend
           # database, let Flyway rebuild from V1); the automatic promotion path never does.
           RESET_ALPHA_DATABASES: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_alpha_databases }}
@@ -532,6 +536,10 @@ jobs:
           POS_TAX_ACCOUNTING_SECRET="$(printf '%s' "${POS_TAX_ACCOUNTING_SECRET}" | tr -d '[:space:]')"
           if [[ -n "${POS_TAX_ACCOUNTING_SECRET}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT+="POS_TAX_ACCOUNTING_SECRET='${POS_TAX_ACCOUNTING_SECRET}' "
+          fi
+          POS_SECURITY_STEP_UP_SECRET="$(printf '%s' "${POS_SECURITY_STEP_UP_SECRET}" | tr -d '[:space:]')"
+          if [[ -n "${POS_SECURITY_STEP_UP_SECRET}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT+="POS_SECURITY_STEP_UP_SECRET='${POS_SECURITY_STEP_UP_SECRET}' "
           fi
           # Same rule for the reset: the variable reaches the host only when the reset was
           # asked for, so deploy-backend.sh's default (false) is what every other deploy sees.

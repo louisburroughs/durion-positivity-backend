@@ -179,6 +179,11 @@ pos:
     # A cashier waits on the step-up at the register: fail fast rather than hang the drawer.
     connect-timeout: ${POS_SECURITY_SERVICE_CONNECT_TIMEOUT:PT2S}
     read-timeout: ${POS_SECURITY_SERVICE_READ_TIMEOUT:PT5S}
+  security:
+    # The step-up's own secret (#2584), shared only with pos-security-service and never the mesh
+    # credential (POS_SECURITY_API_SECRET). Unset, every cash-movement approval answers 503
+    # CASH_MOVEMENT_APPROVAL_UNAVAILABLE. Env / secret store only, never a value here.
+    step-up-secret: ${POS_SECURITY_STEP_UP_SECRET:}
 
 eureka:
   client:

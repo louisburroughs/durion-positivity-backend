@@ -137,6 +137,10 @@ pos:
       # (security.location-scope.assigned-nodes.cap-exceeded); the set is never truncated.
       assigned-node-cap: ${POS_SECURITY_LOCATION_SCOPE_ASSIGNED_NODE_CAP:8}
   security:
+    # The internal step-up check's own secret (#2584), shared only with pos-order and never the mesh
+    # credential (POS_SECURITY_API_SECRET). Unset or equal to the mesh credential, every step-up call
+    # answers 401. Env / secret store only, never a value here.
+    step-up-secret: ${POS_SECURITY_STEP_UP_SECRET:}
     # Asynchronous audit exports (#2408): row and byte caps on one export (more FAILS the job with a
     # narrow-the-filters message); a scheduled per-tenant sweep every sweep-interval fails jobs still
     # PENDING/IN_PROGRESS stale-after past their request (in-flight work is lost on restart) and

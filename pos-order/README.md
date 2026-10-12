@@ -486,7 +486,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.order.outbox.replay.max-lookback` | `P30D` | Oldest window start an `order.outbox.replay-requested` command is served for |
 | `POS_ORDER_TAX_CHECK_CONNECT_TIMEOUT_MS` / `POS_ORDER_TAX_CHECK_READ_TIMEOUT_MS` | `1000` / `3000` | Timeouts of pos-tax's plausibility check and evidence-rules read (CAP:550 S32d) |
 | `POS_ORDER_TAX_CHECK_RETRY_AFTER_SECONDS` | `5` | `Retry-After` of 503 `TAX_CHECK_UNAVAILABLE`; startup fails, naming `pos.order.tax-check.retry-after-seconds`, when it is below connect + read rounded up to whole seconds (ADR-0017 §1) |
-| `POS_SECURITY_API_SECRET` | required for approvals | Sent as `X-Internal-Api-Secret` on the step-up call; unset, every approval is 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
+| `POS_SECURITY_STEP_UP_SECRET` | required for approvals | The step-up's own secret (#2584), shared with pos-security-service only, sent as `X-Step-Up-Secret` on the step-up call; unset (or rejected by pos-security-service), every approval is 503 `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` |
 
 ## Multitenancy (ADR-0062, WS3 wave 5)
 

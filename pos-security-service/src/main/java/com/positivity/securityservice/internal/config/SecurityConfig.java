@@ -1,5 +1,7 @@
 package com.positivity.securityservice.internal.config;
 
+import com.positivity.security.common.SecurityApiConstants;
+import com.positivity.securityservice.internal.controller.StepUpController;
 import com.positivity.securityservice.internal.security.GatewayHeaderAuthenticationFilter;
 import com.positivity.securityservice.internal.security.InternalServiceSecretFilter;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
@@ -9,6 +11,7 @@ import java.security.MessageDigest;
 import java.time.Clock;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -37,6 +40,7 @@ import tools.jackson.databind.ObjectMapper;
 @EnableMethodSecurity
 @EnableConfigurationProperties({LockoutPolicy.class, TenantSearchProperties.class, JwtLifetimeProperties.class})
 @RequiredArgsConstructor
+@Slf4j
 public class SecurityConfig {
     private static final String V1_AUTH_LOGIN = "/v1/auth/login";
     private static final String V1_AUTH_SELF_REGISTER = "/v1/auth/self-register";
@@ -66,11 +70,72 @@ public class SecurityConfig {
     }
 
     /**
-     * The service-to-service surface, {@code /internal/**} (CAP:550 S16, #2512): today the step-up
-     * credential check pos-order calls for a manager's cash-movement approval. Stateless and without
-     * CSRF — a mesh call carries no cookie and no CSRF token — and authenticated only by the mesh
-     * service credential ({@link InternalServiceSecretFilter}); gateway identity headers and bearer
+     * The step-up credential check, {@value StepUpController#PATH} (CAP:550 S16, #2512), which pos-order
+     * calls for a manager's cash-movement approval. It is a password check, so it is not reachable with
+     * the mesh service credential every registering service holds: it takes a secret of its own (#2584),
+     * {@value SecurityApiConstants#STEP_UP_SECRET_PROPERTY} ({@value
+     * SecurityApiConstants#STEP_UP_SECRET_ENV_VAR}), held only by pos-order and presented on {@value
+     * SecurityApiConstants#STEP_UP_SECRET_HEADER}, compared in constant time. Fail closed: unset, or set
+     * to the mesh credential (which would undo the separation), every call answers 401. Otherwise as the
+     * {@code /internal/**} chain below.
+     */
+    @Bean
+    @Order(-1)
+    public SecurityFilterChain stepUpFilterChain(
+            HttpSecurity http,
+            @Value("${" + SecurityApiConstants.STEP_UP_SECRET_PROPERTY + ":}") String stepUpSecret,
+            @Value("${" + SecurityApiConstants.PERMISSION_SECRET_PROPERTY + ":}") String meshSecret,
+            Clock clock,
+            ObjectMapper objectMapper) {
+        try {
+            // CSRF safe to disable: as the /internal/** chain below. (Sonar S4502)
+            http.securityMatcher(StepUpController.PATH)
+                    .csrf(csrf -> csrf.disable())
+                    .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                    .authorizeHttpRequests(
+                            auth -> auth.anyRequest().hasAuthority(InternalServiceSecretFilter.INTERNAL_SERVICE_ROLE))
+                    .addFilterBefore(
+                            new InternalServiceSecretFilter(
+                                    SecurityApiConstants.STEP_UP_SECRET_HEADER,
+                                    effectiveStepUpSecret(stepUpSecret, meshSecret),
+                                    clock,
+                                    objectMapper),
+                            UsernamePasswordAuthenticationFilter.class)
+                    .exceptionHandling(ex -> ex.authenticationEntryPoint(jsonAuthenticationEntryPoint)
+                            .accessDeniedHandler(jsonAccessDeniedHandler));
+            return http.build();
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to build step-up filter chain", e);
+        }
+    }
+
+    /**
+     * The step-up secret the chain checks: the configured one, or none (every call refused) when it is
+     * the mesh credential, since every registering service holds that one (#2584).
+     */
+    static String effectiveStepUpSecret(String stepUpSecret, String meshSecret) {
+        if (SecurityApiConstants.hasSecret(stepUpSecret)
+                && MessageDigest.isEqual(
+                        stepUpSecret.getBytes(StandardCharsets.UTF_8), meshSecret.getBytes(StandardCharsets.UTF_8))) {
+            log.error(
+                    "{} equals {}: the step-up refuses every call until it has a secret of its own",
+                    SecurityApiConstants.STEP_UP_SECRET_PROPERTY,
+                    SecurityApiConstants.PERMISSION_SECRET_PROPERTY);
+            return "";
+        }
+        if (!SecurityApiConstants.hasSecret(stepUpSecret)) {
+            log.warn("{} is not set: the step-up refuses every call", SecurityApiConstants.STEP_UP_SECRET_PROPERTY);
+        }
+        return stepUpSecret;
+    }
+
+    /**
+     * The rest of the service-to-service surface, {@code /internal/**} (CAP:550 S16, #2512). Stateless
+     * and without CSRF — a mesh call carries no cookie and no CSRF token — and authenticated only by the
+     * mesh service credential ({@link InternalServiceSecretFilter}); gateway identity headers and bearer
      * tokens are not accepted here. The gateway also refuses every {@code /internal} path at the edge.
+     * The step-up check is matched first by {@link #stepUpFilterChain}, so the mesh credential never
+     * reaches it.
      */
     @Bean
     @Order(0)

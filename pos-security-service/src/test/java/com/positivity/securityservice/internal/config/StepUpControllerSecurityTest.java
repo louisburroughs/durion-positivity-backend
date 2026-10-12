@@ -1,5 +1,6 @@
 package com.positivity.securityservice.internal.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -37,9 +38,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * CAP:550 S16 (#2512, review B1/M2): the step-up runs through the REAL {@link SecurityConfig}. Its
- * {@code /internal/**} chain has no CSRF — pos-order's POST carries no token — and accepts only the mesh
- * service credential, never gateway identity headers.
+ * CAP:550 S16 (#2512, review B1/M2): the step-up runs through the REAL {@link SecurityConfig}. Its chain
+ * has no CSRF — pos-order's POST carries no token — and accepts only the step-up's own secret (#2584),
+ * never the mesh service credential every registering service holds, nor gateway identity headers.
  */
 @DisplayName("POST /internal/v1/auth/step-up through the real security chain")
 @WebMvcTest(StepUpController.class)
@@ -50,11 +51,13 @@ import org.springframework.test.web.servlet.MockMvc;
     PermissionRegistrationSecretFilter.class,
     StepUpControllerSecurityTest.SliceConfig.class
 })
-@TestPropertySource(properties = "pos.security.api-secret=test-internal-secret")
+@TestPropertySource(
+        properties = {"pos.security.api-secret=test-mesh-secret", "pos.security.step-up-secret=test-step-up-secret"})
 class StepUpControllerSecurityTest {
 
     private static final String PATH = "/internal/v1/auth/step-up";
-    private static final String SECRET_HEADER = "X-Internal-Api-Secret";
+    private static final String SECRET_HEADER = "X-Step-Up-Secret";
+    private static final String MESH_SECRET_HEADER = "X-Internal-Api-Secret";
     private static final String BODY = """
             {"username":"manager","password":"s3cret","permission":"order:session:approve_cash_movement",
              "locationId":"01900000-0000-7000-8000-0000000000d1"}
@@ -84,14 +87,14 @@ class StepUpControllerSecurityTest {
     }
 
     @Test
-    @DisplayName("B1: a POST with the service credential and no CSRF token reaches the check — 200")
+    @DisplayName("B1: a POST with the step-up secret and no CSRF token reaches the check — 200")
     void serviceCredentialWithoutCsrfIsAccepted() throws Exception {
         when(stepUpService.verify(eq("manager"), eq("s3cret"), eq("order:session:approve_cash_movement"), any()))
                 .thenReturn(new StepUpResponse(MANAGER_ID, true, false, false, List.of()));
 
         mockMvc.perform(post(PATH)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .header(SECRET_HEADER, "test-internal-secret")
+                        .header(SECRET_HEADER, "test-step-up-secret")
                         .header("X-Tenant-Id", "01900000-0000-7000-8000-000000000001")
                         .content(BODY))
                 .andExpect(status().isOk())
@@ -106,7 +109,7 @@ class StepUpControllerSecurityTest {
 
         mockMvc.perform(post(PATH)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .header(SECRET_HEADER, "test-internal-secret")
+                        .header(SECRET_HEADER, "test-step-up-secret")
                         .content(BODY))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("STEP_UP_DENIED"));
@@ -131,6 +134,35 @@ class StepUpControllerSecurityTest {
                 .andExpect(status().isUnauthorized());
 
         verify(stepUpService, never()).verify(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#2584: the mesh credential never reaches the check, on either header")
+    void meshCredentialIsRefused() throws Exception {
+        mockMvc.perform(post(PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(MESH_SECRET_HEADER, "test-mesh-secret")
+                        .content(BODY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_INTERNAL_SECRET"));
+        mockMvc.perform(post(PATH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header(SECRET_HEADER, "test-mesh-secret")
+                        .content(BODY))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("INVALID_INTERNAL_SECRET"));
+
+        verify(stepUpService, never()).verify(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#2584: a step-up secret equal to the mesh credential, or none, refuses every call")
+    void stepUpSecretMustBeItsOwn() {
+        assertThat(SecurityConfig.effectiveStepUpSecret("same-secret", "same-secret"))
+                .isEmpty();
+        assertThat(SecurityConfig.effectiveStepUpSecret("", "mesh")).isEmpty();
+        assertThat(SecurityConfig.effectiveStepUpSecret("step-up", "")).isEqualTo("step-up");
+        assertThat(SecurityConfig.effectiveStepUpSecret("step-up", "mesh")).isEqualTo("step-up");
     }
 
     @TestConfiguration

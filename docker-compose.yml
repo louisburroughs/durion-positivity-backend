@@ -1321,6 +1321,9 @@ services:
       # ADR-0067 R-2 (CAP:550 S16): drawer money's functional currency, required (no default in the
       # service). Stage A interim until step A5 reads the tenant's functional currency.
       POS_ORDER_FUNCTIONAL_CURRENCY: USD
+      # #2584: the step-up check's own secret, shared with pos-security-service only (never the mesh
+      # POS_SECURITY_API_SECRET). Unset, every drawer cash-movement approval answers 503.
+      POS_SECURITY_STEP_UP_SECRET: ${POS_SECURITY_STEP_UP_SECRET:-}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
       OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
       SERVER_PORT: 8080
@@ -1476,6 +1479,9 @@ services:
       SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
       SECURITY_JWT_SECRET: ${SECURITY_JWT_SECRET}
       POS_SECURITY_API_SECRET: ${POS_SECURITY_API_SECRET}
+      # #2584: the internal step-up check's own secret, shared with pos-order only. Unset, or equal to
+      # POS_SECURITY_API_SECRET, every step-up call answers 401 (fail closed).
+      POS_SECURITY_STEP_UP_SECRET: ${POS_SECURITY_STEP_UP_SECRET:-}
       SECURITY_SEED_ADMIN_PASSWORD_HASH: ${SECURITY_SEED_ADMIN_PASSWORD_HASH}
       SECURITY_STARTER_PASSWORD_HASH: ${SECURITY_STARTER_PASSWORD_HASH:-}
       # #1883: revocation is a security control now that ADR-0061 location scope rides in the
