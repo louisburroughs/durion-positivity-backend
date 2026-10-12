@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePay
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.ApplicationSource;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.enums.SourceInvoiceState;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
 import com.positivity.accounting.internal.repository.PaymentApplicationRepository;
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
@@ -22,9 +23,10 @@ import java.util.EnumMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -72,6 +74,9 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>An application, or case f, writes no {@code accounting_event} row: the application record is the
  * evidence. A skipped fact re-published under a new event id writes no second row.
+ *
+ * <p>Cases b, c, d and g are {@link SourceInvoiceRule}, which the unapplied-payments list also serves as
+ * each payment's {@code sourceInvoiceState} (#2563), so the two cannot drift.
  */
 @Slf4j
 @Service
@@ -143,6 +148,15 @@ public class AutomaticPaymentApplicationService {
 
     /** The decision and, for a non-application, the detail its row records. */
     public record Result(@NonNull Outcome outcome, @NonNull String detail) {}
+
+    /**
+     * Every {@code failureReasonCode} an outcome row of this path records: what the unapplied-payments list
+     * serves as a payment's {@code autoApplicationReason} (#2563).
+     */
+    public static final Set<String> OUTCOME_REASONS = Stream.of(Outcome.values())
+            .map(Outcome::reason)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toUnmodifiableSet());
 
     private final PaymentApplicationService paymentApplicationService;
     private final ReceivablePaymentRepository receivablePaymentRepository;
@@ -297,27 +311,30 @@ public class AutomaticPaymentApplicationService {
             return new Result(Outcome.SKIPPED_METHOD, "method " + fact.methodType() + " is not applied automatically");
         }
 
-        // b. The invoice must be replicated; replica lag makes this retryable.
+        // b-d. The invoice's standing, by the rule the unapplied-payments list serves too (SourceInvoiceRule, #2563).
         UUID invoiceId = fact.invoiceId();
-        Optional<ExtInvoice> found =
-                invoiceId == null ? Optional.empty() : invoiceBalanceCalculator.findInvoice(invoiceId);
-        if (found.isEmpty()) {
+        ExtInvoice invoice = invoiceId == null
+                ? null
+                : invoiceBalanceCalculator.findInvoice(invoiceId).orElse(null);
+        SourceInvoiceState standing = SourceInvoiceRule.standing(invoice, payment.getCustomerId());
+
+        // b. The invoice must be replicated; replica lag makes this retryable.
+        if (standing == SourceInvoiceState.NOT_FOUND || invoice == null) {
             return new Result(
                     Outcome.SUSPENDED_INVOICE,
                     "invoice " + invoiceLabel(fact) + " is not in the invoice replica yet; retried once it arrives");
         }
-        ExtInvoice invoice = found.get();
         String invoiceNumber = invoiceNumber(invoice, fact);
 
         // c. The invoice must be in AR.
-        if (!invoiceBalanceCalculator.isArEligible(invoice)) {
+        if (standing == SourceInvoiceState.NOT_ELIGIBLE) {
             return new Result(
                     Outcome.FAILED_INELIGIBLE,
                     "invoice " + invoiceNumber + " cannot take a payment (status: " + invoice.getStatus() + ")");
         }
 
         // d. Strict party equality by UUID (BR-2, §9.5a).
-        if (!payment.getCustomerId().equals(partyUuid(invoice.getPartyId()))) {
+        if (standing == SourceInvoiceState.OTHER_CUSTOMER) {
             return new Result(Outcome.SKIPPED_PARTY, "customer differs from invoice " + invoiceNumber);
         }
 
@@ -348,9 +365,10 @@ public class AutomaticPaymentApplicationService {
             return new Result(Outcome.ALREADY_APPLIED, "payment has nothing unapplied");
         }
 
-        // g. A payment against a paid invoice is left for a person (the open point on #2503).
+        // g. A payment against a paid invoice is left for a person (the open point on #2503); the unapplied-payments
+        // list serves the same state as PAID (#2563).
         BigDecimal balanceDue = invoiceBalanceCalculator.balanceDue(invoice);
-        if (!InvoiceBalanceCalculator.isOpenReceivable(invoice, balanceDue, ledgerCurrency.code())) {
+        if (SourceInvoiceRule.byBalance(invoice, balanceDue, ledgerCurrency.code()) == SourceInvoiceState.PAID) {
             return new Result(
                     Outcome.SKIPPED_PAID, "invoice " + invoiceNumber + " has no open balance; left for a person");
         }
@@ -389,17 +407,6 @@ public class AutomaticPaymentApplicationService {
 
     private LocalDateTime transactionDate(PaymentSettledV1 fact) {
         return zoneResolver.heldRecordDateTime(fact.settledAt());
-    }
-
-    private static @Nullable UUID partyUuid(@Nullable String partyId) {
-        if (partyId == null || partyId.isBlank()) {
-            return null;
-        }
-        try {
-            return UUID.fromString(partyId.trim());
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 
     /** The invoice's number for a message: the replica's, else the fact's, else its id. */

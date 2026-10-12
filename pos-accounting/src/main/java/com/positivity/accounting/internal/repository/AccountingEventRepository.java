@@ -17,6 +17,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.repository.query.Param;
 
 /**
  * Repository for AccountingEvent entity.
@@ -44,6 +45,23 @@ public interface AccountingEventRepository
      */
     boolean existsByEventTypeAndDomainKeyIdAndFailureReasonCodeAndErrorMessage(
             String eventType, String domainKeyId, String failureReasonCode, String errorMessage);
+
+    /**
+     * The outcome of every record of {@code eventType} about any of {@code domainKeyIds}, without the
+     * payload (#2563): for a page of settled payments, what automatic application recorded about each.
+     * One query for the page, served by {@code idx_accounting_event_domain_key_id}.
+     *
+     * @param eventType    the consumed fact's type, e.g. {@code payment.payment.settled}
+     * @param domainKeyIds domain keys as the records store them (canonical UUID strings)
+     * @return one outcome per record, unordered
+     */
+    @Query("select new com.positivity.accounting.internal.repository.AccountingEventOutcome(e.eventId,"
+            + " e.domainKeyId, e.status, e.failureReasonCode, e.receivedAt) from AccountingEvent e"
+            + " where e.eventType = :eventType and e.domainKeyId in :domainKeyIds")
+    @NonNull
+    List<AccountingEventOutcome> findOutcomesByEventTypeAndDomainKeyIdIn(
+            @Param("eventType") @NonNull String eventType,
+            @Param("domainKeyIds") @NonNull Collection<String> domainKeyIds);
 
     /**
      * Ids of the oldest events in {@code status}, for the received-event drainer (#2435). Ids only:
