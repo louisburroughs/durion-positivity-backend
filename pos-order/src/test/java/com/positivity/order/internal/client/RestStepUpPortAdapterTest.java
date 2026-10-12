@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -51,7 +52,7 @@ class RestStepUpPortAdapterTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         adapter = new RestStepUpPortAdapter(
-                builder.baseUrl("http://security-service").build(), new ObjectMapper(), "mesh-secret");
+                builder.baseUrl("http://security-service").build(), new ObjectMapper(), "step-up-secret");
         TenantContext.bind(TENANT);
         var token = new UsernamePasswordAuthenticationToken("cashier", "n/a", List.of());
         token.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "cashier"));
@@ -69,7 +70,8 @@ class RestStepUpPortAdapterTest {
     void verifiedAnswer() {
         server.expect(requestTo(URL))
                 .andExpect(method(HttpMethod.POST))
-                .andExpect(header("X-Internal-Api-Secret", "mesh-secret"))
+                .andExpect(header("X-Step-Up-Secret", "step-up-secret"))
+                .andExpect(headerDoesNotExist("X-Internal-Api-Secret"))
                 .andExpect(header("X-Tenant-Id", TENANT.toString()))
                 .andExpect(header("X-User", "cashier"))
                 .andExpect(content().json("""
@@ -124,7 +126,7 @@ class RestStepUpPortAdapterTest {
     }
 
     @Test
-    @DisplayName("an unconfigured mesh credential never calls out and is unavailable")
+    @DisplayName("an unconfigured step-up secret never calls out and is unavailable")
     void missingSecretIsUnavailable() {
         RestStepUpPortAdapter unconfigured = new RestStepUpPortAdapter(
                 RestClient.builder().baseUrl("http://security-service").build(), new ObjectMapper(), "");

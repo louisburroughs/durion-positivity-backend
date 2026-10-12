@@ -248,6 +248,60 @@ require_tax_front_door_secret() {
   unset "${name}"
 }
 
+# The internal step-up check's own secret (#2584), read by pos-security-service and pos-order only, so the
+# mesh credential every registering service holds (POS_SECURITY_API_SECRET) cannot reach the password check.
+# A value supplied by the workflow is persisted (replacing an older one: the secret seals nothing, so a change
+# only needs both services restarted, which this deploy does). With none supplied the copy on the box stays.
+# With neither, one is generated on the box: both readers share this env file, so a fresh random value works
+# without a repository secret. To rotate, set the repository secret, or delete the line and redeploy. A value
+# equal to POS_SECURITY_API_SECRET is refused (pos-security-service would refuse every step-up). Never echoed.
+require_step_up_secret() {
+  local name=POS_SECURITY_STEP_UP_SECRET existing supplied mesh
+  existing="$(grep -E "^${name}=" "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+  existing="${existing%\'}"
+  existing="${existing#\'}"
+  existing="$(trim_space "${existing}")"
+  supplied="$(trim_space "${!name:-}")"
+  mesh="$(grep -E "^POS_SECURITY_API_SECRET=" "${ENV_FILE}" | head -n1 | cut -d= -f2- || true)"
+  mesh="${mesh%\'}"
+  mesh="${mesh#\'}"
+  mesh="$(trim_space "${mesh}")"
+
+  local value=""
+  if [[ -n "${supplied}" ]]; then
+    if ! [[ "${supplied}" =~ ^[A-Za-z0-9+/=._-]{32,256}$ ]]; then
+      echo "ERROR: ${name} must be 32 to 256 characters of [A-Za-z0-9+/=._-] (openssl rand -hex 32)." >&2
+      exit 1
+    fi
+    value="${supplied}"
+  elif [[ -z "${existing}" ]]; then
+    value="$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')"
+    if ! [[ "${value}" =~ ^[0-9a-f]{64}$ ]]; then
+      echo "ERROR: could not generate ${name} from /dev/urandom." >&2
+      exit 1
+    fi
+    echo "${name} was not set: generated one on this box (not printed)."
+  fi
+
+  local effective="${value:-${existing}}"
+  if [[ -n "${mesh}" && "${effective}" == "${mesh}" ]]; then
+    echo "ERROR: ${name} must differ from POS_SECURITY_API_SECRET (the step-up needs a secret of its own)." >&2
+    exit 1
+  fi
+
+  if [[ -n "${value}" ]]; then
+    local quoted
+    quoted="$(env_single_quote "${value}")"
+    if grep -q "^${name}=" "${ENV_FILE}"; then
+      sed -i "s|^${name}=.*|${name}=${quoted}|" "${ENV_FILE}"
+    else
+      printf '%s=%s\n' "${name}" "${quoted}" >> "${ENV_FILE}"
+    fi
+  fi
+  # As for the pos-supplier keys (#1577): an exported, possibly empty copy would shadow the env file.
+  unset "${name}"
+}
+
 # The key a deploy would leave in force: the supplied value when there is one, otherwise the one
 # persisted in the env file; quotes and whitespace removed.
 effective_supplier_key() {
@@ -1014,6 +1068,7 @@ if [[ "${MODE}" == "config-only" ]]; then
   require_env_entry SECURITY_SEED_ADMIN_PASSWORD_HASH
   require_supplier_audit_key
   require_tax_front_door_secret
+  require_step_up_secret
   ecr_login "$(env_value ECR_REGISTRY)"
 else
   if grep -q '^BACKEND_TAG=' "${ENV_FILE}"; then
@@ -1047,6 +1102,7 @@ else
 
   require_supplier_audit_key
   require_tax_front_door_secret
+  require_step_up_secret
 
   # Either half of the accelerated switch, and only on a full deploy: an ordinary one is the
   # teardown, so the marker cannot survive a redeploy that did not ask for it.

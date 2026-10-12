@@ -29,8 +29,10 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>pos-security-service is an ADR-0044 utility module, so this synchronous call needs no domain-wall
  * exception. The path is under {@code /internal/}, which the gateway refuses at the edge; the call goes
- * through the load balancer inside the mesh and authenticates with the mesh service credential ({@code
- * pos.security.api-secret}, sent as {@value SecurityApiConstants#INTERNAL_SECRET_HEADER}). It carries the
+ * through the load balancer inside the mesh and authenticates with the step-up's own secret (#2584,
+ * {@value SecurityApiConstants#STEP_UP_SECRET_PROPERTY} from {@value
+ * SecurityApiConstants#STEP_UP_SECRET_ENV_VAR}, sent as {@value SecurityApiConstants#STEP_UP_SECRET_HEADER}),
+ * which only pos-order and pos-security-service hold, never the mesh credential. It carries the
  * caller's tenant ({@code X-Tenant-Id}) — the credentials are checked in that tenant only, never in one
  * named by a request body (ADR-0062) — and relays the cashier's name for the audit log.
  *
@@ -54,7 +56,7 @@ public class RestStepUpPortAdapter implements StepUpPort {
     public RestStepUpPortAdapter(
             @Qualifier("securityServiceRestClient") RestClient securityServiceRestClient,
             ObjectMapper objectMapper,
-            @Value("${" + SecurityApiConstants.PERMISSION_SECRET_PROPERTY + ":}") String serviceSecret) {
+            @Value("${" + SecurityApiConstants.STEP_UP_SECRET_PROPERTY + ":}") String serviceSecret) {
         this.securityServiceRestClient = securityServiceRestClient;
         this.objectMapper = objectMapper;
         this.serviceSecret = serviceSecret;
@@ -64,8 +66,7 @@ public class RestStepUpPortAdapter implements StepUpPort {
     public @NonNull StepUpResult verify(
             @NonNull String username, @NonNull String password, @NonNull String permission, @Nullable UUID locationId) {
         if (!SecurityApiConstants.hasSecret(serviceSecret)) {
-            log.error(
-                    "Step-up cannot be called: {} is not configured", SecurityApiConstants.PERMISSION_SECRET_PROPERTY);
+            log.error("Step-up cannot be called: {} is not configured", SecurityApiConstants.STEP_UP_SECRET_PROPERTY);
             throw new StepUpUnavailableException("The manager's credentials cannot be checked: not configured", null);
         }
         UUID tenantId = TenantContext.require();
@@ -80,7 +81,7 @@ public class RestStepUpPortAdapter implements StepUpPort {
             response = securityServiceRestClient
                     .post()
                     .uri(PATH)
-                    .header(SecurityApiConstants.INTERNAL_SECRET_HEADER, serviceSecret)
+                    .header(SecurityApiConstants.STEP_UP_SECRET_HEADER, serviceSecret)
                     .header(GatewaySecurityConstants.HEADER_USER, caller)
                     .header(GatewaySecurityConstants.HEADER_AUTHORITIES, OrderPermissions.ORDER_SESSION_CASH_MOVEMENT)
                     .header(GatewaySecurityConstants.HEADER_TENANT_ID, tenantId.toString())

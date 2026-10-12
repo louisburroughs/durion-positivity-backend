@@ -392,7 +392,9 @@ accounting workspace's Approval limits page. Through the gateway it is
   credentials once in the caller's tenant (`X-Tenant-Id`, never a body field) under the sign-in lockout policy and answers
   `{userId, holdsPermission}` for the permission asked about; no token is issued and no session opened; every failed
   check answers one 403 `STEP_UP_DENIED`, never 401. Called by pos-order for a manager's cash-movement approval at
-  the register (CAP:550 S16, #2512; AW31)
+  the register (CAP:550 S16, #2512; AW31). Authenticated by its own secret, `pos.security.step-up-secret`
+  (`POS_SECURITY_STEP_UP_SECRET`) on `X-Step-Up-Secret`, held only by pos-order (#2584); the mesh credential
+  (`POS_SECURITY_API_SECRET`) does not reach it. Unset, or equal to the mesh credential, every call answers 401
 
 ## Error Responses
 

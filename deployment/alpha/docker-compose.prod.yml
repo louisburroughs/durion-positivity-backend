@@ -200,6 +200,9 @@ services:
     image: ${ECR_REGISTRY}/durion/pos-security-service:${BACKEND_TAG}
     restart: unless-stopped
     logging: *logging
+    # POS_SECURITY_STEP_UP_SECRET (#2584, shared with pos-order only) comes from the repository secret of
+    # that name, or is generated on the box on first deploy: deploy-backend.sh persists it into the on-box
+    # .env (docs/OPERATIONS_RUNBOOK.md).
 
   pos-shop-manager:
     image: ${ECR_REGISTRY}/durion/pos-shop-manager:${BACKEND_TAG}

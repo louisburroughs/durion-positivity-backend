@@ -225,6 +225,10 @@ jobs:
           # CAP:550 S32c: pos-accounting's front-door secret for pos-tax's registration writes (ADR-0071 §6).
           # deploy-backend.sh persists it; unset, the copy already on the box stays.
           POS_TAX_ACCOUNTING_SECRET: ${{ secrets.POS_TAX_ACCOUNTING_SECRET }}
+          # #2584: the internal step-up check's own secret (pos-security-service and pos-order only).
+          # Optional: deploy-backend.sh persists it when set, keeps the box's copy when not, and
+          # generates one on the box when neither exists.
+          POS_SECURITY_STEP_UP_SECRET: ${{ secrets.POS_SECURITY_STEP_UP_SECRET }}
         run: |
           # See build-push-ecr.yml for why these two are handled this way: a newline in the
           # base64 breaks the --parameters JSON, and an empty export on the host shadows the
@@ -241,6 +245,10 @@ jobs:
           POS_TAX_ACCOUNTING_SECRET="$(printf '%s' "${POS_TAX_ACCOUNTING_SECRET}" | tr -d '[:space:]')"
           if [[ -n "${POS_TAX_ACCOUNTING_SECRET}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT+="POS_TAX_ACCOUNTING_SECRET='${POS_TAX_ACCOUNTING_SECRET}' "
+          fi
+          POS_SECURITY_STEP_UP_SECRET="$(printf '%s' "${POS_SECURITY_STEP_UP_SECRET}" | tr -d '[:space:]')"
+          if [[ -n "${POS_SECURITY_STEP_UP_SECRET}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT+="POS_SECURITY_STEP_UP_SECRET='${POS_SECURITY_STEP_UP_SECRET}' "
           fi
           # deploy-backend.sh re-checks the anchors before it touches the host: their shape, a
           # gap of at least one day, and the scale. It also writes them into the

@@ -21,17 +21,20 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Authenticates a caller of pos-security-service's {@code /internal/**} surface by the mesh service
- * credential (CAP:550 S16, #2512): the shared secret every service holds as {@code
- * pos.security.api-secret} ({@code POS_SECURITY_API_SECRET}), presented on {@value
- * SecurityApiConstants#INTERNAL_SECRET_HEADER} and compared in constant time. Gateway identity
- * headers are not accepted here, so a forwarded user cannot reach the surface, and the gateway refuses
- * {@code /internal} paths at the edge in any case.
+ * Authenticates a caller of pos-security-service's {@code /internal/**} surface by a service secret
+ * presented on a header and compared in constant time (CAP:550 S16, #2512). Two chains use it: the
+ * step-up check, with its own secret ({@code pos.security.step-up-secret}, {@code
+ * POS_SECURITY_STEP_UP_SECRET}) on {@value SecurityApiConstants#STEP_UP_SECRET_HEADER}, held only by
+ * pos-order (#2584); and every other internal path, with the mesh service credential every service holds
+ * as {@code pos.security.api-secret} ({@code POS_SECURITY_API_SECRET}) on {@value
+ * SecurityApiConstants#INTERNAL_SECRET_HEADER}. Gateway identity headers are not accepted here, so a
+ * forwarded user cannot reach the surface, and the gateway refuses {@code /internal} paths at the edge in
+ * any case.
  *
- * <p>A missing secret configuration or a wrong or absent header answers 401 before the controller; a
- * match authenticates the request as the internal service, {@code ROLE_INTERNAL_SERVICE}, named after
- * the {@code X-User} the caller relays for the audit log. Instantiated by {@code SecurityConfig} for
- * its internal chain only, never registered as a servlet filter of its own.
+ * <p>A missing secret configuration or a wrong or absent header answers 401 before the controller (fail
+ * closed); a match authenticates the request as the internal service, {@code ROLE_INTERNAL_SERVICE},
+ * named after the {@code X-User} the caller relays for the audit log. Instantiated by {@code
+ * SecurityConfig} for its internal chains only, never registered as a servlet filter of its own.
  */
 public class InternalServiceSecretFilter extends OncePerRequestFilter {
 
@@ -40,11 +43,20 @@ public class InternalServiceSecretFilter extends OncePerRequestFilter {
 
     private static final String RELAYED_USER_HEADER = "X-User";
 
+    private final String secretHeader;
     private final String expectedSecret;
     private final Clock clock;
     private final ObjectMapper objectMapper;
 
+    /** The mesh service credential on {@value SecurityApiConstants#INTERNAL_SECRET_HEADER}. */
     public InternalServiceSecretFilter(String expectedSecret, Clock clock, ObjectMapper objectMapper) {
+        this(SecurityApiConstants.INTERNAL_SECRET_HEADER, expectedSecret, clock, objectMapper);
+    }
+
+    /** A secret of its own, presented on {@code secretHeader}. */
+    public InternalServiceSecretFilter(
+            String secretHeader, String expectedSecret, Clock clock, ObjectMapper objectMapper) {
+        this.secretHeader = secretHeader;
         this.expectedSecret = expectedSecret;
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -58,7 +70,7 @@ public class InternalServiceSecretFilter extends OncePerRequestFilter {
                     response, request, "INTERNAL_SECRET_MISSING", "Internal service credential is not configured");
             return;
         }
-        String provided = request.getHeader(SecurityApiConstants.INTERNAL_SECRET_HEADER);
+        String provided = request.getHeader(secretHeader);
         boolean authorized = provided != null
                 && MessageDigest.isEqual(
                         expectedSecret.getBytes(StandardCharsets.UTF_8), provided.getBytes(StandardCharsets.UTF_8));

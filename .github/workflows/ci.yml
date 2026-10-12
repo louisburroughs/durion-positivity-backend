@@ -267,6 +267,12 @@ jobs:
         # missing, never printed, and its shell copy never shadows the env file.
         run: bash scripts/tests/deploy-backend-tax-secret-selftest.sh
 
+      - name: Verify the deploy's step-up secret handling
+        # #2584: POS_SECURITY_STEP_UP_SECRET is persisted when supplied, kept when not, generated on the box
+        # when missing, refused when equal to POS_SECURITY_API_SECRET, never printed, and its shell copy
+        # never shadows the env file.
+        run: bash scripts/tests/deploy-backend-step-up-secret-selftest.sh
+
       - name: Verify the CloudWatch agent installer
         # The installer is the only thing standing between alpha and a repeat of #1862, and its
         # contract is that every condition leaving the box unwatched fails the run. Those paths
