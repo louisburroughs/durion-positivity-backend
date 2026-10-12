@@ -124,7 +124,19 @@ public enum PostingFailureReason {
      * which re-reads the invoice's tax rows and the tenant's keys; the scheduled auto-retry loop skips it, since its
      * remedy is a typed fact or a mapping, never the passage of time.
      */
-    TAX_TYPE_MISSING;
+    TAX_TYPE_MISSING,
+
+    /**
+     * A consumed fact posted through its own posting category needs a GL mapping the tenant has not configured
+     * (CAP:550 S17 PROPOSED 6, #2594): a closed register session whose over/short or drawer movement resolves no
+     * {@code REGISTER_OVER_SHORT} / {@code REGISTER_CASH_MOVEMENT} mapping on its close date. Nothing posts (the session
+     * posts all or nothing). Held {@code SUSPENDED} with the missing category and key in the detail, and released by
+     * the audited reprocess, which re-runs the session's own posting ({@code RegisterSessionCloseReprocessor}), never
+     * the posting engine. The scheduled auto-retry loop skips it, as it skips {@link #TAX_TYPE_MISSING}: its remedy is
+     * a mapping, never the passage of time. Distinct from {@link #UNMAPPED_EVENT_TYPE}, the posting engine's reason
+     * for an event type no rule maps; the name is the 422 code of the same gap on a request.
+     */
+    GL_MAPPING_NOT_CONFIGURED;
 
     /**
      * Whether an event failing for this reason ends in the terminal {@code SKIPPED} status: the
@@ -149,6 +161,7 @@ public enum PostingFailureReason {
         return this == PERIOD_CLOSED
                 || this == CURRENCY_NOT_SUPPORTED
                 || this == TAX_TYPE_MISSING
+                || this == GL_MAPPING_NOT_CONFIGURED
                 // The payload never changes, so a retry fails the same way.
                 || this == VALIDATION_ERROR
                 || this == MISSING_AMOUNT;

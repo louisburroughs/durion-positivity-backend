@@ -351,7 +351,10 @@ public class EventIngestionController {
                 rejected to preserve idempotency, and any other status (RECEIVED, PROCESSING, SKIPPED) is \
                 rejected as not reprocessable. A fact held for its currency (failureReasonCode \
                 CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still \
-                not the ledger's it stays SUSPENDED with that reason and nothing is posted.
+                not the ledger's it stays SUSPENDED with that reason and nothing is posted. A closed register \
+                session (order.session.closed) held GL_MAPPING_NOT_CONFIGURED, failed VALIDATION_ERROR or held for \
+                its currency re-runs its own posting (drawer movements, over/short) from the stored fact, never \
+                the posting engine: it posts once, or ends PROCESSED / DUPLICATE_IGNORED when it already posted.
                 Required inputs: eventId (UUID) as a path parameter; the body is optional and may carry mappingVersionToUse \
                 (a UUID) and reprocessingNotes. The triggering user is the authenticated caller; any user field \
                 in the body is ignored.

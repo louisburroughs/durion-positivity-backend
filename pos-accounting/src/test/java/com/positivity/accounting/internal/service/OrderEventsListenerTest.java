@@ -250,8 +250,8 @@ class OrderEventsListenerTest {
     }
 
     @Test
-    @DisplayName("#2513: a movement posting failure (closed period, missing mapping) propagates before the over/short;"
-            + " nothing is marked")
+    @DisplayName("#2513: a movement posting failure (closed period) propagates before the over/short; nothing is"
+            + " marked")
     void movementPostingFailurePropagates() {
         when(processedEvents.existsById("e-m5")).thenReturn(false);
         doThrow(new IllegalStateException("simulated PERIOD_CLOSED"))
@@ -264,6 +264,104 @@ class OrderEventsListenerTest {
         verify(postingService, never()).postOverShort(any(), any());
         verify(processedEvents, never()).save(any());
         verifyNoInteractions(ingestionRecorder);
+    }
+
+    // ---- recorded refusals (#2594, S17 PROPOSED 6) ---------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2594: a missing mapping is recorded SUSPENDED / GL_MAPPING_NOT_CONFIGURED, naming the category and"
+            + " key, and marked processed, instead of going to retry and the DLQ; nothing else is recorded")
+    void missingMappingIsHeldNotRetried() {
+        when(processedEvents.existsById("e-gl")).thenReturn(false);
+        doThrow(new com.positivity.accounting.internal.exception.GLMappingNotConfiguredException(
+                        "Mapping key not configured: REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_SHOP_SUPPLIES"))
+                .when(movementPostingService)
+                .postMovements(any(), any());
+
+        listener.onOrderEvent(sessionClosedWithMovements("e-gl"));
+
+        ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(ingestionRecorder, processedEvents);
+        order.verify(ingestionRecorder)
+                .recordSuspended(
+                        org.mockito.ArgumentMatchers.eq("pos-order"),
+                        org.mockito.ArgumentMatchers.eq(RegisterSessionClosedV1.EVENT_TYPE),
+                        org.mockito.ArgumentMatchers.eq("e-gl"),
+                        org.mockito.ArgumentMatchers.eq(SESSION_ID),
+                        org.mockito.ArgumentMatchers.eq(java.time.LocalDateTime.of(2026, 7, 23, 18, 30)),
+                        any(RegisterSessionClosedV1.class),
+                        org.mockito.ArgumentMatchers.eq(
+                                com.positivity.accounting.internal.enums.AccountingEventStatus.SUSPENDED),
+                        org.mockito.ArgumentMatchers.eq("GL_MAPPING_NOT_CONFIGURED"),
+                        detail.capture());
+        order.verify(processedEvents).save(any());
+        assertThat(detail.getValue())
+                .contains("REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_SHOP_SUPPLIES")
+                .contains("configure the mapping, then reprocess");
+        verify(postingService, never()).postOverShort(any(), any());
+        verify(ingestionRecorder, never()).record(any(), any(), any(), any(), any(), any(), any());
+        verify(undepositedSessions, never()).record(any(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    @DisplayName("#2594: a close fact that breaks the contract is recorded FAILED / VALIDATION_ERROR with the"
+            + " violation, and marked processed, instead of going to retry and the DLQ")
+    void contractViolationIsRecordedFailed() {
+        when(processedEvents.existsById("e-contract")).thenReturn(false);
+        doThrow(new com.positivity.accounting.internal.exception.RegisterSessionContractViolationException(
+                        "Bank drop null of session " + SESSION_ID + " cannot be deposited: no movementId"))
+                .when(undepositedSessions)
+                .record(any(), org.mockito.ArgumentMatchers.anyInt());
+
+        listener.onOrderEvent(sessionClosedWithMovements("e-contract"));
+
+        verify(ingestionRecorder)
+                .recordSuspended(
+                        any(),
+                        any(),
+                        org.mockito.ArgumentMatchers.eq("e-contract"),
+                        org.mockito.ArgumentMatchers.eq(SESSION_ID),
+                        any(),
+                        any(RegisterSessionClosedV1.class),
+                        org.mockito.ArgumentMatchers.eq(
+                                com.positivity.accounting.internal.enums.AccountingEventStatus.FAILED),
+                        org.mockito.ArgumentMatchers.eq("VALIDATION_ERROR"),
+                        org.mockito.ArgumentMatchers.contains("cannot be deposited: no movementId"));
+        verify(ingestionRecorder, never()).record(any(), any(), any(), any(), any(), any(), any());
+        verify(processedEvents).save(any());
+    }
+
+    @Test
+    @DisplayName("#2594: an IllegalArgumentException that is not the close fact's contract still propagates, unmarked")
+    void otherIllegalArgumentPropagates() {
+        when(processedEvents.existsById("e-iae")).thenReturn(false);
+        doThrow(new IllegalArgumentException("a JPA argument problem"))
+                .when(postingService)
+                .postOverShort(any(), any());
+
+        assertThatExceptionOfType(IllegalArgumentException.class)
+                .isThrownBy(() -> listener.onOrderEvent(sessionClosed("e-iae")));
+
+        verify(processedEvents, never()).save(any());
+        verify(ingestionRecorder, never())
+                .recordSuspended(any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#2594: a lost connection while recording the hold propagates for retry / DLQ; nothing is marked")
+    void holdWriteFailurePropagatesUnmarked() {
+        when(processedEvents.existsById("e-gl-db")).thenReturn(false);
+        doThrow(new com.positivity.accounting.internal.exception.GLMappingNotConfiguredException("no mapping"))
+                .when(postingService)
+                .postOverShort(any(), any());
+        doThrow(new DataAccessResourceFailureException("connection reset"))
+                .when(ingestionRecorder)
+                .recordSuspended(any(), any(), any(), any(), any(), any(), any(), any(), any());
+
+        assertThatExceptionOfType(DataAccessResourceFailureException.class)
+                .isThrownBy(() -> listener.onOrderEvent(sessionClosed("e-gl-db")));
+
+        verify(processedEvents, never()).save(any());
     }
 
     @Test

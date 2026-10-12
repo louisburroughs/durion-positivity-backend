@@ -921,10 +921,31 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   "posts nothing twice" holds within the posting-key window, pending non-expiring posting keys (#2595). The checks run
   in the over/short's order — idempotency, then currency, then the fact's contract — so a redelivered session already
   posted never writes a hold, and a foreign session with a malformed movement is held rather than sent to the DLQ.
-- **Failures** — a closed period or a missing mapping rolls the whole session back (over/short included) and
-  propagates for retry and the DLQ, like the over/short; so does a petty expense that breaks the fact's contract
-  (no `movementId`, not `OUT`, no category, no positive amount). A missing mapping writes no ingestion row; a
-  reprocess route for `order.session.closed` (which would allow one) is a follow-up (#2594).
+- **Failures** — a closed period, a missing mapping or a broken contract rolls the whole session back (over/short,
+  movements and undeposited session together). A closed period (or an unset accounting time zone) propagates for
+  retry and the DLQ, like the over/short. The other two are permanent for the delivery, so they are recorded instead
+  (#2594, S17 PROPOSED 6), with the processed mark, in a transaction of their own:
+  - a **missing mapping** (`REGISTER_CASH_MOVEMENT` or `REGISTER_OVER_SHORT`, by key or with no row effective on the
+    close date) writes `SUSPENDED / GL_MAPPING_NOT_CONFIGURED`, the message naming `CATEGORY/KEY`;
+  - a **broken contract** (a petty expense or bank drop with no `movementId`, a `movementId` named twice, not `OUT`,
+    no category, no positive amount; a schema-2 fact without its `movements` list) writes `FAILED /
+    VALIDATION_ERROR` with the violation.
+
+  A re-emit held for the same reason writes no second row. Both reasons are left out of the scheduled auto-retry
+  (`PostingFailureReason#isExcludedFromAutoRetry`); fix the mapping, then
+  `POST /v1/accounting/events/{eventId}/reprocess`. **Reprocess route:** every `order.session.closed` row, whatever
+  its reason (currency holds included), is reprocessed by `RegisterSessionCloseReprocessor`, never the posting engine
+  — so the scheduled retry never runs a session through the engine either. It re-runs the session's own posting
+  (movements, over/short, undeposited session) from the stored `payload` in a transaction of its own: posted is
+  `PROCESSED / NEW` linked to the over/short's entry (else the first movement's); a session whose posting keys are
+  registered, or whose over/short entry is already in the ledger (its key expires after 24 hours, #2595), posts
+  nothing and closes `PROCESSED / DUPLICATE_IGNORED`; a refusal is held again (`PERIOD_CLOSED`,
+  `ACCOUNTING_TIME_ZONE_UNSET`, `GL_MAPPING_NOT_CONFIGURED`, `CURRENCY_NOT_SUPPORTED`) or stays `FAILED /
+  VALIDATION_ERROR`. The undeposited session is written exactly when the session posts and never twice. The stored
+  payload is the fact, not its envelope, so the reprocess reads the schema from it: a `movements` list is schema 2,
+  none is schema 1 — except on a row failed as a contract violation, which stays failed (a schema-1 fact breaks no
+  contract check, so it was a schema-2 fact without its list). Every attempt writes its history row; two reprocesses
+  of one session at once answer the loser with the engine's "Concurrent reprocessing detected" 409.
 - **Currency** — a session whose fact or any movement to post is not in the ledger currency posts nothing, over/short
   included, and is held once (Ledger currency below).
 - **Vendor cash on delivery** — its posting (Dr `ACCOUNTS_PAYABLE` / Cr `CASH_CLEARING` plus an AP payment of method
@@ -1016,7 +1037,8 @@ on an inbound fact means the ledger currency until producers stamp one (E-3).
   `PERIOD_CLOSED`; release goes through the audited `POST /v1/accounting/events/{eventId}/reprocess`. While
   the fact's `currencyCode`, or any of a session fact's `movements[].currencyCode` (#2513), is still not the
   ledger currency, a reprocess records a `FAILURE` attempt, re-suspends it with `CURRENCY_NOT_SUPPORTED` and posts
-  nothing.
+  nothing. A session fact is reprocessed through its own posting (#2594, Drawer movement posting above): once its
+  currency is the ledger's, the reprocess posts its movements and over/short once, with its undeposited session.
 - **Vendor bills from supplier invoices** (`supplier.invoice.received`, #2309) — the bill records the
   invoice's `currency` (`vendor_bill.currency`, on `VendorBillResponse`). A bill in another currency gets status
   `CURRENCY_HOLD` with the reason in `rejectionReason`: it is not matched, cannot be approved through
@@ -1990,8 +2012,10 @@ ignored without recording its eventId.
   the retry scheduler and `retryAccountingEvent` select; a failed fact is replayed from the DLQ instead. The
   exceptions are a fact held for its currency (see Ledger currency above): `SUSPENDED / CURRENCY_NOT_SUPPORTED`,
   skipped by the retry scheduler and released only through the audited reprocess; a malformed goods receipt,
-  `SUSPENDED / VALIDATION_ERROR`, also skipped by the retry scheduler (its payload never changes); and a settled
-  payment's automatic-application holds (#2503). A manual reprocess (`POST /v1/accounting/events/{id}/reprocess`)
+  `SUSPENDED / VALIDATION_ERROR`, also skipped by the retry scheduler (its payload never changes); a settled
+  payment's automatic-application holds (#2503); and a closed register session refused for a missing mapping
+  (`SUSPENDED / GL_MAPPING_NOT_CONFIGURED`) or a broken contract (`FAILED / VALIDATION_ERROR`), both skipped by the
+  retry scheduler and reprocessed through the session's own posting (#2594, Drawer movement posting above). A manual reprocess (`POST /v1/accounting/events/{id}/reprocess`)
   of a held goods receipt never reaches the posting engine: `GoodsReceiptReprocessor` re-runs the receipt's own
   assessment on the stored payload, currency first (a missing currency stays held as `CURRENCY_NOT_SUPPORTED`).
   A fact still invalid keeps its hold and reason. One that now passes posts under

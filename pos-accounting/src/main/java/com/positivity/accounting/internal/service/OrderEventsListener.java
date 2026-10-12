@@ -2,10 +2,15 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.RegisterSessionContractViolationException;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.domainevents.order.RegisterSessionOpenedV1;
 import com.positivity.kafka.common.KafkaRails;
+import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
@@ -28,10 +33,21 @@ import tools.jackson.databind.ObjectMapper;
  * (odoo-parity G3, issue #1083) and drawer movement GL postings (CAP:550 S17, #2513).
  *
  * <p>Same reliability contract as {@link InventoryEventsListener}: idempotent via {@code
- * processed_events}, transient DB errors and posting failures (closed period, missing mapping,
+ * processed_events}, transient DB errors and posting failures (closed period, unset accounting time zone,
  * anything unexpected) propagate unwrapped and unmarked for container retry / DLQ (ADR-0044 §4),
  * malformed payloads logged and marked processed so a poison record never blocks the partition.
  * Only {@code order.session.closed} and {@code order.session.opened} events are handled.
+ *
+ * <p><b>Recorded refusals (#2594, S17 PROPOSED 6).</b> Two failures of a close fact are permanent for its delivery, so
+ * they are recorded instead of retried and dead-lettered (ADR-0044, permanent-failure rule of 2026-10-02): a missing GL
+ * mapping ({@link GLMappingNotConfiguredException}) writes {@code SUSPENDED / GL_MAPPING_NOT_CONFIGURED}, naming the
+ * category and key, and a fact that breaks the close fact's contract ({@link
+ * RegisterSessionContractViolationException}) writes {@code FAILED / VALIDATION_ERROR}. Either way the handler
+ * transaction has already rolled the whole session back (nothing posted, no undeposited session), and the held record
+ * commits with the processed mark in a transaction of its own; a re-emit held for the same reason writes no second row.
+ * Both are left out of the scheduled auto-retry and are released through the audited reprocess, which re-runs the
+ * session's own posting from the stored fact ({@link RegisterSessionCloseReprocessor}), never the posting engine.
+ * Before recording, the failure is classified ({@link RetryableConsumerFailures}); a retryable one propagates.
  *
  * <p><b>Reconciliation (#2579).</b> Every eventId read from the topic is recorded in {@code processed_events}
  * under the {@link #OWNER} tag, the topic's other fact types included: pos-order's {@code order.manifest.v1}
@@ -49,14 +65,16 @@ import tools.jackson.databind.ObjectMapper;
  * through the {@code REGISTER_OVER_SHORT} posting category, zero-variance posts nothing) lives in
  * {@link RegisterOverShortPostingService}. A schema-2 fact's drawer movements (CAP:550 S17, #2513) post
  * through {@link RegisterCashMovementPostingService} in the same handler transaction, first, so the session
- * posts all or nothing; a session it holds for its currency posts no over/short either.
+ * posts all or nothing; a session it holds for its currency posts no over/short either. The sequence, with the
+ * undeposited-session row (S18), is {@link RegisterSessionClosePosting}, which the reprocess runs too.
  *
  * <p><b>Ingestion record (#2433).</b> Every consumed session-close fact writes one {@code
  * accounting_event} row through {@link KafkaFactIngestionRecorder} in the handler transaction:
  * {@code PROCESSED / NEW} linked to a posted entry (the over/short's, else the first movement's; every
  * movement entry carries the {@code sessionId} dimension), {@code PROCESSED / NEW} with no entry when
  * nothing posts, {@code PROCESSED / DUPLICATE_IGNORED} when every posting key of the session was already
- * registered. A currency hold writes its own {@code SUSPENDED} row inside the posting service.
+ * registered. A currency hold writes its own {@code SUSPENDED} row inside the posting service; a missing mapping or a
+ * broken contract writes its held row after the rollback (above).
  *
  * <p><b>Session replica (#2571, #2573).</b> Both session facts also keep {@link RegisterSessionReplica}, which the
  * register float relocation reads to refuse moving a register with an open session. The opened fact only writes
@@ -89,12 +107,12 @@ public class OrderEventsListener {
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
-    private final RegisterOverShortPostingService registerOverShortPostingService;
-    private final RegisterCashMovementPostingService registerCashMovementPostingService;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final RegisterSessionReplica sessionReplica;
-    private final UndepositedSessionProjection undepositedSessions;
     private final Counter payloadRejectedCounter;
+
+    /** The session's drawer movements, over/short and undeposited row, in one handler transaction. */
+    private final RegisterSessionClosePosting sessionPosting;
 
     private final AccountingCalendarZoneResolver zoneResolver;
 
@@ -115,12 +133,11 @@ public class OrderEventsListener {
             UndepositedSessionProjection undepositedSessions) {
         this.zoneResolver = zoneResolver;
         this.sessionReplica = sessionReplica;
-        this.undepositedSessions = undepositedSessions;
+        this.sessionPosting = new RegisterSessionClosePosting(
+                registerCashMovementPostingService, registerOverShortPostingService, undepositedSessions);
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
-        this.registerOverShortPostingService = registerOverShortPostingService;
-        this.registerCashMovementPostingService = registerCashMovementPostingService;
         this.ingestionRecorder = ingestionRecorder;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -170,10 +187,10 @@ public class OrderEventsListener {
             return;
         }
 
-        // Only deserialization failures are terminal for this record — skip and mark processed (in a
-        // transaction of its own) so a malformed payload does not poison the partition. Anything
-        // thrown by posting (transient DB errors, period gate, unexpected failures) propagates
-        // unwrapped and unmarked for container retry / DLQ.
+        // Deserialization failures are terminal for this record — skip and mark processed (in a
+        // transaction of its own) so a malformed payload does not poison the partition. A missing mapping or a
+        // broken contract is recorded held (#2594, see the class doc). Anything else thrown by posting (transient
+        // DB errors, period gate, unexpected failures) propagates unwrapped and unmarked for container retry / DLQ.
         RegisterSessionClosedV1 fact;
         try {
             fact = objectMapper.treeToValue(envelope.path("payload"), RegisterSessionClosedV1.class);
@@ -195,7 +212,7 @@ public class OrderEventsListener {
             // The replica first, in its own transaction: see the class doc ("Session replica").
             handlerTransaction.executeWithoutResult(_ -> sessionReplica.closed(fact, aggregateVersion));
             handlerTransaction.executeWithoutResult(_ -> {
-                FactPostingOutcome outcome = postSession(fact, eventId, schemaVersion);
+                FactPostingOutcome outcome = sessionPosting.post(fact, eventId, schemaVersion);
                 ingestionRecorder.record(
                         RegisterOverShortPostingService.SOURCE_SYSTEM,
                         RegisterSessionClosedV1.EVENT_TYPE,
@@ -208,29 +225,56 @@ public class OrderEventsListener {
             });
         } catch (DatabindException e) {
             reject(eventId, e);
+        } catch (GLMappingNotConfiguredException | RegisterSessionContractViolationException e) {
+            if (RetryableConsumerFailures.isRetryable(e)) {
+                throw e; // container retries with backoff, then the topic's .dlq (ADR-0044 §4)
+            }
+            hold(fact, eventId, e);
         }
     }
 
     /**
-     * Everything a closed session posts, inside the handler transaction so the session posts all or nothing (CAP:550
-     * S17, #2513): its drawer movements, then its over/short. A session the movement posting held for its currency
-     * posts no over/short either; a schema-1 fact has no movements and posts the over/short alone. Once both posted,
-     * a schema-2 session in functional currency writes its undeposited-session row (CAP:550 S18, #2514), in the same
-     * transaction, so the row exists exactly when the 1095 lines its clearing net describes do; a held session writes
-     * none.
+     * Records a session the handler transaction refused and rolled back (#2594, S17 PROPOSED 6), with its processed
+     * mark, in a transaction of its own: a missing mapping {@code SUSPENDED / GL_MAPPING_NOT_CONFIGURED}, a broken
+     * contract {@code FAILED / VALIDATION_ERROR}. A failure writing it propagates for retry / DLQ, unmarked.
      */
-    private @NonNull FactPostingOutcome postSession(
-            @NonNull RegisterSessionClosedV1 fact, @NonNull String eventId, int schemaVersion) {
-        FactPostingOutcome movements = registerCashMovementPostingService.postMovements(fact, eventId);
-        if (movements instanceof FactPostingOutcome.CurrencyHeld) {
-            return movements;
+    private void hold(
+            @NonNull RegisterSessionClosedV1 fact, @NonNull String eventId, @NonNull RuntimeException refusal) {
+        AccountingEventStatus status;
+        PostingFailureReason reason;
+        String detail;
+        if (refusal instanceof GLMappingNotConfiguredException missing) {
+            status = AccountingEventStatus.SUSPENDED;
+            reason = PostingFailureReason.GL_MAPPING_NOT_CONFIGURED;
+            detail = RegisterSessionClosePosting.mappingDetail(missing);
+            log.warn(
+                    "Register session not posted, held for a missing GL mapping | eventId={} | sessionId={} | {}",
+                    eventId,
+                    fact.sessionId(),
+                    detail);
+        } else {
+            status = AccountingEventStatus.FAILED;
+            reason = PostingFailureReason.VALIDATION_ERROR;
+            detail = String.valueOf(refusal.getMessage());
+            log.error(
+                    "Register session not posted, its close fact breaks the contract | eventId={} | sessionId={} | {}",
+                    eventId,
+                    fact.sessionId(),
+                    detail);
         }
-        FactPostingOutcome outcome =
-                FactPostingOutcome.combine(registerOverShortPostingService.postOverShort(fact, eventId), movements);
-        if (!(outcome instanceof FactPostingOutcome.CurrencyHeld)) {
-            undepositedSessions.record(fact, schemaVersion);
-        }
-        return outcome;
+        handlerTransaction.executeWithoutResult(_ -> {
+            ingestionRecorder.recordSuspended(
+                    RegisterOverShortPostingService.SOURCE_SYSTEM,
+                    RegisterSessionClosedV1.EVENT_TYPE,
+                    eventId,
+                    fact.sessionId(),
+                    zoneResolver.heldRecordDateTime(fact.closedAt()),
+                    fact,
+                    status,
+                    reason.name(),
+                    detail);
+            markProcessed(eventId);
+        });
     }
 
     /**

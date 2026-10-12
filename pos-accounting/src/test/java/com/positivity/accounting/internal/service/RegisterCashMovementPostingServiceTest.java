@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.RegisterCashMovementTaxRecovery;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.RegisterSessionContractViolationException;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.RegisterCashMovementTaxRecoveryRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
@@ -511,14 +512,20 @@ class RegisterCashMovementPostingServiceTest {
     }
 
     @Test
-    @DisplayName("A missing mapping propagates for retry / DLQ and registers no key")
+    @DisplayName("A missing mapping propagates, naming the category and key (#2594: the listener records it), and"
+            + " registers no key")
     void missingMappingPropagates() {
         when(glMappingResolver.resolveGLAccount("REGISTER_CASH_MOVEMENT", "PETTY_EXPENSE_SMALL_TOOLS", POSTING_DATE))
-                .thenThrow(new GLMappingNotConfiguredException("Mapping key not configured"));
+                .thenThrow(new GLMappingNotConfiguredException("No GL mapping found for 1:2 on " + POSTING_DATE));
 
         assertThatThrownBy(() ->
                         service.postMovements(fact(petty(PETTY_1, "SMALL_TOOLS", "18.40", null)), ENVELOPE_EVENT_ID))
-                .isInstanceOf(GLMappingNotConfiguredException.class);
+                .isInstanceOfSatisfying(GLMappingNotConfiguredException.class, missing -> {
+                    assertThat(missing.getReferenceId()).isEqualTo("REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_SMALL_TOOLS");
+                    assertThat(missing.getMessage()).startsWith("No GL mapping found for 1:2");
+                    assertThat(missing.getNextAction()).contains("then reprocess the held session");
+                    assertThat(missing.getCause()).isInstanceOf(GLMappingNotConfiguredException.class);
+                });
         verify(idempotencyService, never()).registerKey(anyString(), any());
     }
 
@@ -539,7 +546,7 @@ class RegisterCashMovementPostingServiceTest {
                                         null,
                                         null)),
                         ENVELOPE_EVENT_ID))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RegisterSessionContractViolationException.class)
                 .hasMessageContaining(PETTY_2.toString())
                 .hasMessageContaining("direction IN");
         assertThatThrownBy(() -> service.postMovements(fact(petty(PETTY_1, null, "18.40", null)), ENVELOPE_EVENT_ID))
@@ -555,7 +562,7 @@ class RegisterCashMovementPostingServiceTest {
                                 petty(PETTY_1, "SHOP_SUPPLIES", "18.40", null),
                                 petty(PETTY_1, "STAFF_MEALS", "22.00", null)),
                         ENVELOPE_EVENT_ID))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RegisterSessionContractViolationException.class)
                 .hasMessageContaining(PETTY_1.toString())
                 .hasMessageContaining("more than once");
         verify(idempotencyService, never()).registerKey(anyString(), any());
@@ -569,7 +576,7 @@ class RegisterCashMovementPostingServiceTest {
         assertThatThrownBy(() -> service.postMovements(
                         fact(petty(PETTY_1, "SHOP_SUPPLIES", "18.40", null), petty(null, "STAFF_MEALS", "22.00", null)),
                         ENVELOPE_EVENT_ID))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RegisterSessionContractViolationException.class)
                 .hasMessageContaining("no movementId");
         verify(idempotencyService, never()).isKeyProcessed("REGISTER_CASH_MOVEMENT_GL_POSTING:null");
         verify(idempotencyService, never()).registerKey(anyString(), any());

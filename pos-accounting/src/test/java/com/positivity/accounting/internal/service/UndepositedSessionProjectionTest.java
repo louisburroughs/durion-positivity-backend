@@ -12,6 +12,7 @@ import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.UndepositedSession;
 import com.positivity.accounting.internal.entity.UndepositedSessionDrop;
 import com.positivity.accounting.internal.enums.UndepositedSessionStatus;
+import com.positivity.accounting.internal.exception.RegisterSessionContractViolationException;
 import com.positivity.accounting.internal.repository.UndepositedSessionDropRepository;
 import com.positivity.accounting.internal.repository.UndepositedSessionRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
@@ -175,19 +176,19 @@ class UndepositedSessionProjectionTest {
                 .as("schema 1 without movements")
                 .isFalse();
         assertThatThrownBy(() -> projection.record(schemaOneShape, 2))
-                .as("schema 2 without its movements list goes to retry / DLQ, never marked done without a row")
-                .isInstanceOf(IllegalArgumentException.class)
+                .as("schema 2 without its list breaks the contract (#2594), never marked done without a row")
+                .isInstanceOf(RegisterSessionContractViolationException.class)
                 .hasMessageContaining("no movements list");
 
         verify(sessions, never()).saveAndFlush(any());
     }
 
     @Test
-    @DisplayName("a bank drop that breaks the fact's contract fails the session for retry / DLQ")
+    @DisplayName("a bank drop that breaks the fact's contract fails the session as a contract violation (#2594)")
     void malformedDropFails() {
         assertThatThrownBy(() -> projection.record(
                         fact("USD", "0.00", List.of(), movement("BANK_DROP", "IN", "10.00", "B-1")), 2))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RegisterSessionContractViolationException.class)
                 .hasMessageContaining("OUT");
         UUID twice = UUID.randomUUID();
         assertThatThrownBy(() -> projection.record(
@@ -198,7 +199,7 @@ class UndepositedSessionProjectionTest {
                                 bankDrop(twice, "10.00", "B-1", "USD"),
                                 bankDrop(twice, "10.00", "B-1", "USD")),
                         2))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(RegisterSessionContractViolationException.class)
                 .hasMessageContaining("more than once");
         verify(sessions, never()).saveAndFlush(any());
     }

@@ -6,10 +6,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.internal.client.TaxProfileClient;
 import com.positivity.accounting.internal.dto.PettyExpenseCategoryDeactivateRequest;
-import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
+import com.positivity.accounting.internal.service.EventIngestionService;
 import com.positivity.accounting.internal.service.FactPostingOutcome;
+import com.positivity.accounting.internal.service.FailedAccountingEventRetryJob;
 import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.OrderEventsListener;
 import com.positivity.accounting.internal.service.PettyExpenseCategoryService;
@@ -95,6 +97,12 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private PettyExpenseCategoryService categories;
+
+    @Autowired
+    private EventIngestionService eventIngestionService;
+
+    @Autowired
+    private FailedAccountingEventRetryJob retryJob;
 
     /** pos-tax's CA profile answers CAD: the fixture a USD tenant's CA registration is checked against (S32d D1). */
     @MockitoBean
@@ -391,8 +399,9 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
     }
 
     @Test
-    @DisplayName("All or nothing: a movement whose mapping is missing rolls back the session's other postings and"
-            + " leaves the fact unmarked for retry / DLQ; a deactivated category still resolves")
+    @DisplayName("All or nothing: a movement whose mapping is missing rolls back the session's other postings and is"
+            + " held SUSPENDED / GL_MAPPING_NOT_CONFIGURED, marked processed, not sent to retry / DLQ (#2594); a"
+            + " deactivated category still resolves")
     void sessionPostsAllOrNothing() {
         UUID tenant = tenant();
         String eventId = UUID.randomUUID().toString();
@@ -403,11 +412,17 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
                 petty("SHOP_SUPPLIES", "18.40", null),
                 petty("NOT_A_CATEGORY", "5.00", null));
 
-        assertThatThrownBy(() -> asTenant(tenant, () -> listener.onOrderEvent(envelope(eventId, broken))))
-                .isInstanceOf(GLMappingNotConfiguredException.class);
+        asTenant(tenant, () -> listener.onOrderEvent(envelope(eventId, broken)));
         assertThat(entryCount(tenant)).isZero();
+        assertThat(count(tenant, "idempotency_keys")).isZero();
         assertThat(asTenant(tenant, () -> processedEventRepository.existsById(eventId)))
-                .isFalse();
+                .isTrue();
+        assertThat(records(tenant, broken.sessionId())).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("SUSPENDED");
+            assertThat(record.get("failure_reason_code")).isEqualTo("GL_MAPPING_NOT_CONFIGURED");
+            assertThat((String) record.get("error_message"))
+                    .contains("REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_NOT_A_CATEGORY");
+        });
 
         // A category deactivated after its movement was recorded still posts (its mapping key stays).
         signIn("controller.cfo");
@@ -484,7 +499,266 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
                 .isEqualTo("NOT_REGISTERED");
     }
 
+    // ---- the reprocess route (#2594, S17 PROPOSED 6) ---------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2594: a missing mapping holds the session SUSPENDED / GL_MAPPING_NOT_CONFIGURED, naming it, with"
+            + " nothing posted and no undeposited session; the auto-retry leaves it alone and a reprocess while it is"
+            + " still missing keeps the hold; once the mapping is fixed the reprocess posts the session once, with its"
+            + " undeposited session, and nothing posts twice")
+    void missingMappingIsHeldThenReprocessedOnce() {
+        UUID tenant = tenant();
+        UUID session = UUIDv7Generator.generate();
+        String eventId = UUID.randomUUID().toString();
+        RegisterSessionClosedV1 fact = fact(
+                session,
+                "-3.00",
+                "USD",
+                petty("SHOP_SUPPLIES", "18.40", "R-2594"),
+                other("BANK_DROP", "OUT", "300.00"));
+        Object effectiveFrom = unmap(tenant, "REGISTER_CASH_MOVEMENT", "PETTY_EXPENSE_SHOP_SUPPLIES");
+
+        asTenant(tenant, () -> listener.onOrderEvent(envelope(eventId, fact)));
+
+        assertThat(entryCount(tenant)).isZero();
+        assertThat(count(tenant, "idempotency_keys")).isZero();
+        assertThat(undepositedSessions(tenant, session)).isZero();
+        assertThat(asTenant(tenant, () -> processedEventRepository.existsById(eventId)))
+                .isTrue();
+        UUID held = heldRow(tenant, session);
+        assertThat(records(tenant, session)).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("SUSPENDED");
+            assertThat(record.get("failure_reason_code")).isEqualTo("GL_MAPPING_NOT_CONFIGURED");
+            assertThat((String) record.get("error_message"))
+                    .contains("REGISTER_CASH_MOVEMENT/PETTY_EXPENSE_SHOP_SUPPLIES")
+                    .contains("configure the mapping, then reprocess");
+        });
+
+        // The scheduled retry skips the hold (its remedy is a mapping); a reprocess while it is missing keeps it.
+        asTenant(tenant, () -> retryJob.retryBoundTenant());
+        assertThat(attempts(tenant, held)).isIn(null, 0);
+        reprocess(tenant, held);
+        assertThat(records(tenant, session)).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("SUSPENDED");
+            assertThat(record.get("failure_reason_code")).isEqualTo("GL_MAPPING_NOT_CONFIGURED");
+        });
+        assertThat(attempts(tenant, held)).isEqualTo(1);
+        assertThat(entryCount(tenant)).isZero();
+
+        // The mapping fixed: the reprocess posts the session once, from its stored fact.
+        remap(tenant, "REGISTER_CASH_MOVEMENT", "PETTY_EXPENSE_SHOP_SUPPLIES", effectiveFrom);
+        reprocess(tenant, held);
+
+        assertThat(entryCount(tenant)).isEqualTo(2);
+        List<Map<String, Object>> lines = lines(tenant);
+        assertThat(net(lines, "6340")).isEqualByComparingTo("18.40");
+        assertThat(net(lines, "6040")).isEqualByComparingTo("3.00");
+        assertThat(net(lines, "1095")).isEqualByComparingTo("-21.40");
+        assertThat(records(tenant, session)).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("PROCESSED");
+            assertThat(record.get("idempotency_outcome")).isEqualTo("NEW");
+            assertThat(record.get("failure_reason_code")).isNull();
+            assertThat(record.get("journal_entry_id")).isNotNull();
+        });
+        assertThat(undepositedSessions(tenant, session)).isEqualTo(1);
+        assertThat(count(tenant, "undeposited_session_drop")).isEqualTo(1);
+        assertThat(count(tenant, "reprocessing_attempt_history")).isEqualTo(2);
+
+        // Posts once: the row is closed (409), and the same fact re-emitted is DUPLICATE_IGNORED with nothing posted.
+        assertThatThrownBy(() -> reprocess(tenant, held))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already PROCESSED");
+        asTenant(tenant, () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), fact)));
+        assertThat(entryCount(tenant)).isEqualTo(2);
+        assertThat(undepositedSessions(tenant, session)).isEqualTo(1);
+        assertThat(records(tenant, session))
+                .extracting(record -> record.get("idempotency_outcome"))
+                .containsExactlyInAnyOrder("NEW", "DUPLICATE_IGNORED");
+    }
+
+    @Test
+    @DisplayName("#2594: a currency hold reprocessed while the currency is still not the ledger's stays SUSPENDED /"
+            + " CURRENCY_NOT_SUPPORTED, one row, nothing posted; released (the stored fact now in USD), the reprocess"
+            + " posts the session's movements and over/short once, through the session's own path, never the engine")
+    void currencyHoldReleasedPostsOnce() {
+        UUID tenant = tenant();
+        UUID session = UUIDv7Generator.generate();
+        RegisterSessionClosedV1 fact = fact(
+                session,
+                "-3.00",
+                "EUR",
+                petty("SHOP_SUPPLIES", "18.40", "R-EUR", "EUR"),
+                petty("STAFF_MEALS", "22.00", null, "EUR"));
+        asTenant(tenant, () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), fact)));
+        UUID held = heldRow(tenant, session);
+
+        reprocess(tenant, held);
+        assertThat(records(tenant, session)).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("SUSPENDED");
+            assertThat(record.get("failure_reason_code")).isEqualTo("CURRENCY_NOT_SUPPORTED");
+            assertThat((String) record.get("error_message")).contains("EUR");
+        });
+        assertThat(entryCount(tenant)).isZero();
+
+        // The release: the held fact now states the ledger currency (stands in for a corrected source or a rate).
+        new JdbcTemplate(ownerDataSource())
+                .update(
+                        "UPDATE accounting_event SET payload = jsonb_set(jsonb_set(jsonb_set(payload,"
+                                + " '{currencyCode}', '\"USD\"'), '{movements,0,currencyCode}', '\"USD\"'),"
+                                + " '{movements,1,currencyCode}', '\"USD\"') WHERE tenant_id = ? AND event_id = ?",
+                        tenant,
+                        held);
+        reprocess(tenant, held);
+
+        assertThat(entryCount(tenant)).isEqualTo(3);
+        List<Map<String, Object>> lines = lines(tenant);
+        assertThat(net(lines, "6340")).isEqualByComparingTo("18.40");
+        assertThat(net(lines, "6295")).isEqualByComparingTo("22.00");
+        assertThat(net(lines, "6040")).isEqualByComparingTo("3.00");
+        assertThat(net(lines, "1095")).isEqualByComparingTo("-43.40");
+        assertThat(records(tenant, session)).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("PROCESSED");
+            assertThat(record.get("idempotency_outcome")).isEqualTo("NEW");
+        });
+        assertThat(undepositedSessions(tenant, session)).isEqualTo(1);
+        assertThatThrownBy(() -> reprocess(tenant, held))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already PROCESSED");
+        assertThat(entryCount(tenant)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName(
+            "#2594: a petty expense that breaks the close fact's contract is recorded FAILED / VALIDATION_ERROR and"
+                    + " marked processed, nothing posted; the auto-retry leaves it and a reprocess keeps it failed")
+    void contractViolationIsRecordedFailed() {
+        UUID tenant = tenant();
+        UUID session = UUIDv7Generator.generate();
+        String eventId = UUID.randomUUID().toString();
+        Movement inward = petty("SHOP_SUPPLIES", "18.40", null);
+        RegisterSessionClosedV1 fact = fact(
+                session,
+                "-3.00",
+                "USD",
+                new Movement(
+                        inward.movementId(),
+                        inward.reason(),
+                        "IN",
+                        inward.amount(),
+                        inward.currencyCode(),
+                        inward.categoryCode(),
+                        null,
+                        null,
+                        null,
+                        inward.clerkId(),
+                        null,
+                        null,
+                        inward.occurredAt(),
+                        null,
+                        List.of(),
+                        null,
+                        null,
+                        null));
+
+        asTenant(tenant, () -> listener.onOrderEvent(envelope(eventId, fact)));
+
+        assertThat(entryCount(tenant)).isZero();
+        assertThat(asTenant(tenant, () -> processedEventRepository.existsById(eventId)))
+                .isTrue();
+        UUID failed = new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT event_id FROM accounting_event WHERE tenant_id = ? AND event_type = ? AND"
+                                + " domain_key_id = ? AND status = 'FAILED'",
+                        UUID.class,
+                        tenant,
+                        RegisterSessionClosedV1.EVENT_TYPE,
+                        session.toString());
+        asTenant(tenant, () -> retryJob.retryBoundTenant());
+        assertThat(attempts(tenant, failed)).isIn(null, 0);
+        reprocess(tenant, failed);
+        assertThat(records(tenant, session)).singleElement().satisfies(record -> {
+            assertThat(record.get("status")).isEqualTo("FAILED");
+            assertThat(record.get("failure_reason_code")).isEqualTo("VALIDATION_ERROR");
+            assertThat((String) record.get("error_message")).contains("direction IN (a petty expense is OUT)");
+        });
+        assertThat(attempts(tenant, failed)).isEqualTo(1);
+        assertThat(entryCount(tenant)).isZero();
+    }
+
     // ---- fixtures -------------------------------------------------------------------------------------------------
+
+    /** Ends the tenant's mapping of {@code category/key} before any session date; returns its start, for {@link #remap}. */
+    private static Object unmap(UUID tenant, String category, String key) {
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        String mapping = " FROM gl_mapping m JOIN mapping_key k ON k.tenant_id = m.tenant_id AND k.mapping_key_id ="
+                + " m.mapping_key_id JOIN posting_category c ON c.tenant_id = k.tenant_id AND c.posting_category_id ="
+                + " k.posting_category_id WHERE m.tenant_id = ? AND c.category_name = ? AND k.key_name = ?";
+        Object effectiveFrom =
+                owner.queryForObject("SELECT m.effective_start_date" + mapping, Object.class, tenant, category, key);
+        assertThat(owner.update(
+                        "UPDATE gl_mapping SET effective_start_date = TIMESTAMP '2999-01-01 00:00:00' WHERE"
+                                + " gl_mapping_id IN (SELECT m.gl_mapping_id" + mapping + ")",
+                        tenant,
+                        category,
+                        key))
+                .isEqualTo(1);
+        return effectiveFrom;
+    }
+
+    private static void remap(UUID tenant, String category, String key, Object effectiveFrom) {
+        new JdbcTemplate(ownerDataSource())
+                .update(
+                        "UPDATE gl_mapping SET effective_start_date = ? WHERE gl_mapping_id IN (SELECT m.gl_mapping_id"
+                                + " FROM gl_mapping m JOIN mapping_key k ON k.tenant_id = m.tenant_id AND"
+                                + " k.mapping_key_id = m.mapping_key_id JOIN posting_category c ON c.tenant_id ="
+                                + " k.tenant_id AND c.posting_category_id = k.posting_category_id WHERE m.tenant_id = ?"
+                                + " AND c.category_name = ? AND k.key_name = ?)",
+                        effectiveFrom,
+                        tenant,
+                        category,
+                        key);
+    }
+
+    private void reprocess(UUID tenant, UUID eventId) {
+        asTenant(
+                tenant,
+                () -> eventIngestionService.reprocessEvent(eventId, new ReprocessEventRequest(), "ops.controller"));
+    }
+
+    /** The session's one held (SUSPENDED) ingestion row. */
+    private static UUID heldRow(UUID tenant, UUID session) {
+        return new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT event_id FROM accounting_event WHERE tenant_id = ? AND event_type = ? AND"
+                                + " domain_key_id = ? AND status = 'SUSPENDED'",
+                        UUID.class,
+                        tenant,
+                        RegisterSessionClosedV1.EVENT_TYPE,
+                        session.toString());
+    }
+
+    private static Integer attempts(UUID tenant, UUID eventId) {
+        return new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT attempt_count FROM accounting_event WHERE tenant_id = ? AND event_id = ?",
+                        Integer.class,
+                        tenant,
+                        eventId);
+    }
+
+    private static int undepositedSessions(UUID tenant, UUID session) {
+        return new JdbcTemplate(ownerDataSource())
+                .queryForObject(
+                        "SELECT count(*) FROM undeposited_session WHERE tenant_id = ? AND session_id = ?",
+                        Integer.class,
+                        tenant,
+                        session);
+    }
+
+    private static int count(UUID tenant, String table) {
+        return new JdbcTemplate(ownerDataSource())
+                .queryForObject("SELECT count(*) FROM " + table + " WHERE tenant_id = ?", Integer.class, tenant);
+    }
 
     /** An over/short posting that fails the way a closed period does, after the movements posted. */
     private static final class FailingOverShortPostingService extends RegisterOverShortPostingService {

@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -34,7 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
  * processing/clock time, so redeliveries post into the same accounting period and resolve the same
  * effective-dated GL mapping. The period gate applies inside
  * {@link com.positivity.accounting.internal.service.JournalEntryService#postJournalEntry}; a CLOSED period
- * propagates unwrapped for container retry / DLQ.
+ * propagates unwrapped for container retry / DLQ. A missing mapping propagates too, naming its category and key, and
+ * {@link OrderEventsListener} records the session {@code SUSPENDED / GL_MAPPING_NOT_CONFIGURED} (#2594).
  *
  * <p><b>Currency (ADR-0067 PC-9, E-5; #2312):</b> a session closed in a currency other than the
  * ledger's ({@link LedgerCurrency}) is never posted at par. It is held as a {@code SUSPENDED}
@@ -104,14 +106,12 @@ public class RegisterOverShortPostingService {
         UUID creditAccountId;
         if (shortage) {
             // Dr Cash Short (expense) / Cr Register Cash Clearing
-            debitAccountId = glMappingResolver.resolveGLAccount(POSTING_CATEGORY_NAME, CASH_SHORT_KEY, transactionDate);
-            creditAccountId =
-                    glMappingResolver.resolveGLAccount(POSTING_CATEGORY_NAME, CASH_CLEARING_KEY, transactionDate);
+            debitAccountId = resolve(CASH_SHORT_KEY, transactionDate);
+            creditAccountId = resolve(CASH_CLEARING_KEY, transactionDate);
         } else {
             // Dr Register Cash Clearing / Cr Cash Over (income)
-            debitAccountId =
-                    glMappingResolver.resolveGLAccount(POSTING_CATEGORY_NAME, CASH_CLEARING_KEY, transactionDate);
-            creditAccountId = glMappingResolver.resolveGLAccount(POSTING_CATEGORY_NAME, CASH_OVER_KEY, transactionDate);
+            debitAccountId = resolve(CASH_CLEARING_KEY, transactionDate);
+            creditAccountId = resolve(CASH_OVER_KEY, transactionDate);
         }
 
         String description = "Register drawer " + (shortage ? "shortage" : "overage") + " for session "
@@ -139,6 +139,22 @@ public class RegisterOverShortPostingService {
                 amount,
                 posted);
         return FactPostingOutcome.posted(posted);
+    }
+
+    /**
+     * The {@code REGISTER_OVER_SHORT} account for {@code key}; a missing mapping is refused naming the category and the
+     * key (#2601), which the listener records on the held session (#2594).
+     */
+    private UUID resolve(String key, LocalDateTime transactionDate) {
+        try {
+            return glMappingResolver.resolveGLAccount(POSTING_CATEGORY_NAME, key, transactionDate);
+        } catch (GLMappingNotConfiguredException missing) {
+            throw missing.naming(
+                    POSTING_CATEGORY_NAME,
+                    key,
+                    "Map " + POSTING_CATEGORY_NAME + "/" + key + " to an active account effective on the session's"
+                            + " close date, then reprocess the held session");
+        }
     }
 
     private void holdForeignCurrency(
