@@ -138,6 +138,8 @@ class RegisterSessionStatedTaxTest {
                 categories,
                 new FunctionalCurrency("CAD"),
                 drawerStatedTax,
+                new com.positivity.order.internal.service.ActorDisplayNames(org.mockito.Mockito.mock(
+                        com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository.class)),
                 CLOCK,
                 meters);
         session = RegisterSession.builder()

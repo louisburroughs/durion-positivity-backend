@@ -222,6 +222,7 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
                 .vendorId(command.vendorId())
                 .tokenHash(hash(token))
                 .approverUserId(verified.userId())
+                .approverUsername(username)
                 .requestedBy(cashier)
                 .status(CashMovementApprovalStatus.ISSUED)
                 .expiresAt(expiresAt)

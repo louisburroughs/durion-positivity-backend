@@ -52,6 +52,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +61,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -118,6 +120,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private final ExtAccountingPettyExpenseCategoryRepository categoryRepository;
     private final FunctionalCurrency functionalCurrency;
     private final DrawerStatedTax drawerStatedTax;
+    private final ActorDisplayNames actorDisplayNames;
     private final Clock clock;
     private final @Nullable MeterRegistry meterRegistry;
 
@@ -150,6 +153,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             ExtAccountingPettyExpenseCategoryRepository categoryRepository,
             FunctionalCurrency functionalCurrency,
             DrawerStatedTax drawerStatedTax,
+            ActorDisplayNames actorDisplayNames,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.registerSessionRepository = registerSessionRepository;
@@ -164,6 +168,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         this.categoryRepository = categoryRepository;
         this.functionalCurrency = functionalCurrency;
         this.drawerStatedTax = drawerStatedTax;
+        this.actorDisplayNames = actorDisplayNames;
         this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
@@ -371,6 +376,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                     .clerkId(SecurityContextHelper.getCurrentUsernameOrDefault("system"))
                     .clerkUserId(currentUserId())
                     .approvedBy(approval == null ? null : approval.getApproverUserId())
+                    .approvedByUsername(approval == null ? null : approval.getApproverUsername())
                     .approvalId(approval == null ? null : approval.getApprovalId())
                     .occurredAt(occurredAt)
                     .supplierName(movement.supplierName())
@@ -1146,7 +1152,13 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         return value.setScale(4, RoundingMode.HALF_UP);
     }
 
+    /**
+     * The session as reads show it, with its opener's and closer's display names resolved in one lookup (#2608): at
+     * read time, so a name that reaches the people-contact copy later shows on an old session too.
+     */
     private RegisterSessionSummary toSummary(RegisterSession s) {
+        Map<String, String> names =
+                actorDisplayNames.namesOf(Arrays.asList(s.getOpenedByClerkId(), s.getClosedByClerkId()));
         return new RegisterSessionSummary(
                 s.getSessionId(),
                 s.getTerminalId(),
@@ -1162,19 +1174,34 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 s.getClosedByClerkId(),
                 s.getOpenedAt(),
                 s.getClosingStartedAt(),
-                s.getClosedAt());
+                s.getClosedAt(),
+                ActorDisplayNames.nameOf(names, s.getOpenedByClerkId()),
+                ActorDisplayNames.nameOf(names, s.getClosedByClerkId()));
     }
 
-    /** The session's movements as reads show them, each with its stated taxes. */
+    /**
+     * The session's movements as reads show them, each with its stated taxes and its actors' display names: every
+     * cashier and approver of the list resolved in one lookup (#2608), never one per row.
+     */
     private List<CashMovementSummary> summaries(List<CashMovement> movements, RegisterSession session) {
         Map<UUID, List<CashMovementStatedTax>> taxes = drawerStatedTax.statedTaxes(
                 movements.stream().map(CashMovement::getMovementId).toList(), session.getCurrencyCode());
+        Map<String, String> names = actorDisplayNames.namesOf(movements.stream()
+                .flatMap(m -> Stream.of(m.getClerkId(), m.getApprovedByUsername()))
+                .toList());
         return movements.stream()
-                .map(m -> toMovementSummary(m, taxes.getOrDefault(m.getMovementId(), List.of())))
+                .map(m -> toMovementSummary(m, taxes.getOrDefault(m.getMovementId(), List.of()), names))
                 .toList();
     }
 
-    private static CashMovementSummary toMovementSummary(CashMovement m, List<CashMovementStatedTax> statedTaxes) {
+    /** One movement as reads show it, its actors' display names resolved in one lookup (#2608). */
+    private CashMovementSummary toMovementSummary(CashMovement m, List<CashMovementStatedTax> statedTaxes) {
+        return toMovementSummary(
+                m, statedTaxes, actorDisplayNames.namesOf(Arrays.asList(m.getClerkId(), m.getApprovedByUsername())));
+    }
+
+    private static CashMovementSummary toMovementSummary(
+            CashMovement m, List<CashMovementStatedTax> statedTaxes, Map<String, String> names) {
         return new CashMovementSummary(
                 m.getMovementId(),
                 m.getSessionId(),
@@ -1196,7 +1223,9 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 statedTaxes,
                 m.getSupplierRegistrationNumber() != null,
                 m.getTaxPlausibility(),
-                m.getSupplierRegistrationRequired());
+                m.getSupplierRegistrationRequired(),
+                ActorDisplayNames.nameOf(names, m.getClerkId()),
+                ActorDisplayNames.nameOf(names, m.getApprovedByUsername()));
     }
 
     /** The session's movements on the close fact, each with its stated taxes, never null. */

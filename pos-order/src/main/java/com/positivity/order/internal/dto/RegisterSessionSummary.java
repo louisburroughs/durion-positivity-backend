@@ -24,6 +24,8 @@ import org.jspecify.annotations.Nullable;
  * @param openedAt when the session opened
  * @param closingStartedAt when begin-close recorded the count (null until then)
  * @param closedAt when the session reached CLOSED (null until then)
+ * @param openedByName the opener's display name, "First Last"; null when it can't be resolved (#2608)
+ * @param closedByName the closer's display name; null until closed or when it can't be resolved (#2608)
  */
 public record RegisterSessionSummary(
         @NonNull UUID sessionId,
@@ -40,4 +42,15 @@ public record RegisterSessionSummary(
         @Nullable String closedByClerkId,
         @NonNull Instant openedAt,
         @Nullable Instant closingStartedAt,
-        @Nullable Instant closedAt) {}
+        @Nullable Instant closedAt,
+        @Nullable String openedByName,
+        @Nullable String closedByName) {
+
+    /** Never prints the actors' display names (ADR-0072). */
+    @Override
+    public String toString() {
+        return "RegisterSessionSummary[sessionId=" + sessionId + ", terminalId=" + terminalId + ", locationId="
+                + locationId + ", openedByClerkId=" + openedByClerkId + ", status=" + status + ", currencyCode="
+                + currencyCode + ", closedByClerkId=" + closedByClerkId + "]";
+    }
+}

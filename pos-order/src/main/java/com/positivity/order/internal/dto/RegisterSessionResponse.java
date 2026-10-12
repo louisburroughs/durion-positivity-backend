@@ -28,7 +28,28 @@ public record RegisterSessionResponse(
         String closedByClerkId,
         Instant openedAt,
         Instant closingStartedAt,
-        Instant closedAt) {
+        Instant closedAt,
+
+        @Schema(
+                description = "The opener's display name, \"First Last\", name only; null when it can't be resolved."
+                        + " Never the username (#2608, ADR-0064)",
+                nullable = true,
+                example = "Dana Reyes")
+        String openedByName,
+
+        @Schema(
+                description = "The closer's display name, \"First Last\", name only; null until the session is closed"
+                        + " or when it can't be resolved. Never the username (#2608, ADR-0064)",
+                nullable = true,
+                example = "Sam Ortiz")
+        String closedByName) {
+
+    /** Never prints the actors' display names (ADR-0072). */
+    @Override
+    public String toString() {
+        return "RegisterSessionResponse[sessionId=" + sessionId + ", terminalId=" + terminalId + ", status=" + status
+                + ", currencyCode=" + currencyCode + "]";
+    }
 
     public static RegisterSessionResponse from(RegisterSessionSummary s) {
         return new RegisterSessionResponse(
@@ -46,6 +67,8 @@ public record RegisterSessionResponse(
                 s.closedByClerkId(),
                 s.openedAt(),
                 s.closingStartedAt(),
-                s.closedAt());
+                s.closedAt(),
+                s.openedByName(),
+                s.closedByName());
     }
 }

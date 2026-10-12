@@ -16,8 +16,10 @@ import com.positivity.order.internal.entity.SessionPolicyType;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.SessionPolicyConflictException;
 import com.positivity.order.internal.exception.SessionPolicyValidationException;
+import com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository;
 import com.positivity.order.internal.repository.SessionPolicyChangeRepository;
 import com.positivity.order.internal.repository.SessionPolicyRepository;
+import com.positivity.order.internal.service.model.SessionPolicyChangeView;
 import com.positivity.order.internal.service.model.SessionPolicyView;
 import com.positivity.order.internal.service.model.UpdateSessionPolicyCommand;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -33,6 +35,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -51,9 +54,16 @@ class SessionPolicyServiceImplTest {
     private final SessionPolicyRepository policies = mock(SessionPolicyRepository.class);
     private final SessionPolicyChangeRepository changes = mock(SessionPolicyChangeRepository.class);
     private final SessionPolicyWriter writer = mock(SessionPolicyWriter.class);
+    private final ExtPeopleContactUserLinkRepository links = mock(ExtPeopleContactUserLinkRepository.class);
+    private final ActorDisplayNames actorDisplayNames = new ActorDisplayNames(links);
     private final List<SessionPolicyChange> written = new ArrayList<>();
     private final SessionPolicyServiceImpl service = new SessionPolicyServiceImpl(
-            policies, changes, writer, new FunctionalCurrency("USD"), Clock.fixed(NOW, ZoneOffset.UTC));
+            policies,
+            changes,
+            writer,
+            new FunctionalCurrency("USD"),
+            actorDisplayNames,
+            Clock.fixed(NOW, ZoneOffset.UTC));
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -249,5 +259,126 @@ class SessionPolicyServiceImplTest {
         assertThatThrownBy(() -> service.update(put(null, true, "50.00", false, null, "3.00", JUSTIFICATION)))
                 .isInstanceOf(SessionPolicyConflictException.class);
         assertThat(written).isEmpty();
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // #2608: history[].actorName, resolved at read time from the people-contact copy
+    // ---------------------------------------------------------------------------------------
+
+    private static SessionPolicyChange change(String actor, Instant at) {
+        return SessionPolicyChange.builder()
+                .setting("OVER_SHORT_TOLERANCE")
+                .oldValue("5.00")
+                .newValue("3.00")
+                .actor(actor)
+                .justification(JUSTIFICATION)
+                .policyVersion(1L)
+                .changedAt(at)
+                .build();
+    }
+
+    private static ExtPeopleContactUserLinkRepository.LinkedName linked(String username, String first, String last) {
+        return new ExtPeopleContactUserLinkRepository.LinkedName() {
+            @Override
+            public String getUsername() {
+                return username;
+            }
+
+            @Override
+            public String getFirstName() {
+                return first;
+            }
+
+            @Override
+            public String getLastName() {
+                return last;
+            }
+        };
+    }
+
+    @Test
+    @DisplayName("#2608 test 1: an actor with an ACTIVE link to a copied person is served \"First Last\"")
+    void historyServesTheActorsName() {
+        when(changes.findAllByOrderByChangedAtDescChangeIdDesc()).thenReturn(List.of(change("dana.reyes", NOW)));
+        when(links.findActiveNames(any())).thenReturn(List.of(linked("dana.reyes", "Dana", " Reyes ")));
+
+        List<SessionPolicyChangeView> history = service.history();
+
+        assertThat(history).singleElement().satisfies(row -> {
+            assertThat(row.actorName()).isEqualTo("Dana Reyes");
+            assertThat(row.actor()).isEqualTo("dana.reyes");
+        });
+    }
+
+    @Test
+    @DisplayName(
+            "#2608 tests 2-3: no link, an unresolved person, blank names and system serve null, never the username")
+    void unresolvedActorsServeNull() {
+        // findActiveNames answers only ACTIVE links to a copied, not deleted person (its query); an actor it does not
+        // answer for, or one whose person has blank names, has no name. system is never looked up.
+        when(changes.findAllByOrderByChangedAtDescChangeIdDesc())
+                .thenReturn(List.of(
+                        change("no.link", NOW),
+                        change("removed.link", NOW.minusSeconds(1)),
+                        change("blank.names", NOW.minusSeconds(2)),
+                        change("system", NOW.minusSeconds(3))));
+        when(links.findActiveNames(any())).thenReturn(List.of(linked("blank.names", " ", null)));
+
+        List<SessionPolicyChangeView> history = service.history();
+
+        assertThat(history).extracting(SessionPolicyChangeView::actorName).containsOnlyNulls();
+        assertThat(history)
+                .extracting(SessionPolicyChangeView::actor)
+                .containsExactly("no.link", "removed.link", "blank.names", "system");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Collection<String>> asked = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(links).findActiveNames(asked.capture());
+        assertThat(asked.getValue()).doesNotContain("system");
+    }
+
+    @Test
+    @DisplayName(
+            "#2608 test 4: several rows by repeated actors resolve in exactly one lookup of the distinct usernames")
+    void historyResolvesInOneLookup() {
+        when(changes.findAllByOrderByChangedAtDescChangeIdDesc())
+                .thenReturn(List.of(
+                        change("dana.reyes", NOW),
+                        change("sam.ortiz", NOW.minusSeconds(1)),
+                        change("dana.reyes", NOW.minusSeconds(2)),
+                        change("sam.ortiz", NOW.minusSeconds(3))));
+        when(links.findActiveNames(any()))
+                .thenReturn(List.of(linked("dana.reyes", "Dana", "Reyes"), linked("sam.ortiz", "Sam", "Ortiz")));
+
+        List<SessionPolicyChangeView> history = service.history();
+
+        assertThat(history)
+                .extracting(SessionPolicyChangeView::actorName)
+                .containsExactly("Dana Reyes", "Sam Ortiz", "Dana Reyes", "Sam Ortiz");
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Collection<String>> asked = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(links, org.mockito.Mockito.times(1)).findActiveNames(asked.capture());
+        assertThat(asked.getValue()).containsExactlyInAnyOrder("dana.reyes", "sam.ortiz");
+    }
+
+    @Test
+    @DisplayName("#2608 test 5: a row written before its person was copied serves the name once the copy holds it")
+    void lateArrivalNamesAnOldRow() {
+        SessionPolicyChange old = change("dana.reyes", NOW);
+        when(changes.findAllByOrderByChangedAtDescChangeIdDesc()).thenReturn(List.of(old));
+        when(links.findActiveNames(any()))
+                .thenReturn(List.of())
+                .thenReturn(List.of(linked("dana.reyes", "Dana", "Reyes")));
+
+        assertThat(service.history())
+                .singleElement()
+                .extracting(SessionPolicyChangeView::actorName)
+                .isNull();
+        assertThat(service.history())
+                .singleElement()
+                .extracting(SessionPolicyChangeView::actorName)
+                .isEqualTo("Dana Reyes");
+        // Resolved at read time: the immutable row was never written.
+        verify(changes, never()).save(any());
+        assertThat(old.getActor()).isEqualTo("dana.reyes");
     }
 }

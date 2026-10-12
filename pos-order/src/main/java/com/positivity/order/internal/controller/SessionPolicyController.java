@@ -153,7 +153,13 @@ public class SessionPolicyController {
                 policy.currencyCode(),
                 history.stream()
                         .map(c -> new SessionPolicyResponse.Change(
-                                c.setting(), c.oldValue(), c.newValue(), c.actor(), c.justification(), c.changedAt()))
+                                c.setting(),
+                                c.oldValue(),
+                                c.newValue(),
+                                c.actor(),
+                                c.justification(),
+                                c.changedAt(),
+                                c.actorName()))
                         .toList());
     }
 }

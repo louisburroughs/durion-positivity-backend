@@ -18,6 +18,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,6 +74,7 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
     private final SessionPolicyChangeRepository sessionPolicyChangeRepository;
     private final SessionPolicyWriter sessionPolicyWriter;
     private final FunctionalCurrency functionalCurrency;
+    private final ActorDisplayNames actorDisplayNames;
     private final Clock clock;
 
     private SessionPolicyView defaults() {
@@ -98,14 +100,20 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
     @Override
     @Transactional(readOnly = true)
     public @NonNull List<SessionPolicyChangeView> history() {
-        return sessionPolicyChangeRepository.findAllByOrderByChangedAtDescChangeIdDesc().stream()
+        List<SessionPolicyChange> changes = sessionPolicyChangeRepository.findAllByOrderByChangedAtDescChangeIdDesc();
+        // Every actor of the history in one lookup (#2608): resolved at read time, never stored on the immutable rows,
+        // so a name that reaches the people-contact copy later shows on old rows too.
+        Map<String, String> names = actorDisplayNames.namesOf(
+                changes.stream().map(SessionPolicyChange::getActor).toList());
+        return changes.stream()
                 .map(change -> new SessionPolicyChangeView(
                         change.getSetting(),
                         change.getOldValue(),
                         change.getNewValue(),
                         change.getActor(),
                         change.getJustification(),
-                        change.getChangedAt()))
+                        change.getChangedAt(),
+                        ActorDisplayNames.nameOf(names, change.getActor())))
                 .toList();
     }
 

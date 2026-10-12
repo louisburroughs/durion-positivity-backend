@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +16,8 @@ import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
+import com.positivity.order.internal.dto.CashMovementSummary;
+import com.positivity.order.internal.dto.RegisterSessionSummary;
 import com.positivity.order.internal.entity.CashMovement;
 import com.positivity.order.internal.entity.CashMovementApproval;
 import com.positivity.order.internal.entity.CashMovementReason;
@@ -32,6 +35,7 @@ import com.positivity.order.internal.repository.CashMovementRepository;
 import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
+import com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -95,6 +99,7 @@ class RegisterSessionCashMovementTest {
     private final ExtAccountingPettyExpenseCategoryRepository categories =
             mock(ExtAccountingPettyExpenseCategoryRepository.class);
     private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final ExtPeopleContactUserLinkRepository links = mock(ExtPeopleContactUserLinkRepository.class);
 
     /** The session's movements as the repository holds them. */
     private final List<CashMovement> recorded = new ArrayList<>();
@@ -125,6 +130,7 @@ class RegisterSessionCashMovementTest {
                 categories,
                 new FunctionalCurrency("USD"),
                 mock(DrawerStatedTax.class),
+                new ActorDisplayNames(links),
                 CLOCK,
                 meters);
         session = RegisterSession.builder()
@@ -259,6 +265,7 @@ class RegisterSessionCashMovementTest {
                 .thenReturn(CashMovementApproval.builder()
                         .approvalId(APPROVAL_ID)
                         .approverUserId(MANAGER_ID)
+                        .approverUsername("sam.ortiz")
                         .amount(new BigDecimal(amount))
                         .build());
     }
@@ -947,5 +954,101 @@ class RegisterSessionCashMovementTest {
         closer.setDetails(Map.of(GatewaySecurityConstants.DETAIL_USERNAME, "closer"));
         SecurityContextHolder.getContext().setAuthentication(closer);
         service.confirmClose(SESSION_ID);
+    }
+
+    private static ExtPeopleContactUserLinkRepository.LinkedName linked(String username, String first, String last) {
+        return new ExtPeopleContactUserLinkRepository.LinkedName() {
+            @Override
+            public String getUsername() {
+                return username;
+            }
+
+            @Override
+            public String getFirstName() {
+                return first;
+            }
+
+            @Override
+            public String getLastName() {
+                return last;
+            }
+        };
+    }
+
+    @Nested
+    @DisplayName("#2608: actor display names beside the actor ids")
+    class ActorNames {
+
+        @Test
+        @DisplayName(
+                "an approved movement keeps the verified approver username and serves both names, never a username")
+        void approvedMovementServesBothNames() {
+            when(links.findActiveNames(any()))
+                    .thenReturn(List.of(linked("cashier", "Dana", "Reyes"), linked("sam.ortiz", "Sam", "Ortiz")));
+            service.recordCashMovement(petty(UUIDv7Generator.generate(), "30.00", null));
+            managerApproves(CashMovementReason.PETTY_EXPENSE, "25.00", "SHOP_SUPPLIES");
+
+            CashMovementResult approved =
+                    service.recordCashMovement(petty(UUIDv7Generator.generate(), "25.00", "token-1"));
+
+            assertThat(recorded.get(1).getApprovedByUsername()).isEqualTo("sam.ortiz");
+            assertThat(approved.movement().recordedByName()).isEqualTo("Dana Reyes");
+            assertThat(approved.movement().approvedByName()).isEqualTo("Sam Ortiz");
+            assertThat(approved.movement().clerkId()).isEqualTo("cashier");
+            assertThat(approved.movement().approvedBy()).isEqualTo(MANAGER_ID);
+        }
+
+        @Test
+        @DisplayName("a list resolves every cashier and approver in one lookup; unresolved actors serve null")
+        void listResolvesInOneLookup() {
+            service.recordCashMovement(petty(UUIDv7Generator.generate(), "10.00", null));
+            service.recordCashMovement(petty(UUIDv7Generator.generate(), "10.00", null));
+            managerApproves(CashMovementReason.PETTY_EXPENSE, "35.00", "SHOP_SUPPLIES");
+            service.recordCashMovement(petty(UUIDv7Generator.generate(), "35.00", "token-1"));
+            org.mockito.Mockito.clearInvocations(links);
+            when(links.findActiveNames(any())).thenReturn(List.of(linked("cashier", "Dana", "Reyes")));
+
+            List<CashMovementSummary> list = service.listCashMovements(SESSION_ID);
+
+            assertThat(list).extracting(CashMovementSummary::recordedByName).containsOnly("Dana Reyes");
+            // The approver has no ACTIVE link in the copy: null, never the username.
+            assertThat(list).extracting(CashMovementSummary::approvedByName).containsOnlyNulls();
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<java.util.Collection<String>> asked = ArgumentCaptor.forClass(java.util.Collection.class);
+            verify(links, times(1)).findActiveNames(asked.capture());
+            assertThat(asked.getValue()).containsExactlyInAnyOrder("cashier", "sam.ortiz");
+        }
+
+        @Test
+        @DisplayName("a movement approved before approver names were kept serves approvedByName null")
+        void legacyApprovalServesNull() {
+            when(approvalService.use(any(), any(), any(), any(), any(), any(), any()))
+                    .thenReturn(CashMovementApproval.builder()
+                            .approvalId(APPROVAL_ID)
+                            .approverUserId(MANAGER_ID)
+                            .amount(new BigDecimal("60.00"))
+                            .build());
+            when(links.findActiveNames(any())).thenReturn(List.of(linked("cashier", "Dana", "Reyes")));
+
+            CashMovementResult approved =
+                    service.recordCashMovement(petty(UUIDv7Generator.generate(), "60.00", "token-1"));
+
+            assertThat(approved.movement().approvedBy()).isEqualTo(MANAGER_ID);
+            assertThat(approved.movement().approvedByName()).isNull();
+        }
+
+        @Test
+        @DisplayName("the session serves its opener's and closer's names; an unresolved closer is null")
+        void sessionServesOpenerAndCloserNames() {
+            session.setClosedByClerkId("closer");
+            when(links.findActiveNames(any())).thenReturn(List.of(linked("opener", "Lee", "Park")));
+
+            RegisterSessionSummary summary = service.getSession(SESSION_ID);
+
+            assertThat(summary.openedByName()).isEqualTo("Lee Park");
+            assertThat(summary.closedByName()).isNull();
+            assertThat(summary.openedByClerkId()).isEqualTo("opener");
+            verify(links, times(1)).findActiveNames(any());
+        }
     }
 }

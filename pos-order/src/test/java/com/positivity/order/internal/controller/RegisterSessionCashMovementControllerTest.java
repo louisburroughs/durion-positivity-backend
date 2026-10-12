@@ -87,7 +87,9 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                 List.of(),
                 false,
                 null,
-                null);
+                null,
+                "Dana Reyes",
+                "Sam Ortiz");
     }
 
     @Test
@@ -104,7 +106,10 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                 .andExpect(jsonPath("$.reason").value("PETTY_EXPENSE"))
                 .andExpect(jsonPath("$.approvedBy").value("01900000-0000-7000-8000-00000000b001"))
                 .andExpect(jsonPath("$.clerkId").value("cashier"))
-                .andExpect(jsonPath("$.currencyCode").value("USD"));
+                .andExpect(jsonPath("$.currencyCode").value("USD"))
+                // #2608: display names beside the actor ids, never the sign-in name.
+                .andExpect(jsonPath("$.recordedByName").value("Dana Reyes"))
+                .andExpect(jsonPath("$.approvedByName").value("Sam Ortiz"));
 
         ArgumentCaptor<CashMovementCommand> command = ArgumentCaptor.forClass(CashMovementCommand.class);
         verify(registerSessionService).recordCashMovement(command.capture());
