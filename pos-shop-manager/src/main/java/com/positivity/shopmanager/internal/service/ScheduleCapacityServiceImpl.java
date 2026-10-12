@@ -626,6 +626,15 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
     /**
      * Which of the workorders holding a bay are linked to an appointment (#2530), one query, issued
      * only when there is a position to resolve.
+     *
+     * <p>Every workorder mapped to an appointment resolves here, superseded runs included, and each
+     * keeps its own position holds (ruling on #2537, recorded by #2605). A position is a fact about
+     * the bay: a superseded run's interval on it was real bay time, so past occupancy counts it, and
+     * the shared appointment key ledgers both runs to the same {@code carryOverIn} entry. This is not
+     * a double count: each run's position is its own interval on the bay. {@link
+     * WorkorderActuals#mostCurrent} governs only the appointment's own hold (which run's actuals stand
+     * for the booking), not which runs held a bay. Dropping superseded runs here would also turn them
+     * into walk-ins, which they are not.
      */
     private Map<UUID, UUID> resolveLinks(List<ExtWorkorderPositionReplica> positions) {
         List<UUID> workorderIds = positions.stream()
@@ -1223,15 +1232,15 @@ public class ScheduleCapacityServiceImpl implements ScheduleCapacityService {
         }
     }
 
+    /** An appointment's planned window, as a technician's assignment books it (#2527). */
+    private record PlannedWindow(Instant start, Instant end) {}
+
     /**
      * The last OK day one hold directly overlapped, and the bay it did so
      * in — the seed carry-over (pass 2) walks forward from. With the lookback in place this day can
      * itself be a pre-range day, which is exactly how a job planned entirely before {@code from}
      * reaches the requested range (#2050).
      */
-    /** An appointment's planned window, as a technician's assignment books it (#2527). */
-    private record PlannedWindow(Instant start, Instant end) {}
-
     private record OverrunTracker(DayAssembly lastOverlapDay, ExtBayReplica bay, Instant effectiveEnd) {}
 
     /**

@@ -55,6 +55,8 @@ public interface WorkOrderAppointmentMappingRepository extends JpaRepository<Wor
     /**
      * Which of the listed workorders are linked to an appointment, and to which (#2530) — one query
      * for the whole set, so the capacity read can tell a walk-in's bay history from a linked job's.
+     * Every mapped workorder is returned, a superseded run included: its bay time stays a linked
+     * job's (ruling on #2537, see {@code ScheduleCapacityServiceImpl#resolveLinks}).
      */
     @Query("SELECT m.workOrderId AS workOrderId, m.appointment.appointmentId AS appointmentId"
             + " FROM WorkOrderAppointmentMapping m WHERE m.workOrderId IN :workOrderIds")

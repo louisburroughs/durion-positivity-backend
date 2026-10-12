@@ -253,7 +253,8 @@ public class ReceivingController {
             @Parameter(description = "Receiving session identifier", required = true) @PathVariable UUID sessionId,
             @Parameter(
                             description =
-                                    "Optional key that makes retries idempotent; takes precedence over the body's idempotencyKey")
+                                    "Optional key that makes retries idempotent; takes precedence over the body's idempotencyKey",
+                            schema = @Schema(maxLength = MAX_IDEMPOTENCY_KEY_LENGTH))
                     @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false)
                     String idempotencyKeyHeader,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -378,7 +379,8 @@ public class ReceivingController {
             @Parameter(description = "Receiving line identifier", required = true) @PathVariable UUID lineId,
             @Parameter(
                             description =
-                                    "Optional key that makes retries idempotent; takes precedence over the body's idempotencyKey")
+                                    "Optional key that makes retries idempotent; takes precedence over the body's idempotencyKey",
+                            schema = @Schema(maxLength = MAX_IDEMPOTENCY_KEY_LENGTH))
                     @RequestHeader(value = IDEMPOTENCY_KEY_HEADER, required = false)
                     String idempotencyKeyHeader,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
