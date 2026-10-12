@@ -5567,6 +5567,7 @@ paths:
         name: Idempotency-Key
         required: false
         schema:
+          maxLength: 200
           type: string
       requestBody:
         content:
@@ -5676,6 +5677,7 @@ paths:
         name: Idempotency-Key
         required: false
         schema:
+          maxLength: 200
           type: string
       requestBody:
         content:
