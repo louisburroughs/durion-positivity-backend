@@ -13,12 +13,12 @@ public interface AuditExportService {
 
     /**
      * Persists a PENDING export job for the bound tenant and schedules it to run once the creating
-     * transaction commits.
+     * transaction commits. A WEBHOOK job pins the tenant's registered destination (#2497).
      *
      * @param request export parameters including filters, format, and delivery mode
      * @return the created job reference with PENDING status
-     * @throws com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException
-     *     when WEBHOOK delivery is requested
+     * @throws com.positivity.securityservice.internal.exception.AuditExportWebhookNotRegisteredException
+     *     when WEBHOOK delivery is requested and the tenant has no registered destination
      */
     @NonNull
     AuditExportJobResponse requestExport(@NonNull AuditExportRequest request);
@@ -48,8 +48,9 @@ public interface AuditExportService {
     AuditExportDownload getExportFile(@NonNull UUID jobId);
 
     /**
-     * Runs a PENDING job to COMPLETED or FAILED. Called on the export executor with the requesting
-     * tenant bound; a job that is no longer PENDING is left alone.
+     * Runs a PENDING job to COMPLETED or FAILED, delivering a WEBHOOK job's file to its pinned
+     * destination first. Called on the export executor with the requesting tenant bound; a job that is
+     * no longer PENDING is left alone.
      *
      * @param jobId the export job UUID
      */

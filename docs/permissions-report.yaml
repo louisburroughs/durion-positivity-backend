@@ -2,8 +2,8 @@ generatedAt: "2026-10-15T01:28:01.620543+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 529
-  uniquePermissionCount: 529
+  permissionCount: 530
+  uniquePermissionCount: 530
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -859,7 +859,7 @@ manifests:
     domain: "security"
     serviceName: "pos-security-service"
     version: "1.0"
-    permissionCount: 18
+    permissionCount: 19
     permissions:
       - name: "security:audit:create"
         description: "Create audit events and pricing snapshots"
@@ -867,6 +867,8 @@ manifests:
         description: "Export audit"
       - name: "security:audit:view"
         description: "View audit events and pricing snapshots"
+      - name: "security:audit_export:webhook_manage"
+        description: "Register, replace or remove the tenant's audit export webhook destination"
       - name: "security:authorization:decide"
         description: "Evaluate authorization decisions for principals"
       - name: "security:permission:register"
@@ -3570,6 +3572,12 @@ permissions:
     source: "pos-security-service/src/main/resources/permissions.yaml"
   - name: "security:audit:view"
     description: "View audit events and pricing snapshots"
+    domain: "security"
+    serviceName: "pos-security-service"
+    module: "pos-security-service"
+    source: "pos-security-service/src/main/resources/permissions.yaml"
+  - name: "security:audit_export:webhook_manage"
+    description: "Register, replace or remove the tenant's audit export webhook destination"
     domain: "security"
     serviceName: "pos-security-service"
     module: "pos-security-service"

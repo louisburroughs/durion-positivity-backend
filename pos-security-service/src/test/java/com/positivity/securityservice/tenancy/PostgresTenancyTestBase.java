@@ -85,6 +85,9 @@ public abstract class PostgresTenancyTestBase {
         registry.add("pos.tenancy.default-tenant-id", () -> "");
         // The pool no longer carries the transitional session binding either.
         registry.add("spring.datasource.hikari.connection-init-sql", () -> "");
+        // #2497: a WEBHOOK export whose host never resolves fails fast (2 attempts, 50 ms apart).
+        registry.add("pos.security.audit-export.webhook.max-attempts", () -> "2");
+        registry.add("pos.security.audit-export.webhook.initial-backoff", () -> "PT0.05S");
         registry.add("spring.flyway.url", POSTGRES::getJdbcUrl);
         registry.add("spring.flyway.user", POSTGRES::getUsername);
         registry.add("spring.flyway.password", POSTGRES::getPassword);

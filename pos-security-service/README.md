@@ -354,6 +354,52 @@ accounting workspace's Approval limits page. Through the gateway it is
 - No events, no writes, and no role name is logged (a custom role's name is tenant-authored text,
   ADR-0072).
 
+## Audit export webhook (#2497)
+
+A `WEBHOOK` audit export is sent to the one endpoint the tenant registered, never to a URL in the
+export request.
+
+- **Registration.** `PUT /v1/audit/exports/webhook {"url": "https://..."}` needs
+  `security:audit_export:webhook_manage` (granted to `ADMIN` only: it decides where the tenant's audit
+  data may go). One row per tenant in `audit_export_webhook` (tenant-scoped, RLS); registering again
+  replaces the URL and rotates the signing secret on the same row. The answer carries `signingSecret`
+  (32 random bytes, base64url without padding) — the only time it is ever returned, and it is never
+  logged. `GET` returns the destination without the secret to holders of either
+  `security:audit_export:webhook_manage` or `security:audit:export`, so whoever requests a `WEBHOOK`
+  export (and pos-mcp-server's write guard, acting as that caller) can see where it goes. `DELETE`
+  answers 204 whether or not one was registered.
+- **Destination rules** (`WebhookDestinationPolicy`, one class used at registration and before every
+  delivery attempt): an absolute `https` URL of at most 2048 characters, with a DNS host name (no IP
+  literal, in any dotted, decimal or hex form), no user info and no fragment, whose host resolves only to publicly routable
+  addresses — never any-local, loopback, link-local (`169.254.169.254` metadata included), private,
+  carrier-grade NAT (`100.64/10`), unique-local IPv6 (`fc00::/7`), multicast, reserved or documentation
+  ranges, nor IPv6 forms embedding a non-public IPv4 address. A refused URL answers 400
+  `VALIDATION_ERROR` with one `fieldErrors[url]` entry per broken rule.
+- **Request.** `POST /v1/audit/exports` with `deliveryMode: WEBHOOK` and no registered destination
+  answers 422 `AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED` and creates no job. Otherwise the job pins the
+  registration's id and URL (`webhook_id`, `webhook_url`).
+- **Delivery.** Once the file renders, the worker POSTs it with the format's `Content-Type` and
+  `X-Audit-Export-Job-Id`, `X-Audit-Export-Timestamp` (epoch seconds) and
+  `X-Audit-Export-Signature: sha256=<hex HMAC-SHA256(secret, timestamp + "." + body)>`, keyed with the
+  UTF-8 bytes of the secret string as it was shown. A receiver recomputes the HMAC over the exact
+  bytes it received and should reject a stale timestamp. Before every attempt the registration is read
+  again (delivery continues only while it still has the pinned id and URL; a rotated secret signs it)
+  and the host is re-resolved and re-checked against the rules, which blunts DNS rebinding. The client
+  is a plain JDK `HttpClient` (not load-balanced) with short connect and read timeouts that never
+  follows redirects and never uses a proxy (a proxy would resolve the host past the address check, so
+  an environment that only reaches the internet through one cannot deliver webhooks); any 2xx is
+  success. Up to `max-attempts` attempts with a doubling backoff.
+- **Outcome.** Delivered: the job is `COMPLETED`, `deliveryStatus: DELIVERED`, and its file stays
+  downloadable for the retention period like a `DOWNLOAD` job's. Not delivered (every attempt failed,
+  the destination was changed or removed, or the policy refused it): the job is `FAILED` with an
+  `errorMessage` saying why, `deliveryStatus: FAILED`, and **no file is kept or served** — audit data
+  that could not reach its destination does not linger, and a new export can be requested. Either way
+  `deliveryAttempts` and, on failure, a short `deliveryError` (`HTTP 503`, an exception class,
+  `DESTINATION_CHANGED`, `DESTINATION_REFUSED`; never the response body) are on the job.
+- **Follow-ups.** The signing secret is stored as-is in the RLS-protected row; encrypting it at rest
+  is a follow-up. The address check and the connection resolve the host separately; the JVM's address
+  cache makes them agree in practice, but pinning the connection to the checked address is not done.
+
 ## Key Classes
 
 - `JwtService` — issues and validates JWTs; encodes `perm_bits` and the `loc_fin_bits` / `loc_oth_bits` / `loc_scope` scope claims via `PermissionBitsetCodec`, and clamps `exp` to the earliest contributing staffing assignment
@@ -384,9 +430,12 @@ accounting workspace's Approval limits page. Through the gateway it is
 - `GET /v1/users/{id}` — retrieve a user
 - `POST /v1/users/{id}/unlock` — admin: unlock account
 - `POST /v1/users/{id}/enable` / `disable` — admin: enable/disable account
-- `POST /v1/audit/exports` — request an asynchronous, tenant-scoped audit export (CSV or JSON, `DOWNLOAD` only; auth: `security:audit:export`); answers 202 with a `PENDING` job
-- `GET /v1/audit/exports/{jobId}` — poll a job (read-only): `PENDING` → `IN_PROGRESS` → `COMPLETED` (with `downloadUrl`) or `FAILED` (with `errorMessage`); jobs and files are purged after `pos.security.audit-export.retention` (7 days), after which the job answers 404
+- `POST /v1/audit/exports` — request an asynchronous, tenant-scoped audit export (CSV or JSON; `DOWNLOAD`, or `WEBHOOK` to the tenant's registered endpoint; auth: `security:audit:export`); answers 202 with a `PENDING` job, or 422 `AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED` for `WEBHOOK` with no destination (no job). See [Audit export webhook](#audit-export-webhook-2497)
+- `GET /v1/audit/exports/{jobId}` — poll a job (read-only): `PENDING` → `IN_PROGRESS` → `COMPLETED` (with `downloadUrl`) or `FAILED` (with `errorMessage`), plus `webhookUrl` and the delivery outcome for a `WEBHOOK` job; jobs and files are purged after `pos.security.audit-export.retention` (7 days), after which the job answers 404
 - `GET /v1/audit/exports/{jobId}/download` — the completed job's file as an attachment; 409 `AUDIT_EXPORT_NOT_READY` until `COMPLETED`
+- `PUT /v1/audit/exports/webhook` — register or replace the tenant's audit export webhook and rotate its signing secret, returned in this response only (auth: `security:audit_export:webhook_manage`, ADMIN)
+- `GET /v1/audit/exports/webhook` — the registered destination without its secret, or 404 `AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED` (auth: `security:audit_export:webhook_manage` or `security:audit:export`)
+- `DELETE /v1/audit/exports/webhook` — remove it; 204, idempotent (auth: `security:audit_export:webhook_manage`)
 - `GET /v1/users/authorization/person-decision` — off-session check whether the user linked to a personId has a permission
 - `POST /internal/v1/auth/step-up` — internal (refused by the gateway, absent from the OpenAPI document): checks a person's own
   credentials once in the caller's tenant (`X-Tenant-Id`, never a body field) under the sign-in lockout policy and answers
@@ -416,7 +465,8 @@ row in the same pull request as the controller or advice that mints the code.
 | Code | Status | Description |
 |------|--------|-------------|
 | `VALIDATION_ERROR` | 400 | This module's own field/reference validation failure (`SecurityValidationException`): a blank required field, a malformed permission key or bitset, an unsupported `perm_ver`. A role or user reference that does not resolve is `ROLE_NOT_FOUND` / `USER_NOT_FOUND` (404) since #1802. Aligned onto the fleet-wide spelling in #1730; it answered `INVALID_REQUEST` between #1694 and #1730 |
-| `AUDIT_EXPORT_WEBHOOK_UNSUPPORTED` | 400 | `POST /v1/audit/exports` with `deliveryMode: WEBHOOK`: no per-tenant webhook destination is designed yet, so only `DOWNLOAD` is accepted (#2408) |
+| `VALIDATION_ERROR` (webhook) | 400 | `PUT /v1/audit/exports/webhook` with a `url` that is not an allowed destination; one `fieldErrors` entry on `url` per broken rule (#2497). The URL is validated by the service, not bean validation, so a missing `url` is this code too, never `INVALID_REQUEST` |
+| `AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED` | 404 / 422 | The tenant has no audit export webhook: 404 on `GET /v1/audit/exports/webhook`, 422 on `POST /v1/audit/exports` with `deliveryMode: WEBHOOK` (no job is created) (#2497). Replaces #2408's 400 `AUDIT_EXPORT_WEBHOOK_UNSUPPORTED`, which no longer exists |
 | `INVALID_REQUEST` | 400 | Request-binding failure raised by the framework before the controller runs — an unreadable body, a missing query parameter, a bean-validation rejection. A pre-existing code with consumers, so #1730 deliberately did **not** rename it. Clients that switch on validation codes should handle both this and `VALIDATION_ERROR` |
 | `INVALID_STATE` | 400 | An `IllegalStateException` from a service other than a role-assignment overlap |
 | `INVALID_CREDENTIALS` | 401 | Username or password is incorrect; also the code for a hidden unknown-user login and for any other authentication failure the entry point cannot name |
@@ -603,6 +653,10 @@ committed spec against the controllers' declarations and fails on drift in eithe
 | `pos.security.audit-export.stale-after` (`POS_SECURITY_AUDIT_EXPORT_STALE_AFTER`) | `PT30M` | A job still `PENDING`/`IN_PROGRESS` this long after it was requested is marked `FAILED` (interrupted) by the scheduled sweep; reads never change a job (#2408) |
 | `pos.security.audit-export.retention` (`POS_SECURITY_AUDIT_EXPORT_RETENTION`) | `P7D` | Jobs and their files older than this (from `completedAt`, else `requestedAt`) are deleted by the sweep; a purged job answers 404 (#2408) |
 | `pos.security.audit-export.sweep-interval` (`POS_SECURITY_AUDIT_EXPORT_SWEEP_INTERVAL`) | `PT5M` | Fixed delay (and initial delay) of the per-tenant audit export sweep (`TenantIterator`) (#2408) |
+| `pos.security.audit-export.webhook.max-attempts` (`POS_SECURITY_AUDIT_EXPORT_WEBHOOK_MAX_ATTEMPTS`) | `3` | Delivery attempts per `WEBHOOK` export (1-10) before the job ends `FAILED` (#2497) |
+| `pos.security.audit-export.webhook.initial-backoff` (`POS_SECURITY_AUDIT_EXPORT_WEBHOOK_INITIAL_BACKOFF`) | `PT5S` | Wait after the first failed attempt, doubling after each further one (#2497) |
+| `pos.security.audit-export.webhook.connect-timeout` (`POS_SECURITY_AUDIT_EXPORT_WEBHOOK_CONNECT_TIMEOUT`) | `PT5S` | Connect timeout of one delivery attempt (#2497) |
+| `pos.security.audit-export.webhook.read-timeout` (`POS_SECURITY_AUDIT_EXPORT_WEBHOOK_READ_TIMEOUT`) | `PT30S` | How long one attempt waits for the endpoint's response (#2497) |
 | `pos.tenancy.default-tenant-id` | alpha default tenant | Transitional binding for unbound requests and pre-WS2b tokens without `tid`; empty means strict |
 | `pos.tenancy.unenforced-paths` | `/v1/auth/` | Paths that run unbound even in strict mode (login resolves the tenant itself) |
 

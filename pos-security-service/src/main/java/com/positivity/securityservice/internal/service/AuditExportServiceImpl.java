@@ -1,7 +1,9 @@
 package com.positivity.securityservice.internal.service;
 
+import com.positivity.securityservice.internal.client.AuditExportWebhookSender;
 import com.positivity.securityservice.internal.config.AuditExportConfig;
 import com.positivity.securityservice.internal.config.AuditExportProperties;
+import com.positivity.securityservice.internal.config.AuditExportWebhookProperties;
 import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import com.positivity.securityservice.internal.dto.AuditExportDownload;
 import com.positivity.securityservice.internal.dto.AuditExportJobResponse;
@@ -9,18 +11,24 @@ import com.positivity.securityservice.internal.dto.AuditExportRequest;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
 import com.positivity.securityservice.internal.entity.AuditExportFile;
 import com.positivity.securityservice.internal.entity.AuditExportJob;
+import com.positivity.securityservice.internal.entity.AuditExportWebhook;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
 import com.positivity.securityservice.internal.enums.AuditDeliveryMode;
+import com.positivity.securityservice.internal.enums.AuditExportDeliveryStatus;
 import com.positivity.securityservice.internal.enums.AuditExportFormat;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
 import com.positivity.securityservice.internal.exception.AuditExportNotReadyException;
-import com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookNotRegisteredException;
 import com.positivity.securityservice.internal.repository.AuditExportFileRepository;
 import com.positivity.securityservice.internal.repository.AuditExportJobRepository;
+import com.positivity.securityservice.internal.repository.AuditExportWebhookRepository;
 import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
 import jakarta.persistence.EntityNotFoundException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -29,6 +37,8 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -42,7 +52,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Persisted, tenant-scoped audit export jobs (B-4, #2408).
+ * Persisted, tenant-scoped audit export jobs (B-4, #2408), delivered as a download or to the tenant's
+ * registered webhook (#2497).
  *
  * <p>A request writes a PENDING {@link AuditExportJob} and, once that transaction commits, hands
  * the job to the {@link AuditExportConfig#EXECUTOR_BEAN} executor, whose task decorator carries the
@@ -51,6 +62,17 @@ import tools.jackson.databind.ObjectMapper;
  * page in its own read-only transaction, so no entity outlives its page), renders CSV or JSON
  * incrementally under both a row and a byte cap, and stores the file with the job (COMPLETED) — or
  * records a sanitised reason (FAILED).
+ *
+ * <p><strong>WEBHOOK delivery (#2497).</strong> A WEBHOOK request needs the tenant's registered
+ * destination (else 422 {@code AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED} and no job), and the job pins
+ * that registration's id and URL. Once the file renders, the worker sends it with {@link
+ * AuditExportWebhookSender}, outside any transaction, up to {@link
+ * AuditExportWebhookProperties#maxAttempts()} times with a doubling backoff. Before every attempt it
+ * reads the registration again: delivery goes ahead only while the tenant's destination still has the
+ * pinned id and URL (a rotated secret signs it), so a re-registration elsewhere or a removal stops it.
+ * A 2xx completes the job and stores its file, which stays downloadable like a DOWNLOAD job's; a
+ * delivery that never succeeds fails the job and keeps no file. Either way the attempts, the outcome
+ * and a short non-sensitive error are recorded on the job.
  *
  * <p>Every lifecycle transition is a status-conditional update: completion writes the file only if
  * the job is still IN_PROGRESS in the same transaction, so a job the sweep has already failed never
@@ -74,37 +96,94 @@ public class AuditExportServiceImpl implements AuditExportService {
             + " narrow the filters (for example the date range) and request it again.";
     static final String TOO_MANY_BYTES_MESSAGE = "The export file would be larger than %d bytes, the configured limit;"
             + " narrow the filters (for example the date range) and request it again.";
+    static final String UNDELIVERED_MESSAGE = "The export could not be delivered to the registered webhook after %d"
+            + " attempt(s) (last error: %s); check that the endpoint answers 2xx, then request a new export.";
+    static final String DESTINATION_CHANGED_MESSAGE = "The audit export webhook destination was changed or removed"
+            + " after this export was requested, so it was not delivered; request a new export.";
+    static final String DESTINATION_REFUSED_MESSAGE = "The webhook destination is no longer allowed (it now resolves"
+            + " to a loopback, private, link-local or metadata address), so nothing was sent; register a public"
+            + " HTTPS endpoint and request a new export.";
+    static final String DELIVERY_INTERRUPTED_MESSAGE =
+            "The export was interrupted while it was being delivered; request a new export.";
+    static final String DESTINATION_CHANGED_ERROR = "DESTINATION_CHANGED";
+    static final String INTERRUPTED_ERROR = "InterruptedException";
     static final int PAGE_SIZE = 500;
     private static final Set<AuditExportStatus> ACTIVE =
             Set.of(AuditExportStatus.PENDING, AuditExportStatus.IN_PROGRESS);
     private static final Sort BY_EVENT_ID = Sort.by(Sort.Direction.ASC, "eventId");
 
+    /** Waits between delivery attempts; a seam so tests never sleep. */
+    @FunctionalInterface
+    interface Sleeper {
+        void sleep(@NonNull Duration duration) throws InterruptedException;
+    }
+
     private final AuditExportJobRepository jobRepository;
     private final AuditExportFileRepository fileRepository;
     private final AuditLogEventRepository auditLogEventRepository;
+    private final AuditExportWebhookRepository webhookRepository;
+    private final AuditExportWebhookSender webhookSender;
     private final ObjectMapper objectMapper;
     private final Clock clock;
     private final AuditExportProperties properties;
+    private final AuditExportWebhookProperties webhookProperties;
     private final Executor executor;
+    private final Sleeper sleeper;
     private final TransactionTemplate writeTx;
     private final TransactionTemplate readTx;
 
+    @Autowired
     public AuditExportServiceImpl(
             AuditExportJobRepository jobRepository,
             AuditExportFileRepository fileRepository,
             AuditLogEventRepository auditLogEventRepository,
+            AuditExportWebhookRepository webhookRepository,
+            AuditExportWebhookSender webhookSender,
             ObjectMapper objectMapper,
             Clock clock,
             AuditExportProperties properties,
+            AuditExportWebhookProperties webhookProperties,
             @Qualifier(AuditExportConfig.EXECUTOR_BEAN) Executor executor,
             PlatformTransactionManager transactionManager) {
+        this(
+                jobRepository,
+                fileRepository,
+                auditLogEventRepository,
+                webhookRepository,
+                webhookSender,
+                objectMapper,
+                clock,
+                properties,
+                webhookProperties,
+                executor,
+                transactionManager,
+                Thread::sleep);
+    }
+
+    AuditExportServiceImpl(
+            AuditExportJobRepository jobRepository,
+            AuditExportFileRepository fileRepository,
+            AuditLogEventRepository auditLogEventRepository,
+            AuditExportWebhookRepository webhookRepository,
+            AuditExportWebhookSender webhookSender,
+            ObjectMapper objectMapper,
+            Clock clock,
+            AuditExportProperties properties,
+            AuditExportWebhookProperties webhookProperties,
+            Executor executor,
+            PlatformTransactionManager transactionManager,
+            Sleeper sleeper) {
         this.jobRepository = jobRepository;
         this.fileRepository = fileRepository;
         this.auditLogEventRepository = auditLogEventRepository;
+        this.webhookRepository = webhookRepository;
+        this.webhookSender = webhookSender;
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.properties = properties;
+        this.webhookProperties = webhookProperties;
         this.executor = executor;
+        this.sleeper = sleeper;
         // REQUIRES_NEW: the worker steps and the after-commit failure path must never join a
         // transaction still bound to the submitting thread.
         this.writeTx = new TransactionTemplate(transactionManager);
@@ -118,12 +197,15 @@ public class AuditExportServiceImpl implements AuditExportService {
     @NonNull
     @Transactional
     public AuditExportJobResponse requestExport(@NonNull AuditExportRequest request) {
-        if (request.getDeliveryMode() == AuditDeliveryMode.WEBHOOK) {
-            throw new AuditExportWebhookUnsupportedException();
-        }
         AuditEventSearchFilter filter =
                 request.getFilters() == null ? new AuditEventSearchFilter() : request.getFilters();
         AuditEventQueries.validate(filter);
+        AuditExportWebhook destination = null;
+        if (request.getDeliveryMode() == AuditDeliveryMode.WEBHOOK) {
+            destination = webhookRepository
+                    .findFirstByOrderByRegisteredAtDesc()
+                    .orElseThrow(AuditExportWebhookNotRegisteredException::forExport);
+        }
 
         AuditExportJob job = new AuditExportJob();
         job.setStatus(AuditExportStatus.PENDING);
@@ -134,6 +216,10 @@ public class AuditExportServiceImpl implements AuditExportService {
         job.setFilterEventType(blankToNull(filter.getEventType()));
         job.setFilterActorId(blankToNull(filter.getActorId()));
         job.setFilterAggregateId(blankToNull(filter.getAggregateId()));
+        if (destination != null) {
+            job.setWebhookId(destination.getWebhookId());
+            job.setWebhookUrl(destination.getUrl());
+        }
         job.setRequestedAt(clock.instant());
         AuditExportJob saved = jobRepository.save(job);
         AuditExportJobResponse response = toResponse(saved);
@@ -182,6 +268,10 @@ public class AuditExportServiceImpl implements AuditExportService {
         }
         try {
             Rendered rendered = render(jobId, claim);
+            if (claim.deliveryMode() == AuditDeliveryMode.WEBHOOK) {
+                deliverAndFinish(jobId, claim, rendered);
+                return;
+            }
             Boolean completed = writeTx.execute(status -> complete(jobId, rendered));
             if (!Boolean.TRUE.equals(completed)) {
                 log.info("Audit export {} finished after it had been failed; result discarded", jobId);
@@ -234,7 +324,7 @@ public class AuditExportServiceImpl implements AuditExportService {
                 .actorId(job.getFilterActorId())
                 .aggregateId(job.getFilterAggregateId())
                 .build();
-        return new Claim(filter, job.getFormat());
+        return new Claim(filter, job.getFormat(), job.getDeliveryMode(), job.getWebhookId(), job.getWebhookUrl());
     }
 
     /**
@@ -319,6 +409,114 @@ public class AuditExportServiceImpl implements AuditExportService {
     }
 
     /**
+     * Delivers a rendered WEBHOOK export and settles the job: COMPLETED with its file when an attempt
+     * answered 2xx, FAILED without one otherwise. The delivery outcome is recorded either way, in the
+     * same transaction as the status change.
+     */
+    private void deliverAndFinish(UUID jobId, Claim claim, Rendered rendered) {
+        Delivery delivery = deliver(jobId, claim, rendered);
+        if (!delivery.delivered()) {
+            log.warn(
+                    "Audit export {} not delivered after {} attempt(s): {}",
+                    jobId,
+                    delivery.attempts(),
+                    delivery.error());
+            failDelivery(jobId, delivery);
+            return;
+        }
+        Boolean completed = writeTx.execute(status -> {
+            jobRepository.recordDelivery(
+                    jobId,
+                    AuditExportDeliveryStatus.DELIVERED,
+                    delivery.attempts(),
+                    delivery.deliveredAt(),
+                    null,
+                    clock.instant());
+            return complete(jobId, rendered);
+        });
+        if (!Boolean.TRUE.equals(completed)) {
+            log.warn(
+                    "Audit export {} was delivered after it had been failed; delivery recorded, file discarded", jobId);
+        }
+    }
+
+    /**
+     * Sends the file up to {@code maxAttempts} times. Before each attempt the tenant's registration is
+     * read again and must still have the job's pinned id and URL: a destination re-registered elsewhere
+     * or removed is never sent to, and a rotated secret signs the attempt. Runs outside any
+     * transaction; each registration read has its own.
+     */
+    private @NonNull Delivery deliver(UUID jobId, Claim claim, Rendered rendered) {
+        UUID webhookId = claim.webhookId();
+        String webhookUrl = claim.webhookUrl();
+        URI destination = webhookUrl == null ? null : parseDestination(webhookUrl);
+        if (destination == null || webhookId == null) {
+            return Delivery.notDelivered(0, AuditExportWebhookSender.DESTINATION_REFUSED, DESTINATION_REFUSED_MESSAGE);
+        }
+        byte[] body = rendered.content().getBytes(StandardCharsets.UTF_8);
+        Duration backoff = webhookProperties.initialBackoff();
+        String lastError = null;
+        int attempts = 0;
+        for (int attempt = 1; attempt <= webhookProperties.maxAttempts(); attempt++) {
+            String secret = readTx.execute(status -> currentSecret(webhookId, webhookUrl));
+            if (secret == null) {
+                return Delivery.notDelivered(attempts, DESTINATION_CHANGED_ERROR, DESTINATION_CHANGED_MESSAGE);
+            }
+            attempts = attempt;
+            AuditExportWebhookSender.Attempt result =
+                    webhookSender.send(destination, secret, jobId, rendered.contentType(), body);
+            if (result.delivered()) {
+                return Delivery.delivered(attempts, clock.instant());
+            }
+            lastError = result.error();
+            if (result.outcome() == AuditExportWebhookSender.Outcome.REFUSED) {
+                return Delivery.notDelivered(attempts, lastError, DESTINATION_REFUSED_MESSAGE);
+            }
+            if (attempt < webhookProperties.maxAttempts()) {
+                try {
+                    sleeper.sleep(backoff);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return Delivery.notDelivered(attempts, INTERRUPTED_ERROR, DELIVERY_INTERRUPTED_MESSAGE);
+                }
+                backoff = backoff.multipliedBy(2);
+            }
+        }
+        return Delivery.notDelivered(attempts, lastError, UNDELIVERED_MESSAGE.formatted(attempts, lastError));
+    }
+
+    private static @Nullable URI parseDestination(@NonNull String webhookUrl) {
+        try {
+            return new URI(webhookUrl);
+        } catch (URISyntaxException e) {
+            return null;
+        }
+    }
+
+    /** CONFIDENTIAL: the current signing secret, or null when the pinned registration no longer holds. */
+    private @Nullable String currentSecret(@NonNull UUID webhookId, @NonNull String webhookUrl) {
+        return webhookRepository
+                .findFirstByOrderByRegisteredAtDesc()
+                .filter(webhook -> webhookId.equals(webhook.getWebhookId()) && webhookUrl.equals(webhook.getUrl()))
+                .map(AuditExportWebhook::getSigningSecret)
+                .orElse(null);
+    }
+
+    private void failDelivery(UUID jobId, Delivery delivery) {
+        try {
+            writeTx.executeWithoutResult(status -> {
+                Instant now = clock.instant();
+                jobRepository.recordDelivery(
+                        jobId, AuditExportDeliveryStatus.FAILED, delivery.attempts(), null, delivery.error(), now);
+                jobRepository.markFailed(jobId, ACTIVE, delivery.message(), now);
+            });
+        } catch (RuntimeException e) {
+            // Nothing else to do: the scheduled sweep fails the job as interrupted.
+            log.error("Audit export {} could not be marked FAILED after its delivery failed", jobId, e);
+        }
+    }
+
+    /**
      * Marks the job COMPLETED and stores its file in one transaction, only if the job is still
      * IN_PROGRESS: when the sweep has failed it meanwhile, nothing is written.
      */
@@ -352,17 +550,22 @@ public class AuditExportServiceImpl implements AuditExportService {
     }
 
     private static AuditExportJobResponse toResponse(AuditExportJob job) {
-        boolean downloadable =
-                job.getStatus() == AuditExportStatus.COMPLETED && job.getDeliveryMode() == AuditDeliveryMode.DOWNLOAD;
+        boolean downloadable = job.getStatus() == AuditExportStatus.COMPLETED;
         return AuditExportJobResponse.builder()
                 .jobId(job.getJobId())
                 .status(job.getStatus())
                 .format(job.getFormat())
+                .deliveryMode(job.getDeliveryMode())
                 .requestedAt(job.getRequestedAt())
                 .completedAt(job.getCompletedAt())
                 .rowCount(job.getRowCount())
                 .downloadUrl(downloadable ? DOWNLOAD_PATH_TEMPLATE.formatted(job.getJobId()) : null)
                 .errorMessage(job.getErrorMessage())
+                .webhookUrl(job.getWebhookUrl())
+                .deliveryStatus(job.getDeliveryStatus())
+                .deliveryAttempts(job.getDeliveryAttempts())
+                .deliveredAt(job.getDeliveredAt())
+                .deliveryError(job.getDeliveryError())
                 .build();
     }
 
@@ -370,9 +573,38 @@ public class AuditExportServiceImpl implements AuditExportService {
         return AuditEventQueries.isBlank(value) ? null : value;
     }
 
-    private record Claim(AuditEventSearchFilter filter, AuditExportFormat format) {}
+    private record Claim(
+            AuditEventSearchFilter filter,
+            AuditExportFormat format,
+            AuditDeliveryMode deliveryMode,
+            @Nullable UUID webhookId,
+            @Nullable String webhookUrl) {}
 
     private record Rendered(String fileName, String contentType, String content, long sizeBytes, int rowCount) {}
+
+    /**
+     * How a WEBHOOK delivery ended.
+     *
+     * @param attempts attempts made (0 when the destination no longer held before the first)
+     * @param deliveredAt when an attempt answered 2xx, else null
+     * @param error short non-sensitive reason when not delivered, else null
+     * @param message the job's errorMessage when not delivered, else null
+     */
+    private record Delivery(
+            boolean delivered,
+            int attempts,
+            @Nullable Instant deliveredAt,
+            @Nullable String error,
+            @Nullable String message) {
+
+        static Delivery delivered(int attempts, Instant at) {
+            return new Delivery(true, attempts, at, null, null);
+        }
+
+        static Delivery notDelivered(int attempts, @Nullable String error, String message) {
+            return new Delivery(false, attempts, null, error, message);
+        }
+    }
 
     /** The export passed {@link AuditExportProperties#maxRows()} or {@link AuditExportProperties#maxBytes()}. */
     private static final class ExportLimitException extends RuntimeException {

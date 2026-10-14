@@ -3,7 +3,8 @@ package com.positivity.securityservice.internal.config;
 import com.positivity.securityservice.internal.dto.AuditLogEventRequest;
 import com.positivity.securityservice.internal.exception.ActivationTokenInvalidException;
 import com.positivity.securityservice.internal.exception.AuditExportNotReadyException;
-import com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookInvalidException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookNotRegisteredException;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
@@ -624,20 +625,42 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handles AuditExportWebhookUnsupportedException (#2408): WEBHOOK delivery has no designed,
-     * per-tenant destination yet, so the request is refused rather than queued.
+     * Handles AuditExportWebhookInvalidException (#2497): the URL offered for the tenant's audit
+     * export webhook is not an allowed destination.
      *
-     * **HTTP Status:** 400 Bad Request
+     * **HTTP Status:** 400 Bad Request (VALIDATION_ERROR, ADR-0017 §1) with one {@code fieldErrors}
+     * entry on {@code url} per problem. The URL itself is not logged: it is the caller's, and may
+     * embed a token.
      */
-    @ExceptionHandler(AuditExportWebhookUnsupportedException.class)
+    @ExceptionHandler(AuditExportWebhookInvalidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ResponseEntity<ApiError> handleAuditExportWebhookUnsupportedException(
-            AuditExportWebhookUnsupportedException ex, WebRequest request) {
-
+    public ResponseEntity<ApiError> handleAuditExportWebhookInvalidException(
+            AuditExportWebhookInvalidException ex, WebRequest request) {
         String correlationId = extractCorrelationId(request);
-        log.warn("Audit export WEBHOOK refused (correlationId={}): {}", correlationId, ex.getMessage());
+        log.warn("Audit export webhook refused (correlationId={}): {}", correlationId, ex.fieldMessages());
+        return respondWithFieldErrors(
+                HttpStatus.BAD_REQUEST,
+                "VALIDATION_ERROR",
+                ex.getMessage(),
+                correlationId,
+                fieldErrors(AuditExportWebhookInvalidException.FIELD, ex.fieldMessages()));
+    }
 
-        return respond(HttpStatus.BAD_REQUEST, "AUDIT_EXPORT_WEBHOOK_UNSUPPORTED", ex.getMessage(), correlationId);
+    /**
+     * Handles AuditExportWebhookNotRegisteredException (#2497): the tenant has no audit export
+     * webhook destination.
+     *
+     * **HTTP Status:** 404 Not Found when the destination is read, 422 Unprocessable Entity when a
+     * WEBHOOK export is requested without one (no job is created); the code is {@code
+     * AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED} on both.
+     */
+    @ExceptionHandler(AuditExportWebhookNotRegisteredException.class)
+    public ResponseEntity<ApiError> handleAuditExportWebhookNotRegisteredException(
+            AuditExportWebhookNotRegisteredException ex, WebRequest request) {
+        String correlationId = extractCorrelationId(request);
+        HttpStatus status = ex.exportRequest() ? HttpStatus.UNPROCESSABLE_ENTITY : HttpStatus.NOT_FOUND;
+        log.warn("Audit export webhook not registered (correlationId={}): {}", correlationId, ex.getMessage());
+        return respond(status, "AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED", ex.getMessage(), correlationId);
     }
 
     /**

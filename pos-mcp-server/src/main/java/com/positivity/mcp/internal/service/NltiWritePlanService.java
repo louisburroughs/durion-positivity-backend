@@ -65,6 +65,13 @@ import org.springframework.stereotype.Service;
  * pinned with the plan. Before execution the event is inspected again: a changed status, or anything
  * the preview showed that no longer holds, cancels the plan as stale data.
  *
+ * <p>#2497: a plan for pos-security-service's {@code requestAuditExport} with WEBHOOK delivery passes
+ * {@link AuditExportWriteGuard} the same way: HIGH risk, the tenant's webhook destination read as the
+ * caller before the preview (none registered answers {@code NEEDS_CLARIFICATION} with {@code
+ * preconditionFailed}), a preview that names the URL the audit data will leave the shop to, and a
+ * pinned fingerprint, so a destination re-registered before confirmation cancels the plan as stale.
+ * A DOWNLOAD export is not guarded.
+ *
  * <p><strong>Transactionality:</strong> deliberately not wrapped in a single transaction — the
  * status transitions around the remote tool call must survive an execution failure (each
  * {@code save} commits on its own), so a failed execution leaves an {@code ERROR} plan rather than
@@ -113,6 +120,10 @@ public class NltiWritePlanService {
     private static final TypeReference<Map<String, ArgProvenance>> MAP_OF_PROVENANCE = new TypeReference<>() {};
     private static final TypeReference<Map<String, String>> MAP_OF_STRING = new TypeReference<>() {};
 
+    /** The keys the write guards store their pins under; never handed to the generic version probe. */
+    private static final List<String> GUARD_PIN_KEYS =
+            List.of(AccountingEventWriteGuard.PIN_KEY, AuditExportWriteGuard.PIN_KEY);
+
     private final NltiWritePlanRepository planRepository;
     private final NltiRequestRepository requestRepository;
     private final NltiSessionAccess sessionAccess;
@@ -120,6 +131,7 @@ public class NltiWritePlanService {
     private final WritePlanExecutor writePlanExecutor;
     private final SourceEntityVersionProbe versionProbe;
     private final AccountingEventWriteGuard writeGuard;
+    private final AuditExportWriteGuard auditExportGuard;
     private final AuditLedgerService auditLedgerService;
     private final NltiRequestTelemetryPublisher telemetryPublisher;
     private final MeterRegistry meterRegistry;
@@ -137,6 +149,7 @@ public class NltiWritePlanService {
             @NonNull WritePlanExecutor writePlanExecutor,
             @NonNull SourceEntityVersionProbe versionProbe,
             @NonNull AccountingEventWriteGuard writeGuard,
+            @NonNull AuditExportWriteGuard auditExportGuard,
             @NonNull AuditLedgerService auditLedgerService,
             @NonNull NltiRequestTelemetryPublisher telemetryPublisher,
             @NonNull MeterRegistry meterRegistry,
@@ -149,6 +162,7 @@ public class NltiWritePlanService {
         this.writePlanExecutor = writePlanExecutor;
         this.versionProbe = versionProbe;
         this.writeGuard = writeGuard;
+        this.auditExportGuard = auditExportGuard;
         this.auditLedgerService = auditLedgerService;
         this.telemetryPublisher = telemetryPublisher;
         this.meterRegistry = meterRegistry;
@@ -200,8 +214,10 @@ public class NltiWritePlanService {
         }
 
         // #2374: a guarded tool (an accounting posting) is HIGH whatever the classifier said, so the
-        // HIGH-risk rules below and at confirmation apply to it.
-        NltiRiskLevel riskLevel = AccountingEventWriteGuard.riskFloor(targetTool, riskOf(intent.riskLevel()));
+        // HIGH-risk rules below and at confirmation apply to it. #2497: so is an audit export that
+        // sends audit data outside the shop (WEBHOOK); a DOWNLOAD export keeps its classified risk.
+        NltiRiskLevel riskLevel = AuditExportWriteGuard.riskFloor(
+                targetTool, args, AccountingEventWriteGuard.riskFloor(targetTool, riskOf(intent.riskLevel())));
         // Drift guards (G6.4): every arg carries provenance; HIGH risk must not ride on inferred
         // defaults. Both hold by construction here, but the invariants are enforced regardless so
         // future plan producers cannot silently regress them.
@@ -222,33 +238,33 @@ public class NltiWritePlanService {
         // PLAN time (fail-closed — an unknown tool or a tool with zero grants is never plannable).
         requireToolPermission(targetTool, callerPermissionCodes);
 
-        // #2374: the guarded tool's precondition, read as the caller before anything is previewed or
-        // reused: a pending plan for the same event is no use once its status has moved on.
+        // #2374/#2497: the guarded tool's precondition, read as the caller before anything is
+        // previewed or reused: a pending plan is no use once what its preview showed has moved on.
         String guardPreview = null;
         String guardFingerprint = null;
-        if (AccountingEventWriteGuard.guards(targetTool)) {
-            AccountingEventWriteGuard.Inspection inspection = writeGuard.inspect(targetTool, args, authHeader);
-            if (!inspection.permitted()) {
+        GuardCheck guard = guardCheck(targetTool, args, authHeader);
+        if (guard != null) {
+            if (!guard.permitted()) {
                 return new NltiResponseV1(
                         request.getId(),
                         request.getCorrelationId(),
                         request.getSessionId(),
                         STATUS_NEEDS_CLARIFICATION,
                         intent,
-                        Map.of(META_PRECONDITION_FAILED, inspection.message()));
+                        Map.of(META_PRECONDITION_FAILED, guard.message()));
             }
-            guardPreview = inspection.message();
-            guardFingerprint = inspection.fingerprint();
+            guardPreview = guard.message();
+            guardFingerprint = guard.fingerprint();
         }
 
         String argsJson = toJson(args);
         Map<String, String> entityVersions =
                 new LinkedHashMap<>(stringMapFromContext(dto.clientContext(), CONTEXT_ENTITY_VERSIONS));
-        if (guardFingerprint != null) {
-            // #2374: pins everything the guarded preview showed (status, amount, the rules it posts
-            // under); confirm compares it before executing. Set after the client's versions so a
-            // client cannot overwrite it.
-            entityVersions.put(AccountingEventWriteGuard.PIN_KEY, guardFingerprint);
+        if (guard != null && guardFingerprint != null) {
+            // #2374/#2497: pins everything the guarded preview showed (an event's status, amount and
+            // rules; an export's destination); confirm compares it before executing. Set after the
+            // client's versions so a client cannot overwrite it.
+            entityVersions.put(guard.pinKey(), guardFingerprint);
         }
         String entityVersionsJson = entityVersions.isEmpty() ? null : toJson(entityVersions);
         // Single-pending rule (G6.5): an identical pending plan is reused; any materially
@@ -369,18 +385,18 @@ public class NltiWritePlanService {
         // #2374: a guarded tool is re-inspected as the caller just before execution. A status that moved
         // on since the preview (another retry, a timed-out attempt that did land) refuses; anything else
         // the preview showed that changed, the rules an unpinned posting follows included, no longer
-        // matches the pinned fingerprint. Either is stale data: the plan is cancelled rather than run.
-        if (AccountingEventWriteGuard.guards(plan.getTargetTool())) {
-            AccountingEventWriteGuard.Inspection inspection =
-                    writeGuard.inspect(plan.getTargetTool(), fromJson(plan.getArgsJson(), MAP_OF_OBJECT), authHeader);
+        // matches the pinned fingerprint. #2497: likewise a WEBHOOK export whose destination is gone or
+        // was re-registered. Either is stale data: the plan is cancelled rather than run.
+        GuardCheck guard = guardCheck(plan.getTargetTool(), fromJson(plan.getArgsJson(), MAP_OF_OBJECT), authHeader);
+        if (guard != null) {
             String pinned = plan.getSourceEntityVersionsJson() == null
                     ? null
                     : fromJson(plan.getSourceEntityVersionsJson(), MAP_OF_STRING)
-                            .get(AccountingEventWriteGuard.PIN_KEY);
-            String stale = !inspection.permitted()
-                    ? inspection.message()
-                    : !Objects.equals(pinned, inspection.fingerprint())
-                            ? "what the preview showed has changed. Now: " + inspection.message()
+                            .get(guard.pinKey());
+            String stale = !guard.permitted()
+                    ? guard.message()
+                    : !Objects.equals(pinned, guard.fingerprint())
+                            ? "what the preview showed has changed. Now: " + guard.message()
                             : null;
             if (stale != null) {
                 transition(plan, request, NltiRequestStatus.CANCELLED);
@@ -395,8 +411,8 @@ public class NltiWritePlanService {
         if (plan.getRiskLevel() != NltiRiskLevel.LOW && plan.getSourceEntityVersionsJson() != null) {
             Map<String, String> captured =
                     new LinkedHashMap<>(fromJson(plan.getSourceEntityVersionsJson(), MAP_OF_STRING));
-            // #2374: the guard's pin was checked above; the generic probe only sees entity versions.
-            captured.remove(AccountingEventWriteGuard.PIN_KEY);
+            // #2374/#2497: a guard's pin was checked above; the generic probe only sees entity versions.
+            GUARD_PIN_KEYS.forEach(captured::remove);
             Map<String, String> current =
                     captured.isEmpty() ? captured : versionProbe.currentVersions(plan.getTargetTool(), captured);
             if (!captured.equals(current)) {
@@ -500,6 +516,42 @@ public class NltiWritePlanService {
             throw new AccessDeniedException("Caller lacks the permission required for tool: " + targetTool);
         }
     }
+
+    /**
+     * #2374/#2497: the write guard that covers this call, inspected as the caller, or null when the
+     * call is not guarded (any tool but the accounting event writes, or a DOWNLOAD audit export).
+     */
+    private @Nullable GuardCheck guardCheck(
+            @NonNull String targetTool, @NonNull Map<String, Object> args, @Nullable String authHeader) {
+        if (AccountingEventWriteGuard.guards(targetTool)) {
+            AccountingEventWriteGuard.Inspection inspection = writeGuard.inspect(targetTool, args, authHeader);
+            return new GuardCheck(
+                    AccountingEventWriteGuard.PIN_KEY,
+                    inspection.permitted(),
+                    inspection.message(),
+                    inspection.fingerprint());
+        }
+        if (AuditExportWriteGuard.guards(targetTool, args)) {
+            // The plan pins the preview's fingerprint, so no destination header is required here.
+            AuditExportWriteGuard.Inspection inspection = auditExportGuard.inspect(targetTool, args, authHeader, false);
+            return new GuardCheck(
+                    AuditExportWriteGuard.PIN_KEY,
+                    inspection.permitted(),
+                    inspection.message(),
+                    inspection.fingerprint());
+        }
+        return null;
+    }
+
+    /**
+     * One guard's decision, in the shape the plan flow needs: the key its pin is stored under, and the
+     * preview (when permitted) or the refusal.
+     */
+    private record GuardCheck(
+            @NonNull String pinKey,
+            boolean permitted,
+            @NonNull String message,
+            @Nullable String fingerprint) {}
 
     private void transition(
             @NonNull NltiWritePlan plan, @NonNull NltiRequest request, @NonNull NltiRequestStatus status) {

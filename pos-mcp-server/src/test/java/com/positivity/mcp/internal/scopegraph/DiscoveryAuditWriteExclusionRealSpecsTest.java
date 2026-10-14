@@ -59,7 +59,8 @@ import reactor.core.publisher.Mono;
  * in scope: a call would make the assistant the upstream producer of a source-system fact, so it is
  * excluded while the event list GET on the same path stays. pos-security-service's {@code
  * requestAuditExport} is out of scope: it is a bulk read of audit data, not an emit, so it is a tool
- * again.
+ * again (#2497: behind {@code AuditExportWriteGuard}, which makes a WEBHOOK export HIGH). Its webhook
+ * destination's PUT and DELETE are in scope: registering answers the signing secret.
  *
  * <p>The same checks run over the per-service Eureka fallback ({@code toToolSpecifications}, used by
  * the full fallback when the aggregate yields nothing and by the targeted fallback for a partial
@@ -92,6 +93,9 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
     private static final Predicate<String> IN_SCOPE = path -> (path.startsWith("/security-service/v1/audit/")
                     && !path.equals("/security-service/v1/audit/exports")
                     && !path.startsWith("/security-service/v1/audit/exports/"))
+            // #2497: the audit export's destination is registered and removed by a person, never a tool
+            // (registering answers the signing secret); its GET stays, as the export guard's read.
+            || path.equals("/security-service/v1/audit/exports/webhook")
             || path.startsWith("/accounting/v1/accounting/audit/")
             || path.equals("/accounting/v1/accounting/events")
             || path.equals("/event-receiver/v1/events")
@@ -284,6 +288,30 @@ class DiscoveryAuditWriteExclusionRealSpecsTest {
                 .as("the reveal audit read (metadata only) stays a tool")
                 .anyMatch(coordinates ->
                         coordinates.startsWith("GET ") && pathOf(coordinates).endsWith("/tax-id-reveals"));
+    }
+
+    @Test
+    @DisplayName(
+            "#2497: the audit export webhook is registered and removed by a person; its read and the export stay tools")
+    void auditExportWebhookWritesAreNeverTools() {
+        for (org.springframework.http.HttpMethod write :
+                List.of(org.springframework.http.HttpMethod.PUT, org.springframework.http.HttpMethod.DELETE)) {
+            assertThat(properties.excludesWrite("/security-service/v1/audit/exports/webhook", write))
+                    .as("%s on the webhook destination", write)
+                    .isTrue();
+        }
+        assertThat(properties.excludesWrite(
+                        "/security-service/v1/audit/exports/webhook", org.springframework.http.HttpMethod.GET))
+                .as("the destination read stays a tool, the export guard's companion")
+                .isFalse();
+        assertThat(properties.excludesWrite(
+                        "/security-service/v1/audit/exports", org.springframework.http.HttpMethod.POST))
+                .as("the export itself stays a tool, behind AuditExportWriteGuard")
+                .isFalse();
+        assertThat(discovered.values())
+                .as("no discovered operation writes the webhook destination, whenever the spec carries it")
+                .noneMatch(coordinates -> !coordinates.startsWith("GET ")
+                        && pathOf(coordinates).equals("/security-service/v1/audit/exports/webhook"));
     }
 
     @Test

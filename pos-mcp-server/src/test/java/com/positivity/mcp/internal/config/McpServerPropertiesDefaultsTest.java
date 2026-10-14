@@ -48,6 +48,8 @@ class McpServerPropertiesDefaultsTest {
                     assertThat(props.excludedWritePathPatterns())
                             .containsExactlyInAnyOrder(
                                     "^/security-service/v1/audit/(?!exports(/|$))",
+                                    // #2497: registering a destination answers its signing secret
+                                    "^/security-service/v1/audit/exports/webhook$",
                                     "^/accounting/v1/accounting/audit/",
                                     "^/accounting/v1/accounting/events$",
                                     "^/event-receiver/v1/events(/|$)",
@@ -112,6 +114,15 @@ class McpServerPropertiesDefaultsTest {
                             .isFalse();
                     assertThat(props.excludesWrite("/security-service/v1/audit/exportsx", HttpMethod.POST))
                             .isTrue();
+                    // #2497: the export's destination is never changed by a tool; its read stays
+                    assertThat(props.excludesWrite("/security-service/v1/audit/exports/webhook", HttpMethod.PUT))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/security-service/v1/audit/exports/webhook", HttpMethod.DELETE))
+                            .isTrue();
+                    assertThat(props.excludesWrite("/security-service/v1/audit/exports/webhook", HttpMethod.GET))
+                            .isFalse();
+                    assertThat(props.excludesWrite("/security-service/v1/audit/exports/{jobId}", HttpMethod.GET))
+                            .isFalse();
                     // business paths that merely contain audit / events
                     assertThat(props.excludesWrite(
                                     "/accounting/v1/accounting/reconciliations/{reconciliationId}/audit",
@@ -138,7 +149,7 @@ class McpServerPropertiesDefaultsTest {
                 .withUserConfiguration(Config.class)
                 .run(ctx -> {
                     McpServerProperties props = ctx.getBean(McpServerProperties.class);
-                    assertThat(props.excludedWritePathPatterns()).hasSize(9);
+                    assertThat(props.excludedWritePathPatterns()).hasSize(10);
                     assertThat(props.excludesWrite("/security-service/v1/audit/events", HttpMethod.POST))
                             .isTrue();
                 });

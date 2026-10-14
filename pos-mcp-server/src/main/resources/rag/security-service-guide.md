@@ -290,6 +290,8 @@ Point-in-time pricing records are stored in the audit system for traceability pu
 
 Bulk audit data can be exported asynchronously. An export job is submitted and a reference is returned. The job status can be checked until the export is complete.
 
+An export is either kept for download or, with webhook delivery, sent as a signed file to the one webhook endpoint the shop has registered. A webhook export sends audit data outside the shop, so the assistant treats it as a high-risk action: it names the destination and asks for explicit confirmation first. Without a registered endpoint, webhook exports are refused. Registering, replacing or removing the endpoint needs the separate webhook-management permission; the signing secret is shown once, when the endpoint is registered.
+
 **Required role(s):** Admin
 
 ---
@@ -316,6 +318,7 @@ The table below shows which platform roles grant which security-service capabili
 | View audit events | ✓ | |
 | Create audit events | ✓ | |
 | Export audit data | ✓ | |
+| Register or remove the audit export webhook | ✓ | |
 | Evaluate authorization decisions | ✓ | |
 
 ---

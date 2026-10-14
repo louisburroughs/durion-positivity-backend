@@ -55,6 +55,11 @@ import org.springframework.stereotype.Component;
  * call first re-reads the event's status as the caller and is refused unless it is FAILED (retry) or
  * SUSPENDED (reprocess), and one turn (one user confirmation) runs at most one of them. Without the
  * guard wired they are not offered at all.
+ *
+ * <p><strong>Audit export (#2497).</strong> pos-security-service's {@code requestAuditExport} is offered
+ * only through {@link AuditExportWriteGuard}, with the webhook destination read beside it. DOWNLOAD
+ * runs as called; WEBHOOK, which sends audit data outside the shop, re-reads the destination as the
+ * caller, must name the previewed URL, and shares the turn's one guarded write.
  */
 @Component
 public class OpenApiToolProvider {
@@ -204,6 +209,9 @@ public class OpenApiToolProvider {
     /** #2374: absent means the guarded accounting event writes are never offered (fail-closed). */
     private volatile @Nullable AccountingEventWriteGuard writeGuard;
 
+    /** #2497: absent means the audit export is never offered, DOWNLOAD included (fail-closed). */
+    private volatile @Nullable AuditExportWriteGuard auditExportGuard;
+
     public OpenApiToolProvider(
             @NonNull ToolMetadataRepository repository,
             @NonNull EmbeddingModel embeddingModel,
@@ -241,6 +249,16 @@ public class OpenApiToolProvider {
         this.writeGuard = writeGuard;
     }
 
+    /**
+     * #2497: wires the guard on pos-security-service's audit export. Setter-injected like {@link
+     * #setWriteGuard}; without it the export tool is skipped, since a WEBHOOK call would otherwise send
+     * audit data outside the shop unguarded.
+     */
+    @Autowired(required = false)
+    public void setAuditExportGuard(@Nullable AuditExportWriteGuard auditExportGuard) {
+        this.auditExportGuard = auditExportGuard;
+    }
+
     public @NonNull List<ToolCallback> resolveToolCallbacks(@Nullable String userMessage) {
         Optional<CurrentUserContext> maybe = userContext.current();
         if (maybe.isEmpty()) {
@@ -273,11 +291,13 @@ public class OpenApiToolProvider {
         }
 
         AccountingEventWriteGuard guard = writeGuard;
-        List<String> companions = guard == null ? List.of() : guardCompanionsMissingFrom(ops);
+        AuditExportWriteGuard exportGuard = auditExportGuard;
+        List<String> companions = guardCompanionsMissingFrom(ops, guard != null, exportGuard != null);
         if (!companions.isEmpty()) {
             // #2374: a guarded write is offered with the tools its preview and its "never retry
-            // blindly" rule depend on (the event read, its history, the rules dry run); the gate
-            // decides, so a caller who may not use them gets none.
+            // blindly" rule depend on (the event read, its history, the rules dry run); #2497: the
+            // audit export with the destination read its WEBHOOK preview names. The gate decides, so
+            // a caller who may not use them gets none.
             ops = new ArrayList<>(ops);
             ops.addAll(repository.findDiscoveredByNamesForPermissions(
                     companions, caller.permissionCodes(), WorkflowState.DEFAULT.name()));
@@ -298,6 +318,11 @@ public class OpenApiToolProvider {
                 LOGGER.debug("MCP openapi guarded op name={} has no write guard wired; skipping", op.name());
                 continue;
             }
+            boolean exportGuarded = AuditExportWriteGuard.covers(op.name());
+            if (exportGuarded && exportGuard == null) {
+                LOGGER.debug("MCP openapi audit export op name={} has no export guard wired; skipping", op.name());
+                continue;
+            }
             writeCapableToolsPresent = writeCapableToolsPresent || isWriteCapable(op);
             OpenApiOperationExecutor executor =
                     new OpenApiOperationExecutor(proxyFactory, op, objectMapper, executionTimeout, authHeader);
@@ -305,13 +330,17 @@ public class OpenApiToolProvider {
                     DefaultToolDefinition.builder()
                             .name(op.name())
                             .description(describeOperation(op)
-                                    + (guarded ? AccountingEventWriteGuard.guardNote(op.name()) : ""))
+                                    + (guarded ? AccountingEventWriteGuard.guardNote(op.name()) : "")
+                                    + (exportGuarded ? AuditExportWriteGuard.guardNote(op.name()) : ""))
                             .inputSchema(buildParameterSchema(op))
                             .build(),
                     executor);
             if (guarded) {
                 callback = new GuardedWriteToolCallback(
                         callback, guard, op.name(), authHeader, guardedCallThisTurn, objectMapper);
+            } else if (exportGuarded) {
+                callback = new AuditExportToolCallback(
+                        callback, exportGuard, op.name(), authHeader, guardedCallThisTurn, objectMapper);
             }
             // #1422: per-execution invocation logging; discovered names match mcp_tool.name exactly.
             tools.add(invocationRecorder != null ? invocationRecorder.wrap(callback, op.name()) : callback);
@@ -341,18 +370,22 @@ public class OpenApiToolProvider {
     }
 
     /**
-     * #2374: the guard's companion tools (the event read, its reprocessing history, the rules dry
-     * run) not already among {@code ops}, when some op is a guarded write; empty otherwise.
+     * The wired guards' companion tools not already among {@code ops}: #2374's (the event read, its
+     * reprocessing history, the rules dry run) when some op is a guarded accounting event write, and
+     * #2497's (the webhook destination read) when the audit export is among them; empty otherwise.
      */
-    private static @NonNull List<String> guardCompanionsMissingFrom(@NonNull List<DiscoveredOperation> ops) {
-        if (ops.stream().noneMatch(op -> AccountingEventWriteGuard.guards(op.name()))) {
-            return List.of();
-        }
+    private static @NonNull List<String> guardCompanionsMissingFrom(
+            @NonNull List<DiscoveredOperation> ops, boolean accountingGuardWired, boolean exportGuardWired) {
         Set<String> present = new HashSet<>();
         ops.forEach(op -> present.add(op.name()));
-        return AccountingEventWriteGuard.COMPANION_TOOLS.stream()
-                .filter(name -> !present.contains(name))
-                .toList();
+        List<String> wanted = new ArrayList<>();
+        if (accountingGuardWired && ops.stream().anyMatch(op -> AccountingEventWriteGuard.guards(op.name()))) {
+            wanted.addAll(AccountingEventWriteGuard.COMPANION_TOOLS);
+        }
+        if (exportGuardWired && ops.stream().anyMatch(op -> AuditExportWriteGuard.covers(op.name()))) {
+            wanted.addAll(AuditExportWriteGuard.COMPANION_TOOLS);
+        }
+        return wanted.stream().filter(name -> !present.contains(name)).toList();
     }
 
     /**
@@ -459,6 +492,82 @@ public class OpenApiToolProvider {
         private static String oneEventPerConfirmation(String spent) {
             return "Error: one confirmation covers one accounting event, and this turn has already used it (" + spent
                     + "). Nothing was run; ask the user to confirm this event on its own.";
+        }
+    }
+
+    /**
+     * #2497: pos-security-service's audit export on the chat path. A DOWNLOAD call runs as it is. A
+     * call that is not plainly DOWNLOAD (WEBHOOK, or a body the guard cannot read) is inspected first:
+     * the destination is read as the caller, the call must name it in {@link
+     * AuditExportWriteGuard#DESTINATION_HEADER} as previewed, and a refusal is an {@code Error:} result
+     * the model reads. A WEBHOOK call that got as far as reading the destination spends the turn's one
+     * guarded write, shared with the accounting event writes, whether it then runs or is refused.
+     */
+    private static final class AuditExportToolCallback implements ToolCallback {
+
+        private final ToolCallback delegate;
+        private final AuditExportWriteGuard guard;
+        private final String toolName;
+        private final @Nullable String authHeader;
+        private final AtomicReference<String> guardedCallThisTurn;
+        private final ObjectMapper objectMapper;
+
+        private AuditExportToolCallback(
+                @NonNull ToolCallback delegate,
+                @NonNull AuditExportWriteGuard guard,
+                @NonNull String toolName,
+                @Nullable String authHeader,
+                @NonNull AtomicReference<String> guardedCallThisTurn,
+                @NonNull ObjectMapper objectMapper) {
+            this.delegate = delegate;
+            this.guard = guard;
+            this.toolName = toolName;
+            this.authHeader = authHeader;
+            this.guardedCallThisTurn = guardedCallThisTurn;
+            this.objectMapper = objectMapper;
+        }
+
+        @Override
+        public ToolDefinition getToolDefinition() {
+            return delegate.getToolDefinition();
+        }
+
+        @Override
+        public ToolMetadata getToolMetadata() {
+            return delegate.getToolMetadata();
+        }
+
+        @Override
+        public String call(String toolInput) {
+            Map<String, Object> arguments;
+            try {
+                arguments = toolInput == null || toolInput.isBlank()
+                        ? Map.of()
+                        : objectMapper.readValue(toolInput, new TypeReference<Map<String, Object>>() {});
+            } catch (JsonProcessingException e) {
+                return "Error: invalid tool arguments; nothing was run.";
+            }
+            if (!AuditExportWriteGuard.guards(toolName, arguments)) {
+                return delegate.call(toolInput);
+            }
+            String spent = guardedCallThisTurn.get();
+            if (spent != null) {
+                return oneGuardedWritePerConfirmation(spent);
+            }
+            AuditExportWriteGuard.Inspection inspection = guard.inspect(toolName, arguments, authHeader, true);
+            if (inspection.destination() != null
+                    && !guardedCallThisTurn.compareAndSet(null, toolName + " WEBHOOK to " + inspection.destination())) {
+                return oneGuardedWritePerConfirmation(guardedCallThisTurn.get());
+            }
+            if (!inspection.permitted()) {
+                return "Error: " + inspection.message();
+            }
+            return delegate.call(toolInput);
+        }
+
+        private static String oneGuardedWritePerConfirmation(String spent) {
+            return "Error: one confirmation covers one guarded write, and this turn has already used it (" + spent
+                    + "). Nothing was run; ask the user to confirm this export on its own.";
         }
     }
 

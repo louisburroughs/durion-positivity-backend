@@ -14,9 +14,10 @@ import com.positivity.securityservice.internal.config.AuditEventService;
 import com.positivity.securityservice.internal.dto.AuditExportDownload;
 import com.positivity.securityservice.internal.dto.AuditExportJobResponse;
 import com.positivity.securityservice.internal.dto.AuditLogEventDto;
+import com.positivity.securityservice.internal.enums.AuditDeliveryMode;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
 import com.positivity.securityservice.internal.exception.AuditExportNotReadyException;
-import com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookNotRegisteredException;
 import com.positivity.securityservice.internal.security.JwtAuthenticationFilter;
 import com.positivity.securityservice.internal.service.AuditExportService;
 import com.positivity.securityservice.internal.service.CustomUserDetailsService;
@@ -291,19 +292,41 @@ class AuditControllerTest {
         mockMvc.perform(get("/v1/audit/exports/{jobId}", KNOWN_JOB_ID)).andExpect(status().isForbidden());
     }
 
-    // ── #2408: WEBHOOK refusal and GET /v1/audit/exports/{jobId}/download ────
+    // ── #2497: WEBHOOK delivery; #2408: GET /v1/audit/exports/{jobId}/download ────
 
     @Test
     @WithMockUser(authorities = "security:audit:export")
-    @DisplayName("POST /v1/audit/exports with WEBHOOK delivery → 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED")
-    void requestAuditExport_webhook_returns400() throws Exception {
-        when(auditExportService.requestExport(any())).thenThrow(new AuditExportWebhookUnsupportedException());
+    @DisplayName(
+            "#2497: POST /v1/audit/exports WEBHOOK with no registered webhook → 422 AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED")
+    void requestAuditExport_webhookUnregistered_returns422() throws Exception {
+        when(auditExportService.requestExport(any())).thenThrow(AuditExportWebhookNotRegisteredException.forExport());
 
         mockMvc.perform(post("/v1/audit/exports")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"format\":\"CSV\",\"deliveryMode\":\"WEBHOOK\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("AUDIT_EXPORT_WEBHOOK_UNSUPPORTED"));
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.code").value("AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED"));
+    }
+
+    @Test
+    @WithMockUser(authorities = "security:audit:export")
+    @DisplayName("#2497: POST /v1/audit/exports WEBHOOK with a registered webhook → 202 naming the pinned destination")
+    void requestAuditExport_webhookRegistered_returns202() throws Exception {
+        when(auditExportService.requestExport(any()))
+                .thenReturn(AuditExportJobResponse.builder()
+                        .jobId(KNOWN_JOB_ID)
+                        .status(AuditExportStatus.PENDING)
+                        .deliveryMode(AuditDeliveryMode.WEBHOOK)
+                        .webhookUrl("https://siem.example.com/hooks/audit")
+                        .requestedAt(Instant.parse("2026-01-01T00:00:00Z"))
+                        .build());
+
+        mockMvc.perform(post("/v1/audit/exports")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"format\":\"JSON\",\"deliveryMode\":\"WEBHOOK\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.deliveryMode").value("WEBHOOK"))
+                .andExpect(jsonPath("$.webhookUrl").value("https://siem.example.com/hooks/audit"));
     }
 
     @Test

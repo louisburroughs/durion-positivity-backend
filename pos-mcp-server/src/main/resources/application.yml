@@ -114,9 +114,16 @@ mcp:
     # the security-service entry skips it; and pos-accounting's event submit is excluded because a
     # call would make the assistant the upstream producer of a source-system fact (Billing and the
     # other source domains own those). Retry and reprocess stay, behind AccountingEventWriteGuard.
+    # #2497: requestAuditExport stays a tool behind AuditExportWriteGuard: DOWNLOAD as is, WEBHOOK (which
+    # sends the audit data outside the shop) HIGH, with the destination previewed and confirmed. The
+    # destination itself is never changed by a tool: registering it answers its signing secret, which
+    # would then sit in the prompt, the external model, chat history and logs, and choosing where audit
+    # data may go is an administrator's act. So PUT/DELETE /v1/audit/exports/webhook are excluded; the
+    # GET stays, as the guard's destination read.
     # Configuration, not a vendor extension: ADR-0042.
     excluded-write-path-patterns:
       - ^/security-service/v1/audit/(?!exports(/|$))  # /v1/audit/events, /events/**, /pricing-snapshots
+      - ^/security-service/v1/audit/exports/webhook$  # PUT/DELETE: register/remove the export destination
       - ^/accounting/v1/accounting/audit/      # POST cancellation, price-override, refund (audit-trail writes)
       - ^/accounting/v1/accounting/events$     # POST submitAccountingEvent (the list GET stays)
       - ^/event-receiver/v1/events(/|$)        # POST /v1/events (emit)

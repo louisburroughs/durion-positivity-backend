@@ -1,12 +1,14 @@
 package com.positivity.securityservice.internal.repository;
 
 import com.positivity.securityservice.internal.entity.AuditExportJob;
+import com.positivity.securityservice.internal.enums.AuditExportDeliveryStatus;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -48,6 +50,26 @@ public interface AuditExportJobRepository extends JpaRepository<AuditExportJob, 
             """)
     int markCompleted(
             @NonNull @Param("jobId") UUID jobId, @Param("rowCount") long rowCount, @NonNull @Param("now") Instant now);
+
+    /**
+     * #2497: records how a {@code WEBHOOK} job's delivery went, whatever its status. Unconditional on
+     * purpose: when the stale sweep failed the job while it was being delivered, what was sent (or
+     * tried) is still recorded truthfully beside the sweep's message.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE AuditExportJob j
+               SET j.deliveryStatus = :deliveryStatus, j.deliveryAttempts = :attempts,
+                   j.deliveredAt = :deliveredAt, j.deliveryError = :deliveryError, j.updatedAt = :now
+             WHERE j.jobId = :jobId
+            """)
+    int recordDelivery(
+            @NonNull @Param("jobId") UUID jobId,
+            @NonNull @Param("deliveryStatus") AuditExportDeliveryStatus deliveryStatus,
+            @Param("attempts") int attempts,
+            @Nullable @Param("deliveredAt") Instant deliveredAt,
+            @Nullable @Param("deliveryError") String deliveryError,
+            @NonNull @Param("now") Instant now);
 
     /** {@code from} -> FAILED for one job; 0 when it had already left every {@code from} status. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)

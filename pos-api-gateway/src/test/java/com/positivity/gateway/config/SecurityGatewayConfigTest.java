@@ -1671,9 +1671,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 105")
+    @DisplayName("CATALOG_VERSION is 106")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(105);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(106);
     }
 
     @Test
@@ -2046,8 +2046,11 @@ class SecurityGatewayConfigTest {
         // catalog v105 (CAP:550 S32c, #2638): the tax-registration front door (bits 561-562)
         assertThat(GatewayPermissionCatalog.authorityForBit(561)).isEqualTo("PERM_accounting:tax_registration:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(562)).isEqualTo("PERM_accounting:tax_registration:view");
+        // catalog v106 (#2497): the tenant's audit export webhook destination (bit 563)
+        assertThat(GatewayPermissionCatalog.authorityForBit(563))
+                .isEqualTo("PERM_security:audit_export:webhook_manage");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(563)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(564)).isNull();
     }
 
     @Test
