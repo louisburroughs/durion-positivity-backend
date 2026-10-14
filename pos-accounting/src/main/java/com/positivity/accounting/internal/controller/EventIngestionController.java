@@ -356,8 +356,7 @@ public class EventIngestionController {
                 its currency re-runs its own posting (drawer movements, over/short) from the stored fact, never \
                 the posting engine: it posts once, or ends PROCESSED / DUPLICATE_IGNORED when it already posted.
                 Required inputs: eventId (UUID) as a path parameter; the body is optional and may carry mappingVersionToUse \
-                (a UUID) and reprocessingNotes. The triggering user is the authenticated caller; any user field \
-                in the body is ignored.
+                (a UUID) and reprocessingNotes, and any user field in it is ignored.
                 Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 \
                 with status PROCESSED while 202 means processing continues.
                 Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already \
