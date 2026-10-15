@@ -116,6 +116,7 @@ class NltiWritePlanServiceTest {
                 writePlanExecutor,
                 versionProbe,
                 new AccountingEventWriteGuard(writePlanExecutor, objectMapper),
+                new AuditExportWriteGuard(writePlanExecutor, objectMapper),
                 auditLedgerService,
                 telemetry.publisher(),
                 meterRegistry,
@@ -829,6 +830,160 @@ class NltiWritePlanServiceTest {
         WritePlanResponseV1 outcome = service.confirm(REQUEST_ID, SUBJECT, Set.of(RETRY_PERMISSION), null, AUTH);
 
         assertThat(outcome.status()).isEqualTo("COMPLETE");
+    }
+
+    // ─── #2497: audit export delivered by WEBHOOK ─────────────────────────────
+
+    private static final String EXPORT_TOOL = AuditExportWriteGuard.EXPORT_TOOL;
+    private static final String EXPORT_PERMISSION = "security:audit:export";
+    private static final String DESTINATION = "https://siem.example.com/hooks/audit";
+
+    private void stubExportPermission() {
+        when(toolMetadataRepository.findDiscoveredToolIdByName(EXPORT_TOOL)).thenReturn(Optional.of(TOOL_ID));
+        when(toolMetadataRepository.listToolPermissions(TOOL_ID)).thenReturn(List.of(EXPORT_PERMISSION));
+    }
+
+    private void destinationReads(String url) {
+        when(writePlanExecutor.execute(AuditExportWriteGuard.DESTINATION_READ_TOOL, "{}", AUTH))
+                .thenReturn("{\"url\":\"" + url + "\",\"registeredAt\":\"2026-10-12T09:00:00Z\","
+                        + "\"registeredBy\":\"admin.alpha\"}");
+    }
+
+    private static Map<String, Object> exportArgs(String deliveryMode) {
+        return Map.of(
+                "body",
+                Map.of("format", "CSV", "deliveryMode", deliveryMode, "filters", Map.of("eventType", "LOGIN_FAILED")));
+    }
+
+    private static NltiRequestDTO exportRequest(String deliveryMode) {
+        return new NltiRequestDTO(
+                "export the failed logins audit",
+                SESSION_ID,
+                Map.of("targetTool", EXPORT_TOOL, "args", exportArgs(deliveryMode)));
+    }
+
+    private NltiWritePlan exportPlan(String pin) {
+        NltiWritePlan plan = pendingPlan();
+        plan.setTargetTool(EXPORT_TOOL);
+        plan.setArgsJson(toJson(exportArgs("WEBHOOK")));
+        plan.setArgProvenanceJson("{\"body\":\"USER_CONTEXT\"}");
+        plan.setRiskLevel(NltiRiskLevel.HIGH);
+        plan.setSourceEntityVersionsJson(toJson(Map.of(AuditExportWriteGuard.PIN_KEY, pin)));
+        return plan;
+    }
+
+    private String currentExportPin() {
+        return new AuditExportWriteGuard(writePlanExecutor, objectMapper)
+                .inspect(EXPORT_TOOL, exportArgs("WEBHOOK"), AUTH, false)
+                .fingerprint();
+    }
+
+    @Test
+    @DisplayName("#2497: a WEBHOOK export previews as a HIGH plan naming where the audit data goes, and runs nothing")
+    void previewAction_webhookExport_highRiskPlanNamingTheDestination() {
+        stubExportPermission();
+        destinationReads(DESTINATION);
+        when(planRepository.findBySessionIdAndStatus(SESSION_ID, NltiRequestStatus.PENDING_CONFIRMATION))
+                .thenReturn(List.of());
+
+        NltiResponseV1 response = service.previewAction(
+                request(), exportRequest("WEBHOOK"), actionIntent("LOW", List.of()), Set.of(EXPORT_PERMISSION), AUTH);
+
+        assertThat(response.status()).isEqualTo("PENDING_CONFIRMATION");
+        ArgumentCaptor<NltiWritePlan> planCaptor = ArgumentCaptor.forClass(NltiWritePlan.class);
+        verify(planRepository).save(planCaptor.capture());
+        NltiWritePlan plan = planCaptor.getValue();
+        assertThat(plan.getRiskLevel())
+                .as("WEBHOOK is HIGH whatever the classifier said")
+                .isEqualTo(NltiRiskLevel.HIGH);
+        assertThat(plan.getSummaryText())
+                .contains(DESTINATION, "Audit data will leave the shop to " + DESTINATION, "CSV", "LOGIN_FAILED");
+        assertThat(plan.getSourceEntityVersionsJson()).contains(AuditExportWriteGuard.PIN_KEY);
+        verify(writePlanExecutor, never()).execute(eq(EXPORT_TOOL), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("#2497: a DOWNLOAD export keeps its classified LOW risk and reads no destination")
+    void previewAction_downloadExport_staysLowAndUnguarded() {
+        stubExportPermission();
+        when(planRepository.findBySessionIdAndStatus(SESSION_ID, NltiRequestStatus.PENDING_CONFIRMATION))
+                .thenReturn(List.of());
+
+        NltiResponseV1 response = service.previewAction(
+                request(), exportRequest("DOWNLOAD"), actionIntent("LOW", List.of()), Set.of(EXPORT_PERMISSION), AUTH);
+
+        assertThat(response.status()).isEqualTo("PENDING_CONFIRMATION");
+        ArgumentCaptor<NltiWritePlan> planCaptor = ArgumentCaptor.forClass(NltiWritePlan.class);
+        verify(planRepository).save(planCaptor.capture());
+        assertThat(planCaptor.getValue().getRiskLevel()).isEqualTo(NltiRiskLevel.LOW);
+        assertThat(planCaptor.getValue().getSourceEntityVersionsJson()).isNull();
+        org.mockito.Mockito.verifyNoInteractions(writePlanExecutor);
+    }
+
+    @Test
+    @DisplayName(
+            "#2497: a WEBHOOK export with no registered destination is not previewed: NEEDS_CLARIFICATION, no plan")
+    void previewAction_webhookExportUnregistered_preconditionFailedWithoutPlan() {
+        stubExportPermission();
+        when(writePlanExecutor.execute(AuditExportWriteGuard.DESTINATION_READ_TOOL, "{}", AUTH))
+                .thenThrow(new com.positivity.mcp.internal.exception.WritePlanExecutionException(
+                        "Write-plan tool execution failed: Error: 404 Not Found from GET"));
+
+        NltiResponseV1 response = service.previewAction(
+                request(), exportRequest("WEBHOOK"), actionIntent("LOW", List.of()), Set.of(EXPORT_PERMISSION), AUTH);
+
+        assertThat(response.status()).isEqualTo("NEEDS_CLARIFICATION");
+        assertThat(response.meta())
+                .extractingByKey(NltiWritePlanService.META_PRECONDITION_FAILED)
+                .asString()
+                .contains("No audit export webhook is registered", "DOWNLOAD");
+        verify(planRepository, never()).save(any());
+        verify(writePlanExecutor, never()).execute(eq(EXPORT_TOOL), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("#2497: confirm re-reads the destination, then executes the exact persisted args")
+    void confirm_webhookExportUnchanged_readsThenExecutes() {
+        stubOwnership();
+        stubExportPermission();
+        destinationReads(DESTINATION);
+        NltiWritePlan plan = exportPlan(currentExportPin());
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(plan));
+        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
+        when(writePlanExecutor.execute(EXPORT_TOOL, plan.getArgsJson(), AUTH)).thenReturn("{\"status\":\"PENDING\"}");
+
+        WritePlanResponseV1 outcome = service.confirm(REQUEST_ID, SUBJECT, Set.of(EXPORT_PERMISSION), null, AUTH);
+
+        assertThat(outcome.status()).isEqualTo("COMPLETE");
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(writePlanExecutor);
+        // The pin above was computed with the same read, so the reads before the export are not one.
+        order.verify(writePlanExecutor, org.mockito.Mockito.atLeastOnce())
+                .execute(AuditExportWriteGuard.DESTINATION_READ_TOOL, "{}", AUTH);
+        order.verify(writePlanExecutor).execute(EXPORT_TOOL, plan.getArgsJson(), AUTH);
+        verify(writePlanExecutor, org.mockito.Mockito.times(2))
+                .execute(AuditExportWriteGuard.DESTINATION_READ_TOOL, "{}", AUTH);
+    }
+
+    @Test
+    @DisplayName("#2497: a destination re-registered since the preview cancels the plan as stale and sends nothing")
+    void confirm_webhookExportDestinationChanged_cancelledAsStaleWithoutExecution() {
+        stubOwnership();
+        stubExportPermission();
+        destinationReads(DESTINATION);
+        NltiWritePlan plan = exportPlan(currentExportPin());
+        when(planRepository.findByRequestId(REQUEST_ID)).thenReturn(Optional.of(plan));
+        when(requestRepository.findById(REQUEST_ID)).thenReturn(Optional.of(request()));
+        // Someone pointed the shop's webhook elsewhere between the preview and the confirmation.
+        destinationReads("https://elsewhere.example.net/collect");
+
+        assertThatThrownBy(() -> service.confirm(REQUEST_ID, SUBJECT, Set.of(EXPORT_PERMISSION), null, AUTH))
+                .isInstanceOf(WritePlanStaleException.class)
+                .hasMessageContaining("what the preview showed has changed")
+                .hasMessageContaining("https://elsewhere.example.net/collect");
+
+        assertThat(plan.getStatus()).isEqualTo(NltiRequestStatus.CANCELLED);
+        verify(writePlanExecutor, never()).execute(eq(EXPORT_TOOL), anyString(), any());
+        assertThat(outcomeCount(NltiWritePlanService.OUTCOME_STALE_DATA)).isEqualTo(1.0);
     }
 
     private double outcomeCount(String outcome) {

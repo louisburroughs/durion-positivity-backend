@@ -12,7 +12,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  * tenant that requested the export and nothing else.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(AuditExportProperties.class)
+@EnableConfigurationProperties({AuditExportProperties.class, AuditExportWebhookProperties.class})
 public class AuditExportConfig {
 
     public static final String EXECUTOR_BEAN = "auditExportExecutor";

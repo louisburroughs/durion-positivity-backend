@@ -38,6 +38,10 @@
             "disclosed_inferred_args": { "type": "array", "items": { "type": "string" } }
           }
         },
+        "plan_args": {
+          "type": "object",
+          "description": "Optional: the exact tool envelope (pathParams, queryParams, headers, body) the plan executes with, when the fixture pins one (#2497)."
+        },
         "assertions": {
           "type": "object",
           "additionalProperties": false,
@@ -49,7 +53,9 @@
             "permission_recheck_at_execute": { "type": "boolean" },
             "expires_after_ttl": { "type": "boolean" },
             "stale_data_forces_repreview": { "type": "boolean" },
-            "idempotency_single_execution": { "type": "boolean" }
+            "idempotency_single_execution": { "type": "boolean" },
+            "preview_names_destination": { "type": "boolean" },
+            "refused_without_destination": { "type": "boolean" }
           }
         },
         "tags": { "type": "array", "items": { "type": "string" } },

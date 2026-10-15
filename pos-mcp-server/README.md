@@ -89,7 +89,7 @@ Permission constants are defined in `McpPermissions`. Errors use the standard `A
 | `mcp.model.simple`                          | `MCP_MODEL_SIMPLE` _(blank)_                | T2-simple executor. Blank = the default executor model. Setting it to a genuinely smaller pulled model is the precondition for turning tiering back on                                                                                                                                                                                                                     |
 | `mcp.server.aggregate-spec-url`             | `MCP_AGGREGATE_SPEC_URL`                    | Gateway aggregate OpenAPI URL                                                                                                                                                                                                                                                                                                                                              |
 | `mcp.server.excluded-path-fragments`        | `/admin/`, `/actuator/`, `/internal/`       | Substrings that drop a whole path (every method) from tool discovery                                                                                                                                                                                                                                                                                                       |
-| `mcp.server.excluded-write-path-patterns`   | see [Tool discovery](#tool-discovery)       | Regexes over the routing-prefixed path whose non-GET operations are never discovered as tools (#2370, #2374); GET stays                                                                                                                                                                                                                                                     |
+| `mcp.server.excluded-write-path-patterns`   | see [Tool discovery](#tool-discovery)       | Regexes over the routing-prefixed path whose non-GET operations are never discovered as tools (#2370, #2374, #2497); GET stays                                                                                                                                                                                                                                                   |
 | `pos.tools.http.connect-timeout`            | `POS_TOOLS_HTTP_CONNECT_TIMEOUT` `2s`       | Connect timeout on `loadBalancedRestClientBuilder` (facade HTTP calls, #1660)                                                                                                                                                                                                                                                                                              |
 | `pos.tools.http.read-timeout`               | `POS_TOOLS_HTTP_READ_TIMEOUT` `30s`         | Read timeout on `loadBalancedRestClientBuilder`; a stalled downstream now fails with a named `SocketTimeoutException` instead of holding the chat turn (#1660)                                                                                                                                                                                                             |
 | Exa web search                              | `EXA_API_KEY`                               | External web-search API key                                                                                                                                                                                                                                                                                                                                                |
@@ -112,7 +112,10 @@ which Billing and the other source domains own; a manual posting is `createJourn
 `/v1/events` (emit) and `/v1/eventTypes` (register, update, delete), and this module's own `/v1/mcp/audit` or
 `/v1/nlt/audit` should they gain writes. `GET` on the same paths stays discoverable (reading the audit log is a
 legitimate admin question, ADR-0068), and so does `POST /v1/audit/exports` (`requestAuditExport`, a bulk read of
-the log for holders of `security:audit:export`, #2374). The patterns are anchored on the routing prefix so business
+the log for holders of `security:audit:export`, #2374, behind `AuditExportWriteGuard` since #2497). The export's
+destination is never changed by a tool: `PUT`/`DELETE /v1/audit/exports/webhook` are excluded too (#2497 —
+registering answers the destination's signing secret, which a tool result would carry into the prompt, the external
+model, chat history and logs), while its `GET` stays, as the guard's destination read. The patterns are anchored on the routing prefix so business
 paths that merely contain `audit` or `events` (pos-accounting's event retry and reprocess, for instance) keep their
 writes; rows registered before the exclusion are pruned on the next discovery run. The per-service Eureka fallback applies the same exclusion: when
 the aggregate yields no tools, or a partial aggregate's failed prefixes are retried service by service, each
@@ -146,6 +149,28 @@ answer without a status refuses, and without the guard wired the chat path does 
 The preview's read needs the caller's token, so `POST /v1/nlt/requests` relays its `Authorization` header to the
 write gate. Holders of retry or reprocess also need `accounting:events:view` for the status read and
 `accounting:posting_rules:view` for the rules dry run (ADMIN and CONTROLLER hold both).
+
+#### Guarded writes: audit export by WEBHOOK (#2497)
+
+`requestAuditExport` stays a tool for holders of `security:audit:export`, behind `AuditExportWriteGuard`. A
+`DOWNLOAD` export keeps the file in the shop and is an ordinary write. A `WEBHOOK` export sends the tenant's audit
+data, signed, to the endpoint the tenant registered in pos-security-service, outside the shop, so it is guarded:
+
+| Rule | Write plan (`POST /v1/nlt/requests` → confirm) | Chat (`/v1/mcp/chat`) |
+| ---- | ---------------------------------------------- | --------------------- |
+| Scope | `body.deliveryMode` other than `DOWNLOAD` is guarded: `WEBHOOK`, and fail-closed anything the guard cannot read as `DOWNLOAD` (a missing or unknown mode, a body string with a duplicated key) | the export tool is always wrapped; a `DOWNLOAD` call runs as called |
+| Risk | HIGH whatever the classifier said; `DOWNLOAD` keeps its classified risk (LOW) | the tool description carries the rules; the WRITE-GATE layer asks for preview and confirmation |
+| Destination | read as the caller (`getAuditExportWebhook`) before the preview; none registered (404) or an unreadable answer is `NEEDS_CLARIFICATION` with `meta.preconditionFailed` and no plan; read again at confirm | read before every `WEBHOOK` call; none registered answers an `Error:` result and nothing runs |
+| Preview | the URL, an explicit "Audit data will leave the shop to &lt;url&gt;" line, who registered it and when, the format, the filters, and that a delivered file cannot be recalled | the model previews the same after reading the destination |
+| Pinning | a fingerprint of the preview is stored with the plan; at confirm a destination re-registered meanwhile (another URL, or the same URL registered again) cancels the plan (409 `WRITE_PLAN_STALE`) | the call names the URL it previewed in `headers.X-Audit-Export-Destination`; missing, or different from the current destination, refuses |
+| One write | the plan's arguments run verbatim | a `WEBHOOK` call that read the destination spends the turn's one guarded write, shared with the accounting event writes |
+| Credential | arguments carrying their own `Authorization` header are refused | same |
+
+On the chat path the export is offered together with `getAuditExportWebhook` (through the same permission gate;
+its `GET` is open to `security:audit:export` holders). The guard fails closed: without it wired the chat path does
+not offer the export at all, `DOWNLOAD` included. pos-security-service backs every rule server-side: a `WEBHOOK`
+request with no registered destination is a 422 and creates no job, the job pins the registration it was requested
+against, and the destination's addresses are re-checked before every delivery attempt.
 
 ### Static RAG preload (`alpha` profile)
 

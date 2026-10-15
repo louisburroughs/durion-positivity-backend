@@ -1,6 +1,7 @@
 package com.positivity.securityservice.internal.entity;
 
 import com.positivity.securityservice.internal.enums.AuditDeliveryMode;
+import com.positivity.securityservice.internal.enums.AuditExportDeliveryStatus;
 import com.positivity.securityservice.internal.enums.AuditExportFormat;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
 import com.positivity.shared.id.UUIDv7Id;
@@ -25,7 +26,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * One asynchronous audit export (#2408, B-4): the filter scope it was requested with and where it
  * is in its lifecycle, {@code PENDING -> IN_PROGRESS -> COMPLETED | FAILED}. The produced file is
- * kept apart in {@link AuditExportFile} so a status poll never loads the content.
+ * kept apart in {@link AuditExportFile} so a status poll never loads the content. A {@code WEBHOOK}
+ * job (#2497) also pins its destination and records how its delivery went.
  */
 @Getter
 @Setter
@@ -82,6 +84,32 @@ public class AuditExportJob extends TenantScopedEntity {
 
     @Column(name = "error_message", length = 500)
     private String errorMessage;
+
+    /**
+     * #2497: the registration a {@code WEBHOOK} job was requested against (null for {@code
+     * DOWNLOAD}). Delivery goes ahead only while the tenant's registration still has this id and
+     * {@link #webhookUrl}, so a later re-registration never redirects an in-flight job.
+     */
+    @Column(name = "webhook_id", columnDefinition = "UUID", updatable = false)
+    private UUID webhookId;
+
+    /** #2497: the destination URL the job was requested for, pinned at request time. */
+    @Column(name = "webhook_url", length = 2048, updatable = false)
+    private String webhookUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_status", length = 16)
+    private AuditExportDeliveryStatus deliveryStatus;
+
+    @Column(name = "delivery_attempts")
+    private Integer deliveryAttempts;
+
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+
+    /** Status code or exception class of the last failed attempt; never a response body. */
+    @Column(name = "delivery_error", length = 200)
+    private String deliveryError;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

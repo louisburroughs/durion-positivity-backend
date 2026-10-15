@@ -836,6 +836,20 @@ class RolePermissionBaselineTest {
         }
 
         @Test
+        @DisplayName("#2497: the audit export webhook is managed by ADMIN alone, in the baseline and the SQL seed")
+        void auditExportWebhookManageIsAdminOnly() {
+            assertThat(holdersOf("security:audit_export:webhook_manage")).containsExactly("ADMIN");
+            assertThat(sqlSeededGrants.get("ADMIN")).contains("security:audit_export:webhook_manage");
+            sqlSeededGrants.forEach((role, grants) -> {
+                if (!"ADMIN".equals(role)) {
+                    assertThat(grants)
+                            .as("%s's SQL grants", role)
+                            .doesNotContain("security:audit_export:webhook_manage");
+                }
+            });
+        }
+
+        @Test
         @DisplayName("GENERAL_MANAGER's SQL grants are the fixture's former set plus payment:apply, ap:pay and ap:view")
         void generalManagerGainsExactlyTheThree() {
             Set<String> sql = sqlSeededGrants.get("GENERAL_MANAGER");

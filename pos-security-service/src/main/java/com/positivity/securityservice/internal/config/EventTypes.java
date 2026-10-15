@@ -124,6 +124,14 @@ public final class EventTypes {
                 EventTypeRegistration.search(
                                 "SECURITY_AUDIT_EXPORT_DOWNLOAD", "Download the file of a completed audit export job")
                         .build(),
+                // AuditExportWebhookController (#2497)
+                EventTypeRegistration.write(
+                                "SECURITY_AUDIT_EXPORT_WEBHOOK_REGISTER",
+                                "Register or replace the tenant's audit export webhook and rotate its signing secret")
+                        .build(),
+                EventTypeRegistration.write(
+                                "SECURITY_AUDIT_EXPORT_WEBHOOK_DELETE", "Remove the tenant's audit export webhook")
+                        .build(),
                 EventTypeRegistration.write(
                                 "SECURITY_AUDIT_PRICING_SNAPSHOT_CREATE",
                                 "Create a pricing snapshot for audit purposes")

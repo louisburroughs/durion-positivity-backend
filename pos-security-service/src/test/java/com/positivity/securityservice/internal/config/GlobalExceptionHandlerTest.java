@@ -12,7 +12,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
 import com.positivity.securityservice.internal.exception.AuditExportNotReadyException;
-import com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookInvalidException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookNotRegisteredException;
 import com.positivity.securityservice.internal.exception.DuplicateRoleNameException;
 import com.positivity.securityservice.internal.exception.DuplicateUsernameException;
 import com.positivity.securityservice.internal.exception.InvalidRefreshTokenException;
@@ -34,6 +35,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
@@ -822,14 +824,45 @@ class GlobalExceptionHandlerTest {
     class HandleAuditExportExceptions {
 
         @Test
-        @DisplayName("WEBHOOK delivery returns 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED")
-        void webhookReturns400() {
-            ResponseEntity<ApiError> response = sut.handleAuditExportWebhookUnsupportedException(
-                    new AuditExportWebhookUnsupportedException(), requestWithHeader());
+        @DisplayName("#2497: a refused webhook URL returns 400 VALIDATION_ERROR with one fieldError on url per problem")
+        void invalidWebhookReturns400WithFieldErrors() {
+            ResponseEntity<ApiError> response = sut.handleAuditExportWebhookInvalidException(
+                    new AuditExportWebhookInvalidException(
+                            List.of("url must use https", "url must not carry a fragment")),
+                    requestWithHeader());
 
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(response.getBody()).isNotNull();
-            assertThat(response.getBody().code()).isEqualTo("AUDIT_EXPORT_WEBHOOK_UNSUPPORTED");
+            assertThat(response.getBody().code()).isEqualTo("VALIDATION_ERROR");
+            assertThat(response.getBody().fieldErrors())
+                    .extracting(ApiError.FieldError::field, ApiError.FieldError::message)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple("url", "url must use https"),
+                            org.assertj.core.groups.Tuple.tuple("url", "url must not carry a fragment"));
+        }
+
+        @Test
+        @DisplayName("#2497: reading an unregistered webhook returns 404 AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED")
+        void unregisteredLookupReturns404() {
+            ResponseEntity<ApiError> response = sut.handleAuditExportWebhookNotRegisteredException(
+                    AuditExportWebhookNotRegisteredException.forLookup(), requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED");
+        }
+
+        @Test
+        @DisplayName(
+                "#2497: a WEBHOOK export with no registered webhook returns 422 AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED")
+        void unregisteredExportReturns422() {
+            ResponseEntity<ApiError> response = sut.handleAuditExportWebhookNotRegisteredException(
+                    AuditExportWebhookNotRegisteredException.forExport(), requestWithHeader());
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().code()).isEqualTo("AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED");
+            assertThat(response.getBody().message()).contains("PUT /v1/audit/exports/webhook", "DOWNLOAD");
         }
 
         @Test
@@ -1207,9 +1240,12 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleDuplicateRoleNameException", (HandlerInvocation)
                             request -> handler.handleDuplicateRoleNameException(
                                     new DuplicateRoleNameException("Role 'ADMIN' already exists"), request)),
-                    Named.of("handleAuditExportWebhookUnsupportedException", (HandlerInvocation)
-                            request -> handler.handleAuditExportWebhookUnsupportedException(
-                                    new AuditExportWebhookUnsupportedException(), request)),
+                    Named.of("handleAuditExportWebhookInvalidException", (HandlerInvocation)
+                            request -> handler.handleAuditExportWebhookInvalidException(
+                                    new AuditExportWebhookInvalidException(List.of("url must use https")), request)),
+                    Named.of("handleAuditExportWebhookNotRegisteredException", (HandlerInvocation)
+                            request -> handler.handleAuditExportWebhookNotRegisteredException(
+                                    AuditExportWebhookNotRegisteredException.forExport(), request)),
                     Named.of("handleAuditExportNotReadyException", (HandlerInvocation)
                             request -> handler.handleAuditExportNotReadyException(
                                     new AuditExportNotReadyException(

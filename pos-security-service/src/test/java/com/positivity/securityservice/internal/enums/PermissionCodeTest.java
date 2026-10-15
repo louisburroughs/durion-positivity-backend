@@ -32,6 +32,8 @@ import org.junit.jupiter.api.Test;
 @DisplayName("PermissionCode catalog contract (PERM-001)")
 class PermissionCodeTest {
 
+    // 564 / 106: catalog v106 added security:audit_export:webhook_manage (563, #2497 — register, replace or remove
+    // the tenant's audit export webhook destination, granted to ADMIN only), on top of v105.
     // 563 / 105: catalog v105 added accounting:tax_registration:manage and accounting:tax_registration:view (561-562,
     // CAP:550 S32c #2638 — the accounting front door to pos-tax's tenant tax registrations, ADR-0071 §5), on top of
     // v104.
@@ -88,8 +90,8 @@ class PermissionCodeTest {
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 563;
-    private static final int EXPECTED_CATALOG_VERSION = 105;
+    private static final int EXPECTED_PERMISSION_COUNT = 564;
+    private static final int EXPECTED_CATALOG_VERSION = 106;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries

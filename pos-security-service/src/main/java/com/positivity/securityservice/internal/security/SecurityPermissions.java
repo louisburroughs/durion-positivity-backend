@@ -26,6 +26,13 @@ public final class SecurityPermissions {
     /** View audit events and pricing snapshots. */
     public static final String AUDIT_VIEW = "security:audit:view";
 
+    /**
+     * Register, replace or remove the tenant's audit export webhook destination, the endpoint WEBHOOK
+     * audit exports are sent to outside the shop (#2497). Granted to ADMIN only: registering one
+     * decides where the tenant's audit data may go and issues its signing secret.
+     */
+    public static final String AUDIT_EXPORT_WEBHOOK_MANAGE = "security:audit_export:webhook_manage";
+
     /** Evaluate authorization decisions for principals. */
     public static final String AUTHORIZATION_DECIDE = "security:authorization:decide";
 

@@ -222,6 +222,78 @@
       },
       "tags": ["accounting-event-guard", "bulk"],
       "notes": "#2374: one confirmation covers one eventId. The assistant lists the FAILED events and previews them one at a time; on the chat path the first guarded call that names an event spends the turn, so a second event in the same turn is refused."
+    },
+    {
+      "fixture_id": "audit-export-download-stays-low",
+      "utterance": "Export last week's permission-denied audit events as a CSV I can download.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["security:audit:export"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "LOW",
+        "tool_id": "security-service_requestauditexport",
+        "required_args": ["format", "deliveryMode"]
+      },
+      "plan_args": {
+        "body": {
+          "format": "CSV",
+          "deliveryMode": "DOWNLOAD",
+          "filters": { "eventType": "PERMISSION_DENIED", "fromDate": "2026-10-05T00:00:00Z", "toDate": "2026-10-12T00:00:00Z" }
+        }
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "plan_args_equal_executed_args": true,
+        "permission_recheck_at_execute": true
+      },
+      "tags": ["audit-export-guard", "delivery-download"],
+      "notes": "#2497: DOWNLOAD keeps the file in the shop for holders of security:audit:export, so AuditExportWriteGuard leaves it alone: it keeps the classified risk (LOW), reads no destination and pins nothing. It is still a write (it creates a job), so it previews and confirms like any other."
+    },
+    {
+      "fixture_id": "audit-export-webhook-guarded-high",
+      "utterance": "Send last week's permission-denied audit events to our SIEM webhook as JSON.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["security:audit:export"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "security-service_requestauditexport",
+        "required_args": ["format", "deliveryMode"]
+      },
+      "plan_args": {
+        "body": {
+          "format": "JSON",
+          "deliveryMode": "WEBHOOK",
+          "filters": { "eventType": "PERMISSION_DENIED", "fromDate": "2026-10-05T00:00:00Z", "toDate": "2026-10-12T00:00:00Z" }
+        }
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "plan_args_equal_executed_args": true,
+        "permission_recheck_at_execute": true,
+        "stale_data_forces_repreview": true,
+        "preview_names_destination": true
+      },
+      "tags": ["audit-export-guard", "delivery-webhook", "stale-data"],
+      "notes": "#2497: WEBHOOK sends the shop's audit data outside the shop, so it is HIGH whatever the classifier says. AuditExportWriteGuard reads the destination as the caller (security-service_getauditexportwebhook) before the preview; the preview names the URL with an explicit 'Audit data will leave the shop to <url>' line, the format and the filters, and says a delivered file cannot be recalled. Its fingerprint is pinned with the plan: a destination re-registered before confirmation cancels the plan as stale. On the chat path the call names the previewed URL in headers.X-Audit-Export-Destination, and a different current destination refuses."
+    },
+    {
+      "fixture_id": "audit-export-webhook-unregistered-refused",
+      "utterance": "Push the whole audit log to our webhook.",
+      "actor": { "role": "ROLE_ADMIN", "permission_codes": ["security:audit:export"] },
+      "expected": {
+        "intent_type": "ACTION",
+        "risk_level": "HIGH",
+        "tool_id": "security-service_requestauditexport",
+        "required_args": ["format", "deliveryMode"]
+      },
+      "plan_args": {
+        "body": { "format": "CSV", "deliveryMode": "WEBHOOK" }
+      },
+      "assertions": {
+        "no_execute_before_confirm": true,
+        "refused_without_destination": true
+      },
+      "tags": ["audit-export-guard", "delivery-webhook"],
+      "notes": "#2497: the shop has no registered webhook. The guard's destination read answers 404, so nothing is previewed (NEEDS_CLARIFICATION with preconditionFailed on the NLTI path, an Error: result on the chat path) and the refusal points at DOWNLOAD; pos-security-service would refuse the request itself with 422 AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED and create no job. Registering a destination is never a tool (it answers the signing secret)."
     }
   ]
 }

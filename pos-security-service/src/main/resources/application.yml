@@ -151,6 +151,14 @@ pos:
       stale-after: ${POS_SECURITY_AUDIT_EXPORT_STALE_AFTER:PT30M}
       retention: ${POS_SECURITY_AUDIT_EXPORT_RETENTION:P7D}
       sweep-interval: ${POS_SECURITY_AUDIT_EXPORT_SWEEP_INTERVAL:PT5M}
+      # WEBHOOK delivery (#2497) to the tenant's registered endpoint: up to max-attempts signed POSTs,
+      # waiting initial-backoff after the first failure and doubling it after each further one; short
+      # connect/read timeouts, redirects never followed, the destination re-checked before each attempt.
+      webhook:
+        max-attempts: ${POS_SECURITY_AUDIT_EXPORT_WEBHOOK_MAX_ATTEMPTS:3}
+        initial-backoff: ${POS_SECURITY_AUDIT_EXPORT_WEBHOOK_INITIAL_BACKOFF:PT5S}
+        connect-timeout: ${POS_SECURITY_AUDIT_EXPORT_WEBHOOK_CONNECT_TIMEOUT:PT5S}
+        read-timeout: ${POS_SECURITY_AUDIT_EXPORT_WEBHOOK_READ_TIMEOUT:PT30S}
     lockout:
       max-attempts: 5
       window: 10m

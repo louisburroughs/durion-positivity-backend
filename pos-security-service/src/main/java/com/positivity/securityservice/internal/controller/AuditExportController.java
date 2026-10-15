@@ -61,15 +61,18 @@ public class AuditExportController {
                     interactive paged queries.
                     Preconditions: the caller must hold security:audit:export; jobs are persisted per tenant, run \
                     in the background once the request commits, and are deleted with their file after the \
-                    configured retention period.
-                    Required inputs: format (CSV or JSON) and deliveryMode, which must be DOWNLOAD; filters is \
+                    configured retention period; deliveryMode WEBHOOK also sends the signed file outside the shop \
+                    to the tenant's registered webhook (read it with getAuditExportWebhook and confirm that \
+                    destination with the user first).
+                    Required inputs: format (CSV or JSON) and deliveryMode (DOWNLOAD or WEBHOOK); filters is \
                     optional and scopes the export with the same criteria as searchAuditEvents.
                     Emits a SECURITY_AUDIT_EXPORT_REQUEST event; poll getAuditExportJob until the job is \
                     COMPLETED, then fetch its downloadUrl with downloadAuditExport, or FAILED, where errorMessage \
-                    says why (for example more matching events than the configured row limit).
+                    says why (for example more matching events than the configured row limit, or a webhook that \
+                    never answered 2xx within the configured attempts).
                     Returns 400 when format or deliveryMode is missing or invalid or fromDate is not before \
-                    toDate, and 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED for WEBHOOK delivery, which has no \
-                    configured destination yet.
+                    toDate, and 422 AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED for WEBHOOK delivery when the tenant has \
+                    no registered webhook, in which case no job is created.
                     """)
     @ApiResponse(
             responseCode = "202",
@@ -77,11 +80,15 @@ public class AuditExportController {
             content = @Content(schema = @Schema(implementation = AuditExportJobResponse.class)))
     @ApiResponse(
             responseCode = "400",
-            description = "Invalid export request, or WEBHOOK delivery (AUDIT_EXPORT_WEBHOOK_UNSUPPORTED)",
+            description = "Invalid export request",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",
             description = "Insufficient authority",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "WEBHOOK delivery with no registered webhook (AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<AuditExportJobResponse> requestAuditExport(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -90,11 +97,19 @@ public class AuditExportController {
                             content =
                                     @Content(
                                             mediaType = "application/json",
-                                            examples = @ExampleObject(name = "CSV download export", value = """
-                                                                    {"format":"CSV",
-                                                                     "deliveryMode":"DOWNLOAD",
-                                                                     "filters":{"eventType":"PERMISSION_DENIED"}}
-                                                                    """)))
+                                            examples = {
+                                                @ExampleObject(name = "CSV download export", value = """
+                                                                        {"format":"CSV",
+                                                                         "deliveryMode":"DOWNLOAD",
+                                                                         "filters":{"eventType":"PERMISSION_DENIED"}}
+                                                                        """),
+                                                @ExampleObject(name = "JSON webhook export", value = """
+                                                                        {"format":"JSON",
+                                                                         "deliveryMode":"WEBHOOK",
+                                                                         "filters":{"fromDate":"2026-10-01T00:00:00Z",
+                                                                                    "toDate":"2026-10-08T00:00:00Z"}}
+                                                                        """)
+                                            }))
                     @RequestBody
                     @Valid
                     @NonNull
@@ -108,7 +123,7 @@ public class AuditExportController {
     @Operation(operationId = "getAuditExportJob", summary = "Get Audit Export Job Status", description = """
                     Returns the current status of an audit export job of the caller's tenant (PENDING, \
                     IN_PROGRESS, COMPLETED or FAILED) with its completion time, row count, download URL and \
-                    error message when present.
+                    error message when present, and for a WEBHOOK job its destination and delivery outcome.
                     Use this tool to poll a job created by requestAuditExport; do not resubmit the export while \
                     the job is still PENDING or IN_PROGRESS.
                     Preconditions: the caller must hold security:audit:export, and the job must belong to the \

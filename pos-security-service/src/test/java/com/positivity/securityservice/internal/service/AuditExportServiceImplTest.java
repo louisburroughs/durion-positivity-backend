@@ -15,24 +15,31 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.securityservice.internal.client.AuditExportWebhookSender;
+import com.positivity.securityservice.internal.client.LocalWebhookServer;
 import com.positivity.securityservice.internal.config.AuditExportProperties;
+import com.positivity.securityservice.internal.config.AuditExportWebhookProperties;
 import com.positivity.securityservice.internal.dto.AuditEventSearchFilter;
 import com.positivity.securityservice.internal.dto.AuditExportDownload;
 import com.positivity.securityservice.internal.dto.AuditExportJobResponse;
 import com.positivity.securityservice.internal.dto.AuditExportRequest;
 import com.positivity.securityservice.internal.entity.AuditExportFile;
 import com.positivity.securityservice.internal.entity.AuditExportJob;
+import com.positivity.securityservice.internal.entity.AuditExportWebhook;
 import com.positivity.securityservice.internal.entity.AuditLogEvent;
 import com.positivity.securityservice.internal.enums.AuditDeliveryMode;
+import com.positivity.securityservice.internal.enums.AuditExportDeliveryStatus;
 import com.positivity.securityservice.internal.enums.AuditExportFormat;
 import com.positivity.securityservice.internal.enums.AuditExportStatus;
 import com.positivity.securityservice.internal.exception.AuditExportNotReadyException;
-import com.positivity.securityservice.internal.exception.AuditExportWebhookUnsupportedException;
+import com.positivity.securityservice.internal.exception.AuditExportWebhookNotRegisteredException;
 import com.positivity.securityservice.internal.exception.SecurityValidationException;
 import com.positivity.securityservice.internal.repository.AuditExportFileRepository;
 import com.positivity.securityservice.internal.repository.AuditExportJobRepository;
+import com.positivity.securityservice.internal.repository.AuditExportWebhookRepository;
 import com.positivity.securityservice.internal.repository.AuditLogEventRepository;
 import jakarta.persistence.EntityNotFoundException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -48,8 +55,10 @@ import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.Function;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor.SpecificationFluentQuery;
@@ -69,6 +78,8 @@ class AuditExportServiceImplTest {
     private static final Instant NOW = Instant.parse("2026-10-05T12:00:00Z");
     private static final AuditExportProperties DEFAULTS = new AuditExportProperties(
             100, 1_000_000, Duration.ofMinutes(30), Duration.ofDays(7), Duration.ofMinutes(5));
+    private static final AuditExportWebhookProperties WEBHOOK_DEFAULTS =
+            new AuditExportWebhookProperties(3, Duration.ofSeconds(5), Duration.ofSeconds(5), Duration.ofSeconds(10));
 
     private final ObjectMapper objectMapper = JsonMapper.builder().build();
     private final Map<UUID, AuditExportJob> jobs = new HashMap<>();
@@ -85,12 +96,35 @@ class AuditExportServiceImplTest {
     private AuditExportFileRepository fileRepository;
     private AuditLogEventRepository auditLogEventRepository;
 
+    /** #2497: the tenant's one registered destination (the webhook "table"), and the waits between attempts. */
+    private AuditExportWebhookRepository webhookRepository;
+
+    private AuditExportWebhook registered;
+    private final List<Duration> sleeps = new ArrayList<>();
+    /** #2497: a mock unless a test wires the real sender against a local receiver. */
+    private AuditExportWebhookSender webhookSender;
+
     @BeforeEach
     @SuppressWarnings("unchecked")
     void setUp() {
         jobRepository = mock(AuditExportJobRepository.class);
         fileRepository = mock(AuditExportFileRepository.class);
         auditLogEventRepository = mock(AuditLogEventRepository.class);
+        webhookRepository = mock(AuditExportWebhookRepository.class);
+        webhookSender = mock(AuditExportWebhookSender.class);
+        when(webhookRepository.findFirstByOrderByRegisteredAtDesc()).thenAnswer(inv -> Optional.ofNullable(registered));
+        when(jobRepository.recordDelivery(any(), any(), anyInt(), any(), any(), any()))
+                .thenAnswer(inv -> {
+                    AuditExportJob job = jobs.get(inv.getArgument(0));
+                    if (job == null) {
+                        return 0;
+                    }
+                    job.setDeliveryStatus(inv.getArgument(1));
+                    job.setDeliveryAttempts(inv.getArgument(2));
+                    job.setDeliveredAt(inv.getArgument(3));
+                    job.setDeliveryError(inv.getArgument(4));
+                    return 1;
+                });
         when(jobRepository.save(any(AuditExportJob.class))).thenAnswer(inv -> {
             AuditExportJob job = inv.getArgument(0);
             if (job.getJobId() == null) {
@@ -197,15 +231,24 @@ class AuditExportServiceImplTest {
     }
 
     private AuditExportServiceImpl service(Executor executor, Clock clock, AuditExportProperties properties) {
+        return service(executor, clock, properties, sleeps::add);
+    }
+
+    private AuditExportServiceImpl service(
+            Executor executor, Clock clock, AuditExportProperties properties, AuditExportServiceImpl.Sleeper sleeper) {
         return new AuditExportServiceImpl(
                 jobRepository,
                 fileRepository,
                 auditLogEventRepository,
+                webhookRepository,
+                webhookSender,
                 objectMapper,
                 clock,
                 properties,
+                WEBHOOK_DEFAULTS,
                 executor,
-                mock(PlatformTransactionManager.class));
+                mock(PlatformTransactionManager.class),
+                sleeper);
     }
 
     private AuditExportServiceImpl inlineService(AuditExportProperties properties) {
@@ -431,13 +474,277 @@ class AuditExportServiceImplTest {
     }
 
     @Test
-    @DisplayName("WEBHOOK delivery is refused before anything is persisted")
-    void webhookIsRejected() {
+    @DisplayName("#2497: WEBHOOK with no registered destination is refused before anything is persisted")
+    void webhookWithoutDestinationIsRefused() {
         AuditExportServiceImpl service = inlineService();
 
         assertThatThrownBy(() -> service.requestExport(request(AuditExportFormat.CSV, AuditDeliveryMode.WEBHOOK)))
-                .isInstanceOf(AuditExportWebhookUnsupportedException.class);
+                .isInstanceOf(AuditExportWebhookNotRegisteredException.class)
+                .satisfies(e -> assertThat(((AuditExportWebhookNotRegisteredException) e).exportRequest())
+                        .isTrue());
         verify(jobRepository, never()).save(any());
+        verify(webhookSender, never()).send(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#2497: a DOWNLOAD job never reads the destination or sends anything")
+    void downloadNeverSends() {
+        registered = webhook(URI.create("https://siem.example.com/hook"), "secret");
+        auditEvents(1, "{}");
+
+        UUID jobId = requestCsv(inlineService());
+
+        assertThat(jobs.get(jobId).getStatus()).isEqualTo(AuditExportStatus.COMPLETED);
+        assertThat(jobs.get(jobId).getWebhookUrl()).isNull();
+        assertThat(jobs.get(jobId).getDeliveryStatus()).isNull();
+        verify(webhookSender, never()).send(any(), any(), any(), any(), any());
+    }
+
+    private static AuditExportWebhook webhook(URI url, String secret) {
+        AuditExportWebhook webhook = new AuditExportWebhook();
+        webhook.setWebhookId(UUID.fromString("01960000-0000-7000-8000-00000000b001"));
+        webhook.setUrl(url.toString());
+        webhook.setSigningSecret(secret);
+        webhook.setRegisteredBy("admin");
+        webhook.setRegisteredAt(NOW.minus(Duration.ofDays(1)));
+        return webhook;
+    }
+
+    /**
+     * #2497: WEBHOOK delivery through the real {@link AuditExportWebhookSender} against a local HTTPS
+     * receiver: signing, retries with a doubling backoff, exhaustion, no redirects, the destination
+     * pinned at request time and re-checked before every attempt.
+     */
+    @Nested
+    @DisplayName("WEBHOOK delivery to a local HTTPS receiver (#2497)")
+    class WebhookDelivery {
+
+        private static final String SECRET = "registered-signing-secret-0000000000000000";
+
+        private LocalWebhookServer receiver;
+
+        @BeforeEach
+        void receiver() throws Exception {
+            receiver = LocalWebhookServer.start();
+            webhookSender = receiver.sender(WEBHOOK_DEFAULTS, Clock.fixed(NOW, ZoneOffset.UTC));
+            registered = webhook(receiver.url("/hooks/audit"), SECRET);
+            events.add(event("user-1", "{}"));
+        }
+
+        @AfterEach
+        void stop() {
+            receiver.close();
+        }
+
+        private UUID requestWebhook(AuditExportServiceImpl service) {
+            return service.requestExport(request(AuditExportFormat.JSON, AuditDeliveryMode.WEBHOOK))
+                    .getJobId();
+        }
+
+        private String signature(String secret, String timestamp, byte[] body) throws Exception {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            mac.update((timestamp + ".").getBytes(StandardCharsets.UTF_8));
+            return "sha256=" + java.util.HexFormat.of().formatHex(mac.doFinal(body));
+        }
+
+        @Test
+        @DisplayName("the job pins the destination and, delivered on the first attempt, completes with its file")
+        void deliveredFirstTime() throws Exception {
+            AuditExportServiceImpl service = inlineService();
+
+            AuditExportJobResponse created =
+                    service.requestExport(request(AuditExportFormat.JSON, AuditDeliveryMode.WEBHOOK));
+
+            assertThat(created.getWebhookUrl()).isEqualTo(registered.getUrl());
+            AuditExportJob job = jobs.get(created.getJobId());
+            assertThat(job.getWebhookId()).isEqualTo(registered.getWebhookId());
+            AuditExportJobResponse polled = service.getExportJob(created.getJobId());
+            assertThat(polled.getStatus()).isEqualTo(AuditExportStatus.COMPLETED);
+            assertThat(polled.getDeliveryMode()).isEqualTo(AuditDeliveryMode.WEBHOOK);
+            assertThat(polled.getDeliveryStatus()).isEqualTo(AuditExportDeliveryStatus.DELIVERED);
+            assertThat(polled.getDeliveryAttempts()).isEqualTo(1);
+            assertThat(polled.getDeliveredAt()).isEqualTo(NOW);
+            assertThat(polled.getDeliveryError()).isNull();
+            assertThat(polled.getDownloadUrl())
+                    .as("a delivered file stays downloadable")
+                    .isNotNull();
+            assertThat(sleeps).isEmpty();
+
+            assertThat(receiver.received()).hasSize(1);
+            LocalWebhookServer.Received delivered = receiver.received().getFirst();
+            byte[] file = service.getExportFile(created.getJobId()).content();
+            assertThat(delivered.body()).isEqualTo(file);
+            assertThat(delivered.header("Content-Type")).startsWith("application/json");
+            assertThat(delivered.header(AuditExportWebhookSender.JOB_ID_HEADER))
+                    .isEqualTo(created.getJobId().toString());
+            String timestamp = delivered.header(AuditExportWebhookSender.TIMESTAMP_HEADER);
+            assertThat(timestamp).isEqualTo(Long.toString(NOW.getEpochSecond()));
+            assertThat(delivered.header(AuditExportWebhookSender.SIGNATURE_HEADER))
+                    .isEqualTo(signature(SECRET, timestamp, file));
+        }
+
+        @Test
+        @DisplayName("a failed attempt is retried after the backoff, and a later 2xx completes the job")
+        void retryThenSuccess() {
+            receiver.replyWith(503, 200);
+
+            UUID jobId = requestWebhook(inlineService());
+
+            AuditExportJob job = jobs.get(jobId);
+            assertThat(job.getStatus()).isEqualTo(AuditExportStatus.COMPLETED);
+            assertThat(job.getDeliveryStatus()).isEqualTo(AuditExportDeliveryStatus.DELIVERED);
+            assertThat(job.getDeliveryAttempts()).isEqualTo(2);
+            assertThat(job.getDeliveryError()).isNull();
+            assertThat(receiver.received()).hasSize(2);
+            assertThat(sleeps).containsExactly(Duration.ofSeconds(5));
+            assertThat(files).containsKey(jobId);
+        }
+
+        @Test
+        @DisplayName("every attempt failing FAILS the job: attempts and last error recorded, doubling waits, no file")
+        void retryExhaustion() {
+            receiver.replyWith(503, 502, 503);
+            AuditExportServiceImpl service = inlineService();
+
+            UUID jobId = requestWebhook(service);
+
+            AuditExportJobResponse polled = service.getExportJob(jobId);
+            assertThat(polled.getStatus()).isEqualTo(AuditExportStatus.FAILED);
+            assertThat(polled.getDeliveryStatus()).isEqualTo(AuditExportDeliveryStatus.FAILED);
+            assertThat(polled.getDeliveryAttempts()).isEqualTo(3);
+            assertThat(polled.getDeliveryError()).isEqualTo("HTTP 503");
+            assertThat(polled.getDeliveredAt()).isNull();
+            assertThat(polled.getErrorMessage())
+                    .isEqualTo(AuditExportServiceImpl.UNDELIVERED_MESSAGE.formatted(3, "HTTP 503"))
+                    .doesNotContain("receiver body");
+            assertThat(polled.getDownloadUrl()).isNull();
+            assertThat(receiver.received()).hasSize(3);
+            assertThat(sleeps).containsExactly(Duration.ofSeconds(5), Duration.ofSeconds(10));
+            assertThat(files).as("an undelivered export keeps no file").isEmpty();
+            assertThatThrownBy(() -> service.getExportFile(jobId)).isInstanceOf(AuditExportNotReadyException.class);
+        }
+
+        @Test
+        @DisplayName("a redirect is not followed: the Location is never requested and the job FAILS")
+        void redirectNotFollowed() {
+            String elsewhere = receiver.url("/elsewhere").toString();
+            receiver.redirectTo(302, elsewhere).redirectTo(302, elsewhere).redirectTo(302, elsewhere);
+
+            UUID jobId = requestWebhook(inlineService());
+
+            assertThat(jobs.get(jobId).getStatus()).isEqualTo(AuditExportStatus.FAILED);
+            assertThat(jobs.get(jobId).getDeliveryError()).isEqualTo("HTTP 302 (redirect not followed)");
+            assertThat(receiver.received())
+                    .extracting(LocalWebhookServer.Received::path)
+                    .containsOnly("/hooks/audit");
+        }
+
+        @Test
+        @DisplayName("the destination is re-checked at delivery: a private answer now sends nothing and is not retried")
+        void deliveryTimeAddressRecheck() throws Exception {
+            webhookSender = receiver.senderResolvingTo(
+                    WEBHOOK_DEFAULTS, Clock.fixed(NOW, ZoneOffset.UTC), java.net.InetAddress.getByName("10.0.0.7"));
+
+            UUID jobId = requestWebhook(inlineService());
+
+            AuditExportJob job = jobs.get(jobId);
+            assertThat(job.getStatus()).isEqualTo(AuditExportStatus.FAILED);
+            assertThat(job.getDeliveryStatus()).isEqualTo(AuditExportDeliveryStatus.FAILED);
+            assertThat(job.getDeliveryAttempts()).isEqualTo(1);
+            assertThat(job.getDeliveryError()).isEqualTo(AuditExportWebhookSender.DESTINATION_REFUSED);
+            assertThat(job.getErrorMessage()).isEqualTo(AuditExportServiceImpl.DESTINATION_REFUSED_MESSAGE);
+            assertThat(receiver.received()).isEmpty();
+            assertThat(sleeps).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a destination re-registered to another URL after the request is never sent to")
+        void destinationChangedIsNotDelivered() {
+            AuditExportServiceImpl worker = queuingService(NOW);
+            UUID jobId = requestWebhook(worker);
+            registered = webhook(URI.create("https://attacker.example.net/collect"), "new-secret");
+
+            queued.forEach(Runnable::run);
+
+            AuditExportJob job = jobs.get(jobId);
+            assertThat(job.getStatus()).isEqualTo(AuditExportStatus.FAILED);
+            assertThat(job.getDeliveryAttempts()).isZero();
+            assertThat(job.getDeliveryError()).isEqualTo(AuditExportServiceImpl.DESTINATION_CHANGED_ERROR);
+            assertThat(job.getErrorMessage()).isEqualTo(AuditExportServiceImpl.DESTINATION_CHANGED_MESSAGE);
+            assertThat(receiver.received()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a removed and re-registered destination (a new id) is not used, even at the same URL")
+        void reRegisteredDestinationIsNotDelivered() {
+            AuditExportServiceImpl worker = queuingService(NOW);
+            UUID jobId = requestWebhook(worker);
+            AuditExportWebhook again = webhook(receiver.url("/hooks/audit"), SECRET);
+            again.setWebhookId(UUID.fromString("01960000-0000-7000-8000-00000000b002"));
+            registered = again;
+
+            queued.forEach(Runnable::run);
+
+            assertThat(jobs.get(jobId).getDeliveryError()).isEqualTo(AuditExportServiceImpl.DESTINATION_CHANGED_ERROR);
+            assertThat(receiver.received()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a secret rotated after the request (same registration, same URL) signs the delivery")
+        void rotatedSecretSigns() throws Exception {
+            AuditExportServiceImpl worker = queuingService(NOW);
+            UUID jobId = requestWebhook(worker);
+            registered.setSigningSecret("rotated-secret");
+
+            queued.forEach(Runnable::run);
+
+            assertThat(jobs.get(jobId).getStatus()).isEqualTo(AuditExportStatus.COMPLETED);
+            LocalWebhookServer.Received delivered = receiver.received().getFirst();
+            assertThat(delivered.header(AuditExportWebhookSender.SIGNATURE_HEADER))
+                    .isEqualTo(signature(
+                            "rotated-secret",
+                            delivered.header(AuditExportWebhookSender.TIMESTAMP_HEADER),
+                            delivered.body()));
+        }
+
+        @Test
+        @DisplayName("a destination removed between attempts stops the retries")
+        void removalStopsRetries() {
+            receiver.replyWith(503, 200);
+            AuditExportServiceImpl service =
+                    service(Runnable::run, Clock.fixed(NOW, ZoneOffset.UTC), DEFAULTS, duration -> registered = null);
+
+            UUID jobId = requestWebhook(service);
+
+            AuditExportJob job = jobs.get(jobId);
+            assertThat(job.getStatus()).isEqualTo(AuditExportStatus.FAILED);
+            assertThat(job.getDeliveryAttempts()).isEqualTo(1);
+            assertThat(job.getDeliveryError()).isEqualTo(AuditExportServiceImpl.DESTINATION_CHANGED_ERROR);
+            assertThat(receiver.received()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("an interrupted wait between attempts FAILS the job and keeps the interrupt")
+        void interruptedBackoff() {
+            receiver.replyWith(503);
+            AuditExportServiceImpl service =
+                    service(Runnable::run, Clock.fixed(NOW, ZoneOffset.UTC), DEFAULTS, duration -> {
+                        throw new InterruptedException("shutdown");
+                    });
+
+            try {
+                UUID jobId = requestWebhook(service);
+
+                assertThat(jobs.get(jobId).getStatus()).isEqualTo(AuditExportStatus.FAILED);
+                assertThat(jobs.get(jobId).getDeliveryError()).isEqualTo(AuditExportServiceImpl.INTERRUPTED_ERROR);
+                assertThat(jobs.get(jobId).getErrorMessage())
+                        .isEqualTo(AuditExportServiceImpl.DELIVERY_INTERRUPTED_MESSAGE);
+                assertThat(Thread.currentThread().isInterrupted()).isTrue();
+            } finally {
+                Thread.interrupted();
+            }
+        }
     }
 
     @Test

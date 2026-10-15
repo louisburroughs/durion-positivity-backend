@@ -8,6 +8,8 @@ permissions:
     description: "Export audit"
   - name: "security:audit:view"
     description: "View audit events and pricing snapshots"
+  - name: "security:audit_export:webhook_manage"
+    description: "Register, replace or remove the tenant's audit export webhook destination"
   - name: "security:authorization:decide"
     description: "Evaluate authorization decisions for principals"
   - name: "security:permission:register"
