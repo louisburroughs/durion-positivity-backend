@@ -50,4 +50,20 @@ public class GLMappingNotConfiguredException extends RuntimeException {
     public @Nullable String getReferenceId() {
         return postingCategory == null || mappingKey == null ? null : postingCategory + "/" + mappingKey;
     }
+
+    /**
+     * This refusal, naming the mapping the caller needed (#2601): itself when it already names one, else a copy with the
+     * same message, the category, the key and {@code nextAction}, caused by this one. A posting that resolves by name
+     * uses it where the resolver's own message carries only ids (a mapping with no effective row), so what it records
+     * says which mapping to configure (#2594).
+     */
+    public GLMappingNotConfiguredException naming(String postingCategory, String mappingKey, String nextAction) {
+        if (getReferenceId() != null) {
+            return this;
+        }
+        GLMappingNotConfiguredException named =
+                new GLMappingNotConfiguredException(getMessage(), postingCategory, mappingKey, nextAction);
+        named.initCause(this);
+        return named;
+    }
 }

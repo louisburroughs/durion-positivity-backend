@@ -41,13 +41,17 @@ import tools.jackson.databind.ObjectMapper;
  * automatic application could not complete yet ({@link #recordSuspended}: {@code SUSPENDED} or {@code
  * FAILED}, #2503), whose reprocess is routed back to that path, and a goods receipt held for its currency or
  * as malformed ({@link #recordCurrencyHeld}, or {@link #recordSuspended} with {@code VALIDATION_ERROR},
- * CAP:550 S41 #2602), and an invoice whose output tax cannot be posted by type ({@code TAX_TYPE_MISSING}, CAP:550
- * S32d, AW50; reprocessed by {@code InvoiceRevenueReprocessor}). The auto-retry loop skips both receipt reasons; a manual reprocess re-runs the
+ * CAP:550 S41 #2602), an invoice whose output tax cannot be posted by type ({@code TAX_TYPE_MISSING}, CAP:550
+ * S32d, AW50; reprocessed by {@code InvoiceRevenueReprocessor}), and a closed register session (#2594, S17 PROPOSED
+ * 6) held for its currency, refused for a missing mapping ({@link #recordSuspended} with {@code SUSPENDED /
+ * GL_MAPPING_NOT_CONFIGURED}) or failed for breaking the close fact's contract ({@code FAILED / VALIDATION_ERROR}),
+ * every {@code order.session.closed} row being reprocessed by {@code RegisterSessionCloseReprocessor}. The auto-retry
+ * loop skips both receipt reasons and both session reasons; a manual reprocess re-runs the
  * receipt's own assessment and posting ({@code GoodsReceiptReprocessor}, routed from {@code
- * EventIngestionServiceImpl#rerunPosting}), never the posting engine. Any other path must not write {@code
- * SUSPENDED} or {@code FAILED}: the retry scheduler and {@code retryAccountingEvent} select those
+ * EventIngestionServiceImpl#rerunPosting}), or the session's own posting, never the posting engine. Any other path must
+ * not write {@code SUSPENDED} or {@code FAILED}: the retry scheduler and {@code retryAccountingEvent} select those
  * statuses and would run the fact through posting rule sets that do not exist. Failures that propagate
- * (closed period, missing mapping, transient) roll this row back with the handler and are visible on
+ * (closed period, any other fact's missing mapping, transient) roll this row back with the handler and are visible on
  * the DLQ instead. A redelivery of the same Kafka
  * envelope is short-circuited by {@code processed_events} before any posting and writes no row.
  *
@@ -308,7 +312,8 @@ public class KafkaFactIngestionRecorder {
      * or {@code FAILED} with the given reason, shaped like {@link #recordCurrencyHeld}. Only a path
      * that routes the row back to itself on reprocess may use it ({@code
      * EventIngestionServiceImpl#rerunPosting} sends a {@code payment.payment.settled} row with one of
-     * the automatic-application reasons back to {@link AutomaticPaymentApplicationService}), since the
+     * the automatic-application reasons back to {@link AutomaticPaymentApplicationService}, and every {@code
+     * order.session.closed} row to {@link RegisterSessionCloseReprocessor}, #2594), since the
      * scheduled retry picks up both statuses. A re-emitted fact already held for the same reason is not
      * recorded twice.
      *

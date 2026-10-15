@@ -119,6 +119,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
     private final AutomaticPaymentApplicationService automaticPaymentApplicationService;
     private final GoodsReceiptReprocessor goodsReceiptReprocessor;
     private final InvoiceRevenueReprocessor invoiceRevenueReprocessor;
+    private final RegisterSessionCloseReprocessor registerSessionCloseReprocessor;
 
     /** Scope-key prefix for the per-month {@code accounting_event.eventReference} counter. */
     private static final String EVENT_REFERENCE_SCOPE_PREFIX = "AE-";
@@ -408,6 +409,23 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             }
         }
 
+        // A held register session (#2594, CAP:550 S17 PROPOSED 6: a missing mapping, a broken contract, its currency)
+        // re-runs the session's own posting from the stored fact, never the posting engine: no rule set exists for it,
+        // and the engine would post neither its over/short nor its drawer movements. Every session row comes here, so
+        // the scheduled retry never runs one through the engine either.
+        if (RegisterSessionCloseReprocessor.handles(event.getEventType())) {
+            try {
+                return reprocessRegisterSession(event, triggeredByUserId);
+            } catch (DataIntegrityViolationException | OptimisticLockingFailureException e) {
+                // Two reprocesses of the same session at once: the loser trips a posting key's or the undeposited
+                // session's unique constraint, or the row's version. The same deterministic 409 as the engine branch.
+                String msg = "Concurrent reprocessing detected for event " + eventId
+                        + ". Another transaction has modified this event. Please retry.";
+                log.warn(msg, e);
+                throw new IllegalStateException(msg, e);
+            }
+        }
+
         // Increment attempt count
         Integer currentAttemptCount = event.getAttemptCount();
         int nextAttemptCount = (currentAttemptCount == null ? 0 : currentAttemptCount) + 1;
@@ -560,6 +578,57 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         reprocessingAttemptHistoryRepository.save(attempt);
         log.info(
                 "Reprocessed invoice event {} through revenue recognition: {} {}",
+                event.getEventId(),
+                result.status(),
+                result.reason() == null ? "" : result.reason());
+        return AccountingEventMapper.toEventResponse(accountingEventRepository.save(event));
+    }
+
+    /**
+     * #2594 (CAP:550 S17 PROPOSED 6): re-run a held {@code order.session.closed} row's session posting (drawer
+     * movements, over/short, undeposited session) from its stored payload, through {@link
+     * RegisterSessionCloseReprocessor}. Shaped like {@link #reprocessGoodsReceipt}: still refused keeps the row held with
+     * its reason ({@code SUSPENDED} for a mapping, a period, the time zone or the currency; {@code FAILED /
+     * VALIDATION_ERROR} for a broken contract); a session that now posts closes {@code PROCESSED / NEW}, or {@code
+     * PROCESSED / DUPLICATE_IGNORED} when it had already posted. Every attempt counts and writes its history row.
+     */
+    private AccountingEventResponse reprocessRegisterSession(
+            @NonNull AccountingEvent event, @NonNull String triggeredByUserId) {
+        String envelopeEventId = event.getIngestionId() != null
+                ? event.getIngestionId().toString()
+                : event.getEventId().toString();
+        RegisterSessionCloseReprocessor.Result result = registerSessionCloseReprocessor.reprocess(
+                event.getPayload(), event.getFailureReasonCode(), envelopeEventId);
+        event.setResolvedByUserId(triggeredByUserId);
+        event.setAttemptCount((event.getAttemptCount() == null ? 0 : event.getAttemptCount()) + 1);
+        event.setStatus(result.status());
+        event.setFailureReasonCode(result.reason());
+        if (result.status() == AccountingEventStatus.PROCESSED) {
+            event.setFailureDetails(null);
+            event.setErrorMessage(null);
+        } else {
+            event.setFailureDetails(result.detail());
+            event.setErrorMessage(result.detail());
+        }
+        if (result.resolved()) {
+            event.setProcessedAt(Instant.now(clock));
+            event.setIdempotencyOutcome(result.idempotencyOutcome().name());
+            event.setJournalEntryId(result.journalEntryId());
+        }
+
+        ReprocessingAttemptHistory attempt = new ReprocessingAttemptHistory();
+        attempt.setAccountingEvent(event);
+        attempt.setTriggeredByUserId(triggeredByUserId);
+        attempt.setAttemptedAt(Instant.now(clock));
+        attempt.setOutcome(
+                result.status() == AccountingEventStatus.PROCESSED
+                        ? ReprocessingOutcome.SUCCESS
+                        : ReprocessingOutcome.FAILURE);
+        attempt.setOutcomeDetails("Register session re-posted: " + result.status()
+                + (result.reason() == null ? "" : " / " + result.reason()) + " (" + result.detail() + ")");
+        reprocessingAttemptHistoryRepository.save(attempt);
+        log.info(
+                "Reprocessed register session event {} through the session posting: {} {}",
                 event.getEventId(),
                 result.status(),
                 result.reason() == null ? "" : result.reason());
@@ -935,7 +1004,12 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 FactPostingKeyDescriptor.builder()
                         .sourceSystem(RegisterOverShortPostingService.SOURCE_SYSTEM)
                         .eventTypes(OrderEventsListener.RECORDED_EVENT_TYPES)
-                        .postingKey("Deterministic sourceEventId derived from the register sessionId")
+                        .postingKey("Deterministic sourceEventId derived from the register sessionId (the over/short)"
+                                + " and from each drawer movement's movementId. A session that is not posted writes"
+                                + " SUSPENDED / CURRENCY_NOT_SUPPORTED, SUSPENDED / GL_MAPPING_NOT_CONFIGURED (a"
+                                + " missing mapping) or FAILED / VALIDATION_ERROR (the close fact breaks its"
+                                + " contract), once per reason, and reprocessing it re-runs the session's own posting"
+                                + " instead of the posting engine")
                         .postsJournalEntry(true)
                         .duplicateOutcome(IdempotencyOutcome.DUPLICATE_IGNORED)
                         .onDuplicate(jeDuplicate)

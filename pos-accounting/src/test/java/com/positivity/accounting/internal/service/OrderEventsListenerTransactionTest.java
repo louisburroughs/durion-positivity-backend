@@ -4,8 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ExtOrderRegisterSession;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.RegisterSessionStatus;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.exception.RegisterSessionContractViolationException;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ExtOrderRegisterSessionRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
@@ -15,6 +20,8 @@ import com.positivity.tenancy.testing.TenantTestSupport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -76,8 +83,12 @@ class OrderEventsListenerTransactionTest {
     @Autowired
     private ExtOrderRegisterSessionRepository sessionRows;
 
+    @Autowired
+    private AccountingEventRepository accountingEventRepository;
+
     private OrderEventsListener listener;
     private String eventId;
+    private final List<UUID> heldSessions = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -100,6 +111,8 @@ class OrderEventsListenerTransactionTest {
 
     @AfterEach
     void tearDown() {
+        // Held records carry no reprocessing_attempt_history rows, so they can be deleted directly.
+        heldSessions.forEach(session -> accountingEventRepository.deleteAll(records(session)));
         processedEventRepository.deleteById(eventId);
         sessionRows.deleteAll();
         TenantContext.clear();
@@ -200,6 +213,70 @@ class OrderEventsListenerTransactionTest {
                 .isExactlyInstanceOf(IllegalStateException.class);
 
         assertThat(processedEventRepository.existsById(eventId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("#2594: a missing mapping thrown through the transactional posting service rolls the session back and"
+            + " commits the SUSPENDED / GL_MAPPING_NOT_CONFIGURED record with the processed mark, in its own"
+            + " transaction, which an enclosing rollback does not undo")
+    void missingMappingIsHeldInItsOwnTransaction() {
+        UUID sessionId = heldSession();
+        failingPostingService.failWith(
+                new GLMappingNotConfiguredException("Mapping key not configured: REGISTER_OVER_SHORT/CASH_SHORT"));
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(_ -> {
+                    listener.onOrderEvent(sessionClosed(sessionId, 0));
+                    throw new IllegalStateException("the enclosing transaction rolls back");
+                }))
+                .isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessage("the enclosing transaction rolls back");
+
+        assertThat(failingPostingService.sawActiveTransaction()).isTrue();
+        assertThat(processedEventRepository.existsById(eventId)).isTrue();
+        assertThat(records(sessionId)).singleElement().satisfies(row -> {
+            assertThat(row.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(row.getFailureReasonCode()).isEqualTo("GL_MAPPING_NOT_CONFIGURED");
+            assertThat(row.getErrorMessage()).contains("REGISTER_OVER_SHORT/CASH_SHORT");
+            assertThat(row.getSourceSystem()).isEqualTo("pos-order");
+            assertThat(row.getIngestionId()).isEqualTo(UUID.fromString(eventId));
+            assertThat(row.getPayload()).containsEntry("sessionId", sessionId.toString());
+        });
+    }
+
+    @Test
+    @DisplayName("#2594: a broken contract is recorded FAILED / VALIDATION_ERROR with its processed mark and does not"
+            + " throw; a re-emit under a new envelope id writes no second row")
+    void contractViolationIsRecordedOnce() {
+        UUID sessionId = heldSession();
+        failingPostingService.failWith(new RegisterSessionContractViolationException(
+                "Petty-expense movement null of session " + sessionId + " cannot post: no movementId"));
+
+        assertThatCode(() -> listener.onOrderEvent(sessionClosed(sessionId, 0))).doesNotThrowAnyException();
+        String first = eventId;
+        eventId = UUID.randomUUID().toString();
+        assertThatCode(() -> listener.onOrderEvent(sessionClosed(sessionId, 0))).doesNotThrowAnyException();
+
+        assertThat(processedEventRepository.existsById(first)).isTrue();
+        assertThat(processedEventRepository.existsById(eventId)).isTrue();
+        processedEventRepository.deleteById(first);
+        assertThat(records(sessionId)).singleElement().satisfies(row -> {
+            assertThat(row.getStatus()).isEqualTo(AccountingEventStatus.FAILED);
+            assertThat(row.getFailureReasonCode()).isEqualTo("VALIDATION_ERROR");
+            assertThat(row.getErrorMessage()).contains("cannot post: no movementId");
+        });
+    }
+
+    private UUID heldSession() {
+        UUID sessionId = UUID.randomUUID();
+        heldSessions.add(sessionId);
+        return sessionId;
+    }
+
+    private List<AccountingEvent> records(UUID sessionId) {
+        return accountingEventRepository.findAll().stream()
+                .filter(e -> RegisterSessionClosedV1.EVENT_TYPE.equals(e.getEventType()))
+                .filter(e -> sessionId.toString().equals(e.getDomainKeyId()))
+                .toList();
     }
 
     private String sessionOpened(UUID sessionId) {

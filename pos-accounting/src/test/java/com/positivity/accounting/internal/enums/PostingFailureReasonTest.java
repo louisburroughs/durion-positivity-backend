@@ -46,7 +46,8 @@ class PostingFailureReasonTest {
                         PostingFailureReason.CURRENCY_NOT_SUPPORTED,
                         PostingFailureReason.VALIDATION_ERROR,
                         PostingFailureReason.MISSING_AMOUNT,
-                        PostingFailureReason.TAX_TYPE_MISSING);
+                        PostingFailureReason.TAX_TYPE_MISSING,
+                        PostingFailureReason.GL_MAPPING_NOT_CONFIGURED);
     }
 
     @Test
@@ -56,8 +57,9 @@ class PostingFailureReasonTest {
                 .isTrue();
         assertThat(PostingFailureReason.isExcludedFromAutoRetry("PERIOD_CLOSED"))
                 .isTrue();
-        for (String code :
-                new String[] {"DUPLICATE_CONFLICT", "INVALID_PAYLOAD", "VALIDATION_ERROR", "MISSING_AMOUNT"}) {
+        for (String code : new String[] {
+            "DUPLICATE_CONFLICT", "INVALID_PAYLOAD", "VALIDATION_ERROR", "MISSING_AMOUNT", "GL_MAPPING_NOT_CONFIGURED"
+        }) {
             assertThat(PostingFailureReason.isExcludedFromAutoRetry(code))
                     .as(code)
                     .isTrue();

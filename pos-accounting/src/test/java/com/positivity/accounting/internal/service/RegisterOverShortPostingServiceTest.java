@@ -119,6 +119,30 @@ class RegisterOverShortPostingServiceTest {
     }
 
     @Test
+    @DisplayName("#2594: a mapping with no effective row is refused naming REGISTER_OVER_SHORT and the key, which the"
+            + " listener records on the held session; nothing posts and no key is registered")
+    void missingMappingIsNamed() {
+        LocalDateTime expectedDate = LocalDateTime.ofInstant(CLOSED_AT, ZoneOffset.UTC);
+        when(glMappingResolver.resolveGLAccount("REGISTER_OVER_SHORT", "CASH_SHORT", expectedDate))
+                .thenThrow(new com.positivity.accounting.internal.exception.GLMappingNotConfiguredException(
+                        "No GL mapping found for 1:2 on " + expectedDate));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.postOverShort(
+                        fact(new BigDecimal("-10.00"), new BigDecimal("140.00"), new BigDecimal("150.00")),
+                        ENVELOPE_EVENT_ID))
+                .isInstanceOfSatisfying(
+                        com.positivity.accounting.internal.exception.GLMappingNotConfiguredException.class, missing -> {
+                            assertThat(missing.getReferenceId()).isEqualTo("REGISTER_OVER_SHORT/CASH_SHORT");
+                            assertThat(RegisterSessionClosePosting.mappingDetail(missing))
+                                    .startsWith("No GL mapping found for 1:2")
+                                    .contains("(REGISTER_OVER_SHORT/CASH_SHORT)")
+                                    .endsWith("configure the mapping, then reprocess");
+                        });
+        org.mockito.Mockito.verifyNoInteractions(glPostingService);
+        verify(idempotencyService, org.mockito.Mockito.never()).registerKey(anyString(), any());
+    }
+
+    @Test
     @DisplayName("Overage posts Dr Register Cash Clearing / Cr Cash Over for abs(overShort)")
     void overagePostsClearingDebitOverCredit() {
         LocalDateTime expectedDate = LocalDateTime.ofInstant(CLOSED_AT, ZoneOffset.UTC);
