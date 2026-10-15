@@ -427,13 +427,13 @@ paths:
 
         Use this tool for bulk extraction of audit data as a file; use searchAuditEvents instead for interactive paged queries.
 
-        Preconditions: the caller must hold security:audit:export; jobs are persisted per tenant, run in the background once the request commits, and are deleted with their file after the configured retention period.
+        Preconditions: the caller must hold security:audit:export; jobs are persisted per tenant, run in the background once the request commits, and are deleted with their file after the configured retention period; deliveryMode WEBHOOK also sends the signed file outside the shop to the tenant''s registered webhook (read it with getAuditExportWebhook and confirm that destination with the user first).
 
-        Required inputs: format (CSV or JSON) and deliveryMode, which must be DOWNLOAD; filters is optional and scopes the export with the same criteria as searchAuditEvents.
+        Required inputs: format (CSV or JSON) and deliveryMode (DOWNLOAD or WEBHOOK); filters is optional and scopes the export with the same criteria as searchAuditEvents.
 
-        Emits a SECURITY_AUDIT_EXPORT_REQUEST event; poll getAuditExportJob until the job is COMPLETED, then fetch its downloadUrl with downloadAuditExport, or FAILED, where errorMessage says why (for example more matching events than the configured row limit).
+        Emits a SECURITY_AUDIT_EXPORT_REQUEST event; poll getAuditExportJob until the job is COMPLETED, then fetch its downloadUrl with downloadAuditExport, or FAILED, where errorMessage says why (for example more matching events than the configured row limit, or a webhook that never answered 2xx within the configured attempts).
 
-        Returns 400 when format or deliveryMode is missing or invalid or fromDate is not before toDate, and 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED for WEBHOOK delivery, which has no configured destination yet.
+        Returns 400 when format or deliveryMode is missing or invalid or fromDate is not before toDate, and 422 AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED for WEBHOOK delivery when the tenant has no registered webhook, in which case no job is created.
 
         '
       operationId: requestAuditExport
@@ -448,6 +448,14 @@ paths:
                   filters:
                     eventType: PERMISSION_DENIED
                   format: CSV
+              JSON webhook export:
+                description: JSON webhook export
+                value:
+                  deliveryMode: WEBHOOK
+                  filters:
+                    fromDate: '2026-10-01T00:00:00Z'
+                    toDate: '2026-10-08T00:00:00Z'
+                  format: JSON
             schema:
               $ref: '#/components/schemas/AuditExportRequest'
         description: Format, delivery mode, and optional filter scope of the export job.
@@ -464,7 +472,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Invalid export request, or WEBHOOK delivery (AUDIT_EXPORT_WEBHOOK_UNSUPPORTED)
+          description: Invalid export request
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient authority
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: WEBHOOK delivery with no registered webhook (AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED)
+      security:
+      - bearerAuth: []
+      summary: Request an Asynchronous Audit Export
+      tags:
+      - Audit Exports
+      x-required-permissions:
+      - security:audit:export
+  /v1/audit/exports/webhook:
+    delete:
+      description: 'Removes the HTTPS endpoint the caller''s tenant receives WEBHOOK audit exports at, so no further export is sent outside the shop.
+
+        Use this tool to stop webhook delivery; use registerAuditExportWebhook instead to point it elsewhere or to rotate the signing secret.
+
+        Preconditions: the caller must hold security:audit_export:webhook_manage; a WEBHOOK job still being delivered is not sent once its destination is removed, and WEBHOOK requests answer 422 until another destination is registered.
+
+        Required inputs: none.
+
+        Emits a SECURITY_AUDIT_EXPORT_WEBHOOK_DELETE event and is idempotent, answering 204 even when nothing is registered.
+
+        Returns 403 when the caller lacks the permission.
+
+        '
+      operationId: deleteAuditExportWebhook
+      responses:
+        '204':
+          description: Destination removed, or none was registered
         '401':
           content:
             application/json:
@@ -479,14 +531,121 @@ paths:
           description: Insufficient authority
       security:
       - bearerAuth: []
-      summary: Request an Asynchronous Audit Export
+      summary: Remove the Audit Export Webhook
       tags:
       - Audit Exports
       x-required-permissions:
+      - security:audit_export:webhook_manage
+    get:
+      description: 'Returns the HTTPS endpoint the caller''s tenant receives WEBHOOK audit exports at, with when and by whom it was registered, and never its signing secret.
+
+        Use this tool to see where a WEBHOOK export would send audit data, and to name that destination to the user before requesting one; do not use it to change the destination, which is registerAuditExportWebhook.
+
+        Preconditions: the caller must hold security:audit_export:webhook_manage or security:audit:export.
+
+        Required inputs: none.
+
+        This is a read-only lookup and no events are emitted.
+
+        Returns 404 AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED when the tenant has no destination, in which case a WEBHOOK export is refused.
+
+        '
+      operationId: getAuditExportWebhook
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExportWebhookResponse'
+          description: The registered destination, without its secret
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient authority
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: No destination registered (AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED)
+      security:
+      - bearerAuth: []
+      summary: Get the Audit Export Webhook
+      tags:
+      - Audit Exports
+      x-required-permissions:
+      - security:audit_export:webhook_manage
       - security:audit:export
+    put:
+      description: 'Registers the HTTPS endpoint the caller''s tenant receives WEBHOOK audit exports at, replacing any earlier one, and returns it with a newly issued signing secret.
+
+        Use this tool to set or rotate where audit exports are delivered; do not use it to export anything, which is requestAuditExport with deliveryMode WEBHOOK.
+
+        Preconditions: the caller must hold security:audit_export:webhook_manage; the url must be an absolute https URL with a DNS host name, no user info and no fragment, at most 2048 characters, and its host must resolve only to publicly routable addresses (never loopback, private, link-local, carrier-grade NAT, multicast, reserved or cloud metadata).
+
+        Required inputs: url in the request body.
+
+        Emits a SECURITY_AUDIT_EXPORT_WEBHOOK_REGISTER event; signingSecret appears only in this response, every earlier secret stops working, and each delivery carries X-Audit-Export-Signature, sha256= followed by the hex HMAC-SHA256 of the X-Audit-Export-Timestamp value, a dot and the body, keyed with that secret.
+
+        Returns 400 VALIDATION_ERROR with one fieldErrors entry on url per broken rule, and 403 without the permission.
+
+        '
+      operationId: registerAuditExportWebhook
+      requestBody:
+        content:
+          application/json:
+            examples:
+              SIEM endpoint:
+                description: SIEM endpoint
+                value:
+                  url: https://siem.example.com/hooks/positivity-audit
+            schema:
+              $ref: '#/components/schemas/AuditExportWebhookRequest'
+        description: The https endpoint WEBHOOK audit exports are delivered to.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditExportWebhookRegistrationResponse'
+          description: Destination registered; the response carries the new signing secret, shown only once
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The url is not an allowed destination (VALIDATION_ERROR, fieldErrors on url)
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Insufficient authority
+      security:
+      - bearerAuth: []
+      summary: Register the Audit Export Webhook
+      tags:
+      - Audit Exports
+      x-required-permissions:
+      - security:audit_export:webhook_manage
   /v1/audit/exports/{jobId}:
     get:
-      description: 'Returns the current status of an audit export job of the caller''s tenant (PENDING, IN_PROGRESS, COMPLETED or FAILED) with its completion time, row count, download URL and error message when present.
+      description: 'Returns the current status of an audit export job of the caller''s tenant (PENDING, IN_PROGRESS, COMPLETED or FAILED) with its completion time, row count, download URL and error message when present, and for a WEBHOOK job its destination and delivery outcome.
 
         Use this tool to poll a job created by requestAuditExport; do not resubmit the export while the job is still PENDING or IN_PROGRESS.
 
@@ -5208,8 +5367,36 @@ components:
           example: '2026-01-15T09:35:00Z'
           format: date-time
           type: string
+        deliveredAt:
+          description: 'WEBHOOK only: when the endpoint accepted the file; null unless DELIVERED'
+          example: '2026-01-15T09:35:02Z'
+          format: date-time
+          type: string
+        deliveryAttempts:
+          description: 'WEBHOOK only: how many delivery attempts were made; null until delivery ends'
+          example: 1
+          format: int32
+          type: integer
+        deliveryError:
+          description: 'WEBHOOK only: short reason the last attempt failed (an HTTP status such as "HTTP 503", an exception class name, DESTINATION_CHANGED or DESTINATION_REFUSED), never the endpoint''s response body; null unless delivery failed'
+          example: HTTP 503
+          type: string
+        deliveryMode:
+          description: 'How the export is delivered: DOWNLOAD (fetch downloadUrl) or WEBHOOK (sent to the tenant''s registered webhook, webhookUrl)'
+          enum:
+          - DOWNLOAD
+          - WEBHOOK
+          example: DOWNLOAD
+          type: string
+        deliveryStatus:
+          description: 'WEBHOOK only: DELIVERED (an attempt answered 2xx; the job is COMPLETED) or FAILED (no attempt succeeded, or the destination changed or was refused; the job is FAILED); null for DOWNLOAD and until delivery ends'
+          enum:
+          - DELIVERED
+          - FAILED
+          example: DELIVERED
+          type: string
         downloadUrl:
-          description: Gateway-relative path that downloads the export file with the same security:audit:export authority (null until COMPLETED)
+          description: Gateway-relative path that downloads the export file with the same security:audit:export authority (null until COMPLETED; a WEBHOOK job whose delivery failed is FAILED and keeps no file)
           example: /security-service/v1/audit/exports/01960000-0000-7000-8000-000000000001/download
           type: string
         errorMessage:
@@ -5247,7 +5434,12 @@ components:
           - FAILED
           example: COMPLETED
           type: string
+        webhookUrl:
+          description: 'WEBHOOK only: the destination this job delivers to, pinned when it was requested (a later re-registration to another URL is never used for it); null for DOWNLOAD'
+          example: https://siem.example.com/hooks/positivity-audit
+          type: string
       required:
+      - deliveryMode
       - format
       - jobId
       - requestedAt
@@ -5257,7 +5449,7 @@ components:
       description: Audit export job submission request
       properties:
         deliveryMode:
-          description: Delivery mode for the exported file; only DOWNLOAD is accepted, WEBHOOK answers 400 AUDIT_EXPORT_WEBHOOK_UNSUPPORTED until a per-tenant webhook destination exists
+          description: 'Delivery mode for the exported file: DOWNLOAD keeps it for downloadAuditExport; WEBHOOK also sends it, signed, to the tenant''s registered webhook (getAuditExportWebhook), so audit data leaves the shop, and answers 422 AUDIT_EXPORT_WEBHOOK_NOT_REGISTERED when none is registered'
           enum:
           - DOWNLOAD
           - WEBHOOK
@@ -5275,6 +5467,64 @@ components:
       required:
       - deliveryMode
       - format
+      type: object
+    AuditExportWebhookRegistrationResponse:
+      description: The registered audit export webhook destination and its signing secret, shown only once
+      properties:
+        registeredAt:
+          description: When the destination was registered
+          example: '2026-10-12T09:30:00Z'
+          format: date-time
+          type: string
+        registeredBy:
+          description: Username that registered the destination
+          example: admin
+          type: string
+        signingSecret:
+          description: 'CONFIDENTIAL. New HMAC-SHA256 signing secret (32 random bytes, base64url without padding); returned only in this response and never again, and every earlier secret stops working. Each delivery carries X-Audit-Export-Signature: sha256=<hex HMAC-SHA256 of X-Audit-Export-Timestamp + "." + body>, keyed with the UTF-8 bytes of this string'
+          example: example-only-not-a-real-secret-00000000000
+          type: string
+        url:
+          description: Where WEBHOOK audit exports are delivered
+          example: https://siem.example.com/hooks/positivity-audit
+          type: string
+      required:
+      - registeredAt
+      - registeredBy
+      - signingSecret
+      - url
+      type: object
+    AuditExportWebhookRequest:
+      description: The endpoint the tenant's WEBHOOK audit exports are delivered to
+      properties:
+        url:
+          description: Absolute https URL with a DNS host name, no user info and no fragment, at most 2048 characters; the host must resolve only to publicly routable addresses
+          example: https://siem.example.com/hooks/positivity-audit
+          maxLength: 2048
+          type: string
+      required:
+      - url
+      type: object
+    AuditExportWebhookResponse:
+      description: The tenant's audit export webhook destination; the signing secret is never returned here
+      properties:
+        registeredAt:
+          description: When the destination was last registered (the signing secret was rotated then)
+          example: '2026-10-12T09:30:00Z'
+          format: date-time
+          type: string
+        registeredBy:
+          description: Username that last registered the destination
+          example: admin
+          type: string
+        url:
+          description: Where WEBHOOK audit exports are delivered
+          example: https://siem.example.com/hooks/positivity-audit
+          type: string
+      required:
+      - registeredAt
+      - registeredBy
+      - url
       type: object
     AuditLogEventDto:
       description: Immutable audit event record

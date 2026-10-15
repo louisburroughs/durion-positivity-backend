@@ -1419,6 +1419,8 @@ paths:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1events~1{eventId}
   /v1/audit/exports:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1exports
+  /v1/audit/exports/webhook:
+    $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1exports~1webhook
   /v1/audit/exports/{jobId}:
     $ref: ../../pos-security-service/openapi.yaml#/paths/~1v1~1audit~1exports~1{jobId}
   /v1/audit/exports/{jobId}/download:
