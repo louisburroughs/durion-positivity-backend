@@ -256,6 +256,34 @@ drawer fields to show; it never calls pos-tax for registrations (ADR-0071 §7, A
   that day, in regime order (at most one per regime): the regimes a drawer may offer (S32d), under the same caveat.
 - The copy keeps no registration number: the drawer needs only whether a regime is registered on a date.
 
+## Drawer actor names (#2608)
+
+The drawer reads serve a display name beside each actor they identify by username, because a screen may not render
+a raw id (ADR-0064):
+
+| Read | Actor field | Name field |
+| --- | --- | --- |
+| Register session (`RegisterSessionResponse`) | `openedByClerkId`, `closedByClerkId` | `openedByName`, `closedByName` |
+| Cash movement (`CashMovementResponse`, also inside the session report) | `clerkId`, `approvedBy` | `recordedByName`, `approvedByName` |
+| Session policy history (`SessionPolicyResponse.Change`, GET and the PUT 200) | `actor` | `actorName` |
+
+- **Source.** pos-order's own copy of pos-people-contact's persons and user-person links (`ext_people_contact_person`,
+  `ext_people_contact_user_link`, V11), fed by `people-contact.events.v1` (`PeopleContactEventsListener`, through
+  `PeopleContactReplica`) and reconciled against `people-contact.manifest.v1` (`PeopleContactManifestListener`, drift
+  sends `people-contact.outbox.replay-requested` on `people-contact.commands.v1`). No call to another service, no
+  cross-database join (ADR-0044). The same shape as pos-accounting's copy (#2670).
+- **Rule** (`ActorDisplayNames`): a username, through its `ACTIVE` link, to its person's "First Last", blanks dropped
+  and trimmed. The name is `null` when there is no `ACTIVE` link, the person is not copied or was deleted, both names
+  are blank, or the actor is `system`. The username is never the fallback, and the actor id fields stay served for
+  audit.
+- **Read time, one lookup per response.** Every actor of a response resolves in one query over its distinct usernames,
+  never one per row; nothing is stored on the session, movement or policy-change rows, so a name that reaches the copy
+  later shows on old rows too.
+- **The approver.** A movement's `approvedBy` is the manager's user id; the step-up now also keeps the sign-in name it
+  verified (`cash_movement_approval.approver_username`, copied to `cash_movement.approved_by_username`, V12), which is
+  what `approvedByName` resolves. A movement approved before V12 serves `approvedByName: null`.
+- Names are CONFIDENTIAL (ADR-0072): served, never logged; the response records leave them out of `toString`.
+
 ## Stated tax on drawer expenses (CAP:550 S32d, #2639)
 
 A `PETTY_EXPENSE` on `POST /v1/orders/sessions/{sessionId}/cash-movements` may carry the tax its receipt states, so
@@ -485,6 +513,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `POS_ORDER_MANIFEST_TOPIC` | `order.manifest.v1` | Topic of the reconciliation manifests (`pos.order.manifest.topic`; see [Reconciliation manifest and replay](#reconciliation-manifest-and-replay-adr-0044-4-2579)) |
 | `POS_ORDER_MANIFEST_WINDOW` / `POS_ORDER_MANIFEST_GRACE` | `PT1H` / `PT5M` | Manifest window length, and how long after a window closes its manifest is published |
 | `POS_ORDER_SUPPLIER_MANIFEST_TOPIC` / `POS_ORDER_SUPPLIER_MANIFEST_CONSUMER_GROUP` | `supplier.manifest.v1` / `pos-order-supplier-manifests` | pos-supplier's reconciliation manifest and this module's group on it (see [Vendor copy](#vendor-copy-and-the-purchase-order-vendor-guard-cap550-s24-2517)) |
+| `POS_ORDER_PEOPLE_CONTACT_EVENTS_TOPIC` / `POS_ORDER_PEOPLE_CONTACT_MANIFEST_TOPIC` / `POS_ORDER_PEOPLE_CONTACT_COMMANDS_TOPIC` | `people-contact.events.v1` / `people-contact.manifest.v1` / `people-contact.commands.v1` | The people-contact copy behind the drawer actor names, its reconciliation manifest and the replay command (groups `pos-order-people-contact-events`, `pos-order-people-contact-manifests`; see [Drawer actor names](#drawer-actor-names-2608)) |
 | `POS_ORDER_SUPPLIER_COMMANDS_TOPIC` | `supplier.commands.v1` | Where `supplier.outbox.replay-requested` is sent on drift |
 | `pos.order.outbox.replay.max-lookback` | `P30D` | Oldest window start an `order.outbox.replay-requested` command is served for |
 | `POS_ORDER_TAX_CHECK_CONNECT_TIMEOUT_MS` / `POS_ORDER_TAX_CHECK_READ_TIMEOUT_MS` | `1000` / `3000` | Timeouts of pos-tax's plausibility check and evidence-rules read (CAP:550 S32d) |

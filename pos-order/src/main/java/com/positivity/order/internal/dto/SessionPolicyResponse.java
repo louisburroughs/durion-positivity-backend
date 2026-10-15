@@ -53,5 +53,20 @@ public record SessionPolicyResponse(
             @Schema(example = "3.00") String newValue,
             @Schema(description = "Who changed it") String actor,
             @Schema(description = "Why") String justification,
-            @Schema(description = "When") Instant changedAt) {}
+            @Schema(description = "When") Instant changedAt,
+
+            @Schema(
+                    description = "The actor's display name, \"First Last\", name only; null when it can't be"
+                            + " resolved. Never the username (#2608, ADR-0064)",
+                    nullable = true,
+                    example = "Dana Reyes")
+            String actorName) {
+
+        /** Never prints the actor's display name (ADR-0072). */
+        @Override
+        public String toString() {
+            return "Change[setting=" + setting + ", oldValue=" + oldValue + ", newValue=" + newValue + ", actor="
+                    + actor + ", changedAt=" + changedAt + "]";
+        }
+    }
 }

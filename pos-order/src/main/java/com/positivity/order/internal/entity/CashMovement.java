@@ -103,6 +103,13 @@ public class CashMovement extends TenantScopedEntity {
     @Column(name = "approved_by", columnDefinition = "UUID", updatable = false)
     private UUID approvedBy;
 
+    /**
+     * That manager's sign-in name as the step-up verified it (#2608), copied from the approval: the key the
+     * people-contact copy resolves to a display name. Null without an approval, or on one issued before it was kept.
+     */
+    @Column(name = "approved_by_username", updatable = false)
+    private String approvedByUsername;
+
     /** The approval it used, or null. */
     @Column(name = "approval_id", columnDefinition = "UUID", updatable = false)
     private UUID approvalId;

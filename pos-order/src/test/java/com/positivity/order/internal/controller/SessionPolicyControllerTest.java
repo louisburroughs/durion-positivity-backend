@@ -78,6 +78,38 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
     }
 
     @Test
+    @DisplayName("#2608: GET serves each history row's actorName beside its actor, null when unresolved")
+    void getServesActorNames() throws Exception {
+        when(sessionPolicyService.current()).thenReturn(defaults());
+        when(sessionPolicyService.history())
+                .thenReturn(List.of(
+                        new SessionPolicyChangeView(
+                                "OVER_SHORT_TOLERANCE",
+                                "5.00",
+                                "3.00",
+                                "dana.reyes",
+                                "Tighter count after the audit",
+                                Instant.parse("2026-10-07T12:00:00Z"),
+                                "Dana Reyes"),
+                        new SessionPolicyChangeView(
+                                "PETTY_EXPENSE_LIMIT",
+                                "40.00",
+                                "50.00",
+                                "unlinked.user",
+                                "Raised for the supplier run",
+                                Instant.parse("2026-10-06T12:00:00Z"),
+                                null)));
+
+        mockMvc.perform(withGatewayAuth(get("/v1/orders/session-policy"), MANAGE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.history[*].actorName").exists())
+                .andExpect(jsonPath("$.history[0].actorName").value("Dana Reyes"))
+                .andExpect(jsonPath("$.history[0].actor").value("dana.reyes"))
+                .andExpect(jsonPath("$.history[1].actorName").doesNotExist())
+                .andExpect(jsonPath("$.history[1].actor").value("unlinked.user"));
+    }
+
+    @Test
     @DisplayName("PUT passes the two configurable types, the tolerance and the justification; returns the history")
     void putUpdates() throws Exception {
         when(sessionPolicyService.update(any()))
@@ -90,7 +122,8 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
                         "3.00",
                         "controller-1",
                         "Tighter count after the audit",
-                        Instant.parse("2026-10-07T12:00:00Z"))));
+                        Instant.parse("2026-10-07T12:00:00Z"),
+                        "Dana Reyes")));
 
         mockMvc.perform(withGatewayAuth(
                         put("/v1/orders/session-policy")
@@ -100,7 +133,10 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.overShortTolerance").value(3.0))
                 .andExpect(jsonPath("$.history[0].oldValue").value("5.00"))
-                .andExpect(jsonPath("$.history[0].newValue").value("3.00"));
+                .andExpect(jsonPath("$.history[0].newValue").value("3.00"))
+                // #2608: the actor's display name beside the username, which stays served for audit.
+                .andExpect(jsonPath("$.history[0].actorName").value("Dana Reyes"))
+                .andExpect(jsonPath("$.history[0].actor").value("controller-1"));
 
         ArgumentCaptor<UpdateSessionPolicyCommand> command = ArgumentCaptor.forClass(UpdateSessionPolicyCommand.class);
         verify(sessionPolicyService).update(command.capture());

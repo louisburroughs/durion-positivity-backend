@@ -32,6 +32,9 @@ import org.jspecify.annotations.Nullable;
  *     part of a read
  * @param taxPlausibility {@code PLAUSIBLE} or {@code RATE_UNAVAILABLE}; null when no check was made
  * @param supplierRegistrationRequired whether an evidence rule asked for the number; null when no check was made
+ * @param recordedByName the cashier's display name, "First Last"; null when it can't be resolved (#2608); CONFIDENTIAL
+ * @param approvedByName the approving manager's display name; null when there was no approval, the approval predates
+ *     the stored approver username, or it can't be resolved (#2608); CONFIDENTIAL
  */
 public record CashMovementSummary(
         @NonNull UUID movementId,
@@ -54,9 +57,11 @@ public record CashMovementSummary(
         @NonNull List<CashMovementStatedTax> statedTaxes,
         boolean supplierRegistrationNumberProvided,
         @Nullable String taxPlausibility,
-        @Nullable Boolean supplierRegistrationRequired) {
+        @Nullable Boolean supplierRegistrationRequired,
+        @Nullable String recordedByName,
+        @Nullable String approvedByName) {
 
-    /** Never prints the supplier's name. */
+    /** Never prints the supplier's name, nor the actors' display names (ADR-0072). */
     @Override
     public String toString() {
         return "CashMovementSummary[movementId=" + movementId + ", sessionId=" + sessionId + ", reason=" + reason

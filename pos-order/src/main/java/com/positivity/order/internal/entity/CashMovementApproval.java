@@ -75,6 +75,13 @@ public class CashMovementApproval extends TenantScopedEntity {
     @Column(name = "approver_user_id", nullable = false, columnDefinition = "UUID", updatable = false)
     private UUID approverUserId;
 
+    /**
+     * The sign-in name the step-up verified, exactly as checked (#2608): the key the people-contact copy resolves to
+     * the manager's display name. Null on an approval issued before it was kept.
+     */
+    @Column(name = "approver_username", updatable = false)
+    private String approverUsername;
+
     /** The cashier who called the step-up (ADR-0018). */
     @Column(name = "requested_by", nullable = false, updatable = false)
     private String requestedBy;

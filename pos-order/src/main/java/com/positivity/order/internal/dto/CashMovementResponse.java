@@ -83,9 +83,24 @@ public record CashMovementResponse(
                 description = "Whether an evidence rule asked for the supplier's number; null when no check was made",
                 example = "false",
                 nullable = true)
-        Boolean supplierRegistrationRequired) {
+        Boolean supplierRegistrationRequired,
 
-    /** Never prints the supplier's name. */
+        @Schema(
+                description = "The cashier's display name, \"First Last\", name only; null when it can't be resolved."
+                        + " Never the sign-in name (#2608, ADR-0064)",
+                nullable = true,
+                example = "Dana Reyes")
+        String recordedByName,
+
+        @Schema(
+                description = "The approving manager's display name, \"First Last\", name only; null when the movement"
+                        + " needed no approval, was approved before approver names were kept, or the name can't be"
+                        + " resolved. Never the sign-in name (#2608, ADR-0064)",
+                nullable = true,
+                example = "Sam Ortiz")
+        String approvedByName) {
+
+    /** Never prints the supplier's name, nor the actors' display names (ADR-0072). */
     @Override
     public String toString() {
         return "CashMovementResponse[movementId=" + movementId + ", reason=" + reason + ", amount=" + amount
@@ -115,6 +130,8 @@ public record CashMovementResponse(
                 m.statedTaxes(),
                 m.supplierRegistrationNumberProvided(),
                 m.taxPlausibility(),
-                m.supplierRegistrationRequired());
+                m.supplierRegistrationRequired(),
+                m.recordedByName(),
+                m.approvedByName());
     }
 }

@@ -170,6 +170,8 @@ class CashMovementApprovalServiceTest {
                 .isEqualTo(CashMovementApprovalServiceImpl.hash(result.approvalToken()))
                 .isNotEqualTo(result.approvalToken());
         assertThat(approval.getApproverUserId()).isEqualTo(MANAGER_ID);
+        // #2608: the sign-in name the step-up verified, the key for the approver's display name.
+        assertThat(approval.getApproverUsername()).isEqualTo("manager");
         assertThat(approval.getRequestedBy()).isEqualTo("cashier");
         assertThat(approval.getStatus()).isEqualTo(CashMovementApprovalStatus.ISSUED);
         assertThat(approval.getCurrencyCode()).isEqualTo("USD");
