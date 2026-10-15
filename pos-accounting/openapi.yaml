@@ -25445,6 +25445,18 @@ components:
     UnappliedPaymentRow:
       description: A customer payment with an unapplied amount, and the invoices it most likely pays
       properties:
+        autoApplicationReason:
+          description: 'Why automatic application did not apply the payment when it settled: the reason on its newest automatic-application record. NOT_POSTABLE is a skip (a method other than CASH or CARD, another customer''s invoice, or an invoice already paid); INVOICE_NOT_FOUND, INVOICE_NOT_ELIGIBLE, PERIOD_CLOSED and ACCOUNTING_TIME_ZONE_UNSET are holds that are retried or reprocessed. Null when the payment has no such record or the record was later processed'
+          enum:
+          - NOT_POSTABLE
+          - INVOICE_NOT_FOUND
+          - INVOICE_NOT_ELIGIBLE
+          - PERIOD_CLOSED
+          - ACCOUNTING_TIME_ZONE_UNSET
+          example: NOT_POSTABLE
+          type:
+          - string
+          - 'null'
         currency:
           description: Payment currency (ISO 4217)
           example: USD
@@ -25477,6 +25489,10 @@ components:
           type:
           - string
           - 'null'
+        possibleDuplicate:
+          description: 'True only when the invoice the payment was taken against is already paid (sourceInvoiceState PAID) and this payment applied nothing to it that is still in force: the payment is possibly a duplicate. False for every other state, and for a payment that itself paid the invoice, in full or in part, and has a remainder waiting'
+          example: true
+          type: boolean
         receivedAt:
           description: When the payment cleared
           example: '2026-10-04T15:12:09Z'
@@ -25495,6 +25511,18 @@ components:
           type:
           - string
           - 'null'
+        sourceInvoiceState:
+          description: 'State of the invoice the payment was taken against, by the rule automatic application decides with: OPEN (it has an open balance this payment can pay), PAID (no open balance is left; it may have been paid by this payment, see possibleDuplicate), NOT_FOUND (not in accounting''s invoice replica yet), NOT_ELIGIBLE (not FINALIZED or POSTED, so it cannot take a payment), OTHER_CUSTOMER (its customer is missing or is not the payment''s); null when the payment names no invoice'
+          enum:
+          - OPEN
+          - PAID
+          - NOT_FOUND
+          - NOT_ELIGIBLE
+          - OTHER_CUSTOMER
+          example: PAID
+          type:
+          - string
+          - 'null'
         suggestion:
           $ref: '#/components/schemas/PaymentMatchSuggestion'
         totalAmount:
@@ -25509,6 +25537,7 @@ components:
       - currency
       - customerId
       - paymentId
+      - possibleDuplicate
       - receivedAt
       - suggestion
       - totalAmount
