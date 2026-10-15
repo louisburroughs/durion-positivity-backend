@@ -21,6 +21,7 @@ import com.positivity.accounting.internal.dto.SuggestedInvoice;
 import com.positivity.accounting.internal.dto.UnappliedPaymentRow;
 import com.positivity.accounting.internal.dto.UnappliedPaymentsPage;
 import com.positivity.accounting.internal.dto.UnappliedPaymentsSummary;
+import com.positivity.accounting.internal.enums.SourceInvoiceState;
 import com.positivity.accounting.internal.service.ReceivablesWorklistService;
 import com.positivity.events.EmitEvent;
 import com.positivity.security.common.GatewaySecurityConfig;
@@ -83,10 +84,44 @@ class ReceivablesWorklistControllerTest extends BaseControllerSliceTest {
                     .andExpect(jsonPath("$.items[0].suggestion.invoices[0].suggestedAmount")
                             .value(4615.00))
                     .andExpect(jsonPath("$.items[0].suggestion.leftOver").value(0.00))
+                    .andExpect(jsonPath("$.items[0].sourceInvoiceState").value("OPEN"))
+                    .andExpect(jsonPath("$.items[0].possibleDuplicate").value(false))
+                    .andExpect(jsonPath("$.items[0].autoApplicationReason").doesNotExist())
                     .andExpect(jsonPath("$.summary.count").value(1))
                     .andExpect(jsonPath("$.summary.totalUnappliedAmount").value(4615.00))
                     .andExpect(jsonPath("$.summary.currency").value("USD"))
                     .andExpect(jsonPath("$.totalElements").value(1));
+        }
+
+        @Test
+        @DisplayName("serves the source invoice's state, the possible-duplicate flag and the automatic-application"
+                + " reason (#2563)")
+        void servesSourceInvoiceFacts() throws Exception {
+            UnappliedPaymentsPage page = page();
+            UnappliedPaymentRow paid = page().getItems().getFirst();
+            paid.setSourceInvoiceState(SourceInvoiceState.PAID);
+            paid.setPossibleDuplicate(true);
+            paid.setAutoApplicationReason("NOT_POSTABLE");
+            paid.setSuggestion(PaymentMatchSuggestion.builder()
+                    .reasons(List.of("SAME_CUSTOMER"))
+                    .invoices(List.of())
+                    .build());
+            UnappliedPaymentRow noInvoice = page().getItems().getFirst();
+            noInvoice.setSourceInvoiceId(null);
+            noInvoice.setSourceInvoiceNumber(null);
+            noInvoice.setSourceInvoiceState(null);
+            noInvoice.setPossibleDuplicate(false);
+            page.setItems(List.of(paid, noInvoice));
+            when(service.listUnappliedPayments(isNull(), eq(0), eq(25))).thenReturn(page);
+
+            mockMvc.perform(withAuth(get(PAYMENTS), APPLY))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items[0].sourceInvoiceState").value("PAID"))
+                    .andExpect(jsonPath("$.items[0].possibleDuplicate").value(true))
+                    .andExpect(jsonPath("$.items[0].autoApplicationReason").value("NOT_POSTABLE"))
+                    .andExpect(jsonPath("$.items[1].sourceInvoiceState").doesNotExist())
+                    .andExpect(jsonPath("$.items[1].possibleDuplicate").value(false))
+                    .andExpect(jsonPath("$.items[1].autoApplicationReason").doesNotExist());
         }
 
         @Test
@@ -208,6 +243,8 @@ class ReceivablesWorklistControllerTest extends BaseControllerSliceTest {
                 .unappliedAmount(new BigDecimal("4615.00"))
                 .sourceInvoiceId(INVOICE_ID)
                 .sourceInvoiceNumber("INV-2026-01702")
+                .sourceInvoiceState(SourceInvoiceState.OPEN)
+                .possibleDuplicate(false)
                 .suggestion(PaymentMatchSuggestion.builder()
                         .reasons(List.of("REMITTANCE_REFERENCE", "SAME_CUSTOMER", "EXACT_TOTAL"))
                         .invoices(List.of(suggested))

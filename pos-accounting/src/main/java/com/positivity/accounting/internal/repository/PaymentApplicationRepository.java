@@ -180,6 +180,24 @@ public interface PaymentApplicationRepository extends JpaRepository<PaymentAppli
     List<InvoiceAmount> sumAppliedAmountByInvoiceIdIn(@Param("invoiceIds") @NonNull Collection<UUID> invoiceIds);
 
     /**
+     * Of {@code paymentIds}, the payments with an application to the invoice they were taken against
+     * ({@code receivable_payment.source_invoice_id}) that has not been reversed (#2563): payments that
+     * themselves paid that invoice, in full or in part, so its having no open balance is not a sign of a
+     * duplicate payment. One query for a page of payments.
+     *
+     * @param paymentIds receivable payment identifiers
+     * @return the matching payment identifiers, each once, unordered
+     */
+    @Query("SELECT DISTINCT pa.payment.paymentId FROM PaymentApplication pa"
+            + " WHERE pa.payment.paymentId IN :paymentIds"
+            + " AND pa.invoiceId = pa.payment.sourceInvoiceId"
+            + " AND NOT EXISTS (SELECT 1 FROM PaymentApplicationReversal r"
+            + " WHERE r.originalPaymentApplication.paymentApplicationId = pa.paymentApplicationId)")
+    @NonNull
+    List<UUID> findPaymentIdsWithLiveApplicationToSourceInvoice(
+            @Param("paymentIds") @NonNull Collection<UUID> paymentIds);
+
+    /**
      * Applications created by any of {@code sources} at or after {@code since}, reversed or not (#2503,
      * the "Matched automatically" read); order and page come from {@code pageable}. Served by {@code
      * idx_payment_application_source_ts}.

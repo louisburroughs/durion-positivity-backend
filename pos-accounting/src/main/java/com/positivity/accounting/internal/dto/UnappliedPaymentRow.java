@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
+import com.positivity.accounting.internal.enums.SourceInvoiceState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,7 +15,9 @@ import lombok.NoArgsConstructor;
 
 /**
  * One customer payment still waiting to be matched (#2502). Display fields are null when accounting
- * cannot resolve them, never an identifier rendered as text (P8, ADR-0064).
+ * cannot resolve them, never an identifier rendered as text (P8, ADR-0064). The source invoice's state,
+ * the possible-duplicate flag and the automatic-application reason are served facts (#2563), so a
+ * client renders them instead of inferring them from the suggestion.
  */
 @Data
 @Builder
@@ -82,6 +85,47 @@ public class UnappliedPaymentRow {
             requiredMode = NOT_REQUIRED,
             nullable = true)
     private String sourceInvoiceNumber;
+
+    @Schema(
+            description = "State of the invoice the payment was taken against, by the rule automatic application"
+                    + " decides with: OPEN (it has an open balance this payment can pay), PAID (no open balance is"
+                    + " left; it may have been paid by this payment, see possibleDuplicate), NOT_FOUND (not in"
+                    + " accounting's invoice replica yet), NOT_ELIGIBLE (not FINALIZED or POSTED, so it cannot take a"
+                    + " payment), OTHER_CUSTOMER (its customer is missing or is not the payment's); null when the"
+                    + " payment names no invoice",
+            example = "PAID",
+            allowableValues = {"OPEN", "PAID", "NOT_FOUND", "NOT_ELIGIBLE", "OTHER_CUSTOMER"},
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private SourceInvoiceState sourceInvoiceState;
+
+    @Schema(
+            description = "True only when the invoice the payment was taken against is already paid (sourceInvoiceState"
+                    + " PAID) and this payment applied nothing to it that is still in force: the payment is"
+                    + " possibly a duplicate. False for every other state, and for a payment that itself paid the"
+                    + " invoice, in full or in part, and has a remainder waiting",
+            example = "true",
+            requiredMode = REQUIRED)
+    private boolean possibleDuplicate;
+
+    @Schema(
+            description = "Why automatic application did not apply the payment when it settled: the reason on its"
+                    + " newest automatic-application record. NOT_POSTABLE is a skip (a method other than CASH or"
+                    + " CARD, another customer's invoice, or an invoice already paid); INVOICE_NOT_FOUND,"
+                    + " INVOICE_NOT_ELIGIBLE, PERIOD_CLOSED and ACCOUNTING_TIME_ZONE_UNSET are holds that are"
+                    + " retried or reprocessed. Null when the payment has no such record or the record was later"
+                    + " processed",
+            example = "NOT_POSTABLE",
+            allowableValues = {
+                "NOT_POSTABLE",
+                "INVOICE_NOT_FOUND",
+                "INVOICE_NOT_ELIGIBLE",
+                "PERIOD_CLOSED",
+                "ACCOUNTING_TIME_ZONE_UNSET"
+            },
+            requiredMode = NOT_REQUIRED,
+            nullable = true)
+    private String autoApplicationReason;
 
     @Schema(description = "The invoices the payment most likely pays and why", requiredMode = REQUIRED)
     private PaymentMatchSuggestion suggestion;

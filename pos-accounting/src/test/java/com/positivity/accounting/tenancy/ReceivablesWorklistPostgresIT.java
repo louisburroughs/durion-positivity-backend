@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.dto.CustomerOpenInvoicesPage;
 import com.positivity.accounting.internal.dto.OpenInvoiceRow;
 import com.positivity.accounting.internal.dto.UnappliedPaymentRow;
 import com.positivity.accounting.internal.dto.UnappliedPaymentsPage;
+import com.positivity.accounting.internal.enums.SourceInvoiceState;
 import com.positivity.accounting.internal.service.FinancialReportingService;
 import com.positivity.accounting.internal.service.ReceivablesWorklistService;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -232,6 +233,119 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
                 .isEqualTo(7);
     }
 
+    @Test
+    @DisplayName("#2563 against the database: case g is PAID and a possible duplicate; a payment that paid its own"
+            + " invoice is not; an undone application does not count; another customer's and a missing invoice are"
+            + " named; the automatic-application reason is served")
+    void sourceInvoiceStates() {
+        UUID tenant = tenantWithZone();
+        UUID customer = UUIDv7Generator.generate();
+        UUID other = UUIDv7Generator.generate();
+        Instant now = Instant.now(clock);
+        LocalDate today = LocalDate.now(clock);
+
+        // Case g: INV-G was paid by another payment, and the payment taken against it applied nothing.
+        UUID invoiceG = invoice(tenant, customer, "INV-G", "POSTED", "100.00", today);
+        UUID payer = payment(tenant, customer, "100.00", "0.00", "FULLY_APPLIED", now.minusSeconds(900), null, "CARD");
+        application(tenant, payer, invoiceG, customer, "100.00");
+        UUID duplicate =
+                payment(tenant, customer, "100.00", "100.00", "AVAILABLE", now.minusSeconds(800), invoiceG, "CARD");
+        settledOutcome(tenant, duplicate, "SUSPENDED", "INVOICE_NOT_FOUND", now.minusSeconds(800));
+        settledOutcome(tenant, duplicate, "SKIPPED", "NOT_POSTABLE", now.minusSeconds(790));
+
+        // The walk-in excess: the payment paid its own invoice in full and 20.00 waits.
+        UUID invoiceSelf = invoice(tenant, customer, "INV-SELF", "POSTED", "100.00", today);
+        UUID selfPaid =
+                payment(tenant, customer, "120.00", "20.00", "AVAILABLE", now.minusSeconds(700), invoiceSelf, "CASH");
+        application(tenant, selfPaid, invoiceSelf, customer, "100.00");
+
+        // This payment's application was undone and another payment then paid the invoice.
+        UUID invoiceUndone = invoice(tenant, customer, "INV-UNDONE", "POSTED", "50.00", today);
+        UUID undone =
+                payment(tenant, customer, "50.00", "50.00", "AVAILABLE", now.minusSeconds(600), invoiceUndone, "CARD");
+        reversal(tenant, application(tenant, undone, invoiceUndone, customer, "50.00"), "50.00");
+        UUID laterPayer =
+                payment(tenant, customer, "50.00", "0.00", "FULLY_APPLIED", now.minusSeconds(550), null, "CARD");
+        application(tenant, laterPayer, invoiceUndone, customer, "50.00");
+
+        // Another customer's paid invoice, and an invoice not replicated.
+        UUID invoiceOther = invoice(tenant, other, "INV-OTHER", "POSTED", "30.00", today);
+        application(tenant, laterPayer, invoiceOther, other, "30.00");
+        UUID ofOther =
+                payment(tenant, customer, "30.00", "30.00", "AVAILABLE", now.minusSeconds(500), invoiceOther, "CARD");
+        UUID missing = payment(
+                tenant,
+                customer,
+                "40.00",
+                "40.00",
+                "AVAILABLE",
+                now.minusSeconds(400),
+                UUIDv7Generator.generate(),
+                "CARD");
+        settledOutcome(tenant, missing, "SUSPENDED", "INVOICE_NOT_FOUND", now.minusSeconds(400));
+
+        List<UnappliedPaymentRow> rows = asTenant(tenant, () -> worklist.listUnappliedPayments(customer, 0, 25))
+                .getItems();
+
+        assertThat(rows)
+                .extracting(UnappliedPaymentRow::getPaymentId)
+                .containsExactly(duplicate, selfPaid, undone, ofOther, missing);
+        assertThat(rows)
+                .extracting(UnappliedPaymentRow::getSourceInvoiceState)
+                .containsExactly(
+                        SourceInvoiceState.PAID,
+                        SourceInvoiceState.PAID,
+                        SourceInvoiceState.PAID,
+                        SourceInvoiceState.OTHER_CUSTOMER,
+                        SourceInvoiceState.NOT_FOUND);
+        assertThat(rows)
+                .extracting(UnappliedPaymentRow::isPossibleDuplicate)
+                .containsExactly(true, false, true, false, false);
+        assertThat(rows)
+                .extracting(UnappliedPaymentRow::getAutoApplicationReason)
+                .containsExactly("NOT_POSTABLE", null, null, null, "INVOICE_NOT_FOUND");
+        assertThat(rows)
+                .extracting(UnappliedPaymentRow::getSourceInvoiceNumber)
+                .containsExactly("INV-G", "INV-SELF", "INV-UNDONE", "INV-OTHER", null);
+    }
+
+    @Test
+    @DisplayName("#2563: a page of twenty-one payments against paid invoices costs the same queries as one")
+    void boundedPaymentQueries() throws Exception {
+        UUID tenant = tenantWithZone();
+        UUID customer = UUIDv7Generator.generate();
+        paidInvoiceWithPaymentAgainstIt(tenant, customer, 0);
+        long forOne = paymentStatementsFor(tenant, 1);
+        for (int n = 1; n < 21; n++) {
+            paidInvoiceWithPaymentAgainstIt(tenant, customer, n);
+        }
+        long forMany = paymentStatementsFor(tenant, 21);
+
+        assertThat(forMany).as("twenty-one payments cost no more than one").isEqualTo(forOne);
+        assertThat(forOne)
+                .as("the page and its totals, the customers, the source invoices, the candidates, five balance terms,"
+                        + " the applications of the PAID rows, the automatic-application records and the CASH parties")
+                .isEqualTo(13);
+    }
+
+    private void paidInvoiceWithPaymentAgainstIt(UUID tenant, UUID customer, int n) {
+        Instant now = Instant.now(clock);
+        UUID invoice = invoice(tenant, customer, "INV-P" + n, "POSTED", "10.00", LocalDate.now(clock));
+        UUID payer = payment(tenant, customer, "10.00", "0.00", "FULLY_APPLIED", now.minusSeconds(5000), null, "CARD");
+        application(tenant, payer, invoice, customer, "10.00");
+        UUID payment =
+                payment(tenant, customer, "10.00", "10.00", "AVAILABLE", now.minusSeconds(1000 - n), invoice, "CARD");
+        settledOutcome(tenant, payment, "SKIPPED", "NOT_POSTABLE", now);
+    }
+
+    private long paymentStatementsFor(UUID tenant, int expectedRows) throws Exception {
+        ThreadStatementCounter.Counted<UnappliedPaymentsPage> counted =
+                ThreadStatementCounter.count(() -> asTenant(tenant, () -> worklist.listUnappliedPayments(null, 0, 25)));
+        assertThat(counted.result().getItems()).hasSize(expectedRows);
+        assertThat(counted.result().getItems()).allMatch(UnappliedPaymentRow::isPossibleDuplicate);
+        return counted.statements();
+    }
+
     /**
      * Statements this read issues on the test thread only: scheduled jobs (the outbox processor polls
      * every five seconds) run on other threads and are not counted.
@@ -368,6 +482,20 @@ class ReceivablesWorklistPostgresIT extends PostgresTenancyTestBase {
                 invoice,
                 new BigDecimal(amount),
                 UUIDv7Generator.generate());
+    }
+
+    /** The {@code accounting_event} record automatic application writes for a settled payment (#2503). */
+    private void settledOutcome(UUID tenant, UUID payment, String status, String reason, Instant receivedAt) {
+        owner.update(
+                "INSERT INTO accounting_event (tenant_id, event_id, event_type, status, source_system, received_at,"
+                        + " transaction_date, version, payload, domain_key_id, failure_reason_code)"
+                        + " VALUES (?, ?, 'payment.payment.settled', ?, 'pos-invoice', ?, now(), 0, '{}'::jsonb, ?, ?)",
+                tenant,
+                UUIDv7Generator.generate(),
+                status,
+                Timestamp.from(receivedAt),
+                payment.toString(),
+                reason);
     }
 
     private void customerParty(UUID tenant, UUID party, String name, String number) {

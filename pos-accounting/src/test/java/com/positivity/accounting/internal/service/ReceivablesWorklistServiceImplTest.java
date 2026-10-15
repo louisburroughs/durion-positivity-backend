@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,7 +18,11 @@ import com.positivity.accounting.internal.dto.UnappliedPaymentsPage;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
 import com.positivity.accounting.internal.entity.ReceivablePayment.ReceivablePaymentStatus;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.DisplayReferenceType;
+import com.positivity.accounting.internal.enums.SourceInvoiceState;
+import com.positivity.accounting.internal.repository.AccountingEventOutcome;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.CustomerCreditTransactionRepository;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
@@ -27,6 +32,7 @@ import com.positivity.accounting.internal.repository.PaymentApplicationRepositor
 import com.positivity.accounting.internal.repository.PaymentApplicationReversalRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentRepository;
 import com.positivity.accounting.internal.repository.ReceivablePaymentTotals;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -36,6 +42,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -89,6 +96,9 @@ class ReceivablesWorklistServiceImplTest {
     @Mock
     private com.positivity.accounting.internal.repository.ExtCustomerPartyRepository parties;
 
+    @Mock
+    private AccountingEventRepository events;
+
     private ReceivablesWorklistServiceImpl service;
 
     private static UUID id(int n) {
@@ -102,6 +112,8 @@ class ReceivablesWorklistServiceImplTest {
         service = new ReceivablesWorklistServiceImpl(
                 payments,
                 invoices,
+                applications,
+                events,
                 calculator,
                 resolver,
                 new UnappliedPaymentSuggester(),
@@ -199,8 +211,8 @@ class ReceivablesWorklistServiceImplTest {
                     .thenReturn(new ReceivablePaymentTotals(2, new BigDecimal("400.00")));
             when(resolver.resolve(eq(DisplayReferenceType.CUSTOMER), anyCollection()))
                     .thenReturn(Map.of(CUSTOMER_A, new ResolvedDisplayReference("Rivera Trucking", "CUST-00412")));
-            when(resolver.resolve(eq(DisplayReferenceType.INVOICE), anyCollection()))
-                    .thenReturn(Map.of(id(99), ResolvedDisplayReference.ofReference("INV-99")));
+            // The source invoice is read once, for its number and its state (#2563).
+            when(invoices.findAllById(any())).thenReturn(List.of(invoice(99, CUSTOMER_A, "50.00", TODAY)));
             // Only B has an invoice of 200.00; A's single open invoice is 150.00.
             when(invoices.findByPartyIdInAndStatusIn(anyCollection(), anyCollection()))
                     .thenReturn(
@@ -215,12 +227,15 @@ class ReceivablesWorklistServiceImplTest {
             assertThat(rowA.getPaymentMethod()).isEqualTo("CARD");
             assertThat(rowA.getReceivedAt()).isEqualTo(ofA.getClearedAt());
             assertThat(rowA.getSourceInvoiceNumber()).isEqualTo("INV-99");
+            assertThat(rowA.getSourceInvoiceState()).isEqualTo(SourceInvoiceState.OPEN);
             assertThat(rowA.getSuggestion().getInvoices()).isEmpty();
             assertThat(rowA.getSuggestion().getReasons()).containsExactly(UnappliedPaymentSuggester.SAME_CUSTOMER);
             // B is missing from the customer replica: display fields null, never the id (AC12).
             assertThat(rowB.getCustomerDisplayName()).isNull();
             assertThat(rowB.getCustomerReference()).isNull();
             assertThat(rowB.getSourceInvoiceNumber()).isNull();
+            assertThat(rowB.getSourceInvoiceState()).isNull();
+            assertThat(rowB.isPossibleDuplicate()).isFalse();
             assertThat(rowB.getSuggestion().getInvoices())
                     .singleElement()
                     .satisfies(invoice -> assertThat(invoice.getInvoiceId()).isEqualTo(id(2)));
@@ -229,6 +244,351 @@ class ReceivablesWorklistServiceImplTest {
             ArgumentCaptor<Collection<String>> parties = ArgumentCaptor.forClass(Collection.class);
             verify(invoices).findByPartyIdInAndStatusIn(parties.capture(), anyCollection());
             assertThat(parties.getValue()).containsExactlyInAnyOrder(CUSTOMER_A.toString(), CUSTOMER_B.toString());
+        }
+    }
+
+    /** One page of the given payments, unfiltered. */
+    private UnappliedPaymentsPage list(ReceivablePayment... rows) {
+        when(payments.findByStatus(eq(ReceivablePaymentStatus.AVAILABLE), any(Pageable.class)))
+                .thenAnswer(call -> new PageImpl<>(List.of(rows), call.getArgument(1), rows.length));
+        when(payments.totalsByStatus(ReceivablePaymentStatus.AVAILABLE))
+                .thenReturn(new ReceivablePaymentTotals(rows.length, BigDecimal.ZERO));
+        return service.listUnappliedPayments(null, 0, 25);
+    }
+
+    /** A payment of {@code total} with {@code unapplied} left, taken against invoice {@code id(invoice)}. */
+    private static ReceivablePayment takenAgainst(int n, int invoice, String total, String unapplied) {
+        ReceivablePayment payment = payment(n, CUSTOMER_A, unapplied, NOW.minusSeconds(1000 - n));
+        payment.setTotalAmount(new BigDecimal(total));
+        payment.setSourceInvoiceId(id(invoice));
+        return payment;
+    }
+
+    private static ExtInvoice withStatus(ExtInvoice invoice, String status) {
+        invoice.setStatus(status);
+        return invoice;
+    }
+
+    private static AccountingEventOutcome outcome(
+            ReceivablePayment payment, AccountingEventStatus status, String reason, Instant receivedAt) {
+        return new AccountingEventOutcome(
+                UUID.randomUUID(), payment.getPaymentId().toString(), status, reason, receivedAt);
+    }
+
+    @Nested
+    @DisplayName("the source invoice's state and the possible-duplicate flag (#2563)")
+    class SourceInvoice {
+
+        @Test
+        @DisplayName("AC1, case g: an invoice already paid by another payment is PAID and the payment a possible"
+                + " duplicate")
+        void caseG() {
+            ReceivablePayment payment = takenAgainst(1, 10, "100.00", "100.00");
+            when(invoices.findAllById(any())).thenReturn(List.of(invoice(10, CUSTOMER_A, "100.00", TODAY)));
+            when(applications.sumAppliedAmountByInvoiceIdIn(anyCollection()))
+                    .thenReturn(List.of(new InvoiceAmount(id(10), new BigDecimal("100.00"))));
+
+            UnappliedPaymentRow row = list(payment).getItems().getFirst();
+
+            assertThat(row.getSourceInvoiceState()).isEqualTo(SourceInvoiceState.PAID);
+            assertThat(row.isPossibleDuplicate()).isTrue();
+            assertThat(row.getSourceInvoiceNumber()).isEqualTo("INV-10");
+            verify(applications).findPaymentIdsWithLiveApplicationToSourceInvoice(List.of(payment.getPaymentId()));
+        }
+
+        @Test
+        @DisplayName("a balance below the currency's minor unit is no open balance: PAID (the open-invoice rule)")
+        void subCentBalanceIsPaid() {
+            ReceivablePayment payment = takenAgainst(1, 10, "100.00", "100.00");
+            when(invoices.findAllById(any())).thenReturn(List.of(invoice(10, CUSTOMER_A, "100.00", TODAY)));
+            when(applications.sumAppliedAmountByInvoiceIdIn(anyCollection()))
+                    .thenReturn(List.of(new InvoiceAmount(id(10), new BigDecimal("99.996"))));
+
+            UnappliedPaymentRow row = list(payment).getItems().getFirst();
+
+            assertThat(row.getSourceInvoiceState()).isEqualTo(SourceInvoiceState.PAID);
+            assertThat(row.isPossibleDuplicate()).isTrue();
+        }
+
+        @Test
+        @DisplayName("AC2: a payment that paid part of its invoice, which another payment finished, is not a duplicate")
+        void partiallyAppliedBySamePayment() {
+            ReceivablePayment payment = takenAgainst(1, 10, "100.00", "40.00");
+            when(invoices.findAllById(any())).thenReturn(List.of(invoice(10, CUSTOMER_A, "100.00", TODAY)));
+            // 60.00 from this payment and 40.00 from another.
+            when(applications.sumAppliedAmountByInvoiceIdIn(anyCollection()))
+                    .thenReturn(List.of(new InvoiceAmount(id(10), new BigDecimal("100.00"))));
+            when(applications.findPaymentIdsWithLiveApplicationToSourceInvoice(anyCollection()))
+                    .thenReturn(List.of(payment.getPaymentId()));
+
+            UnappliedPaymentRow row = list(payment).getItems().getFirst();
+
+            assertThat(row.getSourceInvoiceState()).isEqualTo(SourceInvoiceState.PAID);
+            assertThat(row.isPossibleDuplicate()).isFalse();
+        }
+
+        @Test
+        @DisplayName("AC2: a payment that paid its whole invoice and has a remainder waiting (the walk-in excess) is"
+                + " not a duplicate")
+        void fullyPaidBySamePaymentWithRemainder() {
+            ReceivablePayment payment = takenAgainst(1, 10, "120.00", "20.00");
+            when(invoices.findAllById(any())).thenReturn(List.of(invoice(10, CUSTOMER_A, "100.00", TODAY)));
+            when(applications.sumAppliedAmountByInvoiceIdIn(anyCollection()))
+                    .thenReturn(List.of(new InvoiceAmount(id(10), new BigDecimal("100.00"))));
+            when(applications.findPaymentIdsWithLiveApplicationToSourceInvoice(anyCollection()))
+                    .thenReturn(List.of(payment.getPaymentId()));
+
+            UnappliedPaymentRow row = list(payment).getItems().getFirst();
+
+            assertThat(row.getSourceInvoiceState()).isEqualTo(SourceInvoiceState.PAID);
+            assertThat(row.isPossibleDuplicate()).isFalse();
+        }
+
+        @Test
+        @DisplayName("an invoice with a balance left is OPEN, not a duplicate, and asks for no applications")
+        void openInvoice() {
+            ReceivablePayment payment = takenAgainst(1, 10, "100.00", "40.00");
+            when(invoices.findAllById(any())).thenReturn(List.of(invoice(10, CUSTOMER_A, "200.00", TODAY)));
+            when(applications.sumAppliedAmountByInvoiceIdIn(anyCollection()))
+                    .thenReturn(List.of(new InvoiceAmount(id(10), new BigDecimal("60.00"))));
+
+            UnappliedPaymentRow row = list(payment).getItems().getFirst();
+
+            assertThat(row.getSourceInvoiceState()).isEqualTo(SourceInvoiceState.OPEN);
+            assertThat(row.isPossibleDuplicate()).isFalse();
+            verify(applications, never()).findPaymentIdsWithLiveApplicationToSourceInvoice(anyCollection());
+        }
+
+        @Test
+        @DisplayName("AC2: an invoice not replicated yet is NOT_FOUND, not a duplicate")
+        void notReplicated() {
+            ReceivablePayment payment = takenAgainst(1, 10, "100.00", "100.00");
+
+            UnappliedPaymentRow row = list(payment).getItems().getFirst();
+
+            assertThat(row.getSourceInvoiceState()).isEqualTo(SourceInvoiceState.NOT_FOUND);
+            assertThat(row.isPossibleDuplicate()).isFalse();
+            assertThat(row.getSourceInvoiceNumber()).isNull();
+            verify(applications, never()).findPaymentIdsWithLiveApplicationToSourceInvoice(anyCollection());
+        }
+
+        @Test
+        @DisplayName("AC2: an invoice that is not FINALIZED or POSTED is NOT_ELIGIBLE, not a duplicate, and is not"
+                + " priced")
+        void notEligible() {
+            ReceivablePayment payment = takenAgainst(1, 10, "100.00", "100.00");
+            when(invoices.findAllById(any()))
+                    .thenReturn(List.of(withStatus(invoice(10, CUSTOMER_A, "100.00", TODAY), "VOIDED")));
+
+            UnappliedPaymentRow row = list(payment).getItems().getFirst();
+
+            assertThat(row.getSourceInvoiceState()).isEqualTo(SourceInvoiceState.NOT_ELIGIBLE);
+            assertThat(row.isPossibleDuplicate()).isFalse();
+            verify(applications, never()).sumAppliedAmountByInvoiceIdIn(anyCollection());
+        }
+
+        @Test
+        @DisplayName("AC2: another customer's invoice, or one without a usable party, is OTHER_CUSTOMER, not a"
+                + " duplicate")
+        void otherCustomer() {
+            ReceivablePayment ofB = takenAgainst(1, 10, "100.00", "100.00");
+            ReceivablePayment noParty = takenAgainst(2, 11, "100.00", "100.00");
+            ExtInvoice partyless = invoice(11, CUSTOMER_A, "100.00", TODAY);
+            partyless.setPartyId("not-a-uuid");
+            when(invoices.findAllById(any())).thenReturn(List.of(invoice(10, CUSTOMER_B, "100.00", TODAY), partyless));
+
+            List<UnappliedPaymentRow> rows = list(ofB, noParty).getItems();
+
+            assertThat(rows)
+                    .extracting(UnappliedPaymentRow::getSourceInvoiceState)
+                    .containsExactly(SourceInvoiceState.OTHER_CUSTOMER, SourceInvoiceState.OTHER_CUSTOMER);
+            assertThat(rows).noneMatch(UnappliedPaymentRow::isPossibleDuplicate);
+            verify(applications, never()).sumAppliedAmountByInvoiceIdIn(anyCollection());
+        }
+
+        @Test
+        @DisplayName("a payment that names no invoice has no state and is not a duplicate; no invoice is read")
+        void noSourceInvoice() {
+            UnappliedPaymentRow row =
+                    list(payment(1, CUSTOMER_A, "100.00", NOW)).getItems().getFirst();
+
+            assertThat(row.getSourceInvoiceState()).isNull();
+            assertThat(row.isPossibleDuplicate()).isFalse();
+            verify(invoices, never()).findAllById(any());
+            verify(applications, never()).findPaymentIdsWithLiveApplicationToSourceInvoice(anyCollection());
+        }
+
+        @Test
+        @DisplayName("a page with every case costs one invoice read, one batch of balances, one application query"
+                + " (for the PAID rows only) and one outcome query")
+        void batched() {
+            ReceivablePayment caseG = takenAgainst(1, 10, "100.00", "100.00");
+            ReceivablePayment selfPaid = takenAgainst(2, 11, "120.00", "20.00");
+            ReceivablePayment open = takenAgainst(3, 12, "50.00", "50.00");
+            ReceivablePayment missing = takenAgainst(4, 13, "50.00", "50.00");
+            ReceivablePayment ineligible = takenAgainst(5, 14, "50.00", "50.00");
+            ReceivablePayment ofB = takenAgainst(6, 15, "50.00", "50.00");
+            ReceivablePayment sameInvoiceAsG = takenAgainst(7, 10, "100.00", "100.00");
+            ReceivablePayment none = payment(8, CUSTOMER_A, "10.00", NOW);
+            when(invoices.findAllById(any()))
+                    .thenReturn(List.of(
+                            invoice(10, CUSTOMER_A, "100.00", TODAY),
+                            invoice(11, CUSTOMER_A, "100.00", TODAY),
+                            invoice(12, CUSTOMER_A, "500.00", TODAY),
+                            withStatus(invoice(14, CUSTOMER_A, "50.00", TODAY), "DRAFT"),
+                            invoice(15, CUSTOMER_B, "50.00", TODAY)));
+            when(invoices.findByPartyIdInAndStatusIn(anyCollection(), anyCollection()))
+                    .thenReturn(List.of(invoice(12, CUSTOMER_A, "500.00", TODAY)));
+            when(applications.sumAppliedAmountByInvoiceIdIn(anyCollection()))
+                    .thenReturn(List.of(
+                            new InvoiceAmount(id(10), new BigDecimal("100.00")),
+                            new InvoiceAmount(id(11), new BigDecimal("100.00"))));
+            when(applications.findPaymentIdsWithLiveApplicationToSourceInvoice(anyCollection()))
+                    .thenReturn(List.of(selfPaid.getPaymentId()));
+
+            List<UnappliedPaymentRow> rows = list(caseG, selfPaid, open, missing, ineligible, ofB, sameInvoiceAsG, none)
+                    .getItems();
+
+            assertThat(rows)
+                    .extracting(UnappliedPaymentRow::getSourceInvoiceState)
+                    .containsExactly(
+                            SourceInvoiceState.PAID,
+                            SourceInvoiceState.PAID,
+                            SourceInvoiceState.OPEN,
+                            SourceInvoiceState.NOT_FOUND,
+                            SourceInvoiceState.NOT_ELIGIBLE,
+                            SourceInvoiceState.OTHER_CUSTOMER,
+                            SourceInvoiceState.PAID,
+                            null);
+            assertThat(rows)
+                    .extracting(UnappliedPaymentRow::isPossibleDuplicate)
+                    .containsExactly(true, false, false, false, false, false, true, false);
+
+            verify(invoices, times(1)).findAllById(any());
+            verify(invoices, times(1)).findByPartyIdInAndStatusIn(anyCollection(), anyCollection());
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<UUID>> priced = ArgumentCaptor.forClass(Collection.class);
+            verify(applications, times(1)).sumAppliedAmountByInvoiceIdIn(priced.capture());
+            // The candidates and the source invoices whose balance decides, priced together; never the
+            // ineligible or other customer's invoice.
+            assertThat(priced.getValue()).containsExactlyInAnyOrder(id(12), id(10), id(11));
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<UUID>> paid = ArgumentCaptor.forClass(Collection.class);
+            verify(applications, times(1)).findPaymentIdsWithLiveApplicationToSourceInvoice(paid.capture());
+            assertThat(paid.getValue())
+                    .containsExactlyInAnyOrder(
+                            caseG.getPaymentId(), selfPaid.getPaymentId(), sameInvoiceAsG.getPaymentId());
+            verify(events, times(1)).findOutcomesByEventTypeAndDomainKeyIdIn(eq("payment.payment.settled"), any());
+            verify(resolver, never()).resolve(eq(DisplayReferenceType.INVOICE), anyCollection());
+        }
+
+        @Test
+        @DisplayName("an empty page reads no invoice, application or outcome")
+        void emptyPage() {
+            list();
+
+            verify(invoices, never()).findAllById(any());
+            verify(applications, never()).sumAppliedAmountByInvoiceIdIn(anyCollection());
+            verify(applications, never()).findPaymentIdsWithLiveApplicationToSourceInvoice(anyCollection());
+            verify(events, never()).findOutcomesByEventTypeAndDomainKeyIdIn(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("the automatic-application reason (#2563)")
+    class AutoApplicationReason {
+
+        @Test
+        @DisplayName("serves the reason on the payment's newest automatic-application record, keyed by its id")
+        void newestRecordWins() {
+            ReceivablePayment payment = payment(1, CUSTOMER_A, "100.00", NOW);
+            when(events.findOutcomesByEventTypeAndDomainKeyIdIn(eq("payment.payment.settled"), anyCollection()))
+                    .thenReturn(List.of(
+                            outcome(payment, AccountingEventStatus.SKIPPED, "NOT_POSTABLE", NOW.minusSeconds(10)),
+                            outcome(
+                                    payment,
+                                    AccountingEventStatus.SUSPENDED,
+                                    "INVOICE_NOT_FOUND",
+                                    NOW.minusSeconds(60))));
+
+            UnappliedPaymentRow row = list(payment).getItems().getFirst();
+
+            assertThat(row.getAutoApplicationReason()).isEqualTo("NOT_POSTABLE");
+            verify(events)
+                    .findOutcomesByEventTypeAndDomainKeyIdIn(
+                            "payment.payment.settled",
+                            List.of(payment.getPaymentId().toString()));
+        }
+
+        @Test
+        @DisplayName("a newest record that was processed (a reprocess applied it) leaves no reason")
+        void processedRecordHasNoReason() {
+            ReceivablePayment payment = payment(1, CUSTOMER_A, "100.00", NOW);
+            when(events.findOutcomesByEventTypeAndDomainKeyIdIn(any(), anyCollection()))
+                    .thenReturn(List.of(
+                            outcome(payment, AccountingEventStatus.PROCESSED, null, NOW.minusSeconds(10)),
+                            outcome(
+                                    payment,
+                                    AccountingEventStatus.FAILED,
+                                    "INVOICE_NOT_ELIGIBLE",
+                                    NOW.minusSeconds(60))));
+
+            assertThat(list(payment).getItems().getFirst().getAutoApplicationReason())
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("a record held for another reason (a currency hold) is not an automatic-application record")
+        void otherReasonsAreIgnored() {
+            ReceivablePayment payment = payment(1, CUSTOMER_A, "100.00", NOW);
+            when(events.findOutcomesByEventTypeAndDomainKeyIdIn(any(), anyCollection()))
+                    .thenReturn(List.of(
+                            outcome(
+                                    payment,
+                                    AccountingEventStatus.SUSPENDED,
+                                    "CURRENCY_NOT_SUPPORTED",
+                                    NOW.minusSeconds(10)),
+                            outcome(payment, AccountingEventStatus.SUSPENDED, "PERIOD_CLOSED", NOW.minusSeconds(60))));
+
+            assertThat(list(payment).getItems().getFirst().getAutoApplicationReason())
+                    .isEqualTo("PERIOD_CLOSED");
+        }
+
+        @Test
+        @DisplayName("a payment with no record has no reason; each payment gets its own")
+        void perPayment() {
+            ReceivablePayment held = payment(1, CUSTOMER_A, "100.00", NOW.minusSeconds(10));
+            ReceivablePayment unrecorded = payment(2, CUSTOMER_A, "100.00", NOW);
+            when(events.findOutcomesByEventTypeAndDomainKeyIdIn(any(), anyCollection()))
+                    .thenReturn(List.of(outcome(
+                            held, AccountingEventStatus.SUSPENDED, "ACCOUNTING_TIME_ZONE_UNSET", NOW.minusSeconds(5))));
+
+            List<UnappliedPaymentRow> rows = list(held, unrecorded).getItems();
+
+            assertThat(rows)
+                    .extracting(UnappliedPaymentRow::getAutoApplicationReason)
+                    .containsExactly("ACCOUNTING_TIME_ZONE_UNSET", null);
+        }
+
+        @Test
+        @DisplayName("the schema's allowable values are exactly what is served: the outcome reasons of automatic"
+                + " application, and every source-invoice state")
+        void schemaMatchesServedValues() throws NoSuchFieldException {
+            Schema reason = UnappliedPaymentRow.class
+                    .getDeclaredField("autoApplicationReason")
+                    .getAnnotation(Schema.class);
+            Schema state = UnappliedPaymentRow.class
+                    .getDeclaredField("sourceInvoiceState")
+                    .getAnnotation(Schema.class);
+
+            assertThat(reason.allowableValues())
+                    .containsExactlyInAnyOrderElementsOf(AutomaticPaymentApplicationService.OUTCOME_REASONS);
+            assertThat(state.allowableValues())
+                    .containsExactlyInAnyOrderElementsOf(Stream.of(SourceInvoiceState.values())
+                            .map(Enum::name)
+                            .toList());
+            assertThat(reason.nullable()).isTrue();
+            assertThat(state.nullable()).isTrue();
         }
     }
 
