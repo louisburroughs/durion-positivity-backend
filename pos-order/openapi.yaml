@@ -3573,6 +3573,12 @@ components:
           description: User id of the approving manager, or null
           format: uuid
           type: string
+        approvedByName:
+          description: The approving manager's display name, "First Last", name only; null when the movement needed no approval, was approved before approver names were kept, or the name can't be resolved. Never the sign-in name (#2608, ADR-0064)
+          example: Sam Ortiz
+          type:
+          - string
+          - 'null'
         bagNumber:
           description: Deposit bag, for BANK_DROP
           example: BAG-0042
@@ -3624,6 +3630,12 @@ components:
           description: Receipt, for PETTY_EXPENSE
           example: R-1001
           type: string
+        recordedByName:
+          description: The cashier's display name, "First Last", name only; null when it can't be resolved. Never the sign-in name (#2608, ADR-0064)
+          example: Dana Reyes
+          type:
+          - string
+          - 'null'
         requestId:
           description: The register's idempotency key; null on a movement recorded before the fixed reasons
           format: uuid
@@ -3706,6 +3718,12 @@ components:
         actor:
           description: Who changed it
           type: string
+        actorName:
+          description: The actor's display name, "First Last", name only; null when it can't be resolved. Never the username (#2608, ADR-0064)
+          example: Dana Reyes
+          type:
+          - string
+          - 'null'
         changedAt:
           description: When
           format: date-time
@@ -4796,6 +4814,12 @@ components:
           type: string
         closedByClerkId:
           type: string
+        closedByName:
+          description: The closer's display name, "First Last", name only; null until the session is closed or when it can't be resolved. Never the username (#2608, ADR-0064)
+          example: Sam Ortiz
+          type:
+          - string
+          - 'null'
         closingStartedAt:
           format: date-time
           type: string
@@ -4813,6 +4837,12 @@ components:
           type: string
         openedByClerkId:
           type: string
+        openedByName:
+          description: The opener's display name, "First Last", name only; null when it can't be resolved. Never the username (#2608, ADR-0064)
+          example: Dana Reyes
+          type:
+          - string
+          - 'null'
         openingFloat:
           type: number
         overShort:
