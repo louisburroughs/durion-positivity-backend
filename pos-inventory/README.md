@@ -850,6 +850,13 @@ Uses Flyway with PostgreSQL. Migrations at `src/main/resources/db/migration`.
 
 ## Reconciliation manifest replay requests (#2452)
 
+Both `order.events.v1` consumers are reconciled against `order.manifest.v1` (ADR-0044 §4, #2596):
+`OrderManifestListener` runs one check per consumer, each against its own `processed_events` owner
+(`order` for the counter-sale `OrderEventsListener`, `order:purchase-order-projection` for
+`PurchaseOrderProjectionListener`) and in a consumer group of its own (`pos-inventory-order-manifests`,
+`pos-inventory-purchase-order-projection-manifests`), so every manifest reaches both. Drift sends
+`order.outbox.replay-requested` on `order.commands.v1`.
+
 A manifest listener that finds drift sends the owner's `outbox.replay-requested` command through
 `OutboxReplayRequests`, which waits up to 30s for the broker's acknowledgement. A request that cannot
 be handed to Kafka, that the broker rejects, or that is not acknowledged in time propagates to `KafkaErrorHandlingConfig`, which retries the manifest with backoff and then dead-letters it to `{topic}.dlq`.

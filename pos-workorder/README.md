@@ -801,8 +801,9 @@ out), anywhere in the failure's cause chain. Any other `TransactionException`, s
 asks the classifier before it logs or records anything, so a retryable failure never leaves a
 `processed_events` mark behind.
 
-The five reconciliation-manifest listeners (`CustomerManifestListener`, `LocationManifestListener`,
-`InventoryManifestListener`, `InvoiceManifestListener`, `PeopleManifestListener`) need no rethrow
+The six reconciliation-manifest listeners (`CustomerManifestListener`, `LocationManifestListener`,
+`InventoryManifestListener`, `InvoiceManifestListener`, `PeopleManifestListener`, and `OrderManifestListener` for
+`order.manifest.v1`, #2596) need no rethrow
 (#2354). Their only data access is the `processed_events` ledger read, which sits outside their one
 catch block, so any failure of it, transient or not, already reaches the handler. That catch covers
 only a manifest that does not parse, which is dropped. A replay request is sent through
