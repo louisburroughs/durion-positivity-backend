@@ -1,6 +1,6 @@
 package com.positivity.order.internal.config;
 
-import com.positivity.order.internal.service.DrawerAmounts;
+import java.util.Currency;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -25,8 +25,9 @@ import org.springframework.stereotype.Component;
  * pos-accounting read the increment from the settled fact instead of keeping a second copy.
  *
  * <p>Startup fails, naming the key, on a key that is not an ISO 4217 code, a value that is not positive, one that
- * is not a whole multiple of the currency's minor unit, or one equal to a single minor unit (that would be a
- * misconfiguration dressed as a no-op).
+ * is not a whole multiple of the currency's minor unit, one equal to a single minor unit (that would be a
+ * misconfiguration dressed as a no-op), or one that is not a coin (below one unit it must divide the unit; from
+ * one unit up it must be a whole number of units).
  */
 @Component
 @Slf4j
@@ -53,7 +54,8 @@ public class CashIncrements {
             if (increment == null || increment.signum() <= 0) {
                 throw new IllegalStateException(key + " must be greater than zero, was " + increment);
             }
-            BigDecimal minorUnit = BigDecimal.ONE.movePointLeft(DrawerAmounts.exponent(code));
+            BigDecimal minorUnit = BigDecimal.ONE.movePointLeft(
+                    Math.max(0, Currency.getInstance(code).getDefaultFractionDigits()));
             if (increment.remainder(minorUnit).signum() != 0) {
                 throw new IllegalStateException(
                         key + " = " + increment + " is not a whole multiple of the currency's minor unit " + minorUnit);
@@ -61,6 +63,16 @@ public class CashIncrements {
             if (increment.compareTo(minorUnit) == 0) {
                 throw new IllegalStateException(key + " = " + increment
                         + " equals the currency's minor unit; omit the currency instead of listing a no-op");
+            }
+            // A cash increment is a coin: below one unit it divides the unit (0.05, 0.10, 0.25, 0.50); from one
+            // unit up it is a whole number of units (JPY 5). 0.07 is neither.
+            boolean coin = increment.compareTo(BigDecimal.ONE) < 0
+                    ? BigDecimal.ONE.remainder(increment).signum() == 0
+                    : increment.stripTrailingZeros().scale() <= 0;
+            if (!coin) {
+                throw new IllegalStateException(key + " = " + increment
+                        + " is not a coin: a cash increment below one unit must divide the unit (0.05, 0.10, 0.25,"
+                        + " 0.50) and one of a unit or more must be a whole number of units");
             }
             validated.put(code, increment.stripTrailingZeros());
         });

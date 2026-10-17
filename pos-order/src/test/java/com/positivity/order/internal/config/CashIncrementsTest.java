@@ -30,11 +30,29 @@ class CashIncrementsTest {
     }
 
     @Test
-    void refusesAnIncrementThatIsNotAMultipleOfTheMinorUnit() {
+    void refusesAnIncrementThatIsNotACoin() {
         assertThatThrownBy(() -> new CashIncrements(Map.of("CAD", new BigDecimal("0.07"))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("pos.order.cash-increments.CAD")
+                .hasMessageContaining("coin");
+        assertThatThrownBy(() -> new CashIncrements(Map.of("JPY", new BigDecimal("2.5"))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("coin");
+    }
+
+    @Test
+    void refusesAnIncrementThatIsNotAMultipleOfTheMinorUnit() {
+        assertThatThrownBy(() -> new CashIncrements(Map.of("CAD", new BigDecimal("0.005"))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("pos.order.cash-increments.CAD")
                 .hasMessageContaining("minor unit");
+    }
+
+    @Test
+    void acceptsTheUsualCoins() {
+        assertThat(new CashIncrements(Map.of("CAD", new BigDecimal("0.25"))).of("CAD")).isPresent();
+        assertThat(new CashIncrements(Map.of("SEK", new BigDecimal("1"))).of("SEK")).isPresent();
+        assertThat(new CashIncrements(Map.of("CHF", new BigDecimal("0.05"))).of("CHF")).isPresent();
     }
 
     @Test
