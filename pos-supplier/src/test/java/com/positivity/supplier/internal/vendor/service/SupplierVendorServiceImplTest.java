@@ -578,7 +578,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         void readsAreMasked() {
             VendorView created = createWith(
                     new TaxRegistrationDto(null, "SSN", SSN, null),
-                    new TaxRegistrationDto(null, "BN", "FAKE-123", "ON"));
+                    new TaxRegistrationDto(null, "QST", "FAKE-123", "QC"));
             VendorView got = service.getVendor(created.vendorId());
             VendorView listed = service.listVendors("Sole", null, 0, 50).items().getFirst();
             VendorView updated = as(
@@ -608,7 +608,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                                 TaxRegistrationView::scheme, TaxRegistrationView::region, TaxRegistrationView::last4)
                         .containsExactly(
                                 org.assertj.core.groups.Tuple.tuple("SSN", null, "1234"),
-                                org.assertj.core.groups.Tuple.tuple("BN", "ON", null));
+                                org.assertj.core.groups.Tuple.tuple("QST", "QC", null));
                 String json = JSON.writeValueAsString(view);
                 assertThat(json.contains(SSN) || json.contains(SSN_BARE) || json.contains("FAKE-123"))
                         .as("number absent from the response")
@@ -620,7 +620,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         @Test
         @DisplayName("AC 9: a registration kept by id without its number keeps its ciphertext and queues no fact")
         void keptRegistrationIsUnchanged() {
-            VendorView vendor = createWith(new TaxRegistrationDto(null, "GST_HST", "000000000RT0001", "ON"));
+            VendorView vendor = createWith(new TaxRegistrationDto(null, "QST", "0000000000TQ0001", "QC"));
             String before = storedText(vendor.vendorId());
             int factsBefore = vendorFacts(vendor.vendorId()).size();
             UUID registrationId = vendor.taxRegistrations().getFirst().registrationId();
@@ -629,7 +629,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                     "clerk.a",
                     () -> service.updateVendor(
                             vendor.vendorId(),
-                            update(vendor, new TaxRegistrationDto(registrationId, "GST_HST", null, "ON"))));
+                            update(vendor, new TaxRegistrationDto(registrationId, "QST", null, "QC"))));
 
             assertThat(storedText(vendor.vendorId())).isEqualTo(before);
             assertThat(after.version()).isEqualTo(vendor.version());
@@ -725,7 +725,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         void reEnteredNumberKeepsTheIdAndOmittedIsRemoved() {
             VendorView vendor = createWith(
                     new TaxRegistrationDto(null, "EIN", SSN, null),
-                    new TaxRegistrationDto(null, "BN", "000000000RT0001", "ON"));
+                    new TaxRegistrationDto(null, "QST", "0000000000TQ0001", "QC"));
             UUID ein = vendor.taxRegistrations().getFirst().registrationId();
 
             VendorView after = as(
@@ -834,19 +834,20 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                         });
             }
 
-            VendorView stored = createWith(new TaxRegistrationDto(null, " gst_hst ", "000000000RT0001", "qc"));
+            VendorView stored = createWith(new TaxRegistrationDto(null, " qst ", "0000000000TQ0001", "qc"));
             assertThat(stored.taxRegistrations()).singleElement().satisfies(view -> {
-                assertThat(view.scheme()).isEqualTo("GST_HST");
+                assertThat(view.scheme()).isEqualTo("QST");
                 assertThat(view.region()).isEqualTo("QC");
             });
             JsonNode element = stored(stored.vendorId()).get(0);
-            assertThat(element.path("scheme").stringValue()).isEqualTo("GST_HST");
+            assertThat(element.path("scheme").stringValue()).isEqualTo("QST");
             assertThat(element.path("region").stringValue()).isEqualTo("QC");
-            assertThat(createWith(new TaxRegistrationDto(null, "VAT/IVA", "FAKE00001234", "ca-qc"))
-                            .taxRegistrations()
-                            .getFirst()
-                            .region())
-                    .isEqualTo("CA-QC");
+            // A shape-conformant scheme outside pos-tax's vocabulary is refused since #2623 (unknown scheme), not stored.
+            assertThatThrownBy(() -> createWith(new TaxRegistrationDto(null, "VAT/IVA", "FAKE00001234", "ca-qc")))
+                    .isInstanceOfSatisfying(SupplierValidationException.class, failure -> assertThat(
+                                    failure.getFieldErrors())
+                            .extracting(ApiErrorField::of)
+                            .containsExactly("taxRegistrations[0].scheme"));
         }
     }
 
