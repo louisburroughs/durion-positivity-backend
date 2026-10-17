@@ -596,7 +596,42 @@ public final class VendorBillReview {
                     example = "DOCUMENT",
                     allowableValues = {"DOCUMENT", "APPROVAL"},
                     requiredMode = REQUIRED)
-            String source) {}
+            String source,
+
+            @Schema(
+                    description = "The tax type's configured display label; null when the profile sets none or the"
+                            + " tax service did not answer, never the code (#2679)",
+                    example = "Goods and services tax",
+                    nullable = true,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String label) {
+
+        /** Without a label. */
+        public TaxByType(String taxType, BigDecimal amount, String source) {
+            this(taxType, amount, source, null);
+        }
+    }
+
+    /**
+     * One tax type the approver may split the bill's tax into (CAP:550 #2679, AW51): a tax type of a regime whose
+     * recovery is on as of the date the approval would post on, for the bill's tax country.
+     *
+     * @param taxType the configured tax-type code
+     * @param label its configured display label; null when the profile sets none
+     */
+    @Schema(name = "VendorBillTaxTypeChoice", description = "A tax type the approver may split the bill's tax into")
+    public record TaxTypeChoice(
+            @Schema(description = "The configured tax-type code", example = "TAX_TYPE_1", requiredMode = REQUIRED)
+            String taxType,
+
+            @Schema(
+                    description = "Its configured display label; null when the profile sets none, never the code",
+                    example = "Goods and services tax",
+                    nullable = true,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String label) {}
 
     /**
      * What the posting did with one stated tax amount, for a recovery-enabled tenant (CAP:550 S32d item 10).
@@ -648,5 +683,57 @@ public final class VendorBillReview {
                     example = "NOT_RECOVERABLE",
                     requiredMode = NOT_REQUIRED)
             @Nullable
-            String recoveryWithheldReason) {}
+            String recoveryWithheldReason,
+
+            @Schema(
+                    description = "The tax type's configured display label; null when unknown, never the code (#2679)",
+                    example = "Goods and services tax",
+                    nullable = true,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String taxTypeLabel,
+
+            @Schema(
+                    description = "The regime's configured display label; null when unknown, never the code (#2679)",
+                    example = "Value added tax",
+                    nullable = true,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String regimeLabel) {
+
+        /** Without labels. */
+        public InputTaxRecovery(
+                @Nullable String taxType,
+                @Nullable String regime,
+                BigDecimal statedAmount,
+                BigDecimal recoveredAmount,
+                @Nullable String accountCode,
+                @Nullable String accountName,
+                @Nullable String recoveryWithheldReason) {
+            this(
+                    taxType,
+                    regime,
+                    statedAmount,
+                    recoveredAmount,
+                    accountCode,
+                    accountName,
+                    recoveryWithheldReason,
+                    null,
+                    null);
+        }
+
+        /** This row with its labels (#2679). */
+        public InputTaxRecovery withLabels(@Nullable String taxTypeLabel, @Nullable String regimeLabel) {
+            return new InputTaxRecovery(
+                    taxType,
+                    regime,
+                    statedAmount,
+                    recoveredAmount,
+                    accountCode,
+                    accountName,
+                    recoveryWithheldReason,
+                    taxTypeLabel,
+                    regimeLabel);
+        }
+    }
 }

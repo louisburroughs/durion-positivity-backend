@@ -275,6 +275,12 @@ class InputTaxRecoveryServiceTest {
         when(accounts.findById(accountId)).thenReturn(Optional.of(account));
         when(taxProfiles.evidenceRules("CA", TODAY))
                 .thenReturn(new TaxProfileClient.EvidenceRules("CA", TODAY, "CAD", List.of(), null));
+        when(taxProfiles.taxTypes("CA"))
+                .thenReturn(new TaxProfileClient.TaxTypes(
+                        "CA",
+                        "CAD",
+                        List.of(),
+                        List.of(new TaxProfileClient.Regime("GST_HST", List.of(), "Regime label"))));
 
         InputTaxRecoveryResponse read = service.read();
 
@@ -282,6 +288,7 @@ class InputTaxRecoveryServiceTest {
             assertThat(regime.enabled()).isTrue();
             assertThat(regime.registration().since()).isEqualTo(LocalDate.parse("2026-01-01"));
             assertThat(regime.account().code()).isEqualTo("1250");
+            assertThat(regime.label()).isEqualTo("Regime label"); // #2679
         });
         assertThat(read.evidenceRules())
                 .singleElement()

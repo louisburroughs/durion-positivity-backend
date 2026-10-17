@@ -554,7 +554,8 @@ class VendorBillReaderTest {
                 mock(GLMappingResolver.class),
                 mock(GLAccountRepository.class),
                 mock(VendorBillPurchaseTax.class),
-                mock(ActorDisplayNames.class));
+                mock(ActorDisplayNames.class),
+                mock(VendorBillTaxGuidance.class));
         VendorBill over = billOf("3000.00", "clerk.ana");
         over.setStatus(VendorBillStatus.AWAITING_APPROVAL);
         over.setBillNumber("INV-OVER");
@@ -657,7 +658,8 @@ class VendorBillReaderTest {
                 mock(GLMappingResolver.class),
                 mock(GLAccountRepository.class),
                 mock(VendorBillPurchaseTax.class),
-                mock(ActorDisplayNames.class));
+                mock(ActorDisplayNames.class),
+                mock(VendorBillTaxGuidance.class));
         UUID heldVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a71");
         UUID freeVendor = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a72");
         VendorBill heldBill = billOf("100.00", "clerk.ana");
@@ -694,6 +696,7 @@ class VendorBillReaderTest {
     private final GLAccountRepository readAccounts = mock(GLAccountRepository.class);
     private final VendorBillGlPostingRepository readPostings = mock(VendorBillGlPostingRepository.class);
     private final ActorDisplayNames readNames = mock(ActorDisplayNames.class);
+    private final VendorBillTaxGuidance readGuidance = mock(VendorBillTaxGuidance.class);
 
     private VendorBillReader taxReader() {
         ApApprovalPolicy approvalPolicy = mock();
@@ -717,7 +720,8 @@ class VendorBillReaderTest {
                 readResolver,
                 readAccounts,
                 PurchaseTaxFixtures.off(),
-                readNames);
+                readNames,
+                readGuidance);
     }
 
     private VendorBill postedBill(UUID id, String net, String tax, String gross) {
@@ -793,7 +797,32 @@ class VendorBillReaderTest {
         gl.setAccountName("GST/HST Recoverable");
         when(readAccounts.findById(account1250)).thenReturn(java.util.Optional.of(gl));
 
+        when(readGuidance.profile())
+                .thenReturn(java.util.Optional.of(new com.positivity.accounting.internal.client.TaxProfileClient.TaxTypes(
+                        "ZZ",
+                        "CAD",
+                        List.of(new com.positivity.accounting.internal.client.TaxProfileClient.TaxType(
+                                "GST", "GST_HST", "FEDERAL", true, "Tax type one")),
+                        List.of(new com.positivity.accounting.internal.client.TaxProfileClient.Regime(
+                                "GST_HST", List.of(), "Regime one")))));
+        when(readGuidance.choices(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(List.of(new VendorBillReview.TaxTypeChoice("GST", "Tax type one")));
+
         com.positivity.accounting.internal.dto.VendorBillResponse read = reader.read(bill);
+
+        // #2679: labels from the profile on the stated tax and the recovery rows; none for a type it does not name.
+        assertThat(read.getTaxByType())
+                .extracting(VendorBillReview.TaxByType::taxType, VendorBillReview.TaxByType::label)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("GST", "Tax type one"),
+                        org.assertj.core.groups.Tuple.tuple("PST", null));
+        assertThat(read.getInputTaxRecovery())
+                .extracting(
+                        VendorBillReview.InputTaxRecovery::taxTypeLabel, VendorBillReview.InputTaxRecovery::regimeLabel)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("Tax type one", "Regime one"),
+                        org.assertj.core.groups.Tuple.tuple(null, null));
+        assertThat(read.getTaxTypeChoices()).containsExactly(new VendorBillReview.TaxTypeChoice("GST", "Tax type one"));
 
         assertThat(read.getNetAmount()).isEqualByComparingTo("1000.00");
         assertThat(read.getTaxByType())

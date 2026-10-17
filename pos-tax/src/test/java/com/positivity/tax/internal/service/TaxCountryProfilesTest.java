@@ -65,6 +65,14 @@ class TaxCountryProfilesTest {
                         fixtureWith(p -> p.put(CA + "tax-types[3].code", "GST")),
                         CA + "tax-types[3].code"),
                 Arguments.of(
+                        "tax-type label over 100 characters",
+                        fixtureWith(p -> p.put(CA + "tax-types[0].label", "x".repeat(101))),
+                        CA + "tax-types[0].label"),
+                Arguments.of(
+                        "regime label over 100 characters",
+                        fixtureWith(p -> p.put(CA + "regimes[0].label", "x".repeat(101))),
+                        CA + "regimes[0].label"),
+                Arguments.of(
                         "regime code malformed",
                         fixtureWith(p -> p.put(CA + "regimes[1].code", "Q-ST")),
                         CA + "regimes[1].code"),
@@ -157,6 +165,22 @@ class TaxCountryProfilesTest {
         assertThatThrownBy(() -> new TaxCountryProfiles(bound))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageStartingWith("Invalid tax configuration " + property + ":");
+    }
+
+    @Test
+    @DisplayName("a configured label is served trimmed, a blank or missing one is null, never the code")
+    void labelsAreServedOrNull() {
+        Map<String, String> properties = fixtureWith(p -> {
+            p.put(CA + "tax-types[0].label", "  Fixture levy  ");
+            p.put(CA + "tax-types[1].label", "   ");
+            p.put(CA + "regimes[0].label", "x".repeat(100));
+        });
+
+        CountryTaxProfile profile =
+                new TaxCountryProfiles(TaxProfileFixtures.bind(properties)).profile("CA").orElseThrow();
+
+        assertThat(profile.taxTypes()).extracting(t -> t.label()).containsExactly("Fixture levy", null, null, null);
+        assertThat(profile.regimes()).extracting(r -> r.label()).containsExactly("x".repeat(100), null);
     }
 
     @Test

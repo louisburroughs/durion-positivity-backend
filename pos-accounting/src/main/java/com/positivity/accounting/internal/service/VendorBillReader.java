@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.client.TaxProfileClient;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.TaxPurchaseRules;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
@@ -127,6 +128,7 @@ public class VendorBillReader {
     private final GLAccountRepository glAccounts;
     private final VendorBillPurchaseTax purchaseTax;
     private final ActorDisplayNames actorNames;
+    private final VendorBillTaxGuidance taxGuidance;
 
     /** The full read of one bill, for the caller in the security context. */
     @Transactional(readOnly = true)
@@ -156,6 +158,8 @@ public class VendorBillReader {
         checks.add(withinClerkLimit(bill.getStatus(), bill.getTotalAmount(), settings, ledgerCurrency.code()));
         checks.add(vendorApHold(bill.getStatus(), openAmount, () -> vendorCopies.apHold(bill.getVendorId())));
         checks.add(taxOnResaleGoods(bill, stored));
+        // The tax country's configured labels, once per read (#2679); empty when pos-tax did not answer: labels null.
+        Optional<TaxProfileClient.TaxTypes> taxProfile = taxGuidance.profile();
         // The bill's actors' names in one query (#2670); null when not known, never the username.
         Map<String, String> names = actorNames.namesOf(
                 Arrays.asList(bill.getCreatedBy(), bill.getSubmittedBy(), bill.getApprovedBy(), bill.getRejectedBy()));
@@ -208,9 +212,11 @@ public class VendorBillReader {
                         .map(tax -> new VendorBillReview.TaxByType(
                                 tax.getTaxType(),
                                 tax.getAmount(),
-                                tax.getSource().name()))
+                                tax.getSource().name(),
+                                taxProfile.map(p -> p.taxTypeLabel(tax.getTaxType())).orElse(null)))
                         .toList())
-                .inputTaxRecovery(inputTaxRecovery(billId, posting.orElse(null)))
+                .inputTaxRecovery(inputTaxRecovery(billId, posting.orElse(null), taxProfile))
+                .taxTypeChoices(taxGuidance.choices(bill, taxProfile))
                 .taxOnResaleOverride(
                         bill.getTaxOnResaleOverride() == null
                                 ? null
@@ -853,7 +859,7 @@ public class VendorBillReader {
      * yet posted).
      */
     private @Nullable List<VendorBillReview.InputTaxRecovery> inputTaxRecovery(
-            UUID billId, @Nullable VendorBillGlPosting posting) {
+            UUID billId, @Nullable VendorBillGlPosting posting, Optional<TaxProfileClient.TaxTypes> taxProfile) {
         List<VendorBillTaxRecovery> rows = taxRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId);
         if (rows.isEmpty() || posting == null) {
             return null;
@@ -866,13 +872,16 @@ public class VendorBillReader {
                             : accountsByKey.computeIfAbsent(
                                     row.getMappingKey(), key -> recoveryAccount(key, posting.getPostingDate()));
                     return new VendorBillReview.InputTaxRecovery(
-                            row.getTaxType(),
-                            row.getRegime(),
-                            row.getStatedAmount(),
-                            row.getRecoveredAmount(),
-                            account.map(GLAccount::getAccountCode).orElse(null),
-                            account.map(GLAccount::getAccountName).orElse(null),
-                            row.getRecoveryWithheldReason());
+                                    row.getTaxType(),
+                                    row.getRegime(),
+                                    row.getStatedAmount(),
+                                    row.getRecoveredAmount(),
+                                    account.map(GLAccount::getAccountCode).orElse(null),
+                                    account.map(GLAccount::getAccountName).orElse(null),
+                                    row.getRecoveryWithheldReason())
+                            .withLabels(
+                                    taxProfile.map(p -> p.taxTypeLabel(row.getTaxType())).orElse(null),
+                                    taxProfile.map(p -> p.regimeLabel(row.getRegime())).orElse(null));
                 })
                 .toList();
     }

@@ -231,8 +231,13 @@ class TaxControllerRatesTest {
                 .thenReturn(new TaxTypesResponse(
                         "CA",
                         "CAD",
-                        List.of(new TaxTypesResponse.TaxTypeEntry("GST", "R1", TaxJurisdictionType.COUNTRY, true)),
-                        List.of(new TaxTypesResponse.RegimeEntry("R1", List.of())),
+                        List.of(
+                                new TaxTypesResponse.TaxTypeEntry(
+                                        "GST", "R1", TaxJurisdictionType.COUNTRY, true, "Fixture levy"),
+                                new TaxTypesResponse.TaxTypeEntry("LOCAL", null, TaxJurisdictionType.COUNTRY, false)),
+                        List.of(
+                                new TaxTypesResponse.RegimeEntry("R1", List.of(), "Fixture regime"),
+                                new TaxTypesResponse.RegimeEntry("R2", List.of())),
                         "STUB"));
 
         mockMvc.perform(authed(get("/v1/tax/tax-types").param("countryCode", "CA"), "tax:rates:view"))
@@ -242,7 +247,11 @@ class TaxControllerRatesTest {
                 .andExpect(jsonPath("$.taxTypes[0].regime").value("R1"))
                 .andExpect(jsonPath("$.taxTypes[0].jurisdictionType").value("COUNTRY"))
                 .andExpect(jsonPath("$.taxTypes[0].inputTaxRecoverable").value(true))
+                .andExpect(jsonPath("$.taxTypes[0].label").value("Fixture levy"))
+                .andExpect(jsonPath("$.taxTypes[1].label").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.regimes[0].regime").value("R1"))
+                .andExpect(jsonPath("$.regimes[0].label").value("Fixture regime"))
+                .andExpect(jsonPath("$.regimes[1].label").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$.source").value("STUB"));
     }
 

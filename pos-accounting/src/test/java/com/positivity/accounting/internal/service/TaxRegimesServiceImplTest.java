@@ -140,4 +140,31 @@ class TaxRegimesServiceImplTest {
 
         assertThatThrownBy(() -> service.regimes(null)).isInstanceOf(TaxServiceUnavailableException.class);
     }
+
+    @Test
+    @DisplayName("#2679: a configured regime or tax-type label is relayed; a missing one is null, never the code")
+    void labelsAreRelayedOrNull() {
+        when(taxReference.taxTypes("ZZ"))
+                .thenReturn(answer(
+                        "ZZ",
+                        List.of(
+                                new TaxTypesReference.TaxType("ZZ_LEVY", "ZZ_REGIME_1", "COUNTRY", true, "Levy"),
+                                new TaxTypesReference.TaxType("ZZ_REGIONAL", "ZZ_REGIME_1", "PROVINCE", true)),
+                        List.of(
+                                new TaxTypesReference.Regime("ZZ_REGIME_1", List.of(), "Regime one"),
+                                new TaxTypesReference.Regime("ZZ_REGIME_2", List.of("R1")))));
+
+        TaxRegimesResponse response = service.regimes(null);
+
+        assertThat(response.regimes())
+                .extracting(TaxRegimesResponse.Regime::regime, TaxRegimesResponse.Regime::label)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("ZZ_REGIME_1", "Regime one"),
+                        org.assertj.core.groups.Tuple.tuple("ZZ_REGIME_2", null));
+        assertThat(response.regimes().getFirst().taxTypes())
+                .extracting(TaxRegimesResponse.TaxType::taxType, TaxRegimesResponse.TaxType::label)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("ZZ_LEVY", "Levy"),
+                        org.assertj.core.groups.Tuple.tuple("ZZ_REGIONAL", null));
+    }
 }

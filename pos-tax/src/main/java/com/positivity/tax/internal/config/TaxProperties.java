@@ -289,6 +289,9 @@ public class TaxProperties {
 
         /** Placeholder recoverability; required for every declared tax type. */
         private Boolean inputTaxRecoverable;
+
+        /** The display label, 1-100 characters; optional. */
+        private String label;
     }
 
     /**
@@ -298,6 +301,9 @@ public class TaxProperties {
     public static class RegimeProfile {
         /** The regime code. */
         private String code;
+
+        /** The display label, 1-100 characters; optional. */
+        private String label;
 
         /** Region codes the regime covers; empty means the whole country. Never {@code null}. */
         private List<String> regions = new ArrayList<>();

@@ -53,7 +53,58 @@ public record TaxRegistrationView(
         long version,
 
         @Schema(description = "When pos-tax last changed it", requiredMode = REQUIRED) @NonNull
-        Instant changedAt) {
+        Instant changedAt,
+
+        @Schema(
+                description = "The regime's configured display label; null when the profile sets none or the tax"
+                        + " service did not answer, never the code (#2679)",
+                example = "Value added tax",
+                nullable = true,
+                requiredMode = NOT_REQUIRED)
+        @Nullable
+        String regimeLabel) {
+
+    /** Without a label. */
+    public TaxRegistrationView(
+            @NonNull UUID registrationId,
+            @NonNull String countryCode,
+            @NonNull String regime,
+            @NonNull String registrationNumber,
+            @Nullable String jurisdictionCode,
+            @NonNull LocalDate effectiveFrom,
+            @Nullable LocalDate effectiveTo,
+            @NonNull String status,
+            long version,
+            @NonNull Instant changedAt) {
+        this(
+                registrationId,
+                countryCode,
+                regime,
+                registrationNumber,
+                jurisdictionCode,
+                effectiveFrom,
+                effectiveTo,
+                status,
+                version,
+                changedAt,
+                null);
+    }
+
+    /** This view with its regime label (#2679). */
+    public TaxRegistrationView withRegimeLabel(@Nullable String label) {
+        return new TaxRegistrationView(
+                registrationId,
+                countryCode,
+                regime,
+                registrationNumber,
+                jurisdictionCode,
+                effectiveFrom,
+                effectiveTo,
+                status,
+                version,
+                changedAt,
+                label);
+    }
 
     /** Every field but the number, which is never logged. */
     @Override

@@ -233,6 +233,17 @@ public class VendorBillResponse {
     private @Nullable List<VendorBillReview.InputTaxRecovery> inputTaxRecovery;
 
     @Schema(
+            description = "The tax types the approver may split the stated tax into (CAP:550 #2679, AW51): those of"
+                    + " the regimes whose recovery is on as of the date the approval would post on, for the bill's tax"
+                    + " country, with their labels. Filled only while the bill is approvable (AWAITING_APPROVAL or"
+                    + " MATCH_EXCEPTION) and states tax; otherwise empty, which includes a tenant without recovery."
+                    + " Null when recovery cannot be read now (the tax service did not answer): unknown, not empty. A"
+                    + " guide for the client only; approve and ACCEPT validate taxByType[] as before",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("taxTypeChoices")
+    private @Nullable List<VendorBillReview.TaxTypeChoice> taxTypeChoices;
+
+    @Schema(
             description = "What let the bill through its tax country's hold for tax on goods for resale at approval"
                     + " (CAP:550 S43); null when the hold did not apply",
             requiredMode = NOT_REQUIRED)

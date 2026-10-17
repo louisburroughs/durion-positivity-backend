@@ -40,7 +40,18 @@ public record TaxTypesReference(
             @Nullable String taxType,
             @Nullable String regime,
             @Nullable String jurisdictionType,
-            boolean inputTaxRecoverable) {}
+            boolean inputTaxRecoverable,
+            @Nullable String label) {
+
+        /** Without a label (#2679): pos-tax serves null when the profile sets none. */
+        public TaxType(
+                @Nullable String taxType,
+                @Nullable String regime,
+                @Nullable String jurisdictionType,
+                boolean inputTaxRecoverable) {
+            this(taxType, regime, jurisdictionType, inputTaxRecoverable, null);
+        }
+    }
 
     /**
      * One declared registration and recovery regime.
@@ -49,5 +60,11 @@ public record TaxTypesReference(
      * @param regions the region codes it covers; empty means the whole country
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Regime(@Nullable String regime, @Nullable List<String> regions) {}
+    public record Regime(@Nullable String regime, @Nullable List<String> regions, @Nullable String label) {
+
+        /** Without a label (#2679). */
+        public Regime(@Nullable String regime, @Nullable List<String> regions) {
+            this(regime, regions, null);
+        }
+    }
 }

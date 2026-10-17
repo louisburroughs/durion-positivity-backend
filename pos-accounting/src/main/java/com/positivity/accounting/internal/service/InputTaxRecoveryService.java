@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -231,22 +232,26 @@ public class InputTaxRecoveryService {
     private List<InputTaxRecoveryResponse.Regime> regimes(LocalDate today) {
         List<InputTaxRecoveryResponse.Regime> rows = new ArrayList<>();
         List<InputTaxRecoveryFlags.RegimeFlag> flagged;
+        Map<String, Optional<TaxProfileClient.TaxTypes>> profiles = new HashMap<>();
         try {
             flagged = flags.regimes(today);
         } catch (TaxServiceUnavailableException e) {
             // The read never fails because of pos-tax: whether recovery is on is then unknown, never "off" (AW49).
             log.warn("Input-tax recovery read without the tax configuration: enabled is unknown");
             flagged = flags.regimesUnchecked(today);
-            return flagged.stream().map(flag -> row(flag, null, today)).toList();
+            return flagged.stream().map(flag -> row(flag, null, today, profiles)).toList();
         }
         for (InputTaxRecoveryFlags.RegimeFlag flag : flagged) {
-            rows.add(row(flag, flag.enabled(), today));
+            rows.add(row(flag, flag.enabled(), today, profiles));
         }
         return List.copyOf(rows);
     }
 
     private InputTaxRecoveryResponse.Regime row(
-            InputTaxRecoveryFlags.RegimeFlag flag, @Nullable Boolean enabled, LocalDate today) {
+            InputTaxRecoveryFlags.RegimeFlag flag,
+            @Nullable Boolean enabled,
+            LocalDate today,
+            Map<String, Optional<TaxProfileClient.TaxTypes>> profiles) {
         ExtTaxRegistration registration = flag.registration();
         return new InputTaxRecoveryResponse.Regime(
                 flag.countryCode(),
@@ -256,7 +261,24 @@ public class InputTaxRecoveryService {
                         ? null
                         : new InputTaxRecoveryResponse.Registration(
                                 registration.getRegistrationNumber(), registration.getEffectiveFrom()),
-                account(inputTaxKey(flag.regime()), today));
+                account(inputTaxKey(flag.regime()), today),
+                profiles.computeIfAbsent(flag.countryCode(), this::profileOrEmpty)
+                        .map(profile -> profile.regimeLabel(flag.regime()))
+                        .orElse(null));
+    }
+
+    /**
+     * The country's profile for its labels (#2679), once per read and country; empty when pos-tax cannot answer,
+     * so a label is left null rather than invented. Never for a decision: the posting paths read the profile
+     * themselves and hold when it is missing.
+     */
+    private Optional<TaxProfileClient.TaxTypes> profileOrEmpty(String countryCode) {
+        try {
+            return Optional.ofNullable(taxProfiles.taxTypes(countryCode));
+        } catch (TaxServiceUnavailableException e) {
+            log.warn("Input-tax recovery read without the tax labels: the tax service did not answer");
+            return Optional.empty();
+        }
     }
 
     private InputTaxRecoveryResponse.@Nullable Account account(String keyName, LocalDate today) {

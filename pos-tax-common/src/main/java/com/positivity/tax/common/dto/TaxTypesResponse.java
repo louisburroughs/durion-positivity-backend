@@ -60,6 +60,7 @@ public record TaxTypesResponse(
      * @param regime              the regime it is registered and recovered under; {@code null} for none
      * @param jurisdictionType    the jurisdiction level it is levied at
      * @param inputTaxRecoverable the placeholder recoverability held for expert advice
+     * @param label               the configured display label; {@code null} when the profile sets none
      */
     @Schema(name = "TaxTypeEntry", description = "One tax type a country declares, with its regime and level")
     public record TaxTypeEntry(
@@ -89,13 +90,39 @@ public record TaxTypesResponse(
                     description = "Placeholder recoverability of the tax type, held for expert advice",
                     example = "true",
                     requiredMode = Schema.RequiredMode.REQUIRED)
-            boolean inputTaxRecoverable) {}
+            boolean inputTaxRecoverable,
+
+            @Schema(
+                    description = "Configured display label; null when the profile sets none (never the code)",
+                    example = "Example levy",
+                    nullable = true,
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String label) {
+
+        /**
+         * Builds an entry without a label.
+         *
+         * @param taxType             the configured tax-type code
+         * @param regime              the regime it is registered under; {@code null} for none
+         * @param jurisdictionType    the jurisdiction level it is levied at
+         * @param inputTaxRecoverable the placeholder recoverability
+         */
+        public TaxTypeEntry(
+                String taxType,
+                @Nullable String regime,
+                TaxJurisdictionType jurisdictionType,
+                boolean inputTaxRecoverable) {
+            this(taxType, regime, jurisdictionType, inputTaxRecoverable, null);
+        }
+    }
 
     /**
      * One declared registration and recovery regime.
      *
      * @param regime  the regime name
      * @param regions the region codes it covers; empty means the whole country
+     * @param label   the configured display label; {@code null} when the profile sets none
      */
     @Schema(name = "TaxRegimeEntry", description = "One registration and recovery regime a country declares")
     public record RegimeEntry(
@@ -105,5 +132,24 @@ public record TaxTypesResponse(
             @Schema(
                     description = "Region codes the regime covers; an empty list means the whole country",
                     requiredMode = Schema.RequiredMode.REQUIRED)
-            List<String> regions) {}
+            List<String> regions,
+
+            @Schema(
+                    description = "Configured display label; null when the profile sets none (never the code)",
+                    example = "Example regime",
+                    nullable = true,
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String label) {
+
+        /**
+         * Builds an entry without a label.
+         *
+         * @param regime  the regime name
+         * @param regions the region codes it covers; empty means the whole country
+         */
+        public RegimeEntry(String regime, List<String> regions) {
+            this(regime, regions, null);
+        }
+    }
 }
