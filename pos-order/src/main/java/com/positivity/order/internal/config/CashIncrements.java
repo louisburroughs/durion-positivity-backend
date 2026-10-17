@@ -1,8 +1,8 @@
 package com.positivity.order.internal.config;
 
-import java.util.Currency;
 import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.Currency;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;

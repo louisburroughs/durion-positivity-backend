@@ -50,9 +50,12 @@ class CashIncrementsTest {
 
     @Test
     void acceptsTheUsualCoins() {
-        assertThat(new CashIncrements(Map.of("CAD", new BigDecimal("0.25"))).of("CAD")).isPresent();
-        assertThat(new CashIncrements(Map.of("SEK", new BigDecimal("1"))).of("SEK")).isPresent();
-        assertThat(new CashIncrements(Map.of("CHF", new BigDecimal("0.05"))).of("CHF")).isPresent();
+        assertThat(new CashIncrements(Map.of("CAD", new BigDecimal("0.25"))).of("CAD"))
+                .isPresent();
+        assertThat(new CashIncrements(Map.of("SEK", new BigDecimal("1"))).of("SEK"))
+                .isPresent();
+        assertThat(new CashIncrements(Map.of("CHF", new BigDecimal("0.05"))).of("CHF"))
+                .isPresent();
     }
 
     @Test
