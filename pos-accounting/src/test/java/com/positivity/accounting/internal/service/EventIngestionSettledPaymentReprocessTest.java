@@ -86,7 +86,10 @@ class EventIngestionSettledPaymentReprocessTest {
         event.setTransactionDate(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
         event.setReceivedAt(NOW);
         when(accountingEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
-        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        // Lenient: the #2620 refusal case saves nothing.
+        org.mockito.Mockito.lenient()
+                .when(accountingEventRepository.save(any(AccountingEvent.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @ParameterizedTest(name = "{0}")
