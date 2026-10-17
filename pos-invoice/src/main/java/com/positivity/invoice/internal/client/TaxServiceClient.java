@@ -7,9 +7,9 @@ import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxReferenceType;
-import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -141,7 +141,6 @@ public class TaxServiceClient {
 
         return response;
     }
-
 
     /** pos-tax's 422 codes a caller must answer deterministically (#2644, ADR-0017). */
     private static final java.util.regex.Pattern ERROR_CODE =

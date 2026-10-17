@@ -1,11 +1,11 @@
 package com.positivity.workorder.internal.client;
 
-import com.positivity.workorder.internal.exception.EstimateTaxRefusedException;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.workorder.internal.exception.EstimateTaxRefusedException;
+import java.nio.charset.StandardCharsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import java.nio.charset.StandardCharsets;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -65,5 +65,4 @@ public class TaxClient {
         java.util.regex.Matcher matcher = ERROR_CODE.matcher(body);
         return matcher.find() ? matcher.group(1) : null;
     }
-
 }

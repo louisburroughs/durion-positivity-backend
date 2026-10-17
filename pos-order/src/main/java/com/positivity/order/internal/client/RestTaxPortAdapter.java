@@ -69,5 +69,4 @@ public class RestTaxPortAdapter implements TaxPort {
         java.util.regex.Matcher matcher = ERROR_CODE.matcher(body);
         return matcher.find() ? matcher.group(1) : null;
     }
-
 }

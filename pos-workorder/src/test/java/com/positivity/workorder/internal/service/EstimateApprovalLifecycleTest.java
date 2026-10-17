@@ -169,7 +169,8 @@ class EstimateApprovalLifecycleTest {
                 // identical.
                 org.mockito.Mockito.mock(LaborTimeDefaultingService.class),
                 org.mockito.Mockito.mock(LaborRateDefaultingService.class),
-                org.mockito.Mockito.mock(DocumentNumberAllocator.class));
+                org.mockito.Mockito.mock(DocumentNumberAllocator.class),
+                new com.positivity.workorder.internal.config.FunctionalCurrency("USD"));
     }
 
     private Estimate estimate(EstimateStatus status) {
