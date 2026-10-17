@@ -72,6 +72,7 @@ class PurchaseOrderReviseGateTransactionTest {
 
     private InventoryEventsListener listener;
     private TransactionTemplate transaction;
+    private final List<UUID> created = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -88,8 +89,11 @@ class PurchaseOrderReviseGateTransactionTest {
         transaction = new TransactionTemplate(transactionManager);
     }
 
+    /** Committed orders are removed again: the shared H2 database is also counted by transactional tests (#2681). */
     @AfterEach
     void tearDown() {
+        transaction.executeWithoutResult(_ -> created.forEach(purchaseOrderRepository::deleteById));
+        created.clear();
         TenantContext.clear();
     }
 
@@ -158,7 +162,9 @@ class PurchaseOrderReviseGateTransactionTest {
                         .taxMinor(0L)
                         .purchaseOrder(order)
                         .build());
-        return transaction.execute(_ -> purchaseOrderRepository.save(order).getPurchaseOrderId());
+        UUID id = transaction.execute(_ -> purchaseOrderRepository.save(order).getPurchaseOrderId());
+        created.add(id);
+        return id;
     }
 
     private static RevisePurchaseOrderRequest revision(int builtOnVersion) {

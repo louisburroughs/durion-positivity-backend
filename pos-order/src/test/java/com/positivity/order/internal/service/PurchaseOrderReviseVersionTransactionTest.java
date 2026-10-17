@@ -64,6 +64,7 @@ class PurchaseOrderReviseVersionTransactionTest {
     private PlatformTransactionManager transactionManager;
 
     private TransactionTemplate transaction;
+    private final List<UUID> created = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -83,8 +84,14 @@ class PurchaseOrderReviseVersionTransactionTest {
         });
     }
 
+    /**
+     * These tests commit, and the {@code test} profile's H2 database is one per JVM, shared with transactional tests
+     * that count rows ({@code PurchaseOrderListFilterIT}); every order created here is removed again.
+     */
     @AfterEach
     void tearDown() {
+        transaction.executeWithoutResult(_ -> created.forEach(purchaseOrderRepository::deleteById));
+        created.clear();
         TenantContext.clear();
     }
 
@@ -177,7 +184,9 @@ class PurchaseOrderReviseVersionTransactionTest {
                         .taxMinor(0L)
                         .purchaseOrder(order)
                         .build());
-        return transaction.execute(_ -> purchaseOrderRepository.save(order).getPurchaseOrderId());
+        UUID id = transaction.execute(_ -> purchaseOrderRepository.save(order).getPurchaseOrderId());
+        created.add(id);
+        return id;
     }
 
     private static RevisePurchaseOrderRequest revisionBuiltOn(int version) {
