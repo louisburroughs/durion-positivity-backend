@@ -34,8 +34,8 @@ public class IdempotencyServiceImpl implements IdempotencyService {
     @Transactional(propagation = Propagation.SUPPORTS, readOnly = true)
     public boolean isKeyProcessed(String keyValue) {
         Optional<IdempotencyKey> existing = repository.findByKeyValue(keyValue);
-        existing.ifPresent(key ->
-                log.info("Idempotency key {} already processed for invoice {}", keyValue, key.getInvoiceId()));
+        existing.ifPresent(
+                key -> log.info("Idempotency key {} already processed for invoice {}", keyValue, key.getInvoiceId()));
         return existing.isPresent();
     }
 
