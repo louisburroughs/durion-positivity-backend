@@ -357,13 +357,13 @@ class APPaymentPostingServiceTest {
         assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
         // The audit row is written with the entry, in the posting transaction (#2729 review).
         verify(auditLogs)
-                .save(org.mockito.ArgumentMatchers.argThat(row -> "AP_PAYMENT_GL_POSTING_DEFERRED".equals(
-                                row.getOperation())
-                        && PAYMENT_ID.equals(row.getEntityId())
-                        && "ana".equals(row.getUserId())
-                        && leave.justification().equals(row.getJustification())
-                        && row.getOldValue().contains(PAID_ON.toString())
-                        && row.getNewValue().contains(today.toString())));
+                .save(org.mockito.ArgumentMatchers.argThat(
+                        row -> "AP_PAYMENT_GL_POSTING_DEFERRED".equals(row.getOperation())
+                                && PAYMENT_ID.equals(row.getEntityId())
+                                && "ana".equals(row.getUserId())
+                                && leave.justification().equals(row.getJustification())
+                                && row.getOldValue().contains(PAID_ON.toString())
+                                && row.getNewValue().contains(today.toString())));
 
         // Not hard-locked: the leave changes nothing and nothing more is audited.
         payment.setStatus(APPaymentStatus.GL_POST_FAILED);

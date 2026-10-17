@@ -98,7 +98,8 @@ public class APPaymentPostingService {
      * The retry caller's leave to date the entry past a hard lock (#2729, AW42): who gave it and why. Recorded on the
      * {@code AP_PAYMENT_GL_POSTING_DEFERRED} audit row, written inside the posting transaction.
      */
-    public record Deferral(@NonNull String justification, @NonNull String user) {}
+    public record Deferral(
+            @NonNull String justification, @NonNull String user) {}
 
     /**
      * The outbox delivery: posts a {@code GL_POST_PENDING} payment. A payment already posted, or left {@code
@@ -301,8 +302,8 @@ public class APPaymentPostingService {
             row.setUserId(deferral.user());
             row.setJustification(deferral.justification());
             row.setOldValue("paymentDate=" + payment.getPaymentDate());
-            row.setNewValue("journalEntryId=" + posted.getJournalEntryId() + ";postedOn=" + transactionDate.toLocalDate()
-                    + ";rule=" + DEFERRED_PAST_HARD_LOCK);
+            row.setNewValue("journalEntryId=" + posted.getJournalEntryId() + ";postedOn="
+                    + transactionDate.toLocalDate() + ";rule=" + DEFERRED_PAST_HARD_LOCK);
             auditLogs.save(row);
         }
         log.info(

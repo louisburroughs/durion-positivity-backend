@@ -230,7 +230,8 @@ class APPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("#2729: a gateway orphan reconciled CHARGED (an ACH payment posted unapplied) is allocated the same way")
+    @DisplayName(
+            "#2729: a gateway orphan reconciled CHARGED (an ACH payment posted unapplied) is allocated the same way")
     void allocateReconciledChargedPaymentAppliesTheBill() {
         UUID paymentId = UUID.randomUUID();
         UUID billId = UUID.randomUUID();
@@ -1104,10 +1105,10 @@ class APPaymentServiceTest {
     void retryNonRefusalRecordsNothing() {
         VendorBillException notRetryable =
                 new VendorBillException(VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE, "already posted");
-        when(postingService.retry(TEST_PAYMENT_ID, "Reopened for the audit", null)).thenThrow(notRetryable);
+        when(postingService.retry(TEST_PAYMENT_ID, "Reopened for the audit", null))
+                .thenThrow(notRetryable);
 
-        assertThatThrownBy(() ->
-                        service.retryGLPosting(TEST_PAYMENT_ID, retryRequest("Reopened for the audit"), "ana"))
+        assertThatThrownBy(() -> service.retryGLPosting(TEST_PAYMENT_ID, retryRequest("Reopened for the audit"), "ana"))
                 .isSameAs(notRetryable);
         verify(paymentFailurePersistenceService, never()).persistGLPostRefusal(any(), any());
     }

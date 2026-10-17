@@ -431,14 +431,16 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                 .containsEntry("gl_post_error", "GL_MAPPING_NOT_CONFIGURED");
 
         signIn(CONTROLLER, "accounting:je:post");
-        assertThatThrownBy(() -> asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(null), "retry-it")))
+        assertThatThrownBy(() -> asTenant(
+                        tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(null), "retry-it")))
                 .isInstanceOf(GLMappingNotConfiguredException.class);
         assertThat(paymentState(tenant, payment.getPaymentId()))
                 .containsEntry("status", "GL_POST_FAILED")
                 .containsEntry("gl_post_error", "GL_MAPPING_NOT_CONFIGURED");
 
         restoreMapping(tenant, "ACCOUNTS_PAYABLE");
-        APPaymentResponse retried = asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(null), "retry-it"));
+        APPaymentResponse retried =
+                asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(null), "retry-it"));
         assertThat(retried.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
         assertThat(retried.getGlPostError()).isNull();
         assertThat(lines(tenant, retried.getGlJournalEntryId()))
@@ -450,7 +452,8 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                                 retried.getGlJournalEntryId()))
                 .isEqualTo(payment.getPaymentDate());
 
-        assertThatThrownBy(() -> asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(null), "retry-it")))
+        assertThatThrownBy(() -> asTenant(
+                        tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(null), "retry-it")))
                 .isInstanceOfSatisfying(
                         VendorBillException.class,
                         refusal -> assertThat(refusal.getCode())
@@ -615,7 +618,8 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
         restoreMapping(tenant, "ACCOUNTS_PAYABLE");
 
         signIn(CONTROLLER, "accounting:je:post", "accounting:period:override");
-        assertThatThrownBy(() -> asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(null), "retry-it")))
+        assertThatThrownBy(() -> asTenant(
+                        tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(null), "retry-it")))
                 .isInstanceOf(AccountingPeriodClosedException.class);
         assertThat(paymentState(tenant, payment.getPaymentId()))
                 .containsEntry("status", "GL_POST_FAILED")
@@ -629,7 +633,8 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                 .containsEntry("period_override_by", PAYER);
 
         String own = "Controller posts the June payment into the closed period";
-        APPaymentResponse retried = asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(own), "retry-it"));
+        APPaymentResponse retried =
+                asTenant(tenant, () -> payments.retryGLPosting(payment.getPaymentId(), retryRequest(own), "retry-it"));
         SecurityContextHolder.clearContext();
         assertThat(retried.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
         assertThat(owner().queryForMap(

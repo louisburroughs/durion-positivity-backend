@@ -791,8 +791,10 @@ public class APPaymentServiceImpl implements APPaymentService {
                     VendorBillException.Code.AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED,
                     "deferPastHardLock needs a justification: the entry will be dated today, not the payment's date");
         }
-        APPaymentPostingService.Deferral deferral =
-                defer ? new APPaymentPostingService.Deferral(request.getJustification().trim(), currentUser) : null;
+        APPaymentPostingService.Deferral deferral = defer
+                ? new APPaymentPostingService.Deferral(
+                        request.getJustification().trim(), currentUser)
+                : null;
         try {
             postingService.retry(paymentId, request.getOverrideJustification(), deferral);
         } catch (RuntimeException e) {
