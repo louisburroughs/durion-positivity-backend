@@ -849,8 +849,8 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
     @Test
     @DisplayName("the listener provisions a created tenant, and records but never provisions the platform tenant")
     void theListenerProvisionsACreatedTenantButNeverThePlatformTenant() {
-        TenantEventsListener listener =
-                new TenantEventsListener(new ObjectMapper(), processedEvents, templateReader, provisioner, localeWriter);
+        TenantEventsListener listener = new TenantEventsListener(
+                new ObjectMapper(), processedEvents, templateReader, provisioner, localeWriter);
         UUID t6 = newTenant();
         String createdEvent = newEventId();
         String platformEvent = newEventId();
