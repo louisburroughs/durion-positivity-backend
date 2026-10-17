@@ -111,6 +111,49 @@ class JournalEntryLineAmountPersistenceTest extends PostgresIntegrationTestBase 
         assertThat(creditLine.getDebitAmount()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
+    @Test
+    @DisplayName("Created and posted responses carry the persisted line ids (#2581)")
+    void responsesCarryPersistedLineIds() {
+        GLAccount debitAccount = newAccount("00000000-0000-4000-a000-0000000000c3", "1098T", "Line Id Test Debit");
+        GLAccount creditAccount = newAccount("00000000-0000-4000-a000-0000000000c4", "2098T", "Line Id Test Credit");
+        glAccountRepository.save(debitAccount);
+        glAccountRepository.save(creditAccount);
+
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .sourceEventType("TEST")
+                .sourceEventId(UUID.randomUUID())
+                .transactionDate(LocalDateTime.of(2025, 1, 1, 10, 0))
+                .lines(List.of(
+                        JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                                .glAccountId(debitAccount.getGlAccountId())
+                                .debitAmount(new BigDecimal("40.00"))
+                                .build(),
+                        JournalEntryCreateRequest.JournalEntryLineRequest.builder()
+                                .glAccountId(creditAccount.getGlAccountId())
+                                .creditAmount(new BigDecimal("40.00"))
+                                .build()))
+                .build();
+
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        entityManager.flush();
+        entityManager.clear();
+
+        List<UUID> persistedIds = journalEntryLineRepository
+                .findByJournalEntry_JournalEntryId(created.getJournalEntryId())
+                .stream()
+                .map(JournalEntryLine::getLineId)
+                .toList();
+        assertThat(persistedIds).hasSize(2).doesNotContainNull();
+        assertThat(created.getLines())
+                .extracting(JournalEntryResponse.JournalEntryLineResponse::getLineId)
+                .containsExactlyInAnyOrderElementsOf(persistedIds);
+
+        JournalEntryResponse posted = journalEntryService.postJournalEntry(created.getJournalEntryId());
+        assertThat(posted.getLines())
+                .extracting(JournalEntryResponse.JournalEntryLineResponse::getLineId)
+                .containsExactlyInAnyOrderElementsOf(persistedIds);
+    }
+
     private static GLAccount newAccount(String id, String code, String name) {
         GLAccount account = new GLAccount();
         account.setGlAccountId(UUID.fromString(id));

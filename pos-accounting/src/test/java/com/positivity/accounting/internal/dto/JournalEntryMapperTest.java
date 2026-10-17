@@ -25,6 +25,18 @@ class JournalEntryMapperTest {
     private static final UUID GL_ACCOUNT_ID = UUID.fromString("01900000-0000-7000-8000-000000005100");
 
     @Test
+    @DisplayName("toResponse - line carries its own id (#2581)")
+    void toResponse_lineCarriesItsId() {
+        UUID lineId = UUID.fromString("01936e60-1234-7a3d-8b6e-6f7890123456");
+        JournalEntryLine line = line();
+        line.setLineId(lineId);
+
+        JournalEntryResponse.JournalEntryLineResponse response = mapSingleLine(line);
+
+        assertThat(response.getLineId()).isEqualTo(lineId);
+    }
+
+    @Test
     @DisplayName("toResponse - line answers with its stamped accountCode and accountName")
     void toResponse_lineCarriesStampedAccountCodeAndName() {
         JournalEntryLine line = line();
