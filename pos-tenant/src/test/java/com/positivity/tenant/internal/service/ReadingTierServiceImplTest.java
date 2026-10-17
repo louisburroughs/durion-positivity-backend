@@ -50,6 +50,7 @@ class ReadingTierServiceImplTest {
                 .version(0L)
                 .build();
         when(tiers.findByCode("STANDARD")).thenReturn(Optional.of(standard));
+        when(tiers.lockByCode("STANDARD")).thenReturn(Optional.of(standard));
         when(tiers.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -124,23 +125,37 @@ class ReadingTierServiceImplTest {
     @DisplayName("update: deactivating a tier a non-decommissioned tenant is on is 409 READING_TIER_IN_USE (AC 5);"
             + " a free tier deactivates; an unknown code is 404")
     void deactivate() {
-        when(tenants.existsByReadingTierCodeAndStatusNot("STANDARD", TenantStatus.DECOMMISSIONED))
+        ReadingTierEntity pro = ReadingTierEntity.builder()
+                .id(UUID.randomUUID())
+                .code("PRO")
+                .displayName("Pro")
+                .monthlyAllowanceAmount(new BigDecimal("60.00"))
+                .monthlyAllowanceCurrency("USD")
+                .active(true)
+                .version(0L)
+                .build();
+        when(tiers.lockByCode("PRO")).thenReturn(Optional.of(pro));
+        when(tenants.existsByReadingTierCodeAndStatusNot("PRO", TenantStatus.DECOMMISSIONED))
                 .thenReturn(true);
-        assertThatThrownBy(() -> service.update(
-                        "STANDARD",
-                        ReadingTierUpdateRequest.builder().active(false).build()))
+        assertThatThrownBy(() -> service.update("PRO", ReadingTierUpdateRequest.builder().active(false).build()))
                 .isInstanceOf(ReadingTierInUseException.class);
-        assertThat(standard.isActive()).isTrue();
+        assertThat(pro.isActive()).isTrue();
 
-        when(tenants.existsByReadingTierCodeAndStatusNot("STANDARD", TenantStatus.DECOMMISSIONED))
+        when(tenants.existsByReadingTierCodeAndStatusNot("PRO", TenantStatus.DECOMMISSIONED))
                 .thenReturn(false);
-        assertThat(service.update(
-                                "STANDARD",
-                                ReadingTierUpdateRequest.builder().active(false).build())
+        assertThat(service.update("PRO", ReadingTierUpdateRequest.builder().active(false).build())
                         .isActive())
                 .isFalse();
 
-        when(tiers.findByCode("NOPE")).thenReturn(Optional.empty());
+        // STANDARD is the default every create falls back to: never deactivated, even when free.
+        when(tenants.existsByReadingTierCodeAndStatusNot("STANDARD", TenantStatus.DECOMMISSIONED))
+                .thenReturn(false);
+        assertThatThrownBy(() -> service.update(
+                        "STANDARD", ReadingTierUpdateRequest.builder().active(false).build()))
+                .isInstanceOf(ReadingTierInUseException.class);
+        assertThat(standard.isActive()).isTrue();
+
+        when(tiers.lockByCode("NOPE")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.update(
                         "NOPE", ReadingTierUpdateRequest.builder().active(true).build()))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -157,7 +172,7 @@ class ReadingTierServiceImplTest {
         standard.setActive(false);
         assertThatThrownBy(() -> service.requireAssignable("STANDARD"))
                 .isInstanceOf(ReadingTierNotAssignableException.class);
-        when(tiers.findByCode("PRO")).thenReturn(Optional.empty());
+        when(tiers.lockByCode("PRO")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.requireAssignable("PRO"))
                 .isInstanceOf(ReadingTierNotAssignableException.class);
     }
