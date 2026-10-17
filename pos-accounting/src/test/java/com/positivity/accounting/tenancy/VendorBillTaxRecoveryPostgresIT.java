@@ -15,9 +15,9 @@ import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
-import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
 import com.positivity.accounting.internal.service.VendorBillStatedTax;
@@ -329,12 +329,16 @@ class VendorBillTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
             + " caller's transaction")
     void caughtResolverRefusalLeavesTheTransactionCommittable() {
         UUID tenant = tenant();
-        String committed = asTenant(tenant, () -> new TransactionTemplate(transactionManager).execute(_ -> {
-            assertThatThrownBy(() -> glMappingResolver.resolveGLAccount(
-                            "VENDOR_BILL", "NO_SUCH_KEY_" + tenant.toString().substring(0, 8), today().atStartOfDay()))
-                    .isInstanceOf(GLMappingNotConfiguredException.class);
-            return "committed";
-        }));
+        String committed = asTenant(
+                tenant,
+                () -> new TransactionTemplate(transactionManager).execute(_ -> {
+                    assertThatThrownBy(() -> glMappingResolver.resolveGLAccount(
+                                    "VENDOR_BILL",
+                                    "NO_SUCH_KEY_" + tenant.toString().substring(0, 8),
+                                    today().atStartOfDay()))
+                            .isInstanceOf(GLMappingNotConfiguredException.class);
+                    return "committed";
+                }));
         assertThat(committed).isEqualTo("committed");
     }
 
