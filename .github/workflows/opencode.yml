@@ -1,0 +1,70 @@
+name: OpenCode
+
+# Runs the OpenCode CLI non-interactively against this repository using the
+# checked-in config at .config/opencode/opencode.json. The Ollama Cloud API key
+# is never stored in the repo: the config references {env:OLLAMA_CLOUD_API_KEY},
+# which OpenCode resolves from the environment, and this workflow supplies it
+# from the OLLAMA_CLOUD_API_KEY repository secret.
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: Prompt to send to OpenCode (runs once, non-interactively).
+        required: true
+        type: string
+      model:
+        description: >-
+          Model as provider/model (default: the "model" set in
+          .config/opencode/opencode.json).
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opencode-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: Run OpenCode
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENCODE_CONFIG: ${{ github.workspace }}/.config/opencode/opencode.json
+      OLLAMA_CLOUD_API_KEY: ${{ secrets.OLLAMA_CLOUD_API_KEY }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Check required secret
+        run: |
+          set -euo pipefail
+          if [[ -z "${OLLAMA_CLOUD_API_KEY}" ]]; then
+            echo "::error::Repository secret OLLAMA_CLOUD_API_KEY is not set. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Install OpenCode
+        run: |
+          set -euo pipefail
+          curl -fsSL https://opencode.ai/install | bash
+          echo "${HOME}/.opencode/bin" >> "${GITHUB_PATH}"
+
+      - name: Show OpenCode version
+        run: opencode --version
+
+      - name: Run OpenCode
+        env:
+          PROMPT: ${{ inputs.prompt }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ -n "${MODEL}" ]]; then
+            args+=(--model "${MODEL}")
+          fi
+          opencode run "${args[@]}" "${PROMPT}"
