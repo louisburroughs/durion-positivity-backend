@@ -113,10 +113,23 @@ class PurchaseOrderVendorServiceImplTest {
 
         assertThat(page.getContent())
                 .containsExactly(new PurchaseOrderVendorResponse(
-                        VENDOR_ID, "V-000123", "Acme Tire Supply", PurchaseOrderVendorStatus.ACTIVE));
+                        VENDOR_ID, "V-000123", "Acme Tire Supply", PurchaseOrderVendorStatus.ACTIVE, false));
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
         verify(vendors).findAll(any(Specification.class), pageable.capture());
         assertThat(pageable.getValue().getSort().getOrderFor("vendorId")).isNotNull();
+    }
+
+    @Test
+    @DisplayName("#2713: a vendor with a purchasing channel reads transmittable; the alias itself is not served")
+    void transmittableFollowsTheChannel() {
+        ExtSupplierVendor withChannel = row(ExtSupplierVendor.Status.ACTIVE);
+        withChannel.setPurchaseOrderSupplierRef("edi-main");
+        when(vendors.findById(VENDOR_ID)).thenReturn(Optional.of(withChannel));
+
+        PurchaseOrderVendorResponse read = service.getVendor(VENDOR_ID);
+
+        assertThat(read.transmittable()).isTrue();
+        assertThat(read.toString()).doesNotContain("edi-main");
     }
 
     @Test

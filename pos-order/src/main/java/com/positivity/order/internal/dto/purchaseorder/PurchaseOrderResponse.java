@@ -55,6 +55,15 @@ public class PurchaseOrderResponse {
     private Integer versionNumber;
 
     @Schema(
+            description = "Whether the order has a purchasing channel to be sent through: its vendor's designated"
+                    + " transmission profile, stamped at create, vendor-changing revise, approve and (until the first"
+                    + " send) transmit (#2713). False predicts 422 SUPPLIER_REF_MISSING on transmit; the vendor's"
+                    + " administrator designates a purchasing profile in pos-supplier",
+            example = "true",
+            requiredMode = NOT_REQUIRED)
+    private boolean transmittable;
+
+    @Schema(
             description = "ISO 4217 currency code the purchase order is denominated in",
             example = "USD",
             requiredMode = REQUIRED)

@@ -104,6 +104,7 @@ public class SupplierVendorReplica {
         row.setDisplayName(fact.displayName());
         row.setStatus(fact.isActive() ? ExtSupplierVendor.Status.ACTIVE : ExtSupplierVendor.Status.INACTIVE);
         row.setStatusChangedAt(fact.statusChangedAt());
+        row.setPurchaseOrderSupplierRef(fact.purchaseOrderSupplierRef());
         row.setAggregateVersion(aggregateVersion);
         row.setUpdatedAt(Instant.now(clock));
         try {

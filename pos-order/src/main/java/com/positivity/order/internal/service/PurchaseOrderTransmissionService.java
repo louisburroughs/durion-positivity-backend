@@ -97,6 +97,11 @@ public class PurchaseOrderTransmissionService {
             throw PurchaseOrderNotTransmittableException.publishingUnavailable();
         }
 
+        // #2713: a vendor that gained its channel after approval becomes sendable here; after the first send the
+        // stamp is frozen so a revision reaches the channel the original did.
+        if (order.getTransmissionState() == TransmissionState.NOT_TRANSMITTED) {
+            vendorGuard.purchaseOrderSupplierRef(order.getVendorId()).ifPresent(order::setSupplierRef);
+        }
         guardTransmittable(order);
         // An inactive vendor, or one outside the copy, is sent nothing (S24, #2517).
         vendorGuard.requireActive(order.getVendorId());
@@ -157,9 +162,14 @@ public class PurchaseOrderTransmissionService {
                 order.getTransmissionCount());
     }
 
-    private static void guardTransmittable(PurchaseOrderEntity order) {
+    private void guardTransmittable(PurchaseOrderEntity order) {
         if (order.getSupplierRef() == null || order.getSupplierRef().isBlank()) {
-            throw PurchaseOrderNotTransmittableException.noSupplierRef();
+            // The copy holds the vendor, so a missing channel is a fact about the vendor, not replication lag (#2713).
+            throw vendorGuard
+                    .copyOf(order.getVendorId())
+                    .map(vendor -> PurchaseOrderNotTransmittableException.noPurchasingChannel(
+                            vendor.getVendorId(), vendor.getVendorNumber(), vendor.getDisplayName()))
+                    .orElseGet(PurchaseOrderNotTransmittableException::noSupplierRef);
         }
         // A draft is not a commitment. Sending one would put an order in front of a vendor that
         // nobody inside has yet agreed to place.

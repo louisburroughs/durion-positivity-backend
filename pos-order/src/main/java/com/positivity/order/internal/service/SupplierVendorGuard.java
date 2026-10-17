@@ -4,6 +4,7 @@ import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.web.common.ReplicationPendingException;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -42,6 +43,19 @@ public class SupplierVendorGuard {
      * @throws ReplicationPendingException {@value #VENDOR_REPLICATION_PENDING} when it is not in the copy
      * @throws PurchaseOrderVendorException {@code VENDOR_INACTIVE} when it is inactive
      */
+    /**
+     * The vendor's purchasing channel as the copy holds it now (#2713), for stamping an order's {@code supplierRef};
+     * empty when the copy lacks the vendor or the vendor has no channel. Reads only the copy.
+     */
+    public @NonNull Optional<String> purchaseOrderSupplierRef(@NonNull UUID vendorId) {
+        return vendors.findById(vendorId).map(ExtSupplierVendor::getPurchaseOrderSupplierRef);
+    }
+
+    /** The copy row, for naming the vendor in a refusal; empty when it has not replicated. */
+    public @NonNull Optional<ExtSupplierVendor> copyOf(@NonNull UUID vendorId) {
+        return vendors.findById(vendorId);
+    }
+
     public @NonNull ExtSupplierVendor requireActive(@NonNull UUID vendorId) {
         ExtSupplierVendor vendor = vendors.findById(vendorId)
                 .orElseThrow(() -> new ReplicationPendingException(

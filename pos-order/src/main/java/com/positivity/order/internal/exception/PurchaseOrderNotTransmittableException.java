@@ -1,5 +1,8 @@
 package com.positivity.order.internal.exception;
 
+import org.jspecify.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
+import java.util.UUID;
 import java.util.List;
 
 /**
@@ -12,10 +15,42 @@ import java.util.List;
 public class PurchaseOrderNotTransmittableException extends RuntimeException {
 
     private final String errorCode;
+    private final @Nullable String referenceId;
+    private final @Nullable String nextAction;
+    private final @Nullable String supportAction;
 
     private PurchaseOrderNotTransmittableException(String errorCode, String message) {
+        this(errorCode, message, null, null, null);
+    }
+
+    private PurchaseOrderNotTransmittableException(
+            String errorCode,
+            String message,
+            @Nullable String referenceId,
+            @Nullable String nextAction,
+            @Nullable String supportAction) {
         super(message);
         this.errorCode = errorCode;
+        this.referenceId = referenceId;
+        this.nextAction = nextAction;
+        this.supportAction = supportAction;
+    }
+
+    /**
+     * The vendor has no purchasing channel (#2713, Order ruling on #2682): the copy holds the vendor, so its absence
+     * is a fact about the vendor (422), not replication lag. Names the vendor, the vendor id as {@code referenceId},
+     * and what the buyer and the administrator each do next.
+     */
+    public static PurchaseOrderNotTransmittableException noPurchasingChannel(
+            @NonNull UUID vendorId, @NonNull String vendorNumber, @NonNull String displayName) {
+        return new PurchaseOrderNotTransmittableException(
+                "SUPPLIER_REF_MISSING",
+                "Vendor " + vendorNumber + " " + displayName + " has no purchase-order channel",
+                vendorId.toString(),
+                "Ask an administrator to designate a purchasing profile for this vendor in pos-supplier, then send"
+                        + " the order again",
+                "In pos-supplier, give the vendor exactly one enabled, non-sandbox transmission profile (or designate"
+                        + " one); the vendor fact republishes and the order can be sent");
     }
 
     /** The order names no supplier profile, so there is nobody to send it to. */
@@ -94,6 +129,18 @@ public class PurchaseOrderNotTransmittableException extends RuntimeException {
                 "TRANSMISSION_UNAVAILABLE",
                 "TRANSMISSION_UNAVAILABLE: this deployment cannot send orders to vendors, so the order was"
                         + " not sent and has not been marked as sent");
+    }
+
+    public @Nullable String getReferenceId() {
+        return referenceId;
+    }
+
+    public @Nullable String getNextAction() {
+        return nextAction;
+    }
+
+    public @Nullable String getSupportAction() {
+        return supportAction;
     }
 
     public String getErrorCode() {

@@ -273,16 +273,43 @@ class PurchaseOrderTransmissionServiceTest {
     }
 
     @Test
-    @DisplayName("an order naming no supplier profile has nobody to send to")
+    @DisplayName("#2713: an order whose vendor has no purchasing channel is refused naming the vendor")
     void missingSupplierRefIsRefused() {
         PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
         po.setSupplierRef(null);
 
-        // vendorId cannot stand in: it holds a manufacturer or distributor id that bears no
-        // relationship to a supplier profile.
         assertThatThrownBy(() -> service.requestTransmission(PO_ID, ACTOR))
-                .isInstanceOf(PurchaseOrderNotTransmittableException.class)
-                .hasMessageContaining("SUPPLIER_REF_MISSING");
+                .isInstanceOfSatisfying(PurchaseOrderNotTransmittableException.class, refused -> {
+                    assertThat(refused.getErrorCode()).isEqualTo("SUPPLIER_REF_MISSING");
+                    assertThat(refused.getMessage()).contains("V-000123").contains("Acme Parts");
+                    assertThat(refused.getReferenceId()).isEqualTo(po.getVendorId().toString());
+                    assertThat(refused.getNextAction()).contains("administrator");
+                    assertThat(refused.getSupportAction()).isNotBlank();
+                });
+    }
+
+    @Test
+    @DisplayName("#2713: a vendor that gained its channel after approval is sent through it; the stamp is then frozen")
+    void channelGainedAfterApprovalIsStampedAtTransmit() {
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
+        po.setSupplierRef(null);
+        ExtSupplierVendor withChannel = vendor(po.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
+        withChannel.setPurchaseOrderSupplierRef("acme-parts");
+        when(vendorRepository.findById(po.getVendorId())).thenReturn(Optional.of(withChannel));
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(po.getSupplierRef()).isEqualTo("acme-parts");
+
+        PurchaseOrderEntity sent = order(PurchaseOrderStatus.APPROVED, TransmissionState.TRANSMITTED);
+        sent.setSupplierRef("acme-parts");
+        ExtSupplierVendor moved = vendor(sent.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
+        moved.setPurchaseOrderSupplierRef("acme-new");
+        when(vendorRepository.findById(sent.getVendorId())).thenReturn(Optional.of(moved));
+        assertThatThrownBy(() -> service.requestTransmission(PO_ID, ACTOR))
+                .as("a second send is refused on its own grounds; the stamp was not moved")
+                .isInstanceOf(PurchaseOrderNotTransmittableException.class);
+        assertThat(sent.getSupplierRef()).isEqualTo("acme-parts");
     }
 
     @Test

@@ -18,6 +18,7 @@ import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderReques
 import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
+import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
@@ -802,6 +803,93 @@ class PurchaseOrderServiceImplTest {
             corrected.setRequestedBy("tech-jonas");
             assertThat(service.revisePurchaseOrder(PO_ID, corrected, ACTOR).getRequestedBy())
                     .isEqualTo("tech-jonas");
+        }
+    }
+
+    @Nested
+    @DisplayName("#2713: the vendor's purchasing channel is stamped on the order")
+    class PurchasingChannelStamp {
+
+        private ExtSupplierVendor vendorWithChannel(String channel) {
+            ExtSupplierVendor v = vendor(VENDOR_ID, ExtSupplierVendor.Status.ACTIVE);
+            v.setPurchaseOrderSupplierRef(channel);
+            return v;
+        }
+
+        @Test
+        @DisplayName("create stamps the copy's channel and the read says transmittable")
+        void createStamps() {
+            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.of(vendorWithChannel("edi-main")));
+
+            PurchaseOrderResponse created = service.createPurchaseOrder(createRequest(), ACTOR);
+
+            assertThat(created.isTransmittable()).isTrue();
+            ArgumentCaptor<PurchaseOrderEntity> saved = ArgumentCaptor.forClass(PurchaseOrderEntity.class);
+            verify(purchaseOrderRepository).save(saved.capture());
+            assertThat(saved.getValue().getSupplierRef()).isEqualTo("edi-main");
+        }
+
+        @Test
+        @DisplayName("a vendor without a channel leaves the stamp empty and the read not transmittable")
+        void createWithoutChannel() {
+            PurchaseOrderResponse created = service.createPurchaseOrder(createRequest(), ACTOR);
+            assertThat(created.isTransmittable()).isFalse();
+        }
+
+        @Test
+        @DisplayName("approve re-stamps a channel the vendor gained since the order was raised")
+        void approveRestamps() {
+            PurchaseOrderEntity draft = existingOrder(PurchaseOrderStatus.DRAFT);
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
+            when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.of(vendorWithChannel("edi-main")));
+
+            PurchaseOrderResponse approved = service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR);
+
+            assertThat(approved.isTransmittable()).isTrue();
+            assertThat(draft.getSupplierRef()).isEqualTo("edi-main");
+        }
+
+        @Test
+        @DisplayName("approve keeps an existing stamp when the vendor now has no channel, and never clears it")
+        void approveKeepsStampWithoutChannel() {
+            PurchaseOrderEntity draft = existingOrder(PurchaseOrderStatus.DRAFT);
+            draft.setSupplierRef("edi-old");
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
+
+            service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR);
+
+            assertThat(draft.getSupplierRef()).isEqualTo("edi-old");
+        }
+
+        @Test
+        @DisplayName("a vendor-changing revise stamps the new vendor's channel")
+        void reviseVendorStamps() {
+            UUID other = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a77");
+            PurchaseOrderEntity draft = existingOrder(PurchaseOrderStatus.DRAFT);
+            draft.setSupplierRef("edi-old");
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
+            ExtSupplierVendor otherVendor = vendor(other, ExtSupplierVendor.Status.ACTIVE);
+            otherVendor.setPurchaseOrderSupplierRef("edi-other");
+            when(vendorRepository.findById(other)).thenReturn(Optional.of(otherVendor));
+            RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setExpectedVersionNumber(1);
+            request.setRevisionReason("vendor set up in the master");
+            request.setVendorId(other);
+            request.setLines(List.of(lineRequest("4", 6_000L)));
+
+            service.revisePurchaseOrder(PO_ID, request, ACTOR);
+
+            assertThat(draft.getSupplierRef()).isEqualTo("edi-other");
+        }
+
+        @Test
+        @DisplayName("once transmitted, the stamp is frozen")
+        void frozenAfterSend() {
+            PurchaseOrderEntity sent = existingOrder(PurchaseOrderStatus.APPROVED);
+            sent.setSupplierRef("edi-old");
+            sent.setTransmissionState(TransmissionState.TRANSMITTED);
+            PurchaseOrderServiceImpl.stampChannel(sent, vendorWithChannel("edi-new"));
+            assertThat(sent.getSupplierRef()).isEqualTo("edi-old");
         }
     }
 }

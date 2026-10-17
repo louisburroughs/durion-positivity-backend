@@ -12,9 +12,11 @@ import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusSummar
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderSummaryResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
+import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.entity.PurchaseOrderTransmissionEvent;
+import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
@@ -123,7 +125,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             @NonNull CreatePurchaseOrderRequest request, @NonNull String actorId) {
         // Only an active vendor of the copy takes a new order (S24, #2517). A requested order (createRequested) is
         // not checked here: it lands in DRAFT and approval stops it.
-        vendorGuard.requireActive(request.getVendorId());
+        ExtSupplierVendor vendor = vendorGuard.requireActive(request.getVendorId());
         TotalsAndLines totalsAndLines = buildLineEntities(request.getLines());
         long subtotalMinor = totalsAndLines.subtotalMinor();
         long taxMinor = totalsAndLines.taxMinor();
@@ -131,6 +133,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
 
         PurchaseOrderEntity purchaseOrder = PurchaseOrderEntity.builder()
                 .vendorId(request.getVendorId())
+                // The vendor's purchasing channel as the copy holds it now (#2713); re-stamped at approve and transmit.
+                .supplierRef(vendor.getPurchaseOrderSupplierRef())
                 .poNumber(generatePoNumber())
                 .status(PurchaseOrderStatus.DRAFT)
                 .versionNumber(1)
@@ -374,7 +378,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new PurchaseOrderStateConflictException("Only DRAFT purchase orders can be approved");
         }
         // The guard that stops a requested order naming a vendor outside the copy, or an inactive one (S24, #2517).
-        vendorGuard.requireActive(po.getVendorId());
+        ExtSupplierVendor vendor = vendorGuard.requireActive(po.getVendorId());
+        stampChannel(po, vendor);
 
         // Approval is the moment the order becomes a commitment, and the moment its open
         // quantities start counting as incoming supply everywhere downstream.
@@ -502,8 +507,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new PurchaseOrderStateConflictException(
                     "Only a DRAFT purchase order can change its vendor; this order is " + po.getStatus());
         }
-        vendorGuard.requireActive(vendorId);
+        ExtSupplierVendor vendor = vendorGuard.requireActive(vendorId);
         po.setVendorId(vendorId);
+        po.setSupplierRef(vendor.getPurchaseOrderSupplierRef());
     }
 
     /**
@@ -517,6 +523,21 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     po.getPurchaseOrderId(), po.getPoNumber(), expectedVersionNumber, current);
         }
         return current;
+    }
+
+    /**
+     * Stamps the vendor's current purchasing channel on the order (#2713) while nothing has been sent: once
+     * transmitted, the stamp is frozen so a revision reaches the channel the original did. A vendor that gained its
+     * channel after approval thereby becomes sendable without re-approval; a vendor without one keeps the stamp it
+     * had, never a cleared one.
+     */
+    static void stampChannel(@NonNull PurchaseOrderEntity po, @NonNull ExtSupplierVendor vendor) {
+        if (po.getTransmissionState() != TransmissionState.NOT_TRANSMITTED) {
+            return;
+        }
+        if (vendor.getPurchaseOrderSupplierRef() != null) {
+            po.setSupplierRef(vendor.getPurchaseOrderSupplierRef());
+        }
     }
 
     private PurchaseOrderEntity getPoOrThrow(UUID poId) {
@@ -587,6 +608,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .poNumber(entity.getPoNumber())
                 .status(entity.getStatus())
                 .versionNumber(entity.getVersionNumber())
+                .transmittable(entity.getSupplierRef() != null && !entity.getSupplierRef().isBlank())
                 .currency(entity.getCurrency())
                 .subtotalMinor(entity.getSubtotalMinor())
                 .taxMinor(entity.getTaxMinor())
