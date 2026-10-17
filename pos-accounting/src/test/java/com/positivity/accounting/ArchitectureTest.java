@@ -18,14 +18,12 @@ import com.tngtech.archunit.junit.CacheMode;
 import com.tngtech.archunit.lang.ArchRule;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.Order;
 
 /**
- * Runs first ({@code @Order(0)} under {@code junit-platform.properties}) and releases its class import when it is done
- * ({@code CacheMode.PER_CLASS}): in the CI fork (1.5 GiB) the import of the whole module on top of the cached Spring
- * contexts of a full run was the last straw (#2752).
+ * Runs in a surefire execution of its own (see {@code pom.xml}, {@code archunit-test}), in a fresh fork, and releases
+ * its class import when it is done ({@code CacheMode.PER_CLASS}): after the Spring contexts of a whole run, the import of
+ * the module did not fit what was left of the CI fork's 1.5 GiB (#2752).
  */
-@Order(0)
 @AnalyzeClasses(
         packages = "com.positivity.accounting",
         importOptions = {ImportOption.DoNotIncludeTests.class, ImportOption.DoNotIncludeJars.class},
