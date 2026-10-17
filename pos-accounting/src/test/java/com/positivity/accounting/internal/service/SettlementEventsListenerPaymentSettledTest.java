@@ -264,7 +264,8 @@ class SettlementEventsListenerPaymentSettledTest {
         @DisplayName(
                 "maps a payment.payment.settled event onto handlePaymentCleared, with its invoice and method (#2502)")
         void mapsAndDelegates() {
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(
+                            any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(new ReceivablePayment());
 
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
@@ -292,7 +293,8 @@ class SettlementEventsListenerPaymentSettledTest {
                 + " before the processed mark")
         void recordedPaymentIsAppliedAutomaticallyBeforeTheMark() {
             ReceivablePayment recorded = new ReceivablePayment();
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(
+                            any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(recorded);
 
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
@@ -319,7 +321,8 @@ class SettlementEventsListenerPaymentSettledTest {
         void storedRefundsAreReleasedAfterTheApplicationBeforeTheMark() {
             ReceivablePayment recorded = new ReceivablePayment();
             recorded.setPaymentId(PAYMENT_INTENT_ID);
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(
+                            any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(recorded);
 
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
@@ -341,7 +344,8 @@ class SettlementEventsListenerPaymentSettledTest {
         @Test
         @DisplayName("#2503: an automatic-application failure propagates unmarked, for container retry/DLQ")
         void automaticApplicationFailurePropagatesUnmarked() {
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(
+                            any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(new ReceivablePayment());
             doThrow(new IllegalStateException("conflict"))
                     .when(automaticPaymentApplicationService)
@@ -406,7 +410,8 @@ class SettlementEventsListenerPaymentSettledTest {
         @Test
         @DisplayName("A8: a cash tender whose triple holds is recorded for the applied amount (#2662)")
         void validCashRoundingIsRecordedForTheAppliedAmount() {
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(
+                            any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenAnswer(inv -> {
                         ReceivablePayment payment = new ReceivablePayment();
                         payment.setPaymentId(PAYMENT_INTENT_ID);

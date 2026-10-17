@@ -34,7 +34,8 @@ public final class CashRoundingTriple {
         if (!present(fact)) {
             return Optional.empty();
         }
-        String method = fact.methodType() == null ? "" : fact.methodType().trim().toUpperCase(Locale.ROOT);
+        String method =
+                fact.methodType() == null ? "" : fact.methodType().trim().toUpperCase(Locale.ROOT);
         if (!"CASH".equals(method)) {
             return Optional.of("rounding fields on a " + fact.methodType()
                     + " tender: only a cash tender rounds to the cash increment");
@@ -69,7 +70,8 @@ public final class CashRoundingTriple {
         }
         // One recompute covers the grid and the half-increment bound: a HALF_UP result is on the grid and never
         // more than half an increment from the amount, so an equal settledAmount satisfies both.
-        BigDecimal expected = amount.divide(cashIncrement, 0, RoundingMode.HALF_UP).multiply(cashIncrement);
+        BigDecimal expected =
+                amount.divide(cashIncrement, 0, RoundingMode.HALF_UP).multiply(cashIncrement);
         if (expected.compareTo(settledAmount) != 0) {
             return Optional.of("settledAmount " + settledAmount + " is not amount " + amount
                     + " rounded HALF_UP to the nearest " + cashIncrement + " (expected " + expected + ")");

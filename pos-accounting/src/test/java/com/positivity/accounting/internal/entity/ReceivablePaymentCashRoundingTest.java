@@ -36,6 +36,7 @@ class ReceivablePaymentCashRoundingTest {
     @Test
     void noRoundingNothingToClaim() {
         assertThat(withRounding(null).claimCashRounding(new BigDecimal("9.98"))).isNull();
-        assertThat(withRounding("0.00").claimCashRounding(new BigDecimal("9.98"))).isNull();
+        assertThat(withRounding("0.00").claimCashRounding(new BigDecimal("9.98")))
+                .isNull();
     }
 }

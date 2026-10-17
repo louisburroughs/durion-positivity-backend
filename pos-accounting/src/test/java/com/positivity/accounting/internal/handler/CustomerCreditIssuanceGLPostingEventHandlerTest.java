@@ -62,7 +62,8 @@ class CustomerCreditIssuanceGLPostingEventHandlerTest {
         LocalDateTime january31 = LocalDateTime.of(2026, 1, 31, 23, 30);
         when(glMappingResolver.resolveGLAccount(anyString(), anyString(), eq(january31)))
                 .thenReturn(UUID.fromString("00000000-0000-7000-8000-000000001090"));
-        when(glPostingService.postCustomerCreditIssuance(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+        when(glPostingService.postCustomerCreditIssuance(
+                        any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(JOURNAL_ENTRY_ID);
 
         handler.onCustomerCreditIssuanceGLPosting(event());

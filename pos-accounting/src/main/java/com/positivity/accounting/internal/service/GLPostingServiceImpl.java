@@ -297,7 +297,9 @@ public class GLPostingServiceImpl implements GLPostingService {
         lines.add(lineRequest(arAccountId, BigDecimal.ZERO, amount, "AR Reduction - PA#" + paymentApplicationId));
         if (rounding.signum() != 0) {
             lines.add(cashRoundingLine(
-                    requireRoundingAccount(cashRoundingAccountId), rounding, "Cash Rounding - PA#" + paymentApplicationId));
+                    requireRoundingAccount(cashRoundingAccountId),
+                    rounding,
+                    "Cash Rounding - PA#" + paymentApplicationId));
         }
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
                 .transactionDate(transactionDate)

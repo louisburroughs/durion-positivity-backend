@@ -150,20 +150,6 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
     }
 
     @Override
-    @NonNull
-    public PaymentApplicationResponse applyAutomatically(
-            @NonNull UUID paymentId,
-            @NonNull UUID invoiceId,
-            @NonNull BigDecimal amount,
-            @NonNull String requestId,
-            @NonNull Instant appliedAt,
-            @NonNull ApplicationSource source,
-            @Nullable BigDecimal cashRoundingAmount) {
-        return delegate.applyAutomatically(
-                paymentId, invoiceId, amount, requestId, appliedAt, source, cashRoundingAmount);
-    }
-
-    @Override
     public PaymentApplicationResponse.@Nullable CustomerCreditInfo creditUnappliedPayment(
             @NonNull UUID paymentId, @NonNull String creditRequestId) {
         return delegate.creditUnappliedPayment(paymentId, creditRequestId);

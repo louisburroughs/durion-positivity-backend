@@ -456,8 +456,7 @@ class AutomaticPaymentApplicationServiceTest {
         assertThatThrownBy(() -> service.reapply(stored))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("never recorded");
-        verify(paymentApplicationService, never())
-                .applyAutomatically(any(), any(), any(), anyString(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), anyString(), any(), any());
     }
 
     @Test

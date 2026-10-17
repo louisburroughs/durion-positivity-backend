@@ -31,15 +31,20 @@ class CashRoundingTripleTest {
 
     @Test
     void roundedUpAndDownAreValid() {
-        assertThat(CashRoundingTriple.problem(fact("CASH", "9.98", "10.00", "0.02", "0.05"))).isEmpty();
-        assertThat(CashRoundingTriple.problem(fact("CASH", "10.02", "10.00", "-0.02", "0.05"))).isEmpty();
-        assertThat(CashRoundingTriple.problem(fact("CASH", "149.925", "149.95", "0.025", "0.05"))).isEmpty();
-        assertThat(CashRoundingTriple.problem(fact("CASH", "19.50", "20", "0.50", "1"))).isEmpty();
+        assertThat(CashRoundingTriple.problem(fact("CASH", "9.98", "10.00", "0.02", "0.05")))
+                .isEmpty();
+        assertThat(CashRoundingTriple.problem(fact("CASH", "10.02", "10.00", "-0.02", "0.05")))
+                .isEmpty();
+        assertThat(CashRoundingTriple.problem(fact("CASH", "149.925", "149.95", "0.025", "0.05")))
+                .isEmpty();
+        assertThat(CashRoundingTriple.problem(fact("CASH", "19.50", "20", "0.50", "1")))
+                .isEmpty();
     }
 
     @Test
     void noIncrementNeedsExactAgreement() {
-        assertThat(CashRoundingTriple.problem(fact("CASH", "9.98", "9.98", "0.00", null))).isEmpty();
+        assertThat(CashRoundingTriple.problem(fact("CASH", "9.98", "9.98", "0.00", null)))
+                .isEmpty();
         assertThat(CashRoundingTriple.problem(fact("CASH", "9.98", "10.00", "0.02", null)))
                 .get()
                 .asString()

@@ -604,7 +604,12 @@ public class PaymentApplicationServiceImpl
         // Same transaction as the CustomerCredit insert (transactional outbox, #975): the issuance
         // leg posts Dr Undeposited Funds / Cr Customer Credit Liability for the whole amount.
         enqueueCustomerCreditIssuanceGLPostingWorkItem(
-                payment.getPaymentId(), creditRequestId, payment, creditInfo.getCreditId(), unapplied, timestamp,
+                payment.getPaymentId(),
+                creditRequestId,
+                payment,
+                creditInfo.getCreditId(),
+                unapplied,
+                timestamp,
                 payment.claimCashRounding(unapplied));
 
         payment.applyAmount(unapplied);
