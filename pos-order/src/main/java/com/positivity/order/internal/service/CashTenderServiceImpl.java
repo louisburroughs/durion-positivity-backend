@@ -106,8 +106,9 @@ public class CashTenderServiceImpl implements CashTenderService {
                     "Order " + orderId + " has no balance due; refresh the order before tendering cash");
         }
         BigDecimal increment = cashIncrements.of(currency).orElse(null);
-        BigDecimal cashApplied =
-                request.getCashApplied() == null ? null : request.getCashApplied().setScale(exponent, RoundingMode.UNNECESSARY);
+        BigDecimal cashApplied = request.getCashApplied() == null
+                ? null
+                : request.getCashApplied().setScale(exponent, RoundingMode.UNNECESSARY);
         if (cashApplied != null && cashApplied.compareTo(amountDue) > 0) {
             throw new SalesOrderRequestValidationException(
                     "cashApplied " + cashApplied + " exceeds the balance due " + amountDue);
@@ -187,8 +188,8 @@ public class CashTenderServiceImpl implements CashTenderService {
                 .orElseThrow(() -> new RegisterSessionConflictException(
                         "Register session " + sessionId + " of order " + order.getOrderId() + " does not exist"));
         if (session.getStatus() != RegisterSessionStatus.OPEN) {
-            throw new RegisterSessionConflictException("Register session " + sessionId + " is "
-                    + session.getStatus() + "; a cash tender, movement or close needs an OPEN session");
+            throw new RegisterSessionConflictException("Register session " + sessionId + " is " + session.getStatus()
+                    + "; a cash tender, movement or close needs an OPEN session");
         }
         return session;
     }
@@ -206,7 +207,8 @@ public class CashTenderServiceImpl implements CashTenderService {
             throw new CashMovementTaxRefusedException(
                     CashMovementTaxRefusedException.Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
                     field + " " + amount + " has more decimals than " + currency + " allows; nothing is rounded",
-                    List.of(new ApiError.FieldError(field, "at most " + DrawerAmounts.exponent(currency) + " decimals")));
+                    List.of(new ApiError.FieldError(
+                            field, "at most " + DrawerAmounts.exponent(currency) + " decimals")));
         }
     }
 }

@@ -10,13 +10,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.positivity.order.BaseControllerSliceTest;
-import com.positivity.security.common.GatewaySecurityConfig;
 import com.positivity.order.internal.dto.CashTenderResponse;
 import com.positivity.order.internal.exception.CartIdempotencyConflictException;
 import com.positivity.order.internal.exception.CashTenderRefusedException;
 import com.positivity.order.internal.exception.InvoicingUnavailableException;
 import com.positivity.order.internal.exception.OrderConflictException;
 import com.positivity.order.internal.service.CashTenderService;
+import com.positivity.security.common.GatewaySecurityConfig;
 import com.positivity.shared.error.ApiError;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.math.BigDecimal;
@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;

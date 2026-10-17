@@ -28,6 +28,7 @@ public record SessionReportResponse(
         List<CashMovementResponse> movements,
         Instant openedAt,
         Instant generatedAt,
+
         @Schema(
                 description = "ADR-0067 A8: signed sum of the cash rounding over the session's cash tenders"
                         + " (positive when customers paid more than due); informational, never part of over/short",

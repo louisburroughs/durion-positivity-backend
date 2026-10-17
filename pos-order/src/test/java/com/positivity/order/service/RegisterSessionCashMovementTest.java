@@ -1,6 +1,5 @@
 package com.positivity.order.internal.service;
 
-import com.positivity.order.internal.config.CashIncrements;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -15,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
+import com.positivity.order.internal.config.CashIncrements;
 import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.dto.CashMovementSummary;

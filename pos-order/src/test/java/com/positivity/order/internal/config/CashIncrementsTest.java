@@ -61,6 +61,7 @@ class CashIncrementsTest {
 
     @Test
     void acceptsAWholeUnitIncrementForAZeroExponentCurrency() {
-        assertThat(new CashIncrements(Map.of("JPY", new BigDecimal("5"))).of("JPY")).contains(new BigDecimal("5"));
+        assertThat(new CashIncrements(Map.of("JPY", new BigDecimal("5"))).of("JPY"))
+                .contains(new BigDecimal("5"));
     }
 }

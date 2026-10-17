@@ -1,13 +1,12 @@
 package com.positivity.order.internal.client;
 
-import com.positivity.order.internal.exception.InvoicingUnavailableException;
 import com.positivity.order.internal.exception.CartIdempotencyConflictException;
+import com.positivity.order.internal.exception.InvoicingUnavailableException;
 import com.positivity.order.internal.exception.OrderConflictException;
-import java.util.LinkedHashMap;
-import org.springframework.web.client.RestClientResponseException;
 import com.positivity.security.common.GatewaySecurityConstants;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import com.positivity.shared.dto.OrderInvoiceResponse;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +14,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 /**
  * REST adapter on pos-invoice for the checkout/cancellation money flows (parity stories C1/C3).
@@ -140,8 +140,8 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
             // register's own conflicts (Order ruling §1, §5); anything else is the handshake failing.
             if (status == 409) {
                 throw new CartIdempotencyConflictException(
-                        "Idempotency-Key was already used for a different cash tender (pos-invoice: "
-                                + errorCode(e) + ")");
+                        "Idempotency-Key was already used for a different cash tender (pos-invoice: " + errorCode(e)
+                                + ")");
             }
             if (status == 422) {
                 throw new OrderConflictException("pos-invoice refused the cash tender (" + errorCode(e)

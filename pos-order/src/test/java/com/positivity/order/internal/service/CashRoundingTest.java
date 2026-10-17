@@ -62,8 +62,10 @@ class CashRoundingTest {
 
     @Test
     void multipleOfTheIncrement() {
-        assertThat(CashRounding.isMultipleOf(new BigDecimal("10.00"), new BigDecimal("0.05"))).isTrue();
-        assertThat(CashRounding.isMultipleOf(new BigDecimal("10.02"), new BigDecimal("0.05"))).isFalse();
+        assertThat(CashRounding.isMultipleOf(new BigDecimal("10.00"), new BigDecimal("0.05")))
+                .isTrue();
+        assertThat(CashRounding.isMultipleOf(new BigDecimal("10.02"), new BigDecimal("0.05")))
+                .isFalse();
         assertThat(CashRounding.isMultipleOf(new BigDecimal("10.02"), null)).isTrue();
     }
 }

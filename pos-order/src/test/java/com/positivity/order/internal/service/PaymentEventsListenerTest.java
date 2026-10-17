@@ -166,8 +166,7 @@ class PaymentEventsListenerTest {
                    "methodType":"CASH","amount":%s,"currencyCode":"CAD",
                    "settledAmount":%s,"cashRoundingAmount":%s,"cashIncrement":%s,
                    "settledAt":"2026-07-23T11:59:00Z"}}
-                """
-                .formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, amount, settled, rounding, increment);
+                """.formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, amount, settled, rounding, increment);
     }
 
     @Test

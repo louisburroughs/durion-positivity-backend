@@ -62,8 +62,7 @@ public class OrderCashTenderExceptionHandler {
     }
 
     @ExceptionHandler(CartIdempotencyConflictException.class)
-    public ResponseEntity<ApiError> handleIdempotency(
-            CartIdempotencyConflictException ex, HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleIdempotency(CartIdempotencyConflictException ex, HttpServletRequest request) {
         return respond(HttpStatus.CONFLICT, "ORDER_IDEMPOTENCY_CONFLICT", ex.getMessage(), List.of(), request);
     }
 
@@ -74,20 +73,17 @@ public class OrderCashTenderExceptionHandler {
 
     @ExceptionHandler(CashTenderRefusedException.class)
     public ResponseEntity<ApiError> handleRefused(CashTenderRefusedException ex, HttpServletRequest request) {
-        return respond(
-                HttpStatus.UNPROCESSABLE_CONTENT, ex.code().name(), ex.getMessage(), ex.fieldErrors(), request);
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, ex.code().name(), ex.getMessage(), ex.fieldErrors(), request);
     }
 
     @ExceptionHandler(CashMovementTaxRefusedException.class)
     public ResponseEntity<ApiError> handlePrecision(CashMovementTaxRefusedException ex, HttpServletRequest request) {
-        return respond(
-                HttpStatus.UNPROCESSABLE_CONTENT, ex.code().name(), ex.getMessage(), ex.fieldErrors(), request);
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, ex.code().name(), ex.getMessage(), ex.fieldErrors(), request);
     }
 
     @ExceptionHandler(CurrencyNotSupportedException.class)
     public ResponseEntity<ApiError> handleCurrency(CurrencyNotSupportedException ex, HttpServletRequest request) {
-        return respond(
-                HttpStatus.UNPROCESSABLE_CONTENT, "CURRENCY_NOT_SUPPORTED", ex.getMessage(), List.of(), request);
+        return respond(HttpStatus.UNPROCESSABLE_CONTENT, "CURRENCY_NOT_SUPPORTED", ex.getMessage(), List.of(), request);
     }
 
     @ExceptionHandler(InvoicingUnavailableException.class)
@@ -128,6 +124,8 @@ public class OrderCashTenderExceptionHandler {
 
     private static String correlationId(HttpServletRequest request) {
         String header = request.getHeader(X_CORRELATION_ID);
-        return (header != null && !header.isBlank()) ? header : UUIDv7Generator.generate().toString();
+        return (header != null && !header.isBlank())
+                ? header
+                : UUIDv7Generator.generate().toString();
     }
 }

@@ -11,8 +11,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.positivity.order.internal.exception.CartIdempotencyConflictException;
-import com.positivity.order.internal.exception.OrderConflictException;
 import com.positivity.order.internal.exception.InvoicingUnavailableException;
+import com.positivity.order.internal.exception.OrderConflictException;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -122,7 +122,8 @@ class RestInvoicingPortAdapterTest {
         server.expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/payments/cash"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-User", "pos-order"))
-                .andExpect(header("X-Authorities", "invoice:manage,invoice:payment:process,invoice:payment:limit_override"))
+                .andExpect(header(
+                        "X-Authorities", "invoice:manage,invoice:payment:process,invoice:payment:limit_override"))
                 .andExpect(jsonPath("$.idempotencyKey").value("idem-cash-1"))
                 .andExpect(jsonPath("$.amount").value(9.98))
                 .andExpect(jsonPath("$.settledAmount").value(10.00))

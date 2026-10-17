@@ -12,9 +12,10 @@ import lombok.Data;
  * A cash tender taken at the register (ADR-0067 A8, #2662). The drawer is the order's session; it is not sent.
  */
 @Data
-@Schema(description = "A cash tender at the register: what the customer handed over, optionally the part of the"
-        + " balance it settles, and the drawer's currency. pos-order rounds the cash due to the currency's cash"
-        + " increment and records the tender through pos-invoice.")
+@Schema(
+        description = "A cash tender at the register: what the customer handed over, optionally the part of the"
+                + " balance it settles, and the drawer's currency. pos-order rounds the cash due to the currency's cash"
+                + " increment and records the tender through pos-invoice.")
 public class CashTenderRequest {
 
     @NotNull

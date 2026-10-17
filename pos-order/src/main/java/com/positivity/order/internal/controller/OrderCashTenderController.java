@@ -115,9 +115,7 @@ public class OrderCashTenderController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = {
-                                                @ExampleObject(
-                                                        name = "Full settlement, CAD",
-                                                        value = """
+                                                @ExampleObject(name = "Full settlement, CAD", value = """
                                                                         {"cashTendered":20.00,"currencyCode":"CAD"}
                                                                         """),
                                                 @ExampleObject(
