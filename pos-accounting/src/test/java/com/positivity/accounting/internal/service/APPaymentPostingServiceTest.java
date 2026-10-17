@@ -106,6 +106,18 @@ class APPaymentPostingServiceTest {
     }
 
     @Test
+    @DisplayName("AW41 ruling 2 (#2513): a CASH (drawer cash-on-delivery) payment posts nothing of its own")
+    void cashPaymentPostsNothing() {
+        payment.setPaymentMethod(PaymentMethod.CASH);
+        payment.setStatus(APPaymentStatus.GL_POST_PENDING);
+        payment.setGlJournalEntry(new JournalEntry(ENTRY));
+
+        assertThat(service.postPending(PAYMENT_ID)).isEqualTo(ENTRY);
+        org.mockito.Mockito.verifyNoInteractions(journalEntries);
+        org.mockito.Mockito.verify(mappings, org.mockito.Mockito.never()).resolve(any(), any());
+    }
+
+    @Test
     @DisplayName("AC1: 412.00 from the bank with a 1.50 fee → one entry dated payment_date: Dr 2000 412.00 / Dr 6030"
             + " 1.50 / Cr bank 413.50; the payment GL_POSTED with it")
     void entryShape() {

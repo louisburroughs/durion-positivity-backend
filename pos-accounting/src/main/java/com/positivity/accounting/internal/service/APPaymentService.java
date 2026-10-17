@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.APPaymentResponse;
+import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import java.util.Optional;
@@ -133,4 +134,16 @@ public interface APPaymentService {
      */
     @NonNull
     APPaymentResponse retryGLPosting(@NonNull UUID paymentId, @Nullable String overrideJustification);
+
+    /**
+     * Allocate an unapplied {@code CASH} payment (a drawer cash-on-delivery payout, S17 #2513) to the vendor's
+     * approved bills. Posts nothing (AW41 ruling 3): AP was debited at session close and credited at bill approval,
+     * so the allocation only matches the subledger. Idempotent on {@code requestId}: the same lines answer the same
+     * payment, another body is 409 {@code IDEMPOTENCY_CONFLICT}. Approver ≠ payer applies to every bill (403 {@code
+     * AP_PAYMENT_SELF_APPROVED_BILL}). 422 {@code AP_PAYMENT_NOT_ALLOCATABLE} when the payment is not {@code CASH}
+     * or nothing of it is unapplied; 400 {@code VALIDATION_ERROR} for a bill of another vendor, an unapproved bill
+     * or a total above the unapplied amount.
+     */
+    APPaymentResponse allocateCashPayment(
+            @NonNull UUID paymentId, @NonNull AllocateAPPaymentRequest request, @NonNull String currentUser);
 }

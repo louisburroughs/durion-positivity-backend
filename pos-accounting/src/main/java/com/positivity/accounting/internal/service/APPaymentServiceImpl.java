@@ -1,5 +1,8 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository;
+import com.positivity.accounting.internal.entity.APPaymentAllocationRequest;
+import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
@@ -23,6 +26,7 @@ import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.shared.id.UUIDv7Generator;
+import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
@@ -72,6 +76,7 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final APPaymentPostingService postingService;
     private final ApLockTimeout lockTimeout;
     private final SupplierVendorCopies vendorCopies;
+    private final APPaymentAllocationRequestRepository allocationRequests;
 
     /** One allocation of the plan: the bill, locked, and the amount applied to it. */
     record PlannedAllocation(
@@ -345,6 +350,105 @@ public class APPaymentServiceImpl implements APPaymentService {
         return plan;
     }
 
+    @Override
+    @Transactional
+    public APPaymentResponse allocateCashPayment(
+            @NonNull UUID paymentId, @NonNull AllocateAPPaymentRequest request, @NonNull String currentUser) {
+        lockTimeout.apply();
+        String hash = allocationHash(paymentId, request);
+        APPaymentAllocationRequest earlier =
+                allocationRequests.findById(request.getRequestId()).orElse(null);
+        if (earlier != null) {
+            if (!earlier.getPaymentId().equals(paymentId) || !earlier.getRequestHash().equals(hash)) {
+                throw new VendorBillException(
+                        VendorBillException.Code.IDEMPOTENCY_CONFLICT,
+                        "requestId " + request.getRequestId() + " was already used with a different payload");
+            }
+            return toResponse(paymentRepository.lockById(paymentId).orElseThrow(() -> notFound(paymentId)));
+        }
+        APPayment payment = paymentRepository.lockById(paymentId).orElseThrow(() -> notFound(paymentId));
+        if (payment.getPaymentMethod() != PaymentMethod.CASH) {
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE,
+                    "AP payment " + payment.getPaymentRef() + " is a " + payment.getPaymentMethod()
+                            + " payment; only a drawer cash-on-delivery (CASH) payment is allocated later");
+        }
+        BigDecimal unapplied = payment.getUnappliedAmount() == null ? BigDecimal.ZERO : payment.getUnappliedAmount();
+        if (unapplied.signum() <= 0) {
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE,
+                    "AP payment " + payment.getPaymentRef() + " has nothing unapplied");
+        }
+        // The same plan as the pay command's explicit allocations: bills locked in id order, each APPROVED and the
+        // vendor's, zero lines ignored; the total bounded by what is still unapplied (not the gross).
+        ExecuteAPPaymentRequest asPlan = ExecuteAPPaymentRequest.builder()
+                .vendorId(payment.getVendorId())
+                .allocations(request.getAllocations())
+                .build();
+        List<PlannedAllocation> plan = explicitPlan(asPlan);
+        BigDecimal total = plan.stream().map(PlannedAllocation::appliedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (total.signum() <= 0) {
+            throw new InvalidBillAllocationException("The allocations apply nothing");
+        }
+        if (total.compareTo(unapplied) > 0) {
+            throw new InvalidBillAllocationException("Allocations total " + total.toPlainString()
+                    + " exceeds the payment's unapplied amount " + unapplied.toPlainString());
+        }
+        for (PlannedAllocation planned : plan) {
+            BigDecimal open = calculateOpenAmount(planned.bill().getVendorBillId());
+            if (planned.appliedAmount().compareTo(open) > 0) {
+                throw new InvalidBillAllocationException("Allocation " + planned.appliedAmount().toPlainString()
+                        + " to bill " + planned.bill().getVendorBillId() + " exceeds its open amount "
+                        + open.toPlainString());
+            }
+        }
+        // Approver ≠ payer on every allocation, cash on delivery included (AW6.2, §4.9).
+        payGuard.check(plan.stream().map(PlannedAllocation::bill).toList(), currentUser, payment.getPaymentRef());
+        appendAllocations(payment, plan);
+        allocationRequests.save(new APPaymentAllocationRequest(
+                request.getRequestId(), paymentId, hash, Instant.now(clock)));
+        log.info(
+                "CASH AP payment allocated | paymentId={} | bills={} | total={} | unappliedAfter={}",
+                paymentId,
+                plan.size(),
+                total,
+                payment.getUnappliedAmount());
+        return toResponse(payment);
+    }
+
+    private static String allocationHash(UUID paymentId, AllocateAPPaymentRequest request) {
+        RegisterFloatServiceImpl.Hash hash = new RegisterFloatServiceImpl.Hash().field("ALLOCATE").field(paymentId);
+        for (ExecuteAPPaymentRequest.AllocationLineRequest line : request.getAllocations()) {
+            hash.field(line.getVendorBillId()).field(line.getAppliedAmount());
+        }
+        return hash.digest();
+    }
+
+    private static EntityNotFoundException notFound(UUID paymentId) {
+        return new EntityNotFoundException("AP payment not found: " + paymentId);
+    }
+
+    /** Adds {@code plan} after the payment's existing allocations and takes the total off what is unapplied. */
+    private void appendAllocations(@NonNull APPayment payment, @NonNull List<PlannedAllocation> plan) {
+        List<APPaymentAllocation> existing =
+                allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+        int sequence = existing.size() + 1;
+        List<APPaymentAllocation> allocations = new ArrayList<>();
+        BigDecimal total = BigDecimal.ZERO;
+        for (PlannedAllocation planned : plan) {
+            APPaymentAllocation allocation = new APPaymentAllocation();
+            allocation.setPayment(payment);
+            allocation.setVendorBill(planned.bill());
+            allocation.setAppliedAmount(planned.appliedAmount());
+            allocation.setAllocationSequence(sequence++);
+            allocations.add(allocation);
+            total = total.add(planned.appliedAmount());
+        }
+        payment.setUnappliedAmount(payment.getUnappliedAmount().subtract(total));
+        allocationRepository.saveAll(allocations);
+        paymentRepository.save(payment);
+    }
+
     /** Allocates the payment as {@code plan} decided, in its order. */
     private void applyAllocations(@NonNull APPayment payment, @NonNull List<PlannedAllocation> plan) {
         List<APPaymentAllocation> allocations = new ArrayList<>();
@@ -559,6 +663,9 @@ public class APPaymentServiceImpl implements APPaymentService {
                 .unappliedAmount(payment.getUnappliedAmount())
                 .currency(payment.getCurrency())
                 .bankAccountId(payment.getBankAccountId())
+                .paymentMethod(payment.getPaymentMethod())
+                .registerSessionId(payment.getRegisterSessionId())
+                .cashMovementId(payment.getCashMovementId())
                 .paymentDate(payment.getPaymentDate())
                 .status(payment.getStatus())
                 .gatewayTransactionId(payment.getGatewayTransactionId())

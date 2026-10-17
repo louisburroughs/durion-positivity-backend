@@ -424,6 +424,13 @@ public final class EventTypes {
                                 "Post again an AP payment whose posting was refused (Dr 2000 / Dr 6030 / Cr bank)")
                         .build(),
 
+                // Allocate a cash-on-delivery AP payment - 1 event (CAP:550 S17, Issue #2513; AW41)
+                EventTypeRegistration.write(
+                                "ACCOUNTING_AP_PAYMENT_ALLOCATE",
+                                "Allocate an unapplied drawer cash-on-delivery (CASH) AP payment to the vendor's"
+                                        + " approved bills; posts nothing")
+                        .build(),
+
                 // AR Payment Application GL Posting - 1 event (story C1, Issue #954)
                 EventTypeRegistration.write(
                                 "PAYMENT_APPLICATION_GL_POSTING",

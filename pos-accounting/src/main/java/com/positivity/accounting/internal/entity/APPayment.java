@@ -119,6 +119,14 @@ public class APPayment extends TenantScopedEntity {
     @Column(name = "bank_account_id")
     private UUID bankAccountId;
 
+    /** The register session whose close created this {@code CASH} payment (S17, #2513); null otherwise. */
+    @Column(name = "register_session_id")
+    private UUID registerSessionId;
+
+    /** The {@code VENDOR_COD} drawer movement this {@code CASH} payment came from; one movement, one payment. */
+    @Column(name = "cash_movement_id")
+    private UUID cashMovementId;
+
     /**
      * The justification of a closed-period override accepted on the pay command (S42); the outbox posting applies it as
      * {@link #periodOverrideBy}. Null when the execution date's period was open.

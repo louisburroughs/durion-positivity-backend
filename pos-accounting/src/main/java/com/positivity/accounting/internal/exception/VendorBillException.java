@@ -86,6 +86,10 @@ public class VendorBillException extends RuntimeException {
          * or never past the gateway (CAP:550 S42, #2603). 409.
          */
         AP_PAYMENT_NOT_RETRYABLE(HttpStatus.CONFLICT),
+        /** The payment is not a {@code CASH} payment, or nothing of it is unapplied (S17, #2513). */
+        AP_PAYMENT_NOT_ALLOCATABLE(HttpStatus.UNPROCESSABLE_CONTENT),
+        /** The allocation command's {@code requestId} was used before with another body (S17, #2513). */
+        IDEMPOTENCY_CONFLICT(HttpStatus.CONFLICT),
         /**
          * A new bill or AP payment names an {@code INACTIVE} vendor (CAP:550 S24, #2517; AW23): an inactive vendor takes
          * no new business, and its open bills are not paid while it is inactive. 422.
