@@ -48,8 +48,9 @@ public class CashOutlookController {
                     due date estimated) and the safety cushion check. Bills without a due date use an estimate \
                     from their terms and are flagged; pending bills, overdue invoices and vendor credits are \
                     shown apart and left out of the line.
-                    Use this tool to answer "will we have enough cash over the next weeks"; do not use \
-                    getCashPosition for the cash held now, and do not use aged payables for what is due when.
+                    Use this tool to answer "will we have enough cash over the next weeks"; do not use this tool \
+                    for the cash held now, use getCashPosition for that, and do not use this tool for what each \
+                    vendor is owed, use the aged payables report for that.
                     Preconditions: the caller needs reporting:view:financial-statements authority; the \
                     projection starts from the bank and what waits to be deposited, never drawer cash or the \
                     float, and nothing is posted or stored.

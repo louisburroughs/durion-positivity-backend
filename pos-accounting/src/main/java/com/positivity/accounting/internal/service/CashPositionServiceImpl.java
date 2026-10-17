@@ -22,7 +22,6 @@ import com.positivity.accounting.internal.service.CashAttentionSources.AgedSessi
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -35,7 +34,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -69,7 +67,6 @@ public class CashPositionServiceImpl implements CashPositionService {
     private final AccountingCalendarZoneResolver zoneResolver;
     private final LedgerCurrency ledgerCurrency;
     private final Clock clock;
-    private final Duration factLag;
 
     public CashPositionServiceImpl(
             CashAccounts cashAccounts,
@@ -82,8 +79,7 @@ public class CashPositionServiceImpl implements CashPositionService {
             CashAndPayablesSettings settings,
             AccountingCalendarZoneResolver zoneResolver,
             LedgerCurrency ledgerCurrency,
-            Clock clock,
-            @Value("${pos.accounting.cash-position.fact-lag:PT15M}") Duration factLag) {
+            Clock clock) {
         this.cashAccounts = cashAccounts;
         this.bankPositionFacts = bankPositionFacts;
         this.attentionSources = attentionSources;
@@ -95,7 +91,6 @@ public class CashPositionServiceImpl implements CashPositionService {
         this.zoneResolver = zoneResolver;
         this.ledgerCurrency = ledgerCurrency;
         this.clock = clock;
-        this.factLag = factLag;
     }
 
     @Override
@@ -108,8 +103,10 @@ public class CashPositionServiceImpl implements CashPositionService {
         boolean statementFields = SecurityContextHelper.isAuthenticated()
                 && SecurityContextHelper.hasAuthority(AccountingPermissions.RECONCILIATION_VIEW);
         Map<UUID, Facts> facts = statementFields
-                ? bankPositionFacts.factsOf(
-                        cash.bank().stream().map(Row::glAccountId).toList())
+                ? bankPositionFacts.factsOf(cash.bank().stream()
+                        .filter(Row::reconcilable)
+                        .map(Row::glAccountId)
+                        .toList())
                 : Map.of();
 
         BigDecimal bankTotal = Components.total(cash.bank());
@@ -118,7 +115,10 @@ public class CashPositionServiceImpl implements CashPositionService {
 
         UnpaidWalkInSalesResponse walkIn = unpaidWalkInSalesService.read();
         Instant eventFedAsOf = newestWalkInFact();
-        boolean lagging = eventFedAsOf != null && eventFedAsOf.isBefore(now.minus(factLag));
+        // Replica lag cannot be measured: the ingestion record (AccountingEvent) stamps when accounting received a
+        // fact and the fact's business time, never when the producer emitted it, so a quiet shop and a stalled
+        // consumer look the same. eventFedAsOf is the newest replica write and lagging stays false.
+        boolean lagging = false;
 
         return new CashPositionResponse(
                 now,

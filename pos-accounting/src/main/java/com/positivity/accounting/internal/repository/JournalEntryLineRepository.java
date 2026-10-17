@@ -161,12 +161,15 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
 
     /**
      * The balance of every named account in one query: debits minus credits over POSTED and REVERSED entries, the rule
-     * {@link #getAccountBalance} applies to one account (#2515, the cash position). An account with no lines is absent.
+     * {@link #getAccountBalance} applies to one account, over entries dated before {@code before} (the start of the day
+     * after the tenant's accounting date, so a post-dated entry is not in today's cash; #2515, the cash position). An
+     * account with no lines is absent.
      */
     @Query("SELECT jel.glAccount.glAccountId AS glAccountId, "
             + "COALESCE(SUM(CASE WHEN jel.debitAmount > 0 THEN jel.debitAmount ELSE -jel.creditAmount END), 0) AS balance "
             + "FROM JournalEntryLine jel JOIN jel.journalEntry je "
             + "WHERE jel.glAccount.glAccountId IN :glAccountIds AND je.status IN ('POSTED', 'REVERSED') "
-            + "GROUP BY jel.glAccount.glAccountId")
-    List<AccountBalance> getAccountBalances(@Param("glAccountIds") Collection<UUID> glAccountIds);
+            + "AND je.transactionDate < :before GROUP BY jel.glAccount.glAccountId")
+    List<AccountBalance> getAccountBalances(
+            @Param("glAccountIds") Collection<UUID> glAccountIds, @Param("before") LocalDateTime before);
 }

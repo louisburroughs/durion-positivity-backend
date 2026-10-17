@@ -45,17 +45,17 @@ public class CashPositionController {
                     register cash clearing, netted) and kept in drawers, with their total, plus what needs \
                     attention (settlement suspense, aged undeposited sessions, a clearing residual, aged unapplied \
                     vendor cash payments, a low point below the safety cushion) and the unpaid walk-in sales.
-                    Use this tool to answer "how much cash do we have and where is it"; do not use the balance \
-                    sheet for this, because it does not separate drawers or what waits to be deposited, and do \
-                    not use getCashOutlook for what comes next.
+                    Use this tool to answer "how much cash do we have and where is it"; do not use this tool for \
+                    what comes next, use getCashOutlook for that, and do not use this tool for the books by \
+                    account, use the balance sheet for that.
                     Preconditions: the caller needs reporting:view:financial-statements authority; with \
-                    accounting:reconciliation:view each bank row also carries the latest statement's closing \
-                    balance, the reconciled-through date, open outstanding items and unmatched bank lines, shown \
-                    beside the books balance and never added to the total.
+                    accounting:reconciliation:view each reconcilable bank row also carries the latest statement's \
+                    closing balance, the reconciled-through date, open outstanding items and unmatched bank \
+                    lines, shown beside the books balance and never added to the total.
                     Required inputs: none.
                     Emits an ACCOUNTING_CASH_POSITION_GET event and changes no state; foreign-currency bank \
-                    accounts are left out and counted in excludedForeignCurrencyAccounts, and lagging is true when \
-                    the newest fact behind the unpaid walk-in figure is older than the lag threshold.
+                    accounts are left out and counted in excludedForeignCurrencyAccounts, and eventFedAsOf names \
+                    the newest replica write behind the unpaid walk-in figure.
                     Returns 200 with the position and 403 when the caller lacks the authority.
                     """,
             tags = {"Cash Position"})

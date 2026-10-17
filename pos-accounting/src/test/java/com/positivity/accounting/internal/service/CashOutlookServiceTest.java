@@ -106,7 +106,7 @@ class CashOutlookServiceTest {
         when(settings.cashSafetyCushion()).thenReturn(Optional.empty());
 
         when(balanceCalculator.walkInPartyIds()).thenReturn(Set.of(CASH_PARTY));
-        when(extInvoices.findByStatusIn(any())).thenAnswer(invocation -> List.copyOf(invoices));
+        when(extInvoices.findByStatusInExcludingParties(any(), any())).thenAnswer(invocation -> List.copyOf(invoices));
         when(balanceCalculator.balancesDue(any())).thenAnswer(invocation -> new HashMap<>(invoiceBalances));
         when(billingRules.findAllById(any())).thenReturn(List.of());
 
@@ -421,6 +421,19 @@ class CashOutlookServiceTest {
     }
 
     @Test
+    @DisplayName("the candidate query excludes the CASH party, lower case, or a placeholder when there is none")
+    void candidateQueryExcludesTheCashParty() {
+        service.outlook(30);
+        verify(extInvoices)
+                .findByStatusInExcludingParties(
+                        InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES, Set.of(CASH_PARTY.toString()));
+
+        when(balanceCalculator.walkInPartyIds()).thenReturn(Set.of());
+        service.outlook(30);
+        verify(extInvoices).findByStatusInExcludingParties(InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES, Set.of("-"));
+    }
+
+    @Test
     @DisplayName("an invoice with nothing open is left out")
     void settledInvoiceIsLeftOut() {
         ExtInvoice invoice = invoice("100.00", TODAY.plusDays(2), TODAY.minusDays(5), CUSTOMER);
@@ -521,7 +534,7 @@ class CashOutlookServiceTest {
     // ---- helpers ---------------------------------------------------------------------------------------------
 
     private static CashAccounts.Row row(String code, String balance) {
-        return new CashAccounts.Row(UUID.randomUUID(), code, "Account " + code, new BigDecimal(balance));
+        return new CashAccounts.Row(UUID.randomUUID(), code, "Account " + code, new BigDecimal(balance), false);
     }
 
     private static Point point(CashOutlookResponse outlook, LocalDate date) {
