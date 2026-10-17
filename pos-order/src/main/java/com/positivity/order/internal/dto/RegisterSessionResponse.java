@@ -42,7 +42,13 @@ public record RegisterSessionResponse(
                         + " or when it can't be resolved. Never the username (#2608, ADR-0064)",
                 nullable = true,
                 example = "Sam Ortiz")
-        String closedByName) {
+        String closedByName,
+        @Schema(
+                description = "ADR-0067 A8: the cash increment a cash tender in the drawer's currency rounds to"
+                        + " (pos.order.cash-increments); null when the currency does not round",
+                nullable = true,
+                example = "0.05")
+        BigDecimal cashIncrement) {
 
     /** Never prints the actors' display names (ADR-0072). */
     @Override
@@ -69,6 +75,7 @@ public record RegisterSessionResponse(
                 s.closingStartedAt(),
                 s.closedAt(),
                 s.openedByName(),
-                s.closedByName());
+                s.closedByName(),
+                s.cashIncrement());
     }
 }

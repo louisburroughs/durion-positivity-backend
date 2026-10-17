@@ -42,7 +42,7 @@ public class CashIncrements {
                 .orElse(Map.of()));
     }
 
-    CashIncrements(@NonNull Map<String, BigDecimal> configured) {
+    public CashIncrements(@NonNull Map<String, BigDecimal> configured) {
         Map<String, BigDecimal> validated = new LinkedHashMap<>();
         configured.forEach((rawCode, increment) -> {
             String code = rawCode == null ? "" : rawCode.trim().toUpperCase(Locale.ROOT);

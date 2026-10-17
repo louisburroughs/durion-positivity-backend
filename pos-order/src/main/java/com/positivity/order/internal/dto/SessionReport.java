@@ -46,7 +46,8 @@ public record SessionReport(
         @NonNull List<ClerkWalkInShare> walkInByClerk,
         @NonNull List<CashMovementSummary> movements,
         @NonNull Instant openedAt,
-        @NonNull Instant generatedAt) {
+        @NonNull Instant generatedAt,
+        @Nullable BigDecimal cashRoundingTotal) {
 
     /**
      * Net settled amount for one tender method.

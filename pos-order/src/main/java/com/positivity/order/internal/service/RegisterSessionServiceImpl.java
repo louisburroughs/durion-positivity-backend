@@ -2,6 +2,7 @@ package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.order.internal.client.TaxPlausibilityPort.StatedAmount;
+import com.positivity.order.internal.config.CashIncrements;
 import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.dto.CashMovementStatedTax;
@@ -122,6 +123,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private final DrawerStatedTax drawerStatedTax;
     private final ActorDisplayNames actorDisplayNames;
     private final SupplierVendorGuard vendorGuard;
+    private final CashIncrements cashIncrements;
     private final Clock clock;
     private final @Nullable MeterRegistry meterRegistry;
 
@@ -156,6 +158,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             DrawerStatedTax drawerStatedTax,
             ActorDisplayNames actorDisplayNames,
             SupplierVendorGuard vendorGuard,
+            CashIncrements cashIncrements,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.registerSessionRepository = registerSessionRepository;
@@ -172,6 +175,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         this.drawerStatedTax = drawerStatedTax;
         this.actorDisplayNames = actorDisplayNames;
         this.vendorGuard = vendorGuard;
+        this.cashIncrements = cashIncrements;
         this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
@@ -603,7 +607,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                         cashMovementTotal,
                         saved.getOpenedAt(),
                         now,
-                        factMovements(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId), saved)));
+                        factMovements(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId), saved),
+                        cashRoundingTotal(sessionId)));
         return toSummary(saved);
     }
 
@@ -653,7 +658,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 walkInByClerk(sessionOrders),
                 movements,
                 session.getOpenedAt(),
-                Instant.now(clock));
+                Instant.now(clock),
+                cashRoundingTotal(sessionId));
     }
 
     /**
@@ -1140,11 +1146,27 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     }
 
     /** Net CASH settled over the session: Σ SETTLED − Σ REVERSED. */
+    /**
+     * Σ cash through the drawer (SETTLED − REVERSED). ADR-0067 A8 (#2662): on a rounded CASH tender the drawer holds
+     * the rounded {@code settledAmount}, not the applied {@code amount}, so theoretical cash and over/short count the
+     * cash that actually crossed the counter; rounding never reaches over/short (AW54).
+     */
     private BigDecimal cashSettlements(UUID sessionId) {
         return paymentRecordRepository.findBySessionId(sessionId).stream()
                 .filter(r -> CASH.equalsIgnoreCase(r.getMethodType()))
-                .map(RegisterSessionServiceImpl::signedAmount)
+                .map(RegisterSessionServiceImpl::signedCash)
                 .reduce(ZERO, BigDecimal::add);
+    }
+
+    /** ADR-0067 A8 (#2662): signed Σ of the cash rounding over the session's CASH tenders; informational. */
+    private BigDecimal cashRoundingTotal(UUID sessionId) {
+        return scale(paymentRecordRepository.findBySessionId(sessionId).stream()
+                .filter(r -> CASH.equalsIgnoreCase(r.getMethodType()))
+                .filter(r -> r.getCashRoundingAmount() != null)
+                .map(r -> r.getRecordType() == OrderPaymentRecord.RecordType.SETTLED
+                        ? r.getCashRoundingAmount()
+                        : r.getCashRoundingAmount().negate())
+                .reduce(ZERO, BigDecimal::add));
     }
 
     /** Net settled per tender method over the session (Σ SETTLED − Σ REVERSED), ordered by method. */
@@ -1152,7 +1174,9 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         Map<String, BigDecimal> totals = new TreeMap<>();
         for (OrderPaymentRecord record : paymentRecordRepository.findBySessionId(sessionId)) {
             String method = record.getMethodType() == null ? "OTHER" : record.getMethodType();
-            totals.merge(method, signedAmount(record), BigDecimal::add);
+            // CASH is the cash in the drawer (rounded); the other methods settle the applied amount.
+            BigDecimal signed = CASH.equalsIgnoreCase(method) ? signedCash(record) : signedAmount(record);
+            totals.merge(method, signed, BigDecimal::add);
         }
         Map<String, BigDecimal> scaled = new LinkedHashMap<>();
         totals.forEach((k, v) -> scaled.put(k, scale(v)));
@@ -1172,6 +1196,12 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         return record.getRecordType() == OrderPaymentRecord.RecordType.SETTLED
                 ? record.getAmount()
                 : record.getAmount().negate();
+    }
+
+    private static BigDecimal signedCash(OrderPaymentRecord record) {
+        return record.getRecordType() == OrderPaymentRecord.RecordType.SETTLED
+                ? record.cashAmount()
+                : record.cashAmount().negate();
     }
 
     private static BigDecimal scale(BigDecimal value) {
@@ -1202,7 +1232,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 s.getClosingStartedAt(),
                 s.getClosedAt(),
                 ActorDisplayNames.nameOf(names, s.getOpenedByClerkId()),
-                ActorDisplayNames.nameOf(names, s.getClosedByClerkId()));
+                ActorDisplayNames.nameOf(names, s.getClosedByClerkId()),
+                cashIncrements.of(s.getCurrencyCode()).orElse(null));
     }
 
     /**

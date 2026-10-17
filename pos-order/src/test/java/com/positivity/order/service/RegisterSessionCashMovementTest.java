@@ -1,5 +1,6 @@
 package com.positivity.order.internal.service;
 
+import com.positivity.order.internal.config.CashIncrements;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -137,6 +138,7 @@ class RegisterSessionCashMovementTest {
                 mock(DrawerStatedTax.class),
                 new ActorDisplayNames(links),
                 new SupplierVendorGuard(vendorCopies),
+                new CashIncrements(Map.of("CAD", new BigDecimal("0.05"))),
                 CLOCK,
                 meters);
         session = RegisterSession.builder()

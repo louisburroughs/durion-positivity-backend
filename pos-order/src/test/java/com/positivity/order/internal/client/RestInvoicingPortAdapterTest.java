@@ -10,6 +10,8 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.positivity.order.internal.exception.CartIdempotencyConflictException;
+import com.positivity.order.internal.exception.OrderConflictException;
 import com.positivity.order.internal.exception.InvoicingUnavailableException;
 import com.positivity.shared.dto.OrderInvoiceCreationRequest;
 import java.math.BigDecimal;
@@ -99,6 +101,79 @@ class RestInvoicingPortAdapterTest {
         // "existing" is how the caller knows a retry replayed rather than double-invoiced.
         assertThat(ref.existing()).isTrue();
         server.verify();
+    }
+
+    private static RecordCashPaymentCommand cashCommand() {
+        return new RecordCashPaymentCommand(
+                "idem-cash-1",
+                new BigDecimal("9.98"),
+                new BigDecimal("10.00"),
+                new BigDecimal("0.02"),
+                new BigDecimal("0.05"),
+                "CAD",
+                UUID.fromString("00000000-0000-0000-0000-000000000074"),
+                "REG-01",
+                "clerk-1");
+    }
+
+    @Test
+    @DisplayName("A8: records the cash tender on the invoice with the triple and the register context")
+    void recordsCashPayment() {
+        server.expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/payments/cash"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("X-User", "pos-order"))
+                .andExpect(header("X-Authorities", "invoice:manage,invoice:payment:process,invoice:payment:limit_override"))
+                .andExpect(jsonPath("$.idempotencyKey").value("idem-cash-1"))
+                .andExpect(jsonPath("$.amount").value(9.98))
+                .andExpect(jsonPath("$.settledAmount").value(10.00))
+                .andExpect(jsonPath("$.cashRoundingAmount").value(0.02))
+                .andExpect(jsonPath("$.cashIncrement").value(0.05))
+                .andExpect(jsonPath("$.currencyCode").value("CAD"))
+                .andExpect(jsonPath("$.terminalId").value("REG-01"))
+                .andRespond(withSuccess(
+                        "{\"paymentIntentId\":\"%s\",\"status\":\"CAPTURED\"}".formatted(PAYMENT_INTENT_ID),
+                        MediaType.APPLICATION_JSON));
+
+        CashPaymentRef ref = adapter.recordCashPayment(INVOICE_ID, cashCommand());
+
+        assertThat(ref.paymentIntentId()).isEqualTo(PAYMENT_INTENT_ID);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("A8: pos-invoice's 409 on the key is the register's idempotency conflict")
+    void cashPaymentKeyConflict() {
+        server.expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/payments/cash"))
+                .andRespond(withStatus(HttpStatus.CONFLICT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"PAYMENT_IDEMPOTENCY_CONFLICT\",\"message\":\"reused\",\"status\":409}"));
+
+        assertThatThrownBy(() -> adapter.recordCashPayment(INVOICE_ID, cashCommand()))
+                .isInstanceOf(CartIdempotencyConflictException.class)
+                .hasMessageContaining("PAYMENT_IDEMPOTENCY_CONFLICT");
+    }
+
+    @Test
+    @DisplayName("A8: pos-invoice's 422 refusal is an ORDER_CONFLICT, not an outage")
+    void cashPaymentRefused() {
+        server.expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/payments/cash"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"CASH_ROUNDING_INVALID\",\"message\":\"x\",\"status\":422}"));
+
+        assertThatThrownBy(() -> adapter.recordCashPayment(INVOICE_ID, cashCommand()))
+                .isInstanceOf(OrderConflictException.class)
+                .hasMessageContaining("CASH_ROUNDING_INVALID");
+    }
+
+    @Test
+    @DisplayName("A8: a server error from pos-invoice is the invoicing handshake failing")
+    void cashPaymentOutage() {
+        server.expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/payments/cash"))
+                .andRespond(withServerError());
+
+        assertThatThrownBy(() -> adapter.recordCashPayment(INVOICE_ID, cashCommand()))
+                .isInstanceOf(InvoicingUnavailableException.class);
     }
 
     @Test
