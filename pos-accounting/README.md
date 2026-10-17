@@ -1163,7 +1163,8 @@ differenceClass, differenceAmount, reversalReference}`. The period gate then app
 unless `accounting:period:override` and `overrideJustification`, audited `PERIOD_OVERRIDE_POST`; HARD_LOCKED: 422
 `PERIOD_HARD_LOCKED`). A key with no mapping effective on that date, or one whose account is not active then, is
 one refusal (#2601): 422 `GL_MAPPING_NOT_CONFIGURED`, its message naming the category, the key and the posting date,
-guided with `referenceId` `VENDOR_BILL/<KEY>` and a `nextAction` naming the mapping to set up. Any refusal rolls the
+guided with `referenceId` `VENDOR_BILL/<KEY>` and a `nextAction` naming the mapping to set up. The same refusal
+covers a deactivated posting category or mapping key on every posting path (#2612; see the error-code table). Any refusal rolls the
 approval back (no approval field, no entry) and writes one `VENDOR_BILL_APPROVE_REFUSED` (or
 `..._MATCH_EXCEPTION_RESOLVE_REFUSED`) audit row in a transaction of its own. One `vendor_bill_gl_posting` row per
 bill holds the entry and the durable keys `VENDOR_BILL:<billId>` and `VENDOR_BILL_VOID:<billId>`; the entry's
@@ -1894,7 +1895,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ILLEGAL_STATE` | 409 | Any other `IllegalStateException` raised by this module's services |
 | `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |
 | `GL_ACCOUNT_NOT_ACTIVE` | 422 | GL account is not active on the transaction date, or was never activated |
-| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request; an AP payment names the missing `AP_PAYMENT/<key>` as `referenceId` (#2601, #2603) |
+| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request, or the posting category or mapping key is inactive (#2612: a deactivated one resolves nothing on any posting path, whatever the posting date; a petty-expense category's deactivation keeps its key active so earlier movements still post at close); an AP payment names the missing `AP_PAYMENT/<key>` as `referenceId` (#2601, #2603) |
 | `PERIOD_CLOSED` | 422 | The transaction date falls in a closed accounting period |
 | `PERIOD_HARD_LOCKED` | 422 | The transaction date falls in a hard-locked accounting period |
 | `HARD_LOCK_DATE_REGRESSION` | 422 | The requested hard-lock date is earlier than the current one |
