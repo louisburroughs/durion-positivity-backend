@@ -33,6 +33,21 @@ public interface PaymentApplicationService {
             @NonNull Instant clearedAt,
             @NonNull UUID sourceEventId,
             @Nullable UUID sourceInvoiceId,
+            @Nullable String paymentMethod,
+            @Nullable BigDecimal cashRoundingAmount);
+
+    /**
+     * ADR-0067 A8 (#2662): the shape without a cash rounding (card tenders, the REST payment event). The nine-argument
+     * overload records the signed rounding of a cash tender on the payment for its first cash-receipt entry to book.
+     */
+    ReceivablePayment handlePaymentCleared(
+            @NonNull UUID paymentId,
+            @NonNull UUID customerId,
+            @NonNull String currency,
+            @NonNull BigDecimal totalAmount,
+            @NonNull Instant clearedAt,
+            @NonNull UUID sourceEventId,
+            @Nullable UUID sourceInvoiceId,
             @Nullable String paymentMethod);
 
     /**
@@ -70,20 +85,6 @@ public interface PaymentApplicationService {
      * @return the application result, or the recorded one on a replay
      */
     @NonNull
-    /**
-     * ADR-0067 A8 (#2662): the automatic application of a cash tender carries the signed cash rounding
-     * ({@code settledAmount − amount}) so the cash-receipt entry debits the cash actually taken and books the
-     * difference to 6050 ({@code CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE}); null or zero posts the usual two lines.
-     */
-    PaymentApplicationResponse applyAutomatically(
-            @NonNull UUID paymentId,
-            @NonNull UUID invoiceId,
-            @NonNull BigDecimal amount,
-            @NonNull String requestId,
-            @NonNull Instant appliedAt,
-            @NonNull ApplicationSource source,
-            @Nullable BigDecimal cashRoundingAmount);
-
     PaymentApplicationResponse applyAutomatically(
             @NonNull UUID paymentId,
             @NonNull UUID invoiceId,

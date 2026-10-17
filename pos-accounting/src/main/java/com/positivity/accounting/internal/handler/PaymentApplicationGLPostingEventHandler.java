@@ -120,30 +120,23 @@ public class PaymentApplicationGLPostingEventHandler {
 
             UUID sourceEventId = toSourceEventId(applicationRequestId);
             String description = "AR cash receipt for payment application request " + applicationRequestId;
+            // ADR-0067 A8 (#2662): a rounded cash tender debits the cash taken and books the difference to 6050;
+            // the mapping is resolved only when there is a rounding to book.
             BigDecimal rounding = event.getCashRoundingAmount();
-            UUID postedJournalEntryId;
-            if (rounding != null && rounding.signum() != 0) {
-                // ADR-0067 A8 (#2662): a rounded cash tender debits the cash taken and books the difference to 6050.
-                UUID cashRoundingAccountId = glMappingResolver.resolveGLAccount(
-                        CASH_ROUNDING_POSTING_CATEGORY, CASH_ROUNDING_MAPPING_KEY, transactionDate);
-                postedJournalEntryId = glPostingService.postPaymentApplication(
-                        sourceEventId,
-                        undepositedFundsAccountId,
-                        arAccountId,
-                        event.getAppliedAmount(),
-                        cashRoundingAccountId,
-                        rounding,
-                        transactionDate,
-                        description + " (cash rounding " + rounding + ", ADR-0067 A8)");
-            } else {
-                postedJournalEntryId = glPostingService.postPaymentApplication(
-                        sourceEventId,
-                        undepositedFundsAccountId,
-                        arAccountId,
-                        event.getAppliedAmount(),
-                        transactionDate,
-                        description);
-            }
+            boolean rounded = rounding != null && rounding.signum() != 0;
+            UUID cashRoundingAccountId = rounded
+                    ? glMappingResolver.resolveGLAccount(
+                            CASH_ROUNDING_POSTING_CATEGORY, CASH_ROUNDING_MAPPING_KEY, transactionDate)
+                    : null;
+            UUID postedJournalEntryId = glPostingService.postPaymentApplication(
+                    sourceEventId,
+                    undepositedFundsAccountId,
+                    arAccountId,
+                    event.getAppliedAmount(),
+                    cashRoundingAccountId,
+                    rounded ? rounding : null,
+                    transactionDate,
+                    rounded ? description + " (cash rounding " + rounding + ", ADR-0067 A8)" : description);
 
             idempotencyService.registerKey(idempotencyKey, postedJournalEntryId);
 

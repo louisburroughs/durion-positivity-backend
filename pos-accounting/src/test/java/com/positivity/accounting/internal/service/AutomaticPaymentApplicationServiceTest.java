@@ -135,7 +135,7 @@ class AutomaticPaymentApplicationServiceTest {
         lenient().when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(new BigDecimal("115.00"));
         lenient().when(periodGate.isPostingBlocked(any())).thenReturn(false);
         lenient()
-                .when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any(), any()))
+                .when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any()))
                 .thenReturn(applied("115.00", null));
     }
 
@@ -213,7 +213,7 @@ class AutomaticPaymentApplicationServiceTest {
 
         assertThat(result.outcome()).isEqualTo(expected);
         assertThat(result.detail()).contains(detail);
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
         assertThat(count(expected)).isEqualTo(1.0);
         LocalDateTime settledOn = LocalDateTime.ofInstant(SETTLED_AT, ZoneOffset.UTC);
         switch (expected.status()) {
@@ -272,7 +272,7 @@ class AutomaticPaymentApplicationServiceTest {
             + " PAYMENT_SETTLED:<paymentIntentId>, and writes no row")
     void appliesDatedAtSettlement() {
         payment.setUnappliedAmount(new BigDecimal("120.00"));
-        when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any(), any()))
+        when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any()))
                 .thenReturn(applied("115.00", "5.00"));
 
         Result result = service.applySettled(payment, fact(" cash "), EVENT_ID);
@@ -288,8 +288,7 @@ class AutomaticPaymentApplicationServiceTest {
                         new BigDecimal("120.00"),
                         "PAYMENT_SETTLED:" + INTENT,
                         SETTLED_AT,
-                        ApplicationSource.PAYMENT_SETTLED,
-                        BigDecimal.ZERO);
+                        ApplicationSource.PAYMENT_SETTLED);
         verifyNoInteractions(recorder);
         assertThat(count(Outcome.APPLIED)).isEqualTo(1.0);
     }
@@ -306,7 +305,7 @@ class AutomaticPaymentApplicationServiceTest {
         Result result = service.applySettled(payment, fact("CARD"), EVENT_ID);
 
         assertThat(result.outcome()).isEqualTo(Outcome.ALREADY_APPLIED);
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(recorder);
         assertThat(count(Outcome.ALREADY_APPLIED)).isEqualTo(1.0);
     }
@@ -320,7 +319,7 @@ class AutomaticPaymentApplicationServiceTest {
 
         assertThat(result.outcome()).isEqualTo(Outcome.ALREADY_APPLIED);
         assertThat(result.detail()).contains("undone; not applied again");
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
         verifyNoInteractions(recorder);
     }
 
@@ -359,45 +358,6 @@ class AutomaticPaymentApplicationServiceTest {
                 mapper,
                 zoneResolver,
                 provider);
-    }
-
-    /** ADR-0067 A8 (#2662): the signed rounding travels with the settled-fact application; AC 20 figures. */
-    @Test
-    void cashTenderWithRounding_passesTheRoundingToTheApplication() {
-        PaymentSettledV1 base = fact("CASH");
-        PaymentSettledV1 cash = new PaymentSettledV1(
-                base.paymentIntentId(),
-                base.invoiceId(),
-                base.invoiceNumber(),
-                null,
-                null,
-                base.partyId(),
-                "CASH",
-                new BigDecimal("9.98"),
-                base.currencyCode(),
-                "register",
-                null,
-                base.settledAt(),
-                new BigDecimal("10.00"),
-                new BigDecimal("0.02"),
-                new BigDecimal("0.05"));
-        payment.setTotalAmount(new BigDecimal("9.98"));
-        payment.setUnappliedAmount(new BigDecimal("9.98"));
-        when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(applied("9.98", null));
-
-        Result result = service.applySettled(payment, cash, EVENT_ID);
-
-        assertThat(result.outcome()).isEqualTo(Outcome.APPLIED);
-        verify(paymentApplicationService)
-                .applyAutomatically(
-                        INTENT,
-                        INVOICE,
-                        new BigDecimal("9.98"),
-                        "PAYMENT_SETTLED:" + INTENT,
-                        SETTLED_AT,
-                        ApplicationSource.PAYMENT_SETTLED,
-                        new BigDecimal("0.02"));
     }
 
     private static PaymentSettledV1 factAt(Instant settledAt) {
@@ -454,7 +414,7 @@ class AutomaticPaymentApplicationServiceTest {
         assertThat(result.outcome()).isEqualTo(Outcome.SUSPENDED_TIME_ZONE);
         assertThat(result.outcome().reason()).isEqualTo("ACCOUNTING_TIME_ZONE_UNSET");
         verifyNoInteractions(periodGate);
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
         verify(recorder)
                 .recordSuspended(
                         anyString(),
@@ -497,7 +457,7 @@ class AutomaticPaymentApplicationServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("never recorded");
         verify(paymentApplicationService, never())
-                .applyAutomatically(any(), any(), any(), anyString(), any(), any(), any());
+                .applyAutomatically(any(), any(), any(), anyString(), any(), any());
     }
 
     @Test

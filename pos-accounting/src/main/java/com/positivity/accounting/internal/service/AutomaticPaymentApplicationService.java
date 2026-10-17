@@ -374,16 +374,13 @@ public class AutomaticPaymentApplicationService {
         }
 
         // h. Apply the whole unapplied amount to that invoice only (BR-1), dated settledAt (BR-5).
-        // ADR-0067 A8 (#2662): the cash rounding travels with the first (settled-fact) application so the
-        // cash-receipt entry debits the cash taken and books the difference to 6050.
         PaymentApplicationResponse response = paymentApplicationService.applyAutomatically(
                 payment.getPaymentId(),
                 invoiceId,
                 unapplied,
                 requestId,
                 fact.settledAt(),
-                ApplicationSource.PAYMENT_SETTLED,
-                CashRoundingFactCheck.roundingOf(fact));
+                ApplicationSource.PAYMENT_SETTLED);
         return new Result(
                 Outcome.APPLIED,
                 "applied " + response.getAppliedAmount() + " to invoice " + invoiceNumber + excessDetail(response));

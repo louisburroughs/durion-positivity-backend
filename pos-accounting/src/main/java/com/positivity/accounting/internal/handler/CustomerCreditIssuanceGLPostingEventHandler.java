@@ -9,6 +9,7 @@ import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
 import com.positivity.accounting.internal.service.IdempotencyService;
 import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +62,10 @@ public class CustomerCreditIssuanceGLPostingEventHandler {
     static final String POSTING_CATEGORY_NAME = "CUSTOMER_CREDIT_ISSUANCE";
     static final String DEBIT_MAPPING_KEY = "UNDEPOSITED_FUNDS";
     static final String CREDIT_MAPPING_KEY = "CUSTOMER_CREDIT_LIABILITY";
+    /** ADR-0067 A8 (#2662): 6050 Cash Rounding, when the issuance is the tender's first cash-receipt entry. */
+    static final String CASH_ROUNDING_POSTING_CATEGORY = "CASH_ROUNDING";
+
+    static final String CASH_ROUNDING_MAPPING_KEY = "CASH_ROUNDING_DIFFERENCE";
     static final String IDEMPOTENCY_KEY_PREFIX = "CUSTOMER_CREDIT_ISSUANCE_GL_POSTING:";
     static final String SOURCE_EVENT_NAMESPACE = "CUSTOMER_CREDIT_ISSUANCE:";
 
@@ -119,14 +124,24 @@ public class CustomerCreditIssuanceGLPostingEventHandler {
             String description = "Customer credit issuance for overpayment on application request "
                     + applicationRequestId + " (credit " + event.getCreditId() + ")";
 
+            // ADR-0067 A8 (#2662): when this issuance is the first cash-receipt entry of a rounded cash tender it
+            // carries the rounding; the 6050 mapping is resolved only then.
+            BigDecimal rounding = event.getCashRoundingAmount();
+            boolean rounded = rounding != null && rounding.signum() != 0;
+            UUID cashRoundingAccountId = rounded
+                    ? glMappingResolver.resolveGLAccount(
+                            CASH_ROUNDING_POSTING_CATEGORY, CASH_ROUNDING_MAPPING_KEY, transactionDate)
+                    : null;
             UUID postedJournalEntryId = glPostingService.postCustomerCreditIssuance(
                     sourceEventId,
                     event.getCreditId(),
                     undepositedFundsAccountId,
                     creditLiabilityAccountId,
                     event.getCreditAmount(),
+                    cashRoundingAccountId,
+                    rounded ? rounding : null,
                     transactionDate,
-                    description,
+                    rounded ? description + " (cash rounding " + rounding + ", ADR-0067 A8)" : description,
                     null);
 
             idempotencyService.registerKey(idempotencyKey, postedJournalEntryId);

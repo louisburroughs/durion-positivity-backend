@@ -383,7 +383,10 @@ public class SettlementEventsListener {
                     payload.settledAt(),
                     eventUuid,
                     payload.invoiceId(),
-                    payload.methodType());
+                    payload.methodType(),
+                    // ADR-0067 A8 (#2662): the tender's signed rounding rides on the payment until the first
+                    // cash-receipt entry (this application, or a later one or a credit issuance) books it to 6050.
+                    payload.cashRoundingAmount());
             automaticPaymentApplicationService.applySettled(payment, payload, eventId);
             paymentApplicationService.releaseRefundsRecordedBeforePayment(payment.getPaymentId(), eventUuid);
             markProcessed(eventId);
@@ -391,9 +394,23 @@ public class SettlementEventsListener {
     }
 
     private void holdInvalidCashRounding(PaymentSettledV1 payload, String eventId, String problem) {
-        String detail = "Cash tender of " + payload.settledAmount() + " " + payload.currencyCode() + " applying "
-                + payload.amount() + " not recorded: " + problem + " (ADR-0067 A8, cash increment "
-                + payload.cashIncrement() + "); correct the payment at its source";
+        StringBuilder detail = new StringBuilder("Settled payment of ")
+                .append(payload.amount())
+                .append(' ')
+                .append(payload.currencyCode())
+                .append(" not recorded: ")
+                .append(problem)
+                .append(" (ADR-0067 A8");
+        if (payload.settledAmount() != null) {
+            detail.append("; settledAmount ").append(payload.settledAmount());
+        }
+        if (payload.cashRoundingAmount() != null) {
+            detail.append("; cashRoundingAmount ").append(payload.cashRoundingAmount());
+        }
+        if (payload.cashIncrement() != null) {
+            detail.append("; cashIncrement ").append(payload.cashIncrement());
+        }
+        detail.append("); correct the payment at its source and have the fact republished");
         boolean recorded = ingestionRecorder.recordSuspended(
                 PAYMENT_SETTLED_SOURCE_SYSTEM,
                 PaymentSettledV1.EVENT_TYPE,
@@ -403,7 +420,7 @@ public class SettlementEventsListener {
                 payload,
                 AccountingEventStatus.SUSPENDED,
                 PostingFailureReason.CASH_ROUNDING_INVALID.name(),
-                detail);
+                detail.toString());
         log.warn(
                 "payment.payment.settled held for an invalid cash rounding, no ReceivablePayment | eventId={}"
                         + " | paymentIntentId={} | amount={} | settledAmount={} | cashRoundingAmount={}"

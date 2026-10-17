@@ -151,6 +151,36 @@ public class ReceivablePayment extends TenantScopedEntity implements Persistable
     private String paymentMethod;
 
     /**
+     * ADR-0067 A8 (#2662): the cash tender's signed rounding ({@code settledAmount − amount}; positive when the
+     * customer paid more than due), waiting for the first cash-receipt entry to book it. Null on card tenders and on
+     * payments recorded before A8.
+     */
+    @Column(name = "cash_rounding_amount", precision = 19, scale = 4)
+    private BigDecimal cashRoundingAmount;
+
+    /** ADR-0067 A8: whether an entry has already carried {@link #cashRoundingAmount} to 6050. */
+    @Column(name = "cash_rounding_posted", nullable = false)
+    private boolean cashRoundingPosted;
+
+    /**
+     * ADR-0067 A8 (#2662): hands the unposted rounding to the cash-receipt entry about to be written for {@code
+     * cashDebit} (an application's applied amount or a credit issuance's amount) and marks it posted, so exactly one
+     * entry debits Undeposited Funds for the cash taken and books the difference to 6050. Declines (returns null,
+     * nothing marked) when there is no rounding left or when the entry is too small to absorb a negative rounding
+     * ({@code cashDebit + rounding} would not stay positive); the next entry for the payment then takes it.
+     */
+    public @org.jspecify.annotations.Nullable BigDecimal claimCashRounding(@NonNull BigDecimal cashDebit) {
+        if (cashRoundingPosted || cashRoundingAmount == null || cashRoundingAmount.signum() == 0) {
+            return null;
+        }
+        if (cashDebit.add(cashRoundingAmount).signum() <= 0) {
+            return null;
+        }
+        cashRoundingPosted = true;
+        return cashRoundingAmount;
+    }
+
+    /**
      * Optimistic-lock version (Story C4, issue #936). Every mutation of this
      * row (application, reversal, void) bumps the version, so two concurrent
      * transactions updating {@code unappliedAmount} cannot both commit —

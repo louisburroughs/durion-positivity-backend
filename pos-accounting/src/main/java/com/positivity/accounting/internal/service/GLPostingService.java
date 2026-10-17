@@ -143,13 +143,14 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
-     * ADR-0067 A8 (CAP:550 #2662, AC 20): post the cash application of a rounded cash tender: {@code Dr Undeposited
+     * ADR-0067 A8 (CAP:550 #2662, AC 20): the cash application with the tender's rounding: {@code Dr Undeposited
      * Funds (amount + cashRoundingAmount) / Cr AR amount / Cr 6050 cashRoundingAmount} when the customer paid more
-     * than due (positive), {@code Dr 6050} when the shop absorbed the difference (negative). {@code
-     * cashRoundingAmount} must be non-zero; a zero rounding posts through the two-line overload.
+     * than due (positive), {@code Dr 6050} when the shop absorbed the difference (negative). A null or zero rounding
+     * posts the usual two lines, so every caller goes through this one method.
      *
-     * @param cashRoundingAccountId GL account resolved for {@code CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE} (6050)
-     * @param cashRoundingAmount signed {@code settledAmount − amount}
+     * @param cashRoundingAccountId GL account resolved for {@code CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE} (6050);
+     *     required when {@code cashRoundingAmount} is non-zero
+     * @param cashRoundingAmount signed {@code settledAmount − amount}, or null
      * @return posted journal entry's id
      */
     UUID postPaymentApplication(
@@ -157,10 +158,28 @@ public interface GLPostingService {
             @NonNull UUID undepositedFundsAccountId,
             @NonNull UUID arAccountId,
             @NonNull BigDecimal amount,
-            @NonNull UUID cashRoundingAccountId,
-            @NonNull BigDecimal cashRoundingAmount,
+            @Nullable UUID cashRoundingAccountId,
+            @Nullable BigDecimal cashRoundingAmount,
             @NonNull LocalDateTime transactionDate,
             @NonNull String description);
+
+    /**
+     * ADR-0067 A8 (CAP:550 #2662): the customer-credit issuance that is the first cash-receipt entry of a rounded
+     * cash tender: {@code Dr Undeposited Funds (amount + cashRoundingAmount) / Cr Customer Credit Liability amount}
+     * and the rounding to 6050 (credit when positive, debit when negative). A null or zero rounding posts the usual
+     * two lines.
+     */
+    UUID postCustomerCreditIssuance(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull BigDecimal amount,
+            @Nullable UUID cashRoundingAccountId,
+            @Nullable BigDecimal cashRoundingAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification);
 
     /**
      * Post a customer-credit issuance (overpayment excess) to GL (parity-C1,

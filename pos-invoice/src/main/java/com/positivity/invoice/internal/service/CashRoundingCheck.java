@@ -1,8 +1,8 @@
 package com.positivity.invoice.internal.service;
 
 import com.positivity.invoice.internal.exception.CashRoundingInvalidException;
+import com.positivity.domainevents.payment.CashRoundingTriple;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -21,31 +21,11 @@ final class CashRoundingCheck {
             @NonNull BigDecimal settledAmount,
             @NonNull BigDecimal cashRoundingAmount,
             @Nullable BigDecimal cashIncrement) {
-        if (cashIncrement == null) {
-            if (settledAmount.compareTo(amount) != 0) {
-                throw new CashRoundingInvalidException(
-                        "settledAmount must equal amount when no cashIncrement applies to the currency");
-            }
-            if (cashRoundingAmount.signum() != 0) {
-                throw new CashRoundingInvalidException(
-                        "cashRoundingAmount must be 0 when no cashIncrement applies to the currency");
-            }
-            return;
-        }
-        if (cashIncrement.signum() <= 0) {
-            throw new CashRoundingInvalidException("cashIncrement must be greater than zero");
-        }
-        if (settledAmount.subtract(amount).compareTo(cashRoundingAmount) != 0) {
-            throw new CashRoundingInvalidException("cashRoundingAmount must equal settledAmount minus amount ("
-                    + settledAmount.subtract(amount) + ")");
-        }
-        // One recompute covers the grid and the half-increment bound: a HALF_UP result is on the grid and never
-        // more than half an increment from the amount, so an equal settledAmount satisfies both.
-        BigDecimal expected =
-                amount.divide(cashIncrement, 0, RoundingMode.HALF_UP).multiply(cashIncrement);
-        if (expected.compareTo(settledAmount) != 0) {
-            throw new CashRoundingInvalidException("settledAmount " + settledAmount + " is not amount " + amount
-                    + " rounded HALF_UP to the nearest " + cashIncrement + " (expected " + expected + ")");
-        }
+        // The rule lives beside the fact (pos-domain-events CashRoundingTriple) so the publisher and the consumers
+        // cannot drift apart.
+        CashRoundingTriple.problem(amount, settledAmount, cashRoundingAmount, cashIncrement)
+                .ifPresent(problem -> {
+                    throw new CashRoundingInvalidException(problem);
+                });
     }
 }

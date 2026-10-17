@@ -83,9 +83,35 @@ class GLPostingServiceImplCashRoundingTest {
     }
 
     @Test
-    void zeroRoundingBelongsToTheTwoLineOverload() {
+    void noRoundingPostsTheTwoLines() {
+        service.postPaymentApplication(PA, CASH, AR, new BigDecimal("9.98"), null, null, DATE, "AR cash receipt");
+
+        JournalEntryCreateRequest request = capture();
+        assertThat(request.getLines()).hasSize(2);
+        assertThat(request.getLines().get(0).getDebitAmount()).isEqualByComparingTo("9.98");
+    }
+
+    @Test
+    void aRoundingWithoutItsAccountIsRefused() {
         assertThatThrownBy(() -> service.postPaymentApplication(
-                        PA, CASH, AR, new BigDecimal("9.98"), ROUNDING, BigDecimal.ZERO, DATE, "x"))
+                        PA, CASH, AR, new BigDecimal("9.98"), null, new BigDecimal("0.02"), DATE, "x"))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("a credit issuance that is the tender's first cash-receipt entry carries the rounding")
+    void creditIssuance_carriesTheRounding() {
+        UUID credit = UUID.fromString("00000000-0000-0000-0000-00000000cc01");
+        UUID liability = UUID.fromString("00000000-0000-0000-0000-000000002300");
+        service.postCustomerCreditIssuance(
+                PA, credit, CASH, liability, new BigDecimal("9.98"), ROUNDING, new BigDecimal("0.02"), DATE, "x", null);
+
+        JournalEntryCreateRequest request = capture();
+        assertThat(request.getLines()).hasSize(3);
+        assertThat(request.getLines().get(0).getDebitAmount()).isEqualByComparingTo("10.00");
+        assertThat(request.getLines().get(1).getGlAccountId()).isEqualTo(liability);
+        assertThat(request.getLines().get(1).getCreditAmount()).isEqualByComparingTo("9.98");
+        assertThat(request.getLines().get(2).getGlAccountId()).isEqualTo(ROUNDING);
+        assertThat(request.getLines().get(2).getCreditAmount()).isEqualByComparingTo("0.02");
     }
 }
