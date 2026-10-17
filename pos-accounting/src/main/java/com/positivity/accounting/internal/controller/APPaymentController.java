@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
+import com.positivity.accounting.internal.dto.APPaymentInFlightResponse;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ApPayFromAccountListResponse;
@@ -28,6 +29,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -495,6 +497,36 @@ public class APPaymentController {
             @Valid @RequestBody @NonNull AllocateAPPaymentRequest request) {
         String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         return ResponseEntity.ok(apPaymentService.allocateCashPayment(paymentId, request, currentUser));
+    }
+
+    @GetMapping("/payments/in-flight")
+    @EmitEvent(id = "ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST", apiVersion = "1")
+    @Operation(
+            operationId = "listApPaymentsInFlight",
+            summary = "AP payments the gateway has not settled yet",
+            description = """
+                Lists the AP payments whose charge the gateway accepted as PENDING or AUTHORIZED (an ACH in flight) \
+                or that an operator reconciled as CHARGED, and that the settlement job has not yet seen settled or \
+                returned (#2642): settlementStatus IN_FLIGHT, oldest payment date first. Each row carries its age in \
+                days on today's business date and aged = true once older than accounting.ap.settlement.in-flight-warning \
+                (default P7D; ACH settles in three to five banking days), with settlementCheckedAt, the job's last re-read.
+                Use this tool to see what money is still on its way to vendors and which charges have taken too long; \
+                from here the operator waits, checks with the bank or the processor, and records a return with \
+                recordApPaymentReturn when the bank says so. Nothing here is re-sent: the charge exists.
+                Emits ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST. Returns 200 with the list (empty when nothing is in flight).
+                """,
+            tags = {"AP Payments"})
+    @ApiResponse(responseCode = "200", description = "The payments in flight, oldest first")
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN without accounting:ap:view",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:ap:view"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_VIEW + "')")
+    public @NonNull ResponseEntity<List<APPaymentInFlightResponse>> listApPaymentsInFlight() {
+        return ResponseEntity.ok(apPaymentService.listInFlight());
     }
 
     @GetMapping("/payments/{paymentId}")

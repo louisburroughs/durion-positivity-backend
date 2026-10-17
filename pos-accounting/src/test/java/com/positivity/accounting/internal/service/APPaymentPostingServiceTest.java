@@ -69,6 +69,8 @@ class APPaymentPostingServiceTest {
     private final AccountingCalendarZoneResolver zoneResolver = mock(AccountingCalendarZoneResolver.class);
     private final com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogs =
             mock(com.positivity.accounting.internal.repository.AccountingAuditLogRepository.class);
+    private final com.positivity.accounting.internal.repository.APPaymentAllocationRepository allocations =
+            mock(com.positivity.accounting.internal.repository.APPaymentAllocationRepository.class);
 
     private APPaymentPostingService service;
     private APPayment payment;
@@ -85,7 +87,8 @@ class APPaymentPostingServiceTest {
                 outbox,
                 periodGate,
                 zoneResolver,
-                auditLogs);
+                auditLogs,
+                allocations);
         payment = new APPayment(PAYMENT_ID);
         payment.setPaymentRef("PAY-412");
         payment.setVendorName("Acme Brakes");

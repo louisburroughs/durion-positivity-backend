@@ -1455,8 +1455,24 @@ its own: `settlementStatus` (`IN_FLIGHT` after a `PENDING`/`AUTHORIZED` acceptan
 after a `SUCCEEDED` answer, `RETURNED`; null on `CASH` and on rows older than V32), with `settlementCheckedAt`,
 `settledAt`, `returnedAt`. The gateway port gained `findByReference(paymentRef)` (Stripe: `metadata.payment_ref`, charge
 search) and `failureCode`; a deterministic `local` provider (`payment.gateway.provider: local`, the `dev` default)
-answers by `paymentRef` suffix (`-PENDING`, `-RETURN`, `-DECLINE`). The scheduled re-read of in-flight charges and of
-`GATEWAY_PENDING` orphans, and the in-flight read, are the second half of #2642.
+answers by `paymentRef` suffix (`-PENDING`, `-RETURN`, `-DECLINE`).
+- **The settlement signal** is a scheduled re-read of the gateway, per tenant (`APPaymentSettlementJob`,
+  `accounting.ap.settlement.poll-interval` `PT15M`, `initial-delay` `PT2M`, `enabled`, `batch-size`), each payment in a
+  transaction of its own under its row lock. `GATEWAY_PENDING` orphans older than `orphan-grace` (`PT15M`) are looked
+  up by reference: a charge the gateway holds (SUCCEEDED, PENDING, AUTHORIZED) drives the `reconcile-gateway` CHARGED
+  path with the found transaction id (SUCCEEDED also marks it `SETTLED`); FAILED / DECLINED marks the payment
+  `GATEWAY_FAILED`; no charge at all, once `stripe.idempotency-window-hours` has passed, drives the NOT_CHARGED path
+  (`VOIDED`); inside the window a not-found is left alone (a resend may still replay it). In-flight charges
+  (`settlementStatus = IN_FLIGHT` on a `GL_POST_PENDING`, `GL_POSTED` or `GL_POST_FAILED` payment) are looked up by
+  transaction id: SUCCEEDED → `SETTLED` (`settledAt`, audit `AP_PAYMENT_SETTLE`, no entry); FAILED / DECLINED → the
+  return below, recorded as `system` on today's business date with the gateway's `failureCode`; PENDING / AUTHORIZED →
+  `settlementCheckedAt` only; a charge the gateway no longer finds is logged and left in flight. `SETTLED` rows are
+  never re-read. A gateway error on one payment is logged and the sweep goes on; no gateway bean, no sweep. A signed
+  webhook, when one exists, only triggers this re-read (out of scope: pos-accounting has no public ingress).
+- **In flight too long.** `GET /v1/accounting/ap/payments/in-flight` (`accounting:ap:view`, event
+  `ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST`; `listApPaymentsInFlight`) lists the in-flight payments oldest first with
+  `ageDays` and `aged` (older than `accounting.ap.settlement.in-flight-warning`, `P7D`). The Needs-attention line
+  `AP_PAYMENT_IN_FLIGHT_AGED` and its work items belong to S19 (#2515) once its catalog exists.
 - **A returned charge** (the bank or the processor sent back money that had moved) is recorded by
   `POST /v1/accounting/ap/payments/{paymentId}/record-return` `{requestId, returnDate?, failureCode?, justification,
   overrideJustification?}` (`accounting:ap:pay`, event `ACCOUNTING_AP_PAYMENT_RECORD_RETURN`, approval-grade;

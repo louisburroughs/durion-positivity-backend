@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.repository;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import jakarta.persistence.LockModeType;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -52,6 +54,26 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
      * Find payment by payment reference (idempotency key).
      */
     Optional<APPayment> findByPaymentRef(String paymentRef);
+
+    /** GATEWAY_PENDING orphans created before {@code before} (#2642: the settlement job's grace has passed). */
+    @Query("SELECT p.paymentId FROM APPayment p WHERE p.status = com.positivity.accounting.internal.enums"
+            + ".APPaymentStatus.GATEWAY_PENDING AND p.createdAt < :before ORDER BY p.createdAt ASC")
+    @NonNull
+    List<UUID> findOrphanIds(@Param("before") @NonNull Instant before, @NonNull Pageable pageable);
+
+    /** Payments in flight at the gateway, least recently checked first (#2642: the settlement job). */
+    @Query("SELECT p.paymentId FROM APPayment p WHERE p.settlementStatus = com.positivity.accounting.internal.enums"
+            + ".APPaymentSettlementStatus.IN_FLIGHT AND p.status IN :statuses"
+            + " ORDER BY p.settlementCheckedAt ASC NULLS FIRST, p.paymentDate ASC")
+    @NonNull
+    List<UUID> findInFlightIds(
+            @Param("statuses") @NonNull Collection<APPaymentStatus> statuses, @NonNull Pageable pageable);
+
+    /** The in-flight read (#2642 ruling 4): oldest payment date first. */
+    @Query("SELECT p FROM APPayment p WHERE p.settlementStatus = com.positivity.accounting.internal.enums"
+            + ".APPaymentSettlementStatus.IN_FLIGHT ORDER BY p.paymentDate ASC, p.createdAt ASC")
+    @NonNull
+    List<APPayment> findInFlight();
 
     /** The payment whose own entry is {@code journalEntryId} (#2642: the reversal reaction). */
     Optional<APPayment> findByGlJournalEntry_JournalEntryId(UUID journalEntryId);

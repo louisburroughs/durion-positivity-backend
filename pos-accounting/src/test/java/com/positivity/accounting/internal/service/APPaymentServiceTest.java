@@ -117,6 +117,12 @@ class APPaymentServiceTest {
     @Mock
     private APPaymentReturnService returns;
 
+    @Mock
+    private AccountingCalendarZoneResolver zoneResolver;
+
+    @Mock
+    private APPaymentSettlementSettings settlementSettings;
+
     @InjectMocks
     private APPaymentServiceImpl service;
 
@@ -1500,5 +1506,26 @@ class APPaymentServiceTest {
 
         assertThat(response.getStatus()).isEqualTo(APPaymentStatus.RETURNED);
         assertThat(response.getReturnFailureCode()).isEqualTo("R01");
+    }
+
+    @Test
+    @DisplayName("#2642: the in-flight read ages each payment on today's business date and flags the old ones")
+    void listInFlight() {
+        when(zoneResolver.today()).thenReturn(java.time.LocalDate.of(2026, 10, 17));
+        when(settlementSettings.inFlightWarning()).thenReturn(java.time.Duration.ofDays(7));
+        APPayment fresh = orphan(UUID.randomUUID());
+        fresh.setStatus(APPaymentStatus.GL_POSTED);
+        fresh.setPaymentDate(java.time.LocalDate.of(2026, 10, 15));
+        APPayment old = orphan(UUID.randomUUID());
+        old.setStatus(APPaymentStatus.GL_POSTED);
+        old.setPaymentDate(java.time.LocalDate.of(2026, 10, 1));
+        when(paymentRepository.findInFlight()).thenReturn(List.of(old, fresh));
+
+        List<com.positivity.accounting.internal.dto.APPaymentInFlightResponse> inFlight = service.listInFlight();
+
+        assertThat(inFlight).extracting(com.positivity.accounting.internal.dto.APPaymentInFlightResponse::getAgeDays)
+                .containsExactly(16L, 2L);
+        assertThat(inFlight).extracting(com.positivity.accounting.internal.dto.APPaymentInFlightResponse::isAged)
+                .containsExactly(true, false);
     }
 }

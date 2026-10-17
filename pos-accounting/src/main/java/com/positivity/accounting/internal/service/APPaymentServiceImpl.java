@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
+import com.positivity.accounting.internal.dto.APPaymentInFlightResponse;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
@@ -38,6 +39,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -86,6 +88,8 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final APPaymentAllocationRequestRepository allocationRequests;
     private final AccountingAuditLogRepository auditLogs;
     private final APPaymentReturnService returns;
+    private final AccountingCalendarZoneResolver zoneResolver;
+    private final APPaymentSettlementSettings settlementSettings;
 
     /** One allocation of the plan: the bill, locked, and the amount applied to it. */
     record PlannedAllocation(
@@ -759,6 +763,32 @@ public class APPaymentServiceImpl implements APPaymentService {
                 saved.getStatus(),
                 currentUser);
         return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public @NonNull List<APPaymentInFlightResponse> listInFlight() {
+        LocalDate today = zoneResolver.today();
+        return paymentRepository.findInFlight().stream()
+                .map(payment -> {
+                    long age = payment.getPaymentDate() == null
+                            ? 0
+                            : ChronoUnit.DAYS.between(payment.getPaymentDate(), today);
+                    return APPaymentInFlightResponse.builder()
+                            .paymentId(payment.getPaymentId())
+                            .paymentRef(payment.getPaymentRef())
+                            .vendorId(payment.getVendorId())
+                            .vendorName(payment.getVendorName())
+                            .grossAmount(payment.getGrossAmount())
+                            .currency(payment.getCurrency())
+                            .paymentDate(payment.getPaymentDate())
+                            .status(payment.getStatus())
+                            .ageDays(age)
+                            .aged(age >= settlementSettings.inFlightWarning().toDays())
+                            .settlementCheckedAt(payment.getSettlementCheckedAt())
+                            .build();
+                })
+                .toList();
     }
 
     @Override

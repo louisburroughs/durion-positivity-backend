@@ -438,6 +438,12 @@ public final class EventTypes {
                                 "Record a returned AP payment charge: reverse its entry, reopen its allocations")
                         .build(),
 
+                // AP payments in flight at the gateway - 1 event (#2642 ruling 4): a read.
+                EventTypeRegistration.search(
+                                "ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST",
+                                "List the AP payments whose charge the gateway has not settled yet")
+                        .build(),
+
                 // Allocate a cash-on-delivery AP payment - 1 event (CAP:550 S17, Issue #2513; AW41)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_AP_PAYMENT_ALLOCATE",

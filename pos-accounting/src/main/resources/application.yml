@@ -262,3 +262,13 @@ accounting:
     # SET LOCAL lock_timeout on the AP pay command and the vendor-bill decisions (CAP:550 S42, #2627): a
     # wait for a bill or period row lock beyond it answers 409 LOCK_TIMEOUT and persists nothing.
     lock-timeout: ${ACCOUNTING_AP_LOCK_TIMEOUT:5s}
+    # The settlement re-read of AP payment charges (#2642): GATEWAY_PENDING orphans older than orphan-grace are
+    # looked up by reference; in-flight charges (a PENDING acceptance) by transaction id, until they settle or
+    # return. in-flight-warning flags a charge that has taken too long (ACH settles in 3-5 banking days).
+    settlement:
+      enabled: ${ACCOUNTING_AP_SETTLEMENT_ENABLED:true}
+      initial-delay: ${ACCOUNTING_AP_SETTLEMENT_INITIAL_DELAY:PT2M}
+      poll-interval: ${ACCOUNTING_AP_SETTLEMENT_POLL_INTERVAL:PT15M}
+      orphan-grace: ${ACCOUNTING_AP_SETTLEMENT_ORPHAN_GRACE:PT15M}
+      in-flight-warning: ${ACCOUNTING_AP_SETTLEMENT_IN_FLIGHT_WARNING:P7D}
+      batch-size: ${ACCOUNTING_AP_SETTLEMENT_BATCH_SIZE:200}

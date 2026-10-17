@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.APPaymentAllocation;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -16,6 +17,7 @@ import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetExcep
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
+import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
@@ -91,6 +93,7 @@ public class APPaymentPostingService {
     private final AccountingPeriodGate periodGate;
     private final AccountingCalendarZoneResolver zoneResolver;
     private final AccountingAuditLogRepository auditLogs;
+    private final APPaymentAllocationRepository allocations;
 
     /** {@code posting_date_rule} of an entry dated the retry's business date because the payment date is hard-locked. */
     public static final String DEFERRED_PAST_HARD_LOCK = "DEFERRED_PAST_HARD_LOCK";
@@ -227,6 +230,14 @@ public class APPaymentPostingService {
                 + (payment.getReturnFailureCode() == null ? "" : " (" + payment.getReturnFailureCode() + ")");
         JournalEntryResponse mirror = APPaymentReversalReaction.underReturn(
                 paymentId, () -> journalEntryService.reverseJournalEntry(original, reason, date, callerOverride));
+        // A return held for a period remedy (holdReturn) reopened nothing while 2000 stayed debited: now it does.
+        List<APPaymentAllocation> live = allocations.findLiveByPaymentId(paymentId);
+        if (!live.isEmpty()) {
+            Instant now = Instant.now(clock);
+            live.forEach(row -> row.setReopenedAt(now));
+            allocations.saveAll(live);
+        }
+        payment.setUnappliedAmount(BigDecimal.ZERO);
         payment.setReturnJournalEntryId(mirror.getJournalEntryId());
         payment.setReturnDate(date);
         payment.setReturnDateRule(onReturnDate ? RETURN_DATE : DETECTION_DATE);

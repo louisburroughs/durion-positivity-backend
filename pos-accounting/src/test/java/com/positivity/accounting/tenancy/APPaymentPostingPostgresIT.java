@@ -706,7 +706,8 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                                         .orElseThrow())
                         .getOpenAmount())
                 .isEqualByComparingTo("400.00");
-        assertThat(balance(tenant, "2000")).isEqualByComparingTo("400.00");
+        // The original is REVERSED and its mirror POSTED: over both, 2000 carries the open bill again.
+        assertThat(balanceOverPostedAndReversed(tenant, "2000")).isEqualByComparingTo("400.00");
         assertThat(count(tenant, "accounting_audit_log", "operation = 'AP_PAYMENT_RETURN'"))
                 .isEqualTo(1);
         assertThat(count(tenant, "accounting_audit_log", "operation = 'AP_PAYMENT_RETURN_GL_POSTING'"))
@@ -990,6 +991,18 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
     }
 
     /** Credit minus debit of the tenant's posted lines on {@code accountCode}. */
+    private static BigDecimal balanceOverPostedAndReversed(UUID tenant, String accountCode) {
+        return owner().queryForObject(
+                        "SELECT COALESCE(SUM(l.credit_amount - l.debit_amount), 0) FROM journal_entry_line l"
+                                + " JOIN journal_entry e ON e.tenant_id = l.tenant_id"
+                                + " AND e.journal_entry_id = l.journal_entry_id"
+                                + " JOIN gl_account g ON g.tenant_id = l.tenant_id AND g.gl_account_id = l.gl_account_id"
+                                + " WHERE l.tenant_id = ? AND g.account_code = ? AND e.status IN ('POSTED', 'REVERSED')",
+                        BigDecimal.class,
+                        tenant,
+                        accountCode);
+    }
+
     private static BigDecimal balance(UUID tenant, String accountCode) {
         return owner().queryForObject(
                         "SELECT COALESCE(SUM(l.credit_amount - l.debit_amount), 0) FROM journal_entry_line l"

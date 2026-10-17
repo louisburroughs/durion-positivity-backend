@@ -32,6 +32,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -115,6 +116,46 @@ public class APPaymentReturnService {
             @NonNull APPayment payment, @Nullable String failureCode, @Nullable LocalDate failureDate) {
         requireReturnable(payment);
         applyReturn(payment, failureDate, failureCode, "Gateway re-read: the charge failed", null, SYSTEM, null);
+    }
+
+    /**
+     * The settlement job's hold (ruling 2): the return is known but the mirror was refused by a period, and the
+     * original is posted, so 2000 stays debited and nothing reopens yet. The payment is {@code RETURN_PENDING} with the
+     * refusal as {@code glPostError}; {@code gl-posting-retry} (or the next sweep) posts the mirror and reopens then.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void holdReturn(
+            @NonNull UUID paymentId,
+            @Nullable String failureCode,
+            @Nullable LocalDate failureDate,
+            @NonNull String refusalCode) {
+        APPayment payment = payments.lockById(paymentId).orElse(null);
+        if (payment == null || payment.getSettlementStatus() != APPaymentSettlementStatus.IN_FLIGHT) {
+            return;
+        }
+        String before = payment.getStatus().name();
+        payment.setReturnedAt(Instant.now(clock));
+        payment.setReturnDate(failureDate);
+        payment.setReturnFailureCode(failureCode);
+        payment.setSettlementStatus(APPaymentSettlementStatus.RETURNED);
+        payment.setStatus(APPaymentStatus.RETURN_PENDING);
+        payment.setGlPostError(refusalCode);
+        payments.save(payment);
+        AccountingAuditLog row = new AccountingAuditLog();
+        row.setEntityType("AP_PAYMENT");
+        row.setEntityId(paymentId);
+        row.setOperation(RETURN_OPERATION);
+        row.setUserId(SYSTEM);
+        row.setJustification("Gateway re-read: the charge failed; the mirror waits for a period remedy");
+        row.setOldValue(before);
+        row.setNewValue("RETURN_PENDING;returnDate=" + failureDate + ";failureCode=" + failureCode + ";glPostError="
+                + refusalCode + ";reopened=");
+        auditLogs.save(row);
+        log.warn(
+                "AP payment held RETURN_PENDING | paymentId={} | failureCode={} | glPostError={}",
+                paymentId,
+                failureCode,
+                refusalCode);
     }
 
     private void requireReturnable(APPayment payment) {

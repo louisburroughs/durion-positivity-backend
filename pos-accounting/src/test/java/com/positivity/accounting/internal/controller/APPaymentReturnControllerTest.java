@@ -122,4 +122,28 @@ class APPaymentReturnControllerTest extends BaseIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("AP_PAYMENT_ALREADY_RETURNED"));
     }
+
+    @Test
+    @DisplayName("GET /v1/accounting/ap/payments/in-flight needs accounting:ap:view and answers the list")
+    void inFlightRead() throws Exception {
+        String inFlight = "/v1/accounting/ap/payments/in-flight";
+        mockMvc.perform(withAuth(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(inFlight),
+                        "accounting:ap:pay"))
+                .andExpect(status().isForbidden());
+        when(apPaymentService.listInFlight())
+                .thenReturn(List.of(com.positivity.accounting.internal.dto.APPaymentInFlightResponse.builder()
+                        .paymentId(PAYMENT_ID)
+                        .paymentRef("PAY-412")
+                        .status(APPaymentStatus.GL_POSTED)
+                        .ageDays(9)
+                        .aged(true)
+                        .build()));
+        mockMvc.perform(withAuth(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(inFlight),
+                        "accounting:ap:view"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].paymentRef").value("PAY-412"))
+                .andExpect(jsonPath("$[0].aged").value(true));
+    }
 }
