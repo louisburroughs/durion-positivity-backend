@@ -49,7 +49,9 @@ import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.ExtLocationReplicaRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.UndepositedSessionDropRepository;
+import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
+import com.positivity.accounting.internal.repository.VendorBillMatchEvidenceRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.CashAttentionSources.AgedSession;
@@ -103,7 +105,8 @@ class WorkItemServiceTest {
 
     private final VendorBillRepository vendorBills = mock();
     private final VendorBillMatchCandidateRepository candidates = mock();
-    private final VendorBillReader reader = mock();
+    private final VendorBillMatchEvidenceRepository evidence = mock();
+    private final VendorBillLineRepository billLines = mock();
     private final ApApprovalPolicy policy = mock();
     private final SupplierVendorCopies vendorCopies = mock();
     private final OpenVendorBills openBills = mock();
@@ -137,6 +140,14 @@ class WorkItemServiceTest {
         when(zoneResolver.postingDate(any(Instant.class)))
                 .thenAnswer(invocation -> LocalDate.ofInstant(invocation.getArgument(0), ZoneOffset.UTC));
         when(vendorBills.findByStatusIn(any())).thenAnswer(invocation -> List.copyOf(reviewBills));
+        when(vendorBills.findAllById(any())).thenAnswer(invocation -> {
+            Iterable<UUID> ids = invocation.getArgument(0);
+            List<UUID> wanted = new ArrayList<>();
+            ids.forEach(wanted::add);
+            return reviewBills.stream()
+                    .filter(bill -> wanted.contains(bill.getVendorBillId()))
+                    .toList();
+        });
         when(candidates.findByVendorBill_VendorBillIdInAndResolvedFalse(any())).thenReturn(List.of());
         when(policy.settings()).thenReturn(policySettings(false));
         when(openBills.load()).thenAnswer(invocation -> new Open(List.copyOf(approvedBills), List.of()));
@@ -168,7 +179,8 @@ class WorkItemServiceTest {
                 new BillWorkItemSource(
                         vendorBills,
                         candidates,
-                        reader,
+                        evidence,
+                        billLines,
                         policy,
                         vendorCopies,
                         openBills,
@@ -639,6 +651,7 @@ class WorkItemServiceTest {
         payment.setGlPostError("PERIOD_CLOSED");
         when(apPayments.findByStatusOrderByPaymentDateAscPaymentIdAsc(APPaymentStatus.GL_POST_FAILED))
                 .thenReturn(List.of(payment));
+        when(apPayments.findAllById(any())).thenReturn(List.of(payment));
         return payment;
     }
 
@@ -766,7 +779,7 @@ class WorkItemServiceTest {
         assertThat(mainItem.references())
                 .containsEntry("location", "MAIN")
                 .containsEntry("locationName", "Main Street")
-                .containsEntry("terminals", "T1, T2")
+                .containsEntry("terminalCount", "2")
                 .containsEntry("bagNumbers", "BAG-4471");
         assertThat(mainItem.actions()).singleElement().satisfies(deposit -> {
             assertThat(deposit.action()).isEqualTo("RECORD_DEPOSIT");
@@ -1025,6 +1038,7 @@ class WorkItemServiceTest {
         list();
 
         assertThat(meters.get(WorkItemServiceImpl.GAUGE)
+                        .tag("tenant", "unbound")
                         .tag("type", "BILL_AWAITING_APPROVAL")
                         .gauge()
                         .value())
@@ -1158,5 +1172,109 @@ class WorkItemServiceTest {
 
         assertThat(response.items()).isEmpty();
         assertThat(response.countsByArea().values()).containsOnly(0);
+    }
+
+    // ---- review findings of #2752 -----------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("PAY is blocked VENDOR_ON_AP_HOLD for a vendor on AP hold, before the self-approval rule")
+    void payBlockedByApHold() {
+        OpenBill held = approvedBill("HELD-1", TODAY.plusDays(1), "100.00", "pat");
+        approvedBill("FREE-1", TODAY.plusDays(2), "100.00", "someone");
+        when(vendorCopies.heldVendors(any()))
+                .thenReturn(Map.of(held.bill().getVendorId(), "confidential"));
+
+        signIn("pat", PAYER);
+        List<WorkItem> items = list().items();
+
+        assertThat(items.getFirst().actions()).singleElement().satisfies(pay -> {
+            assertThat(pay.allowed()).isFalse();
+            assertThat(pay.blockedReason()).isEqualTo("VENDOR_ON_AP_HOLD");
+        });
+        assertThat(items.getLast().actions()).singleElement().satisfies(pay -> assertThat(pay.allowed()).isTrue());
+    }
+
+    @Test
+    @DisplayName("a hard-locked payment date blocks RETRY with PERIOD_HARD_LOCKED unless the caller may override")
+    void hardLockedRetry() {
+        APPayment payment = failedPayment(LocalDate.of(2026, 8, 20));
+        when(periodGate.isHardLocked(payment.getPaymentDate())).thenReturn(true);
+        when(periodGate.isPostingBlocked(payment.getPaymentDate())).thenReturn(true);
+
+        signIn("jo", AccountingPermissions.JE_POST);
+        assertThat(only(list(), WorkItemType.AP_PAYMENT_NOT_POSTED).actions())
+                .singleElement()
+                .satisfies(retry -> {
+                    assertThat(retry.allowed()).isFalse();
+                    assertThat(retry.blockedReason()).isEqualTo("PERIOD_HARD_LOCKED");
+                });
+
+        signIn("jo", AccountingPermissions.JE_POST, AccountingPermissions.PERIOD_OVERRIDE);
+        assertThat(only(list(), WorkItemType.AP_PAYMENT_NOT_POSTED).actions())
+                .singleElement()
+                .satisfies(retry -> assertThat(retry.allowed()).isTrue());
+    }
+
+    @Test
+    @DisplayName("the retry preview of a hard-locked payment maps its accounts on today, the date the deferred entry posts")
+    void hardLockedPreviewDate() {
+        APPayment payment = failedPayment(LocalDate.of(2026, 8, 20));
+        when(periodGate.isHardLocked(payment.getPaymentDate())).thenReturn(true);
+        GLAccount payable = account("2000", "Accounts Payable");
+        GLAccount bank = account("1000", "Operating Account");
+        when(glMappingResolver.findGLAccount(any(), any(), eq(TODAY.atStartOfDay())))
+                .thenReturn(Optional.of(payable.getGlAccountId()));
+        when(glAccounts.findById(payable.getGlAccountId())).thenReturn(Optional.of(payable));
+        when(glAccounts.findById(payment.getBankAccountId())).thenReturn(Optional.of(bank));
+
+        signIn("jo", AccountingPermissions.JE_POST, AccountingPermissions.PERIOD_OVERRIDE);
+
+        assertThat(only(list(), WorkItemType.AP_PAYMENT_NOT_POSTED).postingPreview())
+                .hasSize(2);
+    }
+
+    @Test
+    @DisplayName("only the returned page is completed: one evidence read, one lines read, one preview per page bill")
+    void onlyThePageIsCompleted() {
+        for (int i = 0; i < 6; i++) {
+            VendorBill bill = reviewBill(VendorBillStatus.AWAITING_APPROVAL, "100.00", "bob");
+            bill.setOriginEventType(VendorBillReader.ORIGIN_GOODS_RECEIVED);
+            bill.setSubmittedAt(Instant.parse("2026-10-06T10:00:00Z").plusSeconds(i * 86400L));
+        }
+
+        signIn("alice", APPROVER);
+        WorkItemsResponse page = service.list(null, null, 2);
+
+        assertThat(page.items()).hasSize(2);
+        assertThat(page.countsByArea()).containsEntry(WorkItemArea.BILLS, 6);
+        org.mockito.Mockito.verify(approvalPreview, org.mockito.Mockito.times(2)).preview(any());
+        org.mockito.Mockito.verify(evidence, org.mockito.Mockito.times(1)).findByVendorBillIdIn(any());
+        org.mockito.Mockito.verify(billLines, org.mockito.Mockito.times(1)).findByVendorBill_VendorBillIdIn(any());
+        org.mockito.Mockito.verify(vendorCopies, org.mockito.Mockito.times(1)).creatorsFirstBillVendors(any(), any());
+    }
+
+    @Test
+    @DisplayName("an invoice already matched to a goods-receipt bill lets it be sent for approval")
+    void matchedReceiptBillCanBeSent() {
+        VendorBill bill = reviewBill(VendorBillStatus.PENDING_RECEIPT_MATCH, "100.00", "bob");
+        bill.setOriginEventType(VendorBillReader.ORIGIN_GOODS_RECEIVED);
+        com.positivity.accounting.internal.entity.VendorBillMatchEvidence row =
+                mock(com.positivity.accounting.internal.entity.VendorBillMatchEvidence.class);
+        when(row.getVendorBillId()).thenReturn(bill.getVendorBillId());
+        when(row.getSource()).thenReturn(com.positivity.accounting.internal.entity.VendorBillMatchEvidence.Source.CANDIDATE_SELECTION);
+        when(row.getRecordedAt()).thenReturn(NOW);
+        when(row.getMatchEvidenceId()).thenReturn(UUID.randomUUID());
+        when(evidence.findByVendorBillIdIn(any())).thenReturn(List.of(row));
+        com.positivity.accounting.internal.entity.VendorBillLine line = mock(com.positivity.accounting.internal.entity.VendorBillLine.class);
+        when(line.getVendorBill()).thenReturn(bill);
+        when(line.getLineNumber()).thenReturn(1);
+        when(line.getBilledQuantity()).thenReturn(BigDecimal.ONE);
+        when(line.getBilledUnitPrice()).thenReturn(new BigDecimal("100.00"));
+        when(billLines.findByVendorBill_VendorBillIdIn(any())).thenReturn(List.of(line));
+
+        signIn("carol", CLERK);
+        WorkItem item = only(list(), WorkItemType.BILL_WAITING_ON_DELIVERY);
+
+        assertThat(item.actions()).extracting(WorkItemAction::action).containsExactly("SUBMIT_FOR_APPROVAL");
     }
 }

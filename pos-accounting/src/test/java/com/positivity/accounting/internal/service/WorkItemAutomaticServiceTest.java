@@ -24,6 +24,7 @@ import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.WorkItemsCursorInvalidException;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ProcessorSettlementLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
@@ -61,6 +62,7 @@ class WorkItemAutomaticServiceTest {
 
     private final AutomaticPaymentApplicationQueryService applications = mock();
     private final ProcessorSettlementLineRepository settlementLines = mock();
+    private final JournalEntryRepository journalEntries = mock();
     private final VendorBillRepository vendorBills = mock();
     private final AccountingCalendarZoneResolver zoneResolver = mock();
 
@@ -96,14 +98,16 @@ class WorkItemAutomaticServiceTest {
                             .totalPages(1)
                             .build();
                 });
-        when(settlementLines.findByMatchStatusAndUpdatedAtGreaterThanEqual(any(), any()))
+        when(settlementLines.findByMatchStatusAndCreatedAtGreaterThanEqual(any(), any()))
                 .thenReturn(List.of());
         when(vendorBills.findByApprovedByKindAndApprovedAtGreaterThanEqualOrderByApprovedAtAscVendorBillIdAsc(
                         any(), any()))
                 .thenReturn(List.of());
+        when(journalEntries.findSourceEventIdsIn(any())).thenReturn(List.of());
         service = new WorkItemAutomaticServiceImpl(
                 applications,
                 settlementLines,
+                journalEntries,
                 vendorBills,
                 new WorkItemPaging(),
                 zoneResolver,
@@ -192,9 +196,9 @@ class WorkItemAutomaticServiceTest {
                 .netAmount(new BigDecimal("97.10"))
                 .matchStatus(SettlementLineMatchStatus.MATCHED)
                 .matchedPaymentId(UUID.randomUUID())
-                .updatedAt(Instant.parse("2026-10-17T11:00:00Z"))
+                .createdAt(Instant.parse("2026-10-17T11:00:00Z"))
                 .build();
-        when(settlementLines.findByMatchStatusAndUpdatedAtGreaterThanEqual(
+        when(settlementLines.findByMatchStatusAndCreatedAtGreaterThanEqual(
                         SettlementLineMatchStatus.MATCHED, START_OF_TODAY))
                 .thenReturn(List.of(line));
         VendorBill bill = new VendorBill(UUID.randomUUID());
@@ -234,6 +238,68 @@ class WorkItemAutomaticServiceTest {
     }
 
     @Test
+    @DisplayName("a line matched by hand, told apart by the reclass entry its match posts, is not done automatically")
+    void manualMatchIsNotAutomatic() {
+        UUID automatic = UUID.randomUUID();
+        UUID manual = UUID.randomUUID();
+        when(settlementLines.findByMatchStatusAndCreatedAtGreaterThanEqual(
+                        SettlementLineMatchStatus.MATCHED, START_OF_TODAY))
+                .thenReturn(List.of(
+                        ProcessorSettlementLine.builder()
+                                .lineId(automatic)
+                                .createdAt(Instant.parse("2026-10-17T11:00:00Z"))
+                                .build(),
+                        ProcessorSettlementLine.builder()
+                                .lineId(manual)
+                                .createdAt(Instant.parse("2026-10-17T11:00:00Z"))
+                                .build()));
+        when(journalEntries.findSourceEventIdsIn(any()))
+                .thenReturn(List.of(SettlementReconciliationServiceImpl.reclassSourceEventId(manual)));
+
+        signIn(AccountingPermissions.RECONCILIATION_VIEW);
+        List<AutomaticWorkItem> items = service.list(null, null, null).items();
+
+        assertThat(items).extracting(AutomaticWorkItem::itemId).containsExactly("SETTLEMENT_LINE_MATCHED:" + automatic);
+    }
+
+    @Test
+    @DisplayName("each kind is listed only to the holders of its permission; the other sources are not read")
+    void kindsAreGated() {
+        rows.clear();
+        application("2026-10-17T09:00:00Z", false);
+        when(settlementLines.findByMatchStatusAndCreatedAtGreaterThanEqual(any(), any()))
+                .thenReturn(List.of(ProcessorSettlementLine.builder()
+                        .lineId(UUID.randomUUID())
+                        .createdAt(Instant.parse("2026-10-17T11:00:00Z"))
+                        .build()));
+        VendorBill bill = new VendorBill(UUID.randomUUID());
+        bill.setStatus(VendorBillStatus.APPROVED);
+        bill.setApprovedAt(Instant.parse("2026-10-17T07:00:00Z"));
+        when(vendorBills.findByApprovedByKindAndApprovedAtGreaterThanEqualOrderByApprovedAtAscVendorBillIdAsc(
+                        any(), any()))
+                .thenReturn(List.of(bill));
+
+        signIn(AccountingPermissions.PAYMENT_APPLY);
+        assertThat(kinds()).containsExactly(AutomaticWorkItemKind.PAYMENT_APPLIED_AUTOMATICALLY);
+        signIn(AccountingPermissions.PAYMENT_REVERSE);
+        assertThat(kinds()).containsExactly(AutomaticWorkItemKind.PAYMENT_APPLIED_AUTOMATICALLY);
+        signIn(AccountingPermissions.RECONCILIATION_VIEW);
+        assertThat(kinds()).containsExactly(AutomaticWorkItemKind.SETTLEMENT_LINE_MATCHED);
+        signIn(AccountingPermissions.AP_APPROVE);
+        assertThat(kinds()).containsExactly(AutomaticWorkItemKind.BILL_APPROVED_BY_SYSTEM);
+        signIn(AccountingPermissions.AP_APPROVE_OVER_LIMIT);
+        assertThat(kinds()).containsExactly(AutomaticWorkItemKind.BILL_APPROVED_BY_SYSTEM);
+        signIn(AccountingPermissions.COA_VIEW);
+        assertThat(kinds()).isEmpty();
+    }
+
+    private List<AutomaticWorkItemKind> kinds() {
+        return service.list(null, null, null).items().stream()
+                .map(AutomaticWorkItem::kind)
+                .toList();
+    }
+
+    @Test
     @DisplayName("no reference is an identifier as text; identifiers are in routing only")
     void routingCarriesTheIds() {
         application("2026-10-17T09:00:00Z", false);
@@ -250,13 +316,16 @@ class WorkItemAutomaticServiceTest {
     @Test
     @DisplayName("since defaults to the start of today in the tenant zone")
     void defaultSince() {
-        signIn(AccountingPermissions.PAYMENT_REVERSE);
+        signIn(
+                AccountingPermissions.PAYMENT_REVERSE,
+                AccountingPermissions.RECONCILIATION_VIEW,
+                AccountingPermissions.AP_APPROVE);
 
         service.list(null, null, null);
 
         verify(applications).listAutomatic(eq(START_OF_TODAY), eq(0), anyInt(), eq(true));
         verify(settlementLines)
-                .findByMatchStatusAndUpdatedAtGreaterThanEqual(SettlementLineMatchStatus.MATCHED, START_OF_TODAY);
+                .findByMatchStatusAndCreatedAtGreaterThanEqual(SettlementLineMatchStatus.MATCHED, START_OF_TODAY);
     }
 
     @Test

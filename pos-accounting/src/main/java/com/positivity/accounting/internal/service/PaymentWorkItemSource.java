@@ -17,7 +17,9 @@ import com.positivity.accounting.internal.security.AccountingPermissions;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +43,9 @@ public class PaymentWorkItemSource {
 
     /** {@code blockedReason} of {@code RETRY} while the payment's period is closed and the caller cannot override. */
     static final String BLOCKED_PERIOD_CLOSED = "PERIOD_CLOSED";
+
+    /** {@code blockedReason} of {@code RETRY} while the payment's date is hard-locked and the caller cannot override. */
+    static final String BLOCKED_PERIOD_HARD_LOCKED = "PERIOD_HARD_LOCKED";
 
     static final String RETRY = "RETRY";
     static final String MATCH = "MATCH";
@@ -141,8 +146,7 @@ public class PaymentWorkItemSource {
     }
 
     private List<WorkItem> paymentsNotPosted() {
-        List<APPayment> failed =
-                apPayments.findByStatusOrderByPaymentDateAscPaymentIdAsc(APPaymentStatus.GL_POST_FAILED);
+        List<APPayment> failed = apPayments.findByStatusOrderByPaymentDateAscPaymentIdAsc(APPaymentStatus.GL_POST_FAILED);
         if (failed.isEmpty()) {
             return List.of();
         }
@@ -150,21 +154,21 @@ public class PaymentWorkItemSource {
         List<WorkItem> items = new ArrayList<>();
         for (APPayment payment : failed) {
             LocalDate date = payment.getPaymentDate() == null ? zoneResolver.today() : payment.getPaymentDate();
-            // A hard-locked date is no block: the retry can date the entry on its own business date (#2729).
-            boolean closed = periodGate.isPostingBlocked(date) && !periodGate.isHardLocked(date);
-            WorkItemAction retry = closed && !mayOverride
-                    ? WorkItemAction.blocked(RETRY, BLOCKED_PERIOD_CLOSED)
-                    : WorkItemAction.allowed(RETRY);
+            WorkItemAction retry = WorkItemAction.allowed(RETRY);
+            if (!mayOverride) {
+                if (periodGate.isHardLocked(date)) {
+                    retry = WorkItemAction.blocked(RETRY, BLOCKED_PERIOD_HARD_LOCKED);
+                } else if (periodGate.isPostingBlocked(date)) {
+                    retry = WorkItemAction.blocked(RETRY, BLOCKED_PERIOD_CLOSED);
+                }
+            }
             items.add(WorkItems.item(
                     WorkItemType.AP_PAYMENT_NOT_POSTED,
                     payment.getPaymentId().toString(),
                     WorkItems.references(
                             "vendor", payment.getVendorName(),
                             "paymentReference", payment.getPaymentRef(),
-                            "paymentMethod",
-                                    payment.getPaymentMethod() == null
-                                            ? null
-                                            : payment.getPaymentMethod().name(),
+                            "paymentMethod", payment.getPaymentMethod() == null ? null : payment.getPaymentMethod().name(),
                             "paymentDate", date.toString()),
                     payment.getGlPostError() == null || payment.getGlPostError().isBlank()
                             ? REASON_POST_FAILED
@@ -173,7 +177,7 @@ public class PaymentWorkItemSource {
                     payment.getStatus().name(),
                     date,
                     List.of(retry),
-                    retryPreview(payment, date),
+                    List.of(),
                     WorkItems.routing(
                             "paymentId", payment.getPaymentId(),
                             "vendorId", payment.getVendorId(),
@@ -182,17 +186,45 @@ public class PaymentWorkItemSource {
         return items;
     }
 
-    /** Dr 2000 the gross (and 6030 the fee), Cr the payment's bank account; empty when an account cannot be named. */
-    private List<WorkItemPostingLine> retryPreview(APPayment payment, LocalDate date) {
-        if (payment.getBankAccountId() == null || payment.getGrossAmount() == null) {
+    /** The posting previews of the page's {@code AP_PAYMENT_NOT_POSTED} items, by item id; one read of the payments. */
+    public @NonNull Map<String, WorkItem> complete(@NonNull List<WorkItem> page) {
+        List<WorkItem> pending = page.stream()
+                .filter(item -> item.type() == WorkItemType.AP_PAYMENT_NOT_POSTED)
+                .toList();
+        if (pending.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, APPayment> payments = new HashMap<>();
+        apPayments
+                .findAllById(pending.stream().map(item -> item.routing().get("paymentId")).toList())
+                .forEach(payment -> payments.put(payment.getPaymentId(), payment));
+        Map<String, WorkItem> completed = new HashMap<>();
+        for (WorkItem item : pending) {
+            APPayment payment = payments.get(item.routing().get("paymentId"));
+            if (payment != null) {
+                completed.put(
+                        item.itemId(),
+                        item.completed(item.reasonCode(), item.actions(), retryPreview(payment)));
+            }
+        }
+        return completed;
+    }
+
+    /**
+     * Dr 2000 the gross (and 6030 the fee), Cr the payment's bank account, on the date the entry would post: the payment
+     * date, or today when that date is hard-locked and the retry defers past it; empty when an account cannot be named.
+     */
+    private List<WorkItemPostingLine> retryPreview(APPayment payment) {
+        if (payment.getBankAccountId() == null || payment.getGrossAmount() == null || payment.getPaymentDate() == null) {
             return List.of();
         }
+        LocalDate date =
+                periodGate.isHardLocked(payment.getPaymentDate()) ? zoneResolver.today() : payment.getPaymentDate();
         BigDecimal gross = payment.getGrossAmount();
         BigDecimal fee = payment.getFeeAmount() == null ? BigDecimal.ZERO : payment.getFeeAmount();
         Optional<GLAccount> payable = account(APPaymentPreGatewayChecks.ACCOUNTS_PAYABLE_KEY, date);
         Optional<GLAccount> bank = glAccounts.findById(payment.getBankAccountId());
-        Optional<GLAccount> fees =
-                fee.signum() > 0 ? account(APPaymentPreGatewayChecks.PAYMENT_FEES_KEY, date) : Optional.empty();
+        Optional<GLAccount> fees = fee.signum() > 0 ? account(APPaymentPreGatewayChecks.PAYMENT_FEES_KEY, date) : Optional.empty();
         if (payable.isEmpty() || bank.isEmpty() || (fee.signum() > 0 && fees.isEmpty())) {
             return List.of();
         }

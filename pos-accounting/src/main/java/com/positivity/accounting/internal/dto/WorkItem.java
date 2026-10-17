@@ -76,4 +76,11 @@ public record WorkItem(
                 description = "Identifiers for routing to the item's screen, by key; the only place an identifier"
                         + " appears",
                 requiredMode = Schema.RequiredMode.REQUIRED)
-        Map<String, UUID> routing) {}
+        Map<String, UUID> routing) {
+
+    /** This item with the parts a page's second pass fills: why it is listed, what the caller may do, the preview. */
+    public WorkItem completed(String reasonCode, List<WorkItemAction> actions, List<WorkItemPostingLine> postingPreview) {
+        return new WorkItem(
+                itemId, type, area, references, reasonCode, amount, status, occurredOn, actions, postingPreview, routing);
+    }
+}

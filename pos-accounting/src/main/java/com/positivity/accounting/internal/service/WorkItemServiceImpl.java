@@ -5,14 +5,17 @@ import com.positivity.accounting.internal.dto.WorkItemsResponse;
 import com.positivity.accounting.internal.enums.WorkItemArea;
 import com.positivity.accounting.internal.enums.WorkItemType;
 import io.micrometer.core.instrument.Gauge;
+import com.positivity.tenancy.TenantContext;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jspecify.annotations.NonNull;
@@ -27,8 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
  * opaque cursor ({@link WorkItemPaging}). A projection table is a follow-up if a load test shows this read above its
  * budget; it is not part of this story.
  *
- * <p>The gauge {@value #GAUGE}{@code {type}} holds, for each type, the count the last read showed its caller. It is a
- * per-caller figure and so a sample, not a tenant total.
+ * <p>A read costs two passes. The sources first decide the items from their sources alone, which is all the counts and
+ * the paging need; only the page the caller gets is then completed with what costs more (actions, previews).
+ *
+ * <p>The gauge {@value #GAUGE}{@code {tenant,type}} holds, for each type, the count of the last read without an area
+ * filter showed its caller in that tenant: a sample of the last unfiltered read, not a tenant total.
  */
 @Service
 @Transactional(readOnly = true)
@@ -44,7 +50,8 @@ public class WorkItemServiceImpl implements WorkItemService {
     private final WorkItemPaging paging;
     private final AccountingCalendarZoneResolver zoneResolver;
     private final Clock clock;
-    private final Map<WorkItemType, AtomicLong> gaugeValues = new ConcurrentHashMap<>();
+    private final @Nullable MeterRegistry registry;
+    private final Map<String, Map<WorkItemType, AtomicLong>> gaugeValues = new ConcurrentHashMap<>();
 
     public WorkItemServiceImpl(
             BillWorkItemSource bills,
@@ -62,17 +69,7 @@ public class WorkItemServiceImpl implements WorkItemService {
         this.paging = paging;
         this.zoneResolver = zoneResolver;
         this.clock = clock;
-        MeterRegistry registry = meterRegistry.getIfAvailable();
-        for (WorkItemType type : WorkItemType.values()) {
-            AtomicLong value = new AtomicLong();
-            gaugeValues.put(type, value);
-            if (registry != null) {
-                Gauge.builder(GAUGE, value, AtomicLong::get)
-                        .tag("type", type.name())
-                        .description("Work items of the type the last read showed its caller")
-                        .register(registry);
-            }
-        }
+        this.registry = meterRegistry.getIfAvailable();
     }
 
     @Override
@@ -98,13 +95,45 @@ public class WorkItemServiceImpl implements WorkItemService {
             counts.merge(item.area(), 1, Integer::sum);
             perType.merge(item.type(), 1L, Long::sum);
         }
-        gaugeValues.forEach((type, value) -> value.set(perType.getOrDefault(type, 0L)));
+        if (area == null) {
+            publish(perType);
+        }
 
         List<WorkItem> listed = area == null
                 ? visible
                 : visible.stream().filter(item -> item.area() == area).toList();
         WorkItemPaging.Slice<WorkItem> page =
                 paging.slice(listed, WorkItem::occurredOn, WorkItem::itemId, scope, after, size);
-        return new WorkItemsResponse(page.items(), page.nextCursor(), counts, Instant.now(clock));
+        return new WorkItemsResponse(complete(page.items()), page.nextCursor(), counts, Instant.now(clock));
+    }
+
+    /** The page's items with what the sources complete: the same items in the same order. */
+    private List<WorkItem> complete(List<WorkItem> page) {
+        Map<String, WorkItem> completed = new HashMap<>();
+        completed.putAll(bills.complete(page));
+        completed.putAll(payments.complete(page));
+        completed.putAll(cash.complete(page));
+        return page.stream().map(item -> completed.getOrDefault(item.itemId(), item)).toList();
+    }
+
+    /** Sets the tenant's gauges, registering them the first time the tenant is read. */
+    private void publish(Map<WorkItemType, Long> perType) {
+        String tenant = TenantContext.current().map(UUID::toString).orElse("unbound");
+        Map<WorkItemType, AtomicLong> values = gaugeValues.computeIfAbsent(tenant, key -> {
+            Map<WorkItemType, AtomicLong> created = new EnumMap<>(WorkItemType.class);
+            for (WorkItemType type : WorkItemType.values()) {
+                AtomicLong value = new AtomicLong();
+                created.put(type, value);
+                if (registry != null) {
+                    Gauge.builder(GAUGE, value, AtomicLong::get)
+                            .tag("tenant", key)
+                            .tag("type", type.name())
+                            .description("Work items of the type the tenant's last unfiltered read showed its caller")
+                            .register(registry);
+                }
+            }
+            return created;
+        });
+        values.forEach((type, value) -> value.set(perType.getOrDefault(type, 0L)));
     }
 }

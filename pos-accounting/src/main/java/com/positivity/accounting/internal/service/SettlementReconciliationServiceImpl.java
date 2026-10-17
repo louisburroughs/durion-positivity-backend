@@ -266,7 +266,7 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
         UUID undepositedAccount =
                 glMappingResolver.resolveGLAccount(SETTLEMENT_CATEGORY, UNDEPOSITED_MAPPING_KEY, txDate);
 
-        UUID sourceEventId = deterministicId("settlement-reclass:" + lineId);
+        UUID sourceEventId = reclassSourceEventId(lineId);
         glPostingService.postSettlementReclass(
                 sourceEventId,
                 suspenseAccount,
@@ -368,6 +368,14 @@ public class SettlementReconciliationServiceImpl implements SettlementReconcilia
                 .findById(line.getSettlementId())
                 .map(s -> LocalDateTime.of(s.getSettlementDate(), LocalTime.MIDNIGHT))
                 .orElseGet(() -> zoneResolver.postingDateTime(clock.instant()));
+    }
+
+    /**
+     * The source event of the reclass entry a manual match posts. The automatic matcher posts none, so a matched line
+     * with no entry under this key was matched automatically (#2515, S19 "done automatically").
+     */
+    static UUID reclassSourceEventId(@NonNull UUID lineId) {
+        return deterministicId("settlement-reclass:" + lineId);
     }
 
     private static UUID deterministicId(@NonNull String seed) {

@@ -107,8 +107,6 @@ public class CashWorkItemSource {
                 .map(AgedSession::businessDate)
                 .min(Comparator.naturalOrder())
                 .orElseThrow();
-        List<UUID> sessionIds =
-                group.stream().map(aged -> aged.session().getSessionId()).toList();
         Map<String, String> references = new LinkedHashMap<>(locationReferences(location));
         references.putAll(sessionReferences(group, dropsBySession));
         return WorkItems.item(
@@ -120,7 +118,7 @@ public class CashWorkItemSource {
                 STATUS_UNDEPOSITED,
                 oldest,
                 List.of(WorkItemAction.allowed(RECORD_DEPOSIT)),
-                preview(sessionIds),
+                List.of(),
                 WorkItems.routing("locationId", locationId));
     }
 
@@ -142,6 +140,34 @@ public class CashWorkItemSource {
                 List.of(),
                 List.of(),
                 WorkItems.routing("sessionId", session.getSessionId(), "locationId", session.getLocationId()));
+    }
+
+    /**
+     * The deposit previews of the page's {@code CASH_TO_DEPOSIT} items, by item id: the sessions each location's item
+     * covers are read again, and the deposit read is asked once per item on the page.
+     */
+    public @NonNull Map<String, WorkItem> complete(@NonNull List<WorkItem> page) {
+        List<WorkItem> pending =
+                page.stream().filter(item -> item.type() == WorkItemType.CASH_TO_DEPOSIT).toList();
+        if (pending.isEmpty() || !WorkItems.has(AccountingPermissions.DEPOSIT_CREATE)) {
+            return Map.of();
+        }
+        Map<UUID, List<UUID>> sessionsByLocation = new HashMap<>();
+        for (AgedSession aged : sources.undepositedSessions()) {
+            if (aged.balanced() && reaches(aged.session().getLocationId())) {
+                sessionsByLocation
+                        .computeIfAbsent(aged.session().getLocationId(), k -> new ArrayList<>())
+                        .add(aged.session().getSessionId());
+            }
+        }
+        Map<String, WorkItem> completed = new HashMap<>();
+        for (WorkItem item : pending) {
+            List<UUID> sessionIds = sessionsByLocation.get(item.routing().get("locationId"));
+            if (sessionIds != null) {
+                completed.put(item.itemId(), item.completed(item.reasonCode(), item.actions(), preview(sessionIds)));
+            }
+        }
+        return completed;
     }
 
     /** The entry the selected sessions' deposit would post, from the deposit read; empty when it cannot be built. */
@@ -188,7 +214,7 @@ public class CashWorkItemSource {
                     .forEach(bags::add);
         }
         return WorkItems.references(
-                "terminals", String.join(", ", terminals),
+                "terminalCount", terminals.isEmpty() ? null : Integer.toString(terminals.size()),
                 "bagNumbers", String.join(", ", bags),
                 "sessions", Integer.toString(sessions.size()));
     }

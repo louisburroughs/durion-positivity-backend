@@ -5,21 +5,28 @@ import com.positivity.accounting.internal.dto.WorkItem;
 import com.positivity.accounting.internal.dto.WorkItemAction;
 import com.positivity.accounting.internal.dto.WorkItemPostingLine;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
+import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.VendorBillAction;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.enums.WorkItemType;
+import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
+import com.positivity.accounting.internal.repository.VendorBillMatchEvidenceRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.OpenVendorBills.OpenBill;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +41,11 @@ import org.springframework.transaction.annotation.Transactional;
  * are {@link VendorBillReader#availableActions}, the rules the bill's own read applies, so a rule that blocks the caller
  * shows the action disabled with its code (P5). {@code CURRENCY_HOLD}, {@code REJECTED}, {@code VOIDED} and {@code PAID}
  * bills produce nothing.
+ *
+ * <p>Two passes keep a read cheap. {@link #items} decides which bills are items, from the bills alone and one batched
+ * read of the open candidates; the count per type needs only that. {@link #complete} then fills, for the one page the
+ * caller gets, what costs more: the actions (the match evidence and lines of the page's goods-receipt bills in one
+ * read each, and the vendors the caller created in one more) and the approval's posting preview.
  */
 @Component
 @RequiredArgsConstructor
@@ -46,21 +58,33 @@ public class BillWorkItemSource {
             VendorBillStatus.PENDING_RECEIPT_MATCH,
             VendorBillStatus.AWAITING_APPROVAL);
 
+    /** The types whose actions {@link #complete} fills. */
+    static final Set<WorkItemType> REVIEW_TYPES = EnumSet.of(
+            WorkItemType.BILL_MATCH_EXCEPTION,
+            WorkItemType.BILL_PICK_MATCH,
+            WorkItemType.BILL_WAITING_ON_DELIVERY,
+            WorkItemType.BILL_AWAITING_APPROVAL);
+
     /** {@code blockedReason} of {@code PAY} on a bill its payer approved. */
     static final String BLOCKED_SELF_APPROVED = "AP_PAYMENT_SELF_APPROVED_BILL";
 
+    /** {@code blockedReason} of {@code PAY} on a bill of a vendor on AP hold. */
+    static final String BLOCKED_AP_HOLD = "VENDOR_ON_AP_HOLD";
+
     private static final String PAY = "PAY";
+    private static final String ROUTING_BILL = "vendorBillId";
 
     private final VendorBillRepository vendorBills;
     private final VendorBillMatchCandidateRepository candidates;
-    private final VendorBillReader reader;
+    private final VendorBillMatchEvidenceRepository evidence;
+    private final VendorBillLineRepository billLines;
     private final ApApprovalPolicy policy;
     private final SupplierVendorCopies vendorCopies;
     private final OpenVendorBills openBills;
     private final BillApprovalPreview approvalPreview;
     private final AccountingCalendarZoneResolver zoneResolver;
 
-    /** The caller's bills items on {@code today}, unordered. */
+    /** The caller's bills items on {@code today}, unordered, their actions and previews still to be completed. */
     public @NonNull List<WorkItem> items(@NonNull LocalDate today) {
         List<WorkItem> items = new ArrayList<>();
         if (VendorBillDecisions.mayTake(VendorBillAction.CORRECT_EXCEPTION)) {
@@ -83,115 +107,151 @@ public class BillWorkItemSource {
             withCandidates.add(candidate.getVendorBill().getVendorBillId());
         }
         ApApprovalPolicy.Settings settings = policy.settings();
-        String caller = VendorBillDecisions.callerOrNull();
         List<WorkItem> items = new ArrayList<>();
         for (VendorBill bill : bills) {
-            boolean hasCandidates = withCandidates.contains(bill.getVendorBillId());
-            WorkItem item =
-                    switch (bill.getStatus()) {
-                        case MATCH_EXCEPTION, PENDING_RECEIPT_MATCH -> matchItem(bill, hasCandidates, settings, caller);
-                        case AWAITING_APPROVAL -> awaitingApproval(bill, settings, caller);
-                        default -> null;
-                    };
-            if (item != null) {
-                items.add(item);
+            WorkItemType type = typeOf(bill, withCandidates.contains(bill.getVendorBillId()), settings);
+            if (type != null) {
+                items.add(WorkItems.item(
+                        type,
+                        bill.getVendorBillId().toString(),
+                        billReferences(bill),
+                        reasonOf(type, bill, settings),
+                        bill.getTotalAmount(),
+                        bill.getStatus().name(),
+                        reviewDate(bill),
+                        List.of(),
+                        List.of(),
+                        WorkItems.routing(ROUTING_BILL, bill.getVendorBillId(), "vendorId", bill.getVendorId())));
             }
         }
         return items;
     }
 
-    private @Nullable WorkItem matchItem(
-            VendorBill bill, boolean hasCandidates, ApApprovalPolicy.Settings settings, @Nullable String caller) {
-        VendorBillReview.Channel channel = VendorBillReader.channelOf(bill);
-        boolean awaitsInvoice = VendorBillReader.awaitsInvoice(
-                channel, channel == VendorBillReview.Channel.GOODS_RECEIPT && reader.invoiceMatched(bill));
-        boolean exception = bill.getStatus() == VendorBillStatus.MATCH_EXCEPTION;
-        WorkItemType type;
-        String reason;
-        Set<VendorBillAction> shown;
-        if (hasCandidates) {
-            type = WorkItemType.BILL_PICK_MATCH;
-            reason = VendorBillReader.REASON_PICK_A_MATCH;
-            shown = EnumSet.of(VendorBillAction.SELECT_CANDIDATE);
-            if (!VendorBillDecisions.mayTake(VendorBillAction.SELECT_CANDIDATE)) {
-                return null;
-            }
-        } else if (exception) {
-            type = WorkItemType.BILL_MATCH_EXCEPTION;
-            reason = bill.getStatus().name();
-            shown = EnumSet.allOf(VendorBillAction.class);
-            if (!VendorBillDecisions.mayTake(VendorBillAction.CORRECT_EXCEPTION)) {
-                return null;
-            }
-        } else {
-            type = WorkItemType.BILL_WAITING_ON_DELIVERY;
-            reason = awaitsInvoice
-                    ? VendorBillReader.REASON_INVOICE_NOT_MATCHED
-                    : VendorBillReader.REASON_NO_DELIVERY_RECORDED;
-            shown = EnumSet.of(VendorBillAction.SUBMIT_FOR_APPROVAL);
-            if (!VendorBillDecisions.mayTake(VendorBillAction.SUBMIT_FOR_APPROVAL)) {
-                return null;
-            }
+    /** The item type of a review bill for this caller; null when the caller may not act on it. */
+    private static @Nullable WorkItemType typeOf(VendorBill bill, boolean hasCandidates, ApApprovalPolicy.Settings settings) {
+        if (bill.getStatus() == VendorBillStatus.AWAITING_APPROVAL) {
+            boolean mayApprove = VendorBillDecisions.mayTake(VendorBillAction.APPROVE)
+                    && VendorBillDecisions.mayDecideTier(settings.tier(bill.getTotalAmount()));
+            return mayApprove ? WorkItemType.BILL_AWAITING_APPROVAL : null;
         }
-        boolean creatorFirst =
-                exception && caller != null && vendorCopies.isCreatorsFirstBill(bill.getVendorId(), caller);
-        List<WorkItemAction> actions = actions(
-                VendorBillReader.availableActions(
-                        bill.getStatus(),
-                        channel,
-                        hasCandidates,
-                        awaitsInvoice,
-                        false,
-                        false,
-                        VendorBillReader.blocks(bill, settings, creatorFirst)),
-                shown);
-        return WorkItems.item(
-                type,
-                bill.getVendorBillId().toString(),
-                billReferences(bill),
-                reason,
-                bill.getTotalAmount(),
-                bill.getStatus().name(),
-                reviewDate(bill),
-                actions,
-                List.of(),
-                WorkItems.routing("vendorBillId", bill.getVendorBillId(), "vendorId", bill.getVendorId()));
+        if (hasCandidates) {
+            return VendorBillDecisions.mayTake(VendorBillAction.SELECT_CANDIDATE) ? WorkItemType.BILL_PICK_MATCH : null;
+        }
+        if (bill.getStatus() == VendorBillStatus.MATCH_EXCEPTION) {
+            return VendorBillDecisions.mayTake(VendorBillAction.CORRECT_EXCEPTION)
+                    ? WorkItemType.BILL_MATCH_EXCEPTION
+                    : null;
+        }
+        return VendorBillDecisions.mayTake(VendorBillAction.SUBMIT_FOR_APPROVAL)
+                ? WorkItemType.BILL_WAITING_ON_DELIVERY
+                : null;
     }
 
-    private @Nullable WorkItem awaitingApproval(
-            VendorBill bill, ApApprovalPolicy.Settings settings, @Nullable String caller) {
-        VendorBillReview.RequiredTier tier = settings.tier(bill.getTotalAmount());
-        if (!VendorBillDecisions.mayTake(VendorBillAction.APPROVE) || !VendorBillDecisions.mayDecideTier(tier)) {
-            return null;
+    private static String reasonOf(WorkItemType type, VendorBill bill, ApApprovalPolicy.Settings settings) {
+        return switch (type) {
+            case BILL_PICK_MATCH -> VendorBillReader.REASON_PICK_A_MATCH;
+            case BILL_MATCH_EXCEPTION -> bill.getStatus().name();
+            case BILL_AWAITING_APPROVAL -> settings.tier(bill.getTotalAmount()).name();
+            default -> VendorBillReader.REASON_NO_DELIVERY_RECORDED;
+        };
+    }
+
+    /**
+     * The completed form of the review items among {@code page}, by item id: their actions, the reason a waiting bill
+     * gives, and the approval preview of each approvable bill. Items of other types are not in the result.
+     */
+    public @NonNull Map<String, WorkItem> complete(@NonNull List<WorkItem> page) {
+        List<WorkItem> review =
+                page.stream().filter(item -> REVIEW_TYPES.contains(item.type())).toList();
+        if (review.isEmpty()) {
+            return Map.of();
         }
-        VendorBillReview.Channel channel = VendorBillReader.channelOf(bill);
-        boolean awaitsInvoice = VendorBillReader.awaitsInvoice(
-                channel, channel == VendorBillReview.Channel.GOODS_RECEIPT && reader.invoiceMatched(bill));
-        boolean creatorFirst = caller != null && vendorCopies.isCreatorsFirstBill(bill.getVendorId(), caller);
-        List<WorkItemAction> actions = actions(
-                VendorBillReader.availableActions(
-                        bill.getStatus(),
-                        channel,
-                        false,
-                        awaitsInvoice,
-                        false,
-                        false,
-                        VendorBillReader.blocks(bill, settings, creatorFirst)),
-                EnumSet.of(VendorBillAction.APPROVE, VendorBillAction.REJECT));
-        boolean canApprove = actions.stream()
-                .anyMatch(action -> VendorBillAction.APPROVE.name().equals(action.action()));
-        List<WorkItemPostingLine> preview = canApprove ? approvalPreview.preview(bill) : List.of();
-        return WorkItems.item(
-                WorkItemType.BILL_AWAITING_APPROVAL,
-                bill.getVendorBillId().toString(),
-                billReferences(bill),
-                tier.name(),
-                bill.getTotalAmount(),
-                bill.getStatus().name(),
-                reviewDate(bill),
-                actions,
-                preview,
-                WorkItems.routing("vendorBillId", bill.getVendorBillId(), "vendorId", bill.getVendorId()));
+        Map<UUID, VendorBill> bills = new HashMap<>();
+        vendorBills
+                .findAllById(review.stream()
+                        .map(item -> item.routing().get(ROUTING_BILL))
+                        .toList())
+                .forEach(bill -> bills.put(bill.getVendorBillId(), bill));
+        Set<UUID> matched = invoiceMatched(bills.values());
+        String caller = VendorBillDecisions.callerOrNull();
+        Set<UUID> creatorFirstVendors = vendorCopies.creatorsFirstBillVendors(
+                bills.values().stream().map(VendorBill::getVendorId).distinct().toList(), caller);
+        ApApprovalPolicy.Settings settings = policy.settings();
+
+        Map<String, WorkItem> completed = new HashMap<>();
+        for (WorkItem item : review) {
+            VendorBill bill = bills.get(item.routing().get(ROUTING_BILL));
+            if (bill == null) {
+                continue; // vanished between the two passes
+            }
+            VendorBillReview.Channel channel = VendorBillReader.channelOf(bill);
+            boolean awaitsInvoice = VendorBillReader.awaitsInvoice(channel, matched.contains(bill.getVendorBillId()));
+            boolean pick = item.type() == WorkItemType.BILL_PICK_MATCH;
+            List<WorkItemAction> actions = actions(
+                    VendorBillReader.availableActions(
+                            bill.getStatus(),
+                            channel,
+                            pick,
+                            awaitsInvoice,
+                            false,
+                            false,
+                            VendorBillReader.blocks(bill, settings, creatorFirstVendors.contains(bill.getVendorId()))),
+                    shown(item.type()));
+            String reason = item.type() == WorkItemType.BILL_WAITING_ON_DELIVERY && awaitsInvoice
+                    ? VendorBillReader.REASON_INVOICE_NOT_MATCHED
+                    : item.reasonCode();
+            boolean canApprove = item.type() == WorkItemType.BILL_AWAITING_APPROVAL
+                    && actions.stream().anyMatch(action -> VendorBillAction.APPROVE.name().equals(action.action()));
+            List<WorkItemPostingLine> preview = canApprove ? approvalPreview.preview(bill) : List.of();
+            completed.put(item.itemId(), item.completed(reason, actions, preview));
+        }
+        return completed;
+    }
+
+    private static Set<VendorBillAction> shown(WorkItemType type) {
+        return switch (type) {
+            case BILL_PICK_MATCH -> EnumSet.of(VendorBillAction.SELECT_CANDIDATE);
+            case BILL_WAITING_ON_DELIVERY -> EnumSet.of(VendorBillAction.SUBMIT_FOR_APPROVAL);
+            case BILL_AWAITING_APPROVAL -> EnumSet.of(VendorBillAction.APPROVE, VendorBillAction.REJECT);
+            default -> EnumSet.allOf(VendorBillAction.class);
+        };
+    }
+
+    /** The goods-receipt bills among {@code bills} a vendor invoice is matched to; one read of evidence, one of lines. */
+    private Set<UUID> invoiceMatched(java.util.Collection<VendorBill> bills) {
+        List<UUID> receiptBills = bills.stream()
+                .filter(bill -> VendorBillReader.channelOf(bill) == VendorBillReview.Channel.GOODS_RECEIPT)
+                .map(VendorBill::getVendorBillId)
+                .toList();
+        Set<UUID> matched = new HashSet<>();
+        if (receiptBills.isEmpty()) {
+            return matched;
+        }
+        Map<UUID, VendorBillMatchEvidence> latest = new HashMap<>();
+        for (VendorBillMatchEvidence row : evidence.findByVendorBillIdIn(receiptBills)) {
+            latest.merge(
+                    row.getVendorBillId(),
+                    row,
+                    (a, b) -> Comparator.comparing(VendorBillMatchEvidence::getRecordedAt)
+                                            .thenComparing(VendorBillMatchEvidence::getMatchEvidenceId)
+                                            .compare(a, b)
+                                    >= 0
+                            ? a
+                            : b);
+        }
+        Map<UUID, List<VendorBillLine>> lines = new HashMap<>();
+        for (VendorBillLine line : billLines.findByVendorBill_VendorBillIdIn(receiptBills)) {
+            lines.computeIfAbsent(line.getVendorBill().getVendorBillId(), k -> new ArrayList<>())
+                    .add(line);
+        }
+        for (UUID id : receiptBills) {
+            List<VendorBillLine> stored = new ArrayList<>(lines.getOrDefault(id, List.of()));
+            stored.sort(Comparator.comparing(VendorBillLine::getLineNumber));
+            if (VendorBillReader.invoiceMatched(latest.get(id), stored)) {
+                matched.add(id);
+            }
+        }
+        return matched;
     }
 
     private List<WorkItem> dueSoon(LocalDate today) {
@@ -205,6 +265,9 @@ public class BillWorkItemSource {
         }
         ApApprovalPolicy.Settings settings = policy.settings();
         String caller = VendorBillDecisions.callerOrNull();
+        Set<UUID> held = vendorCopies
+                .heldVendors(due.stream().map(open -> open.bill().getVendorId()).distinct().toList())
+                .keySet();
         List<WorkItem> items = new ArrayList<>();
         for (OpenBill open : due) {
             VendorBill bill = open.bill();
@@ -213,6 +276,9 @@ public class BillWorkItemSource {
                     && bill.getApprovedByKind() == VendorBillApproverKind.PERSON
                     && caller.equals(bill.getApprovedBy())
                     && !settings.allowApproverPayment();
+            WorkItemAction pay = held.contains(bill.getVendorId())
+                    ? WorkItemAction.blocked(PAY, BLOCKED_AP_HOLD)
+                    : selfApproved ? WorkItemAction.blocked(PAY, BLOCKED_SELF_APPROVED) : WorkItemAction.allowed(PAY);
             items.add(WorkItems.item(
                     WorkItemType.BILLS_DUE_SOON,
                     bill.getVendorBillId().toString(),
@@ -222,20 +288,14 @@ public class BillWorkItemSource {
                             "purchaseOrderNumber", bill.getPurchaseOrderNumber(),
                             "dueDate", dueDate.toString(),
                             "estimated", Boolean.toString(open.estimated()),
-                            "termsSource",
-                                    open.estimate() == null
-                                            ? null
-                                            : open.estimate().termsSource().name()),
+                            "termsSource", open.estimate() == null ? null : open.estimate().termsSource().name()),
                     dueDate.isBefore(today) ? "OVERDUE" : "DUE_SOON",
                     open.openAmount(),
                     bill.getStatus().name(),
                     dueDate,
-                    List.of(
-                            selfApproved
-                                    ? WorkItemAction.blocked(PAY, BLOCKED_SELF_APPROVED)
-                                    : WorkItemAction.allowed(PAY)),
+                    List.of(pay),
                     List.of(),
-                    WorkItems.routing("vendorBillId", bill.getVendorBillId(), "vendorId", bill.getVendorId())));
+                    WorkItems.routing(ROUTING_BILL, bill.getVendorBillId(), "vendorId", bill.getVendorId())));
         }
         return items;
     }
@@ -248,15 +308,12 @@ public class BillWorkItemSource {
                 .toList();
     }
 
-    private static java.util.Map<String, String> billReferences(VendorBill bill) {
+    private static Map<String, String> billReferences(VendorBill bill) {
         return WorkItems.references(
                 "vendor", bill.getVendorName(),
                 "billNumber", bill.getBillNumber(),
                 "purchaseOrderNumber", bill.getPurchaseOrderNumber(),
-                "billDate",
-                        bill.getBillDate() == null
-                                ? null
-                                : bill.getBillDate().toLocalDate().toString());
+                "billDate", bill.getBillDate() == null ? null : bill.getBillDate().toLocalDate().toString());
     }
 
     /** When the bill started waiting: its submission for an approval, else its arrival; its bill date as a last resort. */
@@ -267,8 +324,6 @@ public class BillWorkItemSource {
         if (at != null) {
             return zoneResolver.postingDate(at);
         }
-        return bill.getBillDate() == null
-                ? zoneResolver.today()
-                : bill.getBillDate().toLocalDate();
+        return bill.getBillDate() == null ? zoneResolver.today() : bill.getBillDate().toLocalDate();
     }
 }

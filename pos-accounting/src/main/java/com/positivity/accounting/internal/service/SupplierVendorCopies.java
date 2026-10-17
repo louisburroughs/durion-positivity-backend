@@ -278,6 +278,25 @@ public class SupplierVendorCopies {
     }
 
     /**
+     * {@link #isCreatorsFirstBill} for many vendors at once: those among {@code vendorIds} that {@code actor} created
+     * and none of whose bills was ever approved. One read of the vendor copies, and one more per vendor the actor
+     * created.
+     */
+    public @NonNull java.util.Set<UUID> creatorsFirstBillVendors(
+            @NonNull Collection<UUID> vendorIds, @Nullable String actor) {
+        java.util.Set<UUID> first = new java.util.HashSet<>();
+        if (actor == null || vendorIds.isEmpty()) {
+            return first;
+        }
+        for (ExtSupplierVendor vendor : vendors.findAllById(vendorIds)) {
+            if (actor.equals(vendor.getCreatedBy()) && !bills.existsByVendorIdAndApprovedAtIsNotNull(vendor.getVendorId())) {
+                first.add(vendor.getVendorId());
+            }
+        }
+        return first;
+    }
+
+    /**
      * Whether the vendor accepts tax charged on goods for resale (CAP:550 S43, AW44): its AP setting {@code
      * acceptTaxOnResaleGoods}, false without a settings row or a vendor.
      */

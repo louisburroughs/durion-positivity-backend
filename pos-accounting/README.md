@@ -88,7 +88,7 @@ Every display value is resolved from data accounting already holds — its own r
 - `GET /v1/accounting/unpaid-walk-in-sales` — unpaid walk-in sales (see [Unpaid walk-in sales](#unpaid-walk-in-sales-cap550-s11-2508)): the CASH house account's `balance`, its `openInvoices` oldest sale first, the day-end `needsAttention` item and `unappliedPayments` (permission `reporting:view:financial-statements`, event `ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW`, CAP:550 S11, #2508)
 - `GET /v1/accounting/cash-position` — your cash (see [Cash position and outlook](#cash-position-and-outlook-2515)): `total` = in the bank + waiting to be deposited + kept in drawers, each component with its accounts, `needsAttention[]`, `unpaidWalkInSales` and `asOf` (permission `reporting:view:financial-statements`, plus `accounting:reconciliation:view` for the statement fields; event `ACCOUNTING_CASH_POSITION_GET`)
 - `GET /v1/accounting/cash-outlook?days=30` — the projected daily balance over `days` (1-90, default 30; any other value → 400 `VALIDATION_ERROR` on `days`) from approved bills and open invoices, with `lowPoint`, `billsLane` and the cushion check (permission `reporting:view:financial-statements`, event `ACCOUNTING_CASH_OUTLOOK_GET`)
-- `GET /v1/accounting/work-items?area=&cursor=&limit=` — the to-do list (see [Work items](#work-items-2515)): items built on read from their sources, already filtered to what the caller may act on, oldest first, with `countsByArea`, `nextCursor` and `asOf`; `limit` 1-200, default 50 (any other value → 400 `VALIDATION_ERROR` on `limit`); a malformed or wrong-area cursor → 400 `WORK_ITEMS_CURSOR_INVALID` (permission: any of the item permissions, else 403; event `ACCOUNTING_WORK_ITEMS_LIST`, CAP:550 S19, #2515)
+- `GET /v1/accounting/work-items?area=&cursor=&limit=` — the to-do list (see [Work items](#work-items-2515)): items built on read from their sources, already filtered to what the caller may act on, oldest first, with `countsByArea`, `nextCursor` and `asOf`; `limit` 1-200, default 50 (any other value → 400 `VALIDATION_ERROR` on `limit`); an `area` other than the four → 400 `VALIDATION_ERROR` on `area`; a malformed or wrong-area cursor → 400 `WORK_ITEMS_CURSOR_INVALID` (permission: any of the item permissions, else 403; event `ACCOUNTING_WORK_ITEMS_LIST`, CAP:550 S19, #2515)
 - `GET /v1/accounting/work-items/automatic?since=&cursor=&limit=` — done automatically (see [Work items](#work-items-2515)): payment applications with `UNDO` for holders of `accounting:payment:reverse`, matched settlement lines and system-approved bills, oldest first; `since` an ISO instant or a date read in the tenant zone, default the start of today there, at most 31 days back and not in the future (else 400 `VALIDATION_ERROR` on `since`) (permission: any of the item permissions, else 403; event `ACCOUNTING_WORK_ITEMS_AUTOMATIC_LIST`, CAP:550 S19, #2515)
 - `GET /v1/accounting/settlements/{settlementId}/lines` — list settlement lines, optional `unmatchedOnly` filter (permission `accounting:reconciliation:view`, event `ACCOUNTING_SETTLEMENT_LINES_LIST`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/match` — manually match an unmatched line to a receivable payment (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_MATCH`, story F1c)
@@ -542,11 +542,16 @@ day's `moneyIn`, `moneyOut` and the `estimatedMoneyOut` part of it):
 
 Two computed reads, `WorkItemService` and `WorkItemAutomaticService`; no table, nothing stored or posted. An item exists
 while its source is in the listed state and has no state of its own. If a load test shows the read above budget, a
-projection table is a follow-up. Both reads answer 403 to a caller holding none of `accounting:ap:approve`,
-`accounting:ap:approve_over_limit`, `accounting:ap:pay`, `accounting:ap:view`, `accounting:payment:apply`,
-`accounting:deposit:create`, `accounting:reconciliation:adjust`, `accounting:reconciliation:approve`,
-`reporting:view:financial-statements` and `accounting:je:post`; the service then shows each type only to the holders of
-its own gate.
+projection table is a follow-up. The list answers 403 to a caller holding none of `accounting:ap:approve`,
+`accounting:ap:approve_over_limit`, `accounting:ap:pay`, `accounting:payment:apply`, `accounting:deposit:create`,
+`accounting:reconciliation:adjust`, `accounting:reconciliation:approve`, `reporting:view:financial-statements` and
+`accounting:je:post` (`accounting:ap:view` comes back with `DELIVERIES_NOT_BILLED`, #2750); the service then shows each
+type only to the holders of its own gate. The automatic read has its own gate (see below).
+
+A read has two passes: the sources first decide which items exist, from their sources alone (all the counts and the
+paging need), and only the page the caller gets is completed with the costlier parts: a bill's actions (the match
+evidence and lines of the page's goods-receipt bills and the vendors the caller created, one read each) and the
+posting previews.
 
 **Item**: `itemId` (`<TYPE>:<source id>`, stable), `type`, `area`, `references` (business values by key: vendor, bill
 number, purchase order number, customer, payment reference, invoice number, location, terminals, bag numbers, statement
@@ -561,12 +566,12 @@ only where an action posts) and `routing` (the identifiers, the only place they 
 | `BILL_PICK_MATCH` | `BILLS` | `MATCH_EXCEPTION` or `PENDING_RECEIPT_MATCH` with open candidates | the approve permissions | `SELECT_CANDIDATE` |
 | `BILL_WAITING_ON_DELIVERY` | `BILLS` | `PENDING_RECEIPT_MATCH`, no open candidates | the approve permissions | `SUBMIT_FOR_APPROVAL`, absent while a goods-receipt bill awaits its invoice |
 | `BILL_AWAITING_APPROVAL` | `BILLS` | `AWAITING_APPROVAL` | `approve_over_limit`, or `approve` for a `CLERK`-tier bill | `APPROVE` blocked `AP_BILL_SELF_APPROVAL` for the creator, `REJECT`; `postingPreview` = the entry the approval would post (none when it cannot be built; recovery and use tax are decided at approval and not previewed) |
-| `BILLS_DUE_SOON` | `BILLS` | `OpenVendorBills`: approved, open, due (real or estimated) on or before today + 7, overdue included | `accounting:ap:pay` | `PAY` blocked `AP_PAYMENT_SELF_APPROVED_BILL` for the person who approved it unless `AP_ALLOW_APPROVER_PAYMENT`; references `estimated`, `termsSource` |
+| `BILLS_DUE_SOON` | `BILLS` | `OpenVendorBills`: approved, open, due (real or estimated) on or before today + 7, overdue included | `accounting:ap:pay` | `PAY` blocked `VENDOR_ON_AP_HOLD` for a vendor on AP hold, else `AP_PAYMENT_SELF_APPROVED_BILL` for the person who approved it unless `AP_ALLOW_APPROVER_PAYMENT`; references `estimated`, `termsSource` |
 | `PAYMENT_TO_MATCH` | `PAYMENTS` | unapplied customer payments with a suggestion (`ReceivablesWorklistService`); `OVERPAID` when it leaves money over, else `SUGGESTED_MATCH` | `accounting:payment:apply` | `MATCH` |
 | `PAYMENT_NO_CUSTOMER` | `PAYMENTS` | defined, never produced until OI-8 | | |
 | `UNPAID_WALK_IN_SALE` | `PAYMENTS` | open walk-in invoices past their business day (`UnpaidWalkInSalesService`) | `reporting:view:financial-statements` | none |
-| `AP_PAYMENT_NOT_POSTED` | `PAYMENTS` | `APPayment` in `GL_POST_FAILED` only (`GL_POST_PENDING` is not an item); `reasonCode` = the stored failure; `occurredOn` = `paymentDate` | `accounting:je:post` | `RETRY` (`POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry`) blocked `PERIOD_CLOSED` while the payment date is in a closed period and the caller lacks `accounting:period:override` (a hard-locked date is not blocked: the retry can defer past it); preview Dr 2000 (and the fee) / Cr the bank account |
-| `CASH_TO_DEPOSIT` | `CASH` | the balanced undeposited sessions, one item per location, for the locations the caller's scope reaches (`CashAttentionSources`); `occurredOn` = the oldest business date; references location, terminals, bag numbers | `accounting:deposit:create` | `RECORD_DEPOSIT`; preview from the deposit read |
+| `AP_PAYMENT_NOT_POSTED` | `PAYMENTS` | `APPayment` in `GL_POST_FAILED` only (`GL_POST_PENDING` is not an item); `reasonCode` = the stored failure; `occurredOn` = `paymentDate` | `accounting:je:post` | `RETRY` (`POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry`) blocked `PERIOD_CLOSED` while the payment date is in a closed period, and `PERIOD_HARD_LOCKED` while it is hard-locked, unless the caller holds `accounting:period:override`; a caller with it may retry a hard-locked payment, and the retry command then needs its `deferPastHardLock` flag with a justification (the entry is dated on the retry's business date); preview Dr 2000 (and the fee) / Cr the bank account, mapped on the date the entry would post |
+| `CASH_TO_DEPOSIT` | `CASH` | the balanced undeposited sessions, one item per location, for the locations the caller's scope reaches (`CashAttentionSources`); `occurredOn` = the oldest business date; references location, `terminalCount`, bag numbers (no terminal id: the replicas carry no terminal name) | `accounting:deposit:create` | `RECORD_DEPOSIT`; preview from the deposit read |
 | `UNDEPOSITED_SESSION_UNBALANCED` | `CASH` | an undeposited session older than `UNDEPOSITED_CASH_AGED_DAYS` whose drops do not balance; `reasonCode` `UNBALANCED` | `accounting:deposit:create` | none (a controller's journal correction fixes it) |
 | `BANK_LINE_UNMATCHED` | `BANK` | `UNMATCHED` lines of the statements of reconciliations `IN_PROGRESS`; `CARD_DEPOSIT_CANDIDATE` for a credit line the matching finds a ledger candidate for, else `NOT_IN_BOOKS` | `accounting:reconciliation:adjust` | none |
 | `RECONCILIATION_AWAITING_APPROVAL` | `BANK` | reconciliations `SUBMITTED`; `occurredOn` = the submission date | `accounting:reconciliation:approve` | `APPROVE` blocked `RECONCILIATION_SELF_APPROVAL` for the preparer unless `BANK_REC_ALLOW_SELF_APPROVAL` |
@@ -584,15 +589,22 @@ The next page resumes after that key, so an item that has vanished is no error. 
 was issued for another area (for the automatic read, another `since`) is 400 `WORK_ITEMS_CURSOR_INVALID`; start again from the
 first page.
 
-**Done automatically** (`/automatic`): `PAYMENT_APPLIED_AUTOMATICALLY` (read in process through
+**Done automatically** (`/automatic`): the list answers 403 unless the caller holds one of `accounting:payment:apply`,
+`accounting:payment:reverse`, `accounting:reconciliation:view`, `accounting:ap:approve` or
+`accounting:ap:approve_over_limit`, and each kind is listed only to the holders of its own: the payment applications to
+the first two, the settlement matches to `reconciliation:view`, the system-approved bills to the last two.
+`PAYMENT_APPLIED_AUTOMATICALLY` (read in process through
 `AutomaticPaymentApplicationQueryService`; `UNDO` only for holders of `accounting:payment:reverse`, a reversed
 application is listed with `status` `REVERSED` and no `UNDO`; undo is `POST /v1/accounting/payment-applications/{id}/reverse`),
-`SETTLEMENT_LINE_MATCHED` (a `MATCHED` processor settlement line changed since) and `BILL_APPROVED_BY_SYSTEM` (a bill
+`SETTLEMENT_LINE_MATCHED` (a `MATCHED` processor settlement line the automatic matcher matched since: it decides a line as
+it creates it, so the creation time is the match time, and a line matched by hand is told apart by the reclass entry that
+match posts, which the automatic matcher does not) and `BILL_APPROVED_BY_SYSTEM` (a bill
 whose approver is the system approver, approved since); the last two carry no actions. Bank-reconciliation proposals are
 never listed. `since` is an ISO instant, or a date read as the start of that day in the tenant zone; omitted, the start of
 today there; it may not be in the future or more than 31 days back (400 `VALIDATION_ERROR` on `since`).
 
-**Metric**: the gauge `accounting.work_items.count{type}` holds, for each type, the count the last read showed its caller.
+**Metric**: the gauge `accounting.work_items.count{tenant,type}` holds, for each type, the count the last read without
+an `area` filter showed its caller in that tenant: the last unfiltered read, a sample and not a tenant total.
 
 ### Bank reconciliation close readiness and policy (#2305)
 

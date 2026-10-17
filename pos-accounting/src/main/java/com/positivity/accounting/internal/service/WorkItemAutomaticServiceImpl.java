@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.enums.AutomaticWorkItemKind;
 import com.positivity.accounting.internal.enums.SettlementLineMatchStatus;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ProcessorSettlementLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
@@ -20,7 +21,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -30,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Builds the "done automatically" list on every request (CAP:550 S19, #2515): the payment applications read through
  * {@link AutomaticPaymentApplicationQueryService} in-process (this read builds no payment source of its own), the
- * settlement lines in {@code MATCHED} changed since, and the bills the system approver approved since. Only a payment
+ * settlement lines the automatic matcher matched since, and the bills the system approver approved since. Only a payment
  * application can be undone, by the holders of {@code accounting:payment:reverse}; an approved bill is locked and a
  * settlement match has no undo (P4). The look-back is the 31 days the ruling of 2026-10-17 allows, on the tenant
  * accounting date.
@@ -47,6 +51,7 @@ public class WorkItemAutomaticServiceImpl implements WorkItemAutomaticService {
 
     private final AutomaticPaymentApplicationQueryService applications;
     private final ProcessorSettlementLineRepository settlementLines;
+    private final JournalEntryRepository journalEntries;
     private final VendorBillRepository vendorBills;
     private final WorkItemPaging paging;
     private final AccountingCalendarZoneResolver zoneResolver;
@@ -61,9 +66,16 @@ public class WorkItemAutomaticServiceImpl implements WorkItemAutomaticService {
         WorkItemPaging.Key after = paging.decode(cursor, scope);
 
         List<AutomaticWorkItem> items = new ArrayList<>();
-        items.addAll(paymentApplications(from));
-        items.addAll(settlementMatches(from));
-        items.addAll(systemApprovals(from));
+        // Each kind is shown to those who hold a permission over what it lists (ruling of the review of #2752).
+        if (WorkItems.hasAny(AccountingPermissions.PAYMENT_APPLY, AccountingPermissions.PAYMENT_REVERSE)) {
+            items.addAll(paymentApplications(from));
+        }
+        if (WorkItems.has(AccountingPermissions.RECONCILIATION_VIEW)) {
+            items.addAll(settlementMatches(from));
+        }
+        if (WorkItems.hasAny(AccountingPermissions.AP_APPROVE, AccountingPermissions.AP_APPROVE_OVER_LIMIT)) {
+            items.addAll(systemApprovals(from));
+        }
         WorkItemPaging.Slice<AutomaticWorkItem> page =
                 paging.slice(items, AutomaticWorkItem::occurredOn, AutomaticWorkItem::itemId, scope, after, size);
         return new AutomaticWorkItemsResponse(page.items(), page.nextCursor(), Instant.now(clock));
@@ -111,21 +123,33 @@ public class WorkItemAutomaticServiceImpl implements WorkItemAutomaticService {
                         "invoiceId", row.getInvoiceId()));
     }
 
+    /**
+     * The lines the automatic matcher matched at or after {@code since}. The matcher decides a line as it creates it, so
+     * the creation time is the match time; a line matched by hand is told apart by the reclass entry that match posts
+     * (the automatic matcher posts none), and is left out.
+     */
     private List<AutomaticWorkItem> settlementMatches(Instant since) {
+        List<ProcessorSettlementLine> matched =
+                settlementLines.findByMatchStatusAndCreatedAtGreaterThanEqual(SettlementLineMatchStatus.MATCHED, since);
+        if (matched.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> byHand = new HashSet<>(journalEntries.findSourceEventIdsIn(matched.stream()
+                .map(line -> SettlementReconciliationServiceImpl.reclassSourceEventId(line.getLineId()))
+                .toList()));
         List<AutomaticWorkItem> items = new ArrayList<>();
-        for (ProcessorSettlementLine line : settlementLines.findByMatchStatusAndUpdatedAtGreaterThanEqual(
-                SettlementLineMatchStatus.MATCHED, since)) {
+        for (ProcessorSettlementLine line : matched) {
+            if (byHand.contains(SettlementReconciliationServiceImpl.reclassSourceEventId(line.getLineId()))) {
+                continue;
+            }
             items.add(new AutomaticWorkItem(
                     AutomaticWorkItemKind.SETTLEMENT_LINE_MATCHED.name() + ":" + line.getLineId(),
                     AutomaticWorkItemKind.SETTLEMENT_LINE_MATCHED,
-                    zoneResolver.postingDate(line.getUpdatedAt()),
+                    zoneResolver.postingDate(line.getCreatedAt()),
                     WorkItems.references(
                             "settlement", line.getSettlementId(),
                             "paymentReference", line.getPaymentReference(),
-                            "lineType",
-                                    line.getLineType() == null
-                                            ? null
-                                            : line.getLineType().name()),
+                            "lineType", line.getLineType() == null ? null : line.getLineType().name()),
                     line.getNetAmount(),
                     STATUS_MATCHED,
                     List.of(),

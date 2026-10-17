@@ -155,10 +155,12 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("400 when area is not one of BILLS, PAYMENTS, BANK, CASH")
+    @DisplayName("400 VALIDATION_ERROR on the area field when area is not one of BILLS, PAYMENTS, BANK, CASH")
     void unknownArea() throws Exception {
         mockMvc.perform(withAuth(get(LIST).param("area", "SPACE"), "accounting:ap:pay"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("area"));
 
         verify(service, never()).list(any(), any(), any());
     }
@@ -167,6 +169,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @DisplayName("AC12: 403 on the list for a caller holding none of the item permissions")
     void listForbidden() throws Exception {
         mockMvc.perform(withAuth(get(LIST), "accounting:coa:view")).andExpect(status().isForbidden());
+        mockMvc.perform(withAuth(get(LIST), "accounting:ap:view")).andExpect(status().isForbidden());
 
         verify(service, never()).list(any(), any(), anyInt());
     }
@@ -180,7 +183,6 @@ class WorkItemControllerTest extends BaseIntegrationTest {
                 "accounting:ap:approve",
                 "accounting:ap:approve_over_limit",
                 "accounting:ap:pay",
-                "accounting:ap:view",
                 "accounting:payment:apply",
                 "accounting:deposit:create",
                 "accounting:reconciliation:adjust",
@@ -189,6 +191,22 @@ class WorkItemControllerTest extends BaseIntegrationTest {
                 "accounting:je:post")) {
             mockMvc.perform(withAuth(get(LIST), permission)).andExpect(status().isOk());
         }
+    }
+
+    @Test
+    @DisplayName("each permission an automatic kind needs opens the automatic list; the list-only ones do not")
+    void automaticPermissions() throws Exception {
+        when(automaticService.list(isNull(), isNull(), isNull())).thenReturn(automaticPage());
+
+        for (String permission : List.of(
+                "accounting:payment:apply",
+                "accounting:payment:reverse",
+                "accounting:reconciliation:view",
+                "accounting:ap:approve",
+                "accounting:ap:approve_over_limit")) {
+            mockMvc.perform(withAuth(get(AUTOMATIC), permission)).andExpect(status().isOk());
+        }
+        mockMvc.perform(withAuth(get(AUTOMATIC), "accounting:deposit:create")).andExpect(status().isForbidden());
     }
 
     @Test
@@ -238,7 +256,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @DisplayName("operation ids and the ACCOUNTING_WORK_ITEMS_* events")
     void annotations() throws Exception {
         Method list =
-                WorkItemController.class.getMethod("listWorkItems", WorkItemArea.class, String.class, Integer.class);
+                WorkItemController.class.getMethod("listWorkItems", String.class, String.class, Integer.class);
         Method automatic =
                 WorkItemController.class.getMethod("listAutomaticWorkItems", String.class, String.class, Integer.class);
 
