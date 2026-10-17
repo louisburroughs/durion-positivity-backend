@@ -48,11 +48,11 @@ public class PlatformTenantController {
     private static final String TENANT_CREATE_EXAMPLE = """
             {"slug":"acme-tire","displayName":"Acme Tire & Auto — Tucson",
              "accountId":"01990000-0000-7000-8000-00000000a001","cell":"us-east-1",
-             "initialAdminEmail":"owner@acme.example"}
+             "initialAdminEmail":"owner@acme.example","locale":"en-US"}
             """;
 
     private static final String TENANT_UPDATE_EXAMPLE = """
-            {"displayName":"Acme Tire & Auto Group","cell":"us-east-2"}
+            {"displayName":"Acme Tire & Auto Group","cell":"us-east-2","locale":"fr-CA"}
             """;
 
     @Operation(operationId = "createTenant", summary = "Register a Tenant", description = """
@@ -62,7 +62,9 @@ public class PlatformTenantController {
             Use this tool once per customer tenancy, after createAccount when the owning account does not exist; do not use \
             it to change an existing tenant, use updateTenant or the lifecycle operations instead.
             Preconditions: the account exists, and neither the slug nor the display name is taken.
-            Required inputs: slug, accountId and initialAdminEmail; cell and displayName are optional. Omitting \
+            Required inputs: slug, accountId, initialAdminEmail and locale (a BCP 47 tag with a region from \
+            pos.tenant.supported-locales, #2618; a bare language or an unlisted tag is 400 VALIDATION_ERROR with \
+            fieldErrors[locale]); cell and displayName are optional. Omitting \
             displayName seeds it from the account's legal name, suffixed " #2", " #3" and so on only where that \
             would collide — a fallback, so prefer naming the tenant explicitly.
             Emits a TENANT_CREATE event.
@@ -147,14 +149,14 @@ public class PlatformTenantController {
     }
 
     @Operation(operationId = "updateTenant", summary = "Update a Tenant", description = """
-            Changes a tenant's display name or cell and publishes tenant.updated; slug, account and status are \
-            never changed here.
+            Changes a tenant's display name, cell or locale and publishes tenant.updated; slug, account and status \
+            are never changed here.
             Use this tool for descriptive edits; do not use it to change status, use suspendTenant, reactivateTenant or \
             decommissionTenant instead.
             Preconditions: the tenant exists, is not DECOMMISSIONED, and the new display name is not already held \
             by another tenant.
-            Required inputs: id (UUID) as a path parameter and a body with displayName and/or cell; a null field \
-            leaves the value unchanged.
+            Required inputs: id (UUID) as a path parameter and a body with any of displayName, cell and locale (a \
+            listed BCP 47 tag with a region, #2618); a null field leaves the value unchanged.
             Emits a TENANT_UPDATE event.
             Returns 200 with the tenant, 404 when it does not exist and 409 when it is decommissioned or the \
             display name is taken.
