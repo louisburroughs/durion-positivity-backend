@@ -35,12 +35,14 @@ class VendorCreateRequestHashTest {
     }
 
     @Test
-    @DisplayName("null and empty are different values")
-    void nullIsNotEmpty() {
-        RemitToDto withNull = new RemitToDto("P", "L1", null, "City", "ST", "00000", "US", null);
-        RemitToDto withEmpty = new RemitToDto("P", "L1", "", "City", "ST", "00000", "US", null);
-        assertThat(VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), withNull)))
-                .isNotEqualTo(VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), withEmpty)));
+    @DisplayName("an absent remit-to and a present one differ, as do two remit-tos by one optional line")
+    void remitToCounts() {
+        RemitToDto one = new RemitToDto("P", "L1", null, "City", "ST", "00000", "US", null);
+        RemitToDto two = new RemitToDto("P", "L1", "Suite 2", "City", "ST", "00000", "US", null);
+        String absent = VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), null));
+        String withOne = VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), one));
+        assertThat(withOne).isNotEqualTo(absent);
+        assertThat(VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), two))).isNotEqualTo(withOne);
     }
 
     @Test
@@ -52,8 +54,8 @@ class VendorCreateRequestHashTest {
         assertThat(VendorCreateRequestHash.of(
                         request("ACME", "Acme", List.of(new TaxRegistrationDto(id, "EIN", "000-00-1234", null)), null)))
                 .isNotEqualTo(plain);
-        assertThat(VendorCreateRequestHash.of(
-                        request("ACME", "Acme", List.of(new TaxRegistrationDto(null, "EIN", "000-00-4321", null)), null)))
+        assertThat(VendorCreateRequestHash.of(request(
+                        "ACME", "Acme", List.of(new TaxRegistrationDto(null, "EIN", "000-00-4321", null)), null)))
                 .isNotEqualTo(plain);
     }
 }

@@ -916,7 +916,8 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         void keyRowHoldsNoNumber() {
             UUID key = UUIDv7Generator.generate();
             as("clerk.a", () -> service.createVendor(keyed(key, "Michelin")));
-            SupplierVendorCreateRequestEntity row = createRequests.findByRequestId(key).orElseThrow();
+            SupplierVendorCreateRequestEntity row =
+                    createRequests.findByRequestId(key).orElseThrow();
             assertThat(row.getRequestHash()).hasSize(64);
             assertThat(row.getResponseJson()).contains("Michelin").doesNotContain("000-00-1234");
         }
