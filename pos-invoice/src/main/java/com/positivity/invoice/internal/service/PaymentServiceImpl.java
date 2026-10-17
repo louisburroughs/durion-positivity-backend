@@ -409,7 +409,8 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private static boolean exceedsPaymentLimit(@NonNull InitiatePaymentRequest request) {
-        return exceedsPaymentLimit(request.getAmount());
+        // Kept literal: pos-mcp-server's InvoicingPaymentsGuideTest mirrors this line against the guide.
+        return request.getAmount().compareTo(PAYMENT_LIMIT_THRESHOLD) > 0;
     }
 
     private static boolean exceedsPaymentLimit(@NonNull BigDecimal amount) {
