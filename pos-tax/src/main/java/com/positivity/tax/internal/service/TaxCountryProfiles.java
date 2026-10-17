@@ -55,6 +55,7 @@ public class TaxCountryProfiles {
 
     private static final String COUNTRIES = "pos.tax.countries.";
     private static final String DEFAULT_PROVIDERS = "pos.tax.default-providers.";
+    private static final int MAX_LABEL = 100;
     private static final Pattern ALPHA_2 = Pattern.compile("^[A-Z]{2}$");
     private static final Pattern REGION_CODE = Pattern.compile("^[A-Za-z0-9]{1,3}$");
 
@@ -181,7 +182,14 @@ public class TaxCountryProfiles {
                 throw invalid(
                         property + ".regime", "regime " + regime + " is not declared under " + prefix + ".regimes");
             }
-            entries.put(code, new TaxTypeEntry(code, regime, jurisdictionType, typeProfile.getInputTaxRecoverable()));
+            entries.put(
+                    code,
+                    new TaxTypeEntry(
+                            code,
+                            regime,
+                            jurisdictionType,
+                            typeProfile.getInputTaxRecoverable(),
+                            optionalLabel(property + ".label", typeProfile.getLabel())));
         }
         return entries;
     }
@@ -199,6 +207,16 @@ public class TaxCountryProfiles {
                     "'" + value + "' is not a " + kind + " code of 1 to 32 upper-case letters, digits or underscores");
         }
         return value;
+    }
+
+    /** An optional display label: trimmed, blank means absent, at most 100 characters. */
+    @Nullable
+    private static String optionalLabel(@NonNull String property, @Nullable String value) {
+        String label = blankToNull(value == null ? null : value.trim());
+        if (label != null && label.length() > MAX_LABEL) {
+            throw invalid(property, "a label is at most " + MAX_LABEL + " characters");
+        }
+        return label;
     }
 
     @NonNull
@@ -229,7 +247,10 @@ public class TaxCountryProfiles {
             for (int i = 0; i < regions.size(); i++) {
                 normalized.add(regionCode(property + ".regions[" + i + "]", regions.get(i)));
             }
-            entries.put(name, new RegimeEntry(name, List.copyOf(normalized)));
+            entries.put(
+                    name,
+                    new RegimeEntry(
+                            name, List.copyOf(normalized), optionalLabel(property + ".label", profile.getLabel())));
         }
         return List.copyOf(entries.values());
     }

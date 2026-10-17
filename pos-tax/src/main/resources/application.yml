@@ -128,14 +128,16 @@ pos:
     countries:
       CA:
         currency: CAD
+        # Display labels (1-100 characters, optional) are PLACEHOLDERS held for expert advice (OI-4); a type or
+        # regime without one is served with a null label, never its code.
         tax-types: # a list with explicit codes, so binding never mangles a code
-          - { code: GST, regime: GST_HST, jurisdiction-type: COUNTRY, input-tax-recoverable: true }
-          - { code: HST, regime: GST_HST, jurisdiction-type: PROVINCE, input-tax-recoverable: true }
-          - { code: QST, regime: QST, jurisdiction-type: PROVINCE, input-tax-recoverable: true }
-          - { code: PST, jurisdiction-type: PROVINCE, input-tax-recoverable: false } # no regime
+          - { code: GST, regime: GST_HST, jurisdiction-type: COUNTRY, input-tax-recoverable: true, label: Goods and services tax }
+          - { code: HST, regime: GST_HST, jurisdiction-type: PROVINCE, input-tax-recoverable: true, label: Harmonized sales tax }
+          - { code: QST, regime: QST, jurisdiction-type: PROVINCE, input-tax-recoverable: true, label: Quebec sales tax }
+          - { code: PST, jurisdiction-type: PROVINCE, input-tax-recoverable: false, label: Provincial sales tax } # no regime
         regimes: # empty regions = the whole country
-          - { code: GST_HST, regions: [] }
-          - { code: QST, regions: [QC] }
+          - { code: GST_HST, regions: [], label: GST/HST }
+          - { code: QST, regions: [QC], label: QST }
         # rates: none shipped (OI-4)
         # CAP:550 S32b. The regime whose shape a supplier's number must match (placeholder, OI-4).
         supplier-registration-regime: GST_HST

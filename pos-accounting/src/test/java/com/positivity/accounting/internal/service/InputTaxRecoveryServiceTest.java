@@ -56,6 +56,7 @@ class InputTaxRecoveryServiceTest {
 
     private final InputTaxRecoveryFlags flags = mock(InputTaxRecoveryFlags.class);
     private final TaxProfileClient taxProfiles = mock(TaxProfileClient.class);
+    private final TaxProfileReads profileReads = mock(TaxProfileReads.class);
     private final PettyExpenseCategoryRepository categories = mock(PettyExpenseCategoryRepository.class);
     private final PettyExpenseCategoryTaxSettingRepository settings =
             mock(PettyExpenseCategoryTaxSettingRepository.class);
@@ -74,6 +75,7 @@ class InputTaxRecoveryServiceTest {
         service = new InputTaxRecoveryService(
                 flags,
                 taxProfiles,
+                profileReads,
                 categories,
                 settings,
                 changes,
@@ -275,6 +277,12 @@ class InputTaxRecoveryServiceTest {
         when(accounts.findById(accountId)).thenReturn(Optional.of(account));
         when(taxProfiles.evidenceRules("CA", TODAY))
                 .thenReturn(new TaxProfileClient.EvidenceRules("CA", TODAY, "CAD", List.of(), null));
+        when(profileReads.taxTypesIfAvailable("CA"))
+                .thenReturn(Optional.of(new TaxProfileClient.TaxTypes(
+                        "CA",
+                        "CAD",
+                        List.of(),
+                        List.of(new TaxProfileClient.Regime("GST_HST", List.of(), "Regime label")))));
 
         InputTaxRecoveryResponse read = service.read();
 
@@ -282,6 +290,7 @@ class InputTaxRecoveryServiceTest {
             assertThat(regime.enabled()).isTrue();
             assertThat(regime.registration().since()).isEqualTo(LocalDate.parse("2026-01-01"));
             assertThat(regime.account().code()).isEqualTo("1250");
+            assertThat(regime.label()).isEqualTo("Regime label"); // #2679
         });
         assertThat(read.evidenceRules())
                 .singleElement()

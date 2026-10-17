@@ -41,7 +41,7 @@ Tax calculation service for the Durion Positivity ETSMS platform. Supports two o
 - `POST /v1/tax/calculate` — calculate tax for a set of line items
 - `GET /v1/tax/rates` — rate-only lookup for an address (`tax:rates:view`)
 - `GET /v1/tax/tax-types?countryCode=` — a country's configured tax types, regimes and currency (`tax:rates:view`, service
-  authority; CAP:550 S32a)
+  authority; CAP:550 S32a); each tax type and regime carries an optional display `label` (null when none is configured, never the code)
 - `GET /v1/tax/evidence-rules?countryCode=&asOf=` — a country's evidence rules in effect on a date (`tax:rates:view`, service
   authority; CAP:550 S32b)
 - `POST /v1/tax/plausibility-checks` — the stated-tax plausibility check of a receipt (`tax:rates:view`, service authority;
@@ -156,6 +156,7 @@ what the stub answers today, and which questions wait for expert advice.
 | Evidence rule | `GET /v1/tax/evidence-rules?countryCode=&asOf=` (`tax:rates:view`, service authority; AW53; CAP:550 S32b, #2637) | Built. `pos.tax.countries.<country>.evidence-rules`, `source = STUB`: the rules in effect on `asOf` (default today), amounts in the profile's currency; a country with none → an empty list. The first configured country (`CA`) ships one placeholder row: `SUPPLIER_REGISTRATION_NUMBER` from 100.00, `appliesTo [DRAWER_RECEIPT, VENDOR_BILL]`, undated; no $500 tier. The answer also carries `supplierRegistrationRegime`, the country's `supplier-registration-regime` (null when it names none): the registration pos-accounting looks for in a bill's vendor copy (CAP:550 S32d, #2639, AW53; the stub S32d added). A caller that cannot obtain the rule retries or holds, never treats it as absent (AW49) | pos-accounting, pos-order | The threshold, the $500 tier, what is compared, whether bills are in scope |
 | Receipt-tax plausibility | `POST /v1/tax/plausibility-checks` (`tax:rates:view`, service authority; AW55; CAP:550 S32b, #2637) | Built, keyed by regime. Per stated amount: 422 `TAX_AMOUNT_IMPLAUSIBLE` when it, or the sum of all, reaches the total `T`, or when it is above `T × r / (1 + r)` rounded up to the minor unit plus `pos.tax.plausibility.tolerance-minor-units` (placeholder 5); `r` is decided per regime (Accounting ruling on #2637, comment 6071110619): **rated** — a row of the regime's tax types is in effect in the region on `asOf`, use its rate; **not levied** — no row and the regime does not cover the region (its `regions` are neither empty nor contain it), `r = 0`, so the maximum is the tolerance; **unrated** — no row but the regime covers the region, no rate bound, and the regime is in neither `ratesUsed` nor `maximums`. The total check always applies; no combined bound. `RATE_UNAVAILABLE` when at least one stated amount above zero is unrated, otherwise `PLAUSIBLE` (zero or absent amounts included). Refusals in order: 400 shape (including a repeated regime), 422 `TAX_JURISDICTION_NOT_CONFIGURED`, `CURRENCY_NOT_SUPPORTED`, `AMOUNT_PRECISION_EXCEEDS_CURRENCY`, `TAX_REGIME_NOT_DECLARED`, `TAX_AMOUNT_IMPLAUSIBLE`. Also answers `supplierRegistrationRequired` (the evidence rule for `DRAWER_RECEIPT`) and `supplierRegistrationNumberWellFormed` (the country's `supplier-registration-regime` shape, or null). Pure: no tenant data, no state, no event; the number is never echoed, logged or stored. A bookkeeping control against typing errors, not a tax rule | pos-order (drawer entry) | How taxes stack on one receipt |
 | Information-return forms | `GET /v1/tax/information-return-forms?countryCode=` (`tax:rates:view`, service authority; CAP:550 louisburroughs/durion-positivity-backend#2615) | Built. `pos.tax.information-returns.<country>.forms[]`, `source = STUB`: configured forms, boxes and payee-id schemes per country; a country with none → an empty list; a missing or malformed `countryCode` → 400. US and CA rows are placeholders (`US_1099_NEC`, `US_1099_MISC`, `CA_T4A`) | pos-accounting (#2615) | Which forms and boxes apply per country, payee ids, thresholds, filing |
+| Tax-type and regime labels | `GET /v1/tax/tax-types` (`taxTypes[].label`, `regimes[].label`; CAP:550 louisburroughs/durion-positivity-backend#2679) | Built. `pos.tax.countries.<country>.tax-types[].label` and `.regimes[].label`, 1-100 characters, `source = STUB`; a missing label is served as null, never the code and never a default; the CA labels are placeholders | pos-accounting (#2679: tax regimes, input-tax recovery, tax registrations and the vendor-bill read) | The wording on each country's documents (OI-4) |
 
 ## Configuration
 
@@ -207,7 +208,8 @@ pos:
 Every value here is a **placeholder held for expert advice** (AW48, OI-4), never tax law. Code names no country, regime or tax
 type: adding a country is a configuration block and a `default-providers` entry. Tax-type codes are a configuration-only
 vocabulary (no enum; `TaxTypeCodes` in pos-tax-common only fixes their shape, 1–32 upper-case letters, digits or underscores);
-consumers store the code as a string, so a new code needs no code change or migration anywhere.
+consumers store the code as a string, so a new code needs no code change or migration anywhere. Each tax type and regime may
+carry an optional `label` (1-100 characters, trimmed, blank = absent); a missing label is served as `null`, never the code.
 
 ```yaml
 pos.tax:

@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -157,6 +158,27 @@ public class TaxProfileClient {
         public boolean declaresRegime(@NonNull String regime) {
             return regimes.stream().anyMatch(r -> regime.equals(r.regime()));
         }
+
+        /** The configured display label of a regime, or null when the profile sets none (#2679). */
+        public @Nullable String regimeLabel(@Nullable String regime) {
+            if (regime == null) {
+                return null;
+            }
+            return regimes.stream()
+                    .filter(r -> regime.equals(r.regime()))
+                    .map(Regime::label)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        /** The configured display label of a tax type, or null when the profile sets none (#2679). */
+        public @Nullable String taxTypeLabel(@Nullable String code) {
+            if (code == null) {
+                return null;
+            }
+            return taxType(code).map(TaxType::label).orElse(null);
+        }
     }
 
     /**
@@ -171,7 +193,18 @@ public class TaxProfileClient {
             @NonNull String taxType,
             @Nullable String regime,
             @Nullable String jurisdictionType,
-            boolean inputTaxRecoverable) {}
+            boolean inputTaxRecoverable,
+            @Nullable String label) {
+
+        /** Without a label (#2679): pos-tax serves null when the profile sets none. */
+        public TaxType(
+                @NonNull String taxType,
+                @Nullable String regime,
+                @Nullable String jurisdictionType,
+                boolean inputTaxRecoverable) {
+            this(taxType, regime, jurisdictionType, inputTaxRecoverable, null);
+        }
+    }
 
     /**
      * One declared regime.
@@ -179,7 +212,16 @@ public class TaxProfileClient {
      * @param regime the regime
      * @param regions the regions it covers; empty for the whole country
      */
-    public record Regime(@NonNull String regime, @Nullable List<String> regions) {}
+    public record Regime(
+            @NonNull String regime,
+            @Nullable List<String> regions,
+            @Nullable String label) {
+
+        /** Without a label (#2679). */
+        public Regime(@NonNull String regime, @Nullable List<String> regions) {
+            this(regime, regions, null);
+        }
+    }
 
     /**
      * The evidence rules in effect on a date (S32b's {@code TaxEvidenceRulesResponse}).

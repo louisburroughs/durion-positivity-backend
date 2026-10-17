@@ -1,10 +1,12 @@
 package com.positivity.accounting.internal.dto;
 
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The tax regimes configured for one country, each with the regions it covers and the tax types registered and
@@ -69,11 +71,25 @@ public record TaxRegimesResponse(
                             @Schema(
                                     description = "The tax types registered and recovered under the regime",
                                     requiredMode = REQUIRED))
-            List<TaxType> taxTypes) {
+            List<TaxType> taxTypes,
+
+            @Schema(
+                    description = "The regime's configured display label; null when the profile sets none, never the"
+                            + " code (#2679)",
+                    example = "Value added tax",
+                    nullable = true,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String label) {
 
         public Regime {
             regions = regions == null ? List.of() : List.copyOf(regions);
             taxTypes = taxTypes == null ? List.of() : List.copyOf(taxTypes);
+        }
+
+        /** Without a label. */
+        public Regime(String regime, List<String> regions, List<TaxType> taxTypes) {
+            this(regime, regions, taxTypes, null);
         }
     }
 
@@ -93,5 +109,20 @@ public record TaxRegimesResponse(
                     example = "COUNTRY",
                     allowableValues = {"COUNTRY", "STATE", "PROVINCE", "COUNTY", "CITY", "DISTRICT", "SPECIAL"},
                     requiredMode = REQUIRED)
-            String jurisdictionType) {}
+            String jurisdictionType,
+
+            @Schema(
+                    description = "The tax type's configured display label; null when the profile sets none, never"
+                            + " the code (#2679)",
+                    example = "Goods and services tax",
+                    nullable = true,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String label) {
+
+        /** Without a label. */
+        public TaxType(String taxType, String jurisdictionType) {
+            this(taxType, jurisdictionType, null);
+        }
+    }
 }

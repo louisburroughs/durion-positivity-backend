@@ -94,7 +94,27 @@ public record InputTaxRecoveryResponse(
                     nullable = true,
                     requiredMode = REQUIRED)
             @Nullable
-            Account account) {}
+            Account account,
+
+            @Schema(
+                    description = "The regime's configured display label; null when the profile sets none or the tax"
+                            + " service did not answer, never the code (#2679)",
+                    example = "Value added tax",
+                    nullable = true,
+                    requiredMode = NOT_REQUIRED)
+            @Nullable
+            String label) {
+
+        /** Without a label. */
+        public Regime(
+                @NonNull String countryCode,
+                @NonNull String regime,
+                @Nullable Boolean enabled,
+                @Nullable Registration registration,
+                @Nullable Account account) {
+            this(countryCode, regime, enabled, registration, account, null);
+        }
+    }
 
     /**
      * A registration.

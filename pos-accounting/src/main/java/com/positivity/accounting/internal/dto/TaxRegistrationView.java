@@ -53,7 +53,18 @@ public record TaxRegistrationView(
         long version,
 
         @Schema(description = "When pos-tax last changed it", requiredMode = REQUIRED) @NonNull
-        Instant changedAt) {
+        Instant changedAt,
+
+        @Schema(
+                description = "The regime's configured display label; null when the profile sets none or the tax"
+                        + " service did not answer, never the code (#2679)",
+                example = "Value added tax",
+                nullable = true,
+                requiredMode = NOT_REQUIRED)
+        @Nullable
+        String regimeLabel) {
+
+    // #2679: regimeLabel is set where the view is built, never copied in afterwards.
 
     /** Every field but the number, which is never logged. */
     @Override

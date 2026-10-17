@@ -25,6 +25,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +69,7 @@ public class InputTaxRecoveryService {
 
     private final InputTaxRecoveryFlags flags;
     private final TaxProfileClient taxProfiles;
+    private final TaxProfileReads profileReads;
     private final PettyExpenseCategoryRepository categories;
     private final PettyExpenseCategoryTaxSettingRepository settings;
     private final PettyExpenseCategoryTaxSettingChangeRepository settingChanges;
@@ -234,19 +236,27 @@ public class InputTaxRecoveryService {
         try {
             flagged = flags.regimes(today);
         } catch (TaxServiceUnavailableException e) {
-            // The read never fails because of pos-tax: whether recovery is on is then unknown, never "off" (AW49).
+            // The read never fails because of pos-tax: whether recovery is on is then unknown, never "off" (AW49),
+            // and the labels are left null without asking pos-tax a second time (#2679).
             log.warn("Input-tax recovery read without the tax configuration: enabled is unknown");
             flagged = flags.regimesUnchecked(today);
-            return flagged.stream().map(flag -> row(flag, null, today)).toList();
+            return flagged.stream().map(flag -> row(flag, null, today, null)).toList();
         }
+        Map<String, Optional<TaxProfileClient.TaxTypes>> profiles = new HashMap<>();
         for (InputTaxRecoveryFlags.RegimeFlag flag : flagged) {
-            rows.add(row(flag, flag.enabled(), today));
+            String label = profiles.computeIfAbsent(flag.countryCode(), profileReads::taxTypesIfAvailable)
+                    .map(profile -> profile.regimeLabel(flag.regime()))
+                    .orElse(null);
+            rows.add(row(flag, flag.enabled(), today, label));
         }
         return List.copyOf(rows);
     }
 
     private InputTaxRecoveryResponse.Regime row(
-            InputTaxRecoveryFlags.RegimeFlag flag, @Nullable Boolean enabled, LocalDate today) {
+            InputTaxRecoveryFlags.RegimeFlag flag,
+            @Nullable Boolean enabled,
+            LocalDate today,
+            @Nullable String regimeLabel) {
         ExtTaxRegistration registration = flag.registration();
         return new InputTaxRecoveryResponse.Regime(
                 flag.countryCode(),
@@ -256,7 +266,8 @@ public class InputTaxRecoveryService {
                         ? null
                         : new InputTaxRecoveryResponse.Registration(
                                 registration.getRegistrationNumber(), registration.getEffectiveFrom()),
-                account(inputTaxKey(flag.regime()), today));
+                account(inputTaxKey(flag.regime()), today),
+                regimeLabel);
     }
 
     private InputTaxRecoveryResponse.@Nullable Account account(String keyName, LocalDate today) {
