@@ -4,6 +4,11 @@
 spring:
   application:
     name: pos-inventory-pg-test
+  datasource:
+    hikari:
+      data-source-properties:
+        # ADR-0072 (#2650): no pgjdbc "Failing row contains" detail in driver messages; guarded by PgjdbcServerErrorDetailTest.
+        logServerErrorDetail: false
   autoconfigure:
     exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   jpa:
