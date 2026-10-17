@@ -24,11 +24,10 @@ import com.positivity.order.internal.service.model.CashMovementApprovalCommand;
 import com.positivity.order.internal.service.model.CashMovementApprovalResult;
 import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
-import com.positivity.shared.error.ApiError;
 import java.math.BigDecimal;
-import java.util.List;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -39,6 +38,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -386,5 +386,4 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
     private static @Nullable String blankToNull(@Nullable String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
-
 }

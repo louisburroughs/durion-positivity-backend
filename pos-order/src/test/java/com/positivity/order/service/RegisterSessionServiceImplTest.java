@@ -493,7 +493,8 @@ class RegisterSessionServiceImplTest {
     }
 
     @Test
-    @DisplayName("#2651 (ADR-0067 PC-6): a countedCash finer than the drawer currency's minor unit is refused, not rounded")
+    @DisplayName(
+            "#2651 (ADR-0067 PC-6): a countedCash finer than the drawer currency's minor unit is refused, not rounded")
     void beginClose_refusesSubMinorUnitCount() {
         UUID id = UUID.randomUUID();
         RegisterSession session = openSession(id);
@@ -502,7 +503,9 @@ class RegisterSessionServiceImplTest {
         assertThatThrownBy(() -> service.beginClose(id, new BigDecimal("100.005")))
                 .isInstanceOfSatisfying(
                         com.positivity.order.internal.exception.CashMovementTaxRefusedException.class,
-                        e -> assertThat(e.fieldErrors()).extracting(f -> f.field()).containsExactly("countedCash"));
+                        e -> assertThat(e.fieldErrors())
+                                .extracting(f -> f.field())
+                                .containsExactly("countedCash"));
         assertThat(session.getCountedCash()).isNull();
         assertThat(session.getStatus()).isEqualTo(RegisterSessionStatus.OPEN);
     }

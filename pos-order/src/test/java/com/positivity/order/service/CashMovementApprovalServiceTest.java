@@ -142,9 +142,12 @@ class CashMovementApprovalServiceTest {
                 .isInstanceOfSatisfying(
                         com.positivity.order.internal.exception.CashMovementTaxRefusedException.class, e -> {
                             assertThat(e.code())
-                                    .isEqualTo(com.positivity.order.internal.exception.CashMovementTaxRefusedException
-                                            .Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
-                            assertThat(e.fieldErrors()).extracting(f -> f.field()).containsExactly("amount");
+                                    .isEqualTo(
+                                            com.positivity.order.internal.exception.CashMovementTaxRefusedException.Code
+                                                    .AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                            assertThat(e.fieldErrors())
+                                    .extracting(f -> f.field())
+                                    .containsExactly("amount");
                         });
 
         session.setCurrencyCode("JPY");
