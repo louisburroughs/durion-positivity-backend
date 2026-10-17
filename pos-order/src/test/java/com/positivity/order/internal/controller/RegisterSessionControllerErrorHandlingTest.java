@@ -69,11 +69,11 @@ class RegisterSessionControllerErrorHandlingTest extends BaseControllerSliceTest
                                 "countedCash", "has more decimals than USD allows"))));
 
         mockMvc.perform(withGatewayAuth(
-                                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
-                                                "/v1/orders/sessions/{sessionId}/begin-close", SESSION_ID)
-                                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                        .content("{\"countedCash\":100.005}"),
-                                "order:session:close"))
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                                        "/v1/orders/sessions/{sessionId}/begin-close", SESSION_ID)
+                                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                                .content("{\"countedCash\":100.005}"),
+                        "order:session:close"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("AMOUNT_PRECISION_EXCEEDS_CURRENCY"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("countedCash"))

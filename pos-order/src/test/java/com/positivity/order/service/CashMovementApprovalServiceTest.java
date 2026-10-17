@@ -140,16 +140,13 @@ class CashMovementApprovalServiceTest {
         session.setCurrencyCode("CAD");
         assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
                         SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", new BigDecimal("30.005"), "CAD", null, null)))
-                .isInstanceOfSatisfying(
-                        CashMovementTaxRefusedException.class, e -> {
-                            assertThat(e.code())
-                                    .isEqualTo(
-                                            com.positivity.order.internal.exception.CashMovementTaxRefusedException.Code
-                                                    .AMOUNT_PRECISION_EXCEEDS_CURRENCY);
-                            assertThat(e.fieldErrors())
-                                    .extracting(f -> f.field())
-                                    .containsExactly("amount");
-                        });
+                .isInstanceOfSatisfying(CashMovementTaxRefusedException.class, e -> {
+                    assertThat(e.code())
+                            .isEqualTo(
+                                    com.positivity.order.internal.exception.CashMovementTaxRefusedException.Code
+                                            .AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                    assertThat(e.fieldErrors()).extracting(f -> f.field()).containsExactly("amount");
+                });
 
         session.setCurrencyCode("JPY");
         assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
