@@ -249,8 +249,9 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         String actor = RegisterFloatServiceImpl.currentActor();
         category.setStatus(PettyExpenseCategoryStatus.INACTIVE);
         category.setModifiedBy(actor);
-        // The key and its mapping are kept: a movement recorded before deactivation still posts (§4.6 "never
-        // retroactive"). Resolution by category and key does not read the key's active flag.
+        // The key and its mapping are kept, and the key stays active: a movement recorded before deactivation
+        // still posts (§4.6 "never retroactive"). The resolver refuses an inactive key (#2612), so the key's flag
+        // is deliberately not touched here; the category's own INACTIVE status is what refuses new movements.
         PettyExpenseCategory saved = persistChange(category);
         PettyExpenseCategoryChange change = record(
                 saved,

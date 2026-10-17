@@ -2,6 +2,10 @@ spring:
   datasource:
     url: jdbc:postgresql://${POS_MCP_DB_HOST}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        # ADR-0072 (#2650): no pgjdbc "Failing row contains" detail in driver messages; guarded by PgjdbcServerErrorDetailTest.
+        logServerErrorDetail: false
     username: ${POS_MCP_DB_USER:pos_mcp}
     password: ${POS_MCP_DB_PASSWORD}
   flyway:

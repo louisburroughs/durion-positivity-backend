@@ -149,6 +149,31 @@ class RegisterFloatReversalReactionTest {
     }
 
     @Test
+    @DisplayName("#2607: reversing a float REVERSAL entry is 409 FLOAT_REVERSAL_NOT_REVERSIBLE and changes nothing")
+    void reversalEntryIsNotReversible() {
+        RegisterFloatChange goLive = rows.get(0);
+        RegisterFloatChange mirror = row(RegisterFloatChangeKind.REVERSAL, SHOP_B, "100.00", "0.00", MOVED.plusDays(2));
+        mirror.setReversedChangeId(goLive.getChangeId());
+        goLive.setReversalJournalEntryId(mirror.getJournalEntryId());
+        rows.add(mirror);
+        registerFloat.setAmount(BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> reaction.onReversed(reversal(mirror.getJournalEntryId(), MOVED.plusDays(3), null)))
+                .isInstanceOf(CashSetupException.class)
+                .satisfies(e -> {
+                    CashSetupException refused = (CashSetupException) e;
+                    assertThat(refused.getCode()).isEqualTo(CashSetupException.Code.FLOAT_REVERSAL_NOT_REVERSIBLE);
+                    assertThat(refused.getCode().status().value()).isEqualTo(409);
+                    assertThat(refused.getReferenceId()).isEqualTo("T-1");
+                });
+        assertThat(registerFloat.getAmount()).isEqualByComparingTo("0.00");
+        verify(floats, never()).saveAndFlush(any());
+        verify(changes, never()).saveAndFlush(any());
+        verify(journalEntries, never()).createJournalEntry(any());
+        verify(writer, never()).publish(any(), any());
+    }
+
+    @Test
     @DisplayName("AC9: a go-live reversal dated before the register's latest move is 422"
             + " FLOAT_REVERSAL_BEFORE_RELOCATION and changes nothing")
     void reversalMayNotPredateTheMove() {

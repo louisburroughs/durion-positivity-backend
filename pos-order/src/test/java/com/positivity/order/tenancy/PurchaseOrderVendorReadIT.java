@@ -90,7 +90,11 @@ class PurchaseOrderVendorReadIT extends PostgresTenancyTestBase {
                     .containsExactly(inactiveA, activeA);
             assertThat(all.getContent().get(0))
                     .isEqualTo(new PurchaseOrderVendorResponse(
-                            inactiveA, token + "-001", "Alpha Parts " + token, PurchaseOrderVendorStatus.INACTIVE));
+                            inactiveA,
+                            token + "-001",
+                            "Alpha Parts " + token,
+                            PurchaseOrderVendorStatus.INACTIVE,
+                            false));
 
             Page<PurchaseOrderVendorResponse> active = list(PurchaseOrderVendorStatus.ACTIVE, token, Sort.unsorted());
             assertThat(active.getContent().stream().map(PurchaseOrderVendorResponse::vendorId))

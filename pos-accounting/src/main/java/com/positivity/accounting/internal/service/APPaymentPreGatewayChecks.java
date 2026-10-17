@@ -141,6 +141,12 @@ public class APPaymentPreGatewayChecks {
         }
         List<GLAccount> eligible = payFromAccounts.eligible(date);
         Optional<UUID> single = payFromAccounts.defaultFor(eligible);
+        if (single.isPresent() && !payFromAccounts.isEligible(single.get(), date)) {
+            // Re-checked under the account's row lock (#2645): a deactivation that committed between the list and
+            // here is seen, and the lock is then held until the payment commits.
+            throw bankAccountRefused("bankAccountId is required: the one active " + ledgerCurrency.code()
+                    + " bank account (BANK_CASH) was deactivated while the payment was being checked");
+        }
         if (single.isEmpty()) {
             throw bankAccountRefused(
                     eligible.isEmpty()

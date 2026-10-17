@@ -268,11 +268,9 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                 .hasSize(1);
         assertThat(entryCount(tenant)).isEqualTo(1);
 
-        // Past the posting key's 24 hours, the entry's deterministic source event is the backstop.
-        new JdbcTemplate(ownerDataSource())
-                .update(
-                        "UPDATE idempotency_keys SET expires_at = now() - interval '1 day' WHERE tenant_id = ?",
-                        tenant);
+        // Posting keys never expire (#2595). Belt and braces: with the key rows gone, the entry's deterministic
+        // source event still stops a re-emit from posting twice.
+        new JdbcTemplate(ownerDataSource()).update("DELETE FROM idempotency_keys WHERE tenant_id = ?", tenant);
         asTenant(
                 tenant,
                 () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), fact)));

@@ -53,7 +53,8 @@ class SupplierVendorUpdatedV1Test {
                 "controller-b",
                 "clerk-a",
                 CREATED,
-                CREATED.plusSeconds(60));
+                CREATED.plusSeconds(60),
+                null);
     }
 
     @Test
@@ -172,7 +173,8 @@ class SupplierVendorUpdatedV1Test {
                         null,
                         "clerk-a",
                         CREATED,
-                        CREATED))
+                        CREATED,
+                        null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

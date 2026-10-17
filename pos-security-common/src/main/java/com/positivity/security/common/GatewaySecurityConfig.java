@@ -5,6 +5,7 @@ import java.security.MessageDigest;
 import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -87,6 +88,24 @@ public class GatewaySecurityConfig {
         // Absent in modules that have not adopted location scope (#1870): the filter still builds a
         // LocationScope, and every scoped permission it is asked about is denied, never allowed.
         return new GatewayAuthoritiesFilter(locationAncestorResolver.getIfAvailable());
+    }
+
+    /**
+     * Keeps {@link GatewayAuthoritiesFilter} inside {@link #gatewaySecurityFilterChain} only (#2656). Because the
+     * filter is a {@code @Bean}, Spring Boot would also register it as a plain servlet filter that runs after every
+     * security chain. On a request to a module's own chain (a shared-secret chain, a public or token-checked
+     * {@code permitAll} chain) the request carries no gateway headers, and the stray instance would clear the
+     * authentication that chain had set, or build one from client-supplied {@code X-Authorities} headers after a
+     * {@code permitAll} chain had already passed the request. The gateway chain adds the filter itself; nothing else
+     * changes. Every importer gets this once, so no module (or slice test) needs its own copy.
+     */
+    @Bean
+    public FilterRegistrationBean<GatewayAuthoritiesFilter> gatewayAuthoritiesFilterServletRegistration(
+            GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
+        FilterRegistrationBean<GatewayAuthoritiesFilter> registration =
+                new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

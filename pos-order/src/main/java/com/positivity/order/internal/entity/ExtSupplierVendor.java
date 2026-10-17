@@ -25,7 +25,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * <p>Written only by the {@code supplier.vendor.updated} branch of {@code SupplierOrderResultListener}, under
  * {@code ReplicaVersionGuard}. It holds every vendor, active or inactive, and only the R3 minimum a purchase order
  * needs: the vendor key, its number, its display name and its status, which {@code SupplierVendorGuard} reads before
- * a purchase order is created, approved, revised to another vendor or transmitted. No tax registration is copied.
+ * a purchase order is created, approved, revised to another vendor or transmitted, plus the vendor's purchasing channel
+ * (#2713), stamped on the order as its {@code supplierRef}. No tax registration is copied.
  */
 @Entity
 @EntityListeners(AuditingEntityListener.class)
@@ -59,6 +60,13 @@ public class ExtSupplierVendor extends TenantScopedEntity {
     @Column(name = "status_changed_at")
     private Instant statusChangedAt;
 
+    /**
+     * The vendor's purchasing channel (#2713): pos-supplier's designated transmission profile alias, the {@code
+     * supplierRef} a purchase order to this vendor is sent through; null when the vendor has none.
+     */
+    @Column(name = "purchase_order_supplier_ref", length = 100)
+    private String purchaseOrderSupplierRef;
+
     /** Envelope {@code aggregateVersion} of the last applied fact: the stale-fact guard. */
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
@@ -68,6 +76,11 @@ public class ExtSupplierVendor extends TenantScopedEntity {
     private Instant updatedAt;
 
     /** Whether the vendor may be named on a new, approved or transmitted purchase order. */
+    /** Whether the vendor has a purchasing channel (#2713): a non-blank {@code purchaseOrderSupplierRef}. */
+    public boolean hasPurchasingChannel() {
+        return purchaseOrderSupplierRef != null && !purchaseOrderSupplierRef.isBlank();
+    }
+
     public boolean isActive() {
         return status == Status.ACTIVE;
     }

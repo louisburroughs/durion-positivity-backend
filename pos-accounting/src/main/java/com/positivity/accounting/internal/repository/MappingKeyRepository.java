@@ -28,6 +28,12 @@ public interface MappingKeyRepository extends JpaRepository<MappingKey, UUID>, J
      */
     List<MappingKey> findByIsActive(Boolean isActive);
 
+    /** The key with its posting category in one read (#2612), for the resolver's active check on the posting path. */
+    @org.springframework.data.jpa.repository.Query(
+            "SELECT k FROM MappingKey k JOIN FETCH k.postingCategory WHERE k.mappingKeyId = :mappingKeyId")
+    Optional<MappingKey> findWithCategoryById(
+            @org.springframework.data.repository.query.Param("mappingKeyId") UUID mappingKeyId);
+
     /**
      * Check if a mapping key name already exists within a category.
      */

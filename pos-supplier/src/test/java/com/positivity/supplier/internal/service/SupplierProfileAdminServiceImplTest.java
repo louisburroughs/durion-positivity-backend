@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.UUID;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,9 +53,28 @@ import org.springframework.test.context.event.RecordApplicationEvents;
     TestClockConfig.class,
     SupplierProfileAdminServiceImpl.class,
     SecretSchemeRegistry.class,
-    EnvSecretReferenceResolver.class
+    EnvSecretReferenceResolver.class,
+    com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile.class,
+    com.positivity.supplier.internal.vendor.service.VendorFactPublisher.class,
+    com.positivity.supplier.internal.service.SupplierOutboxEventWriter.class,
+    SupplierProfileAdminServiceImplTest.FactSupportConfig.class
 })
 class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
+
+    /** #2712: the admin writes republish the vendor fact through the real outbox writer, which needs a mapper. */
+    @org.springframework.boot.test.context.TestConfiguration
+    static class FactSupportConfig {
+        @org.springframework.context.annotation.Bean
+        tools.jackson.databind.ObjectMapper objectMapper() {
+            return tools.jackson.databind.json.JsonMapper.builder().build();
+        }
+    }
+
+    @Autowired
+    private com.positivity.supplier.internal.repository.SupplierOutboxEventRepository outboxRepository;
+
+    @Autowired
+    private com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile purchasingProfile;
 
     private static final UUID LOCATION_A = UUID.fromString("018f0000-0000-7000-8000-0000000000a1");
 
@@ -953,6 +973,85 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
                 assertThat(view.vendorNumber()).startsWith("T-");
             });
             assertThat(adminService.listProfiles(null)).hasSize(3);
+        }
+    }
+
+    @Nested
+    @DisplayName("#2712: the vendor's purchasing channel follows its profiles")
+    class PurchasingChannel {
+
+        private VendorProfileRequest profileFor(String supplierRef, UUID vendor, boolean enabled, boolean sandbox) {
+            return new VendorProfileRequest(
+                    supplierRef, "Display " + supplierRef, enabled, sandbox, 5000, 30000, 3, null, null, vendor);
+        }
+
+        /** Only the vendor facts: a profile write queues other outbox rows of its own. */
+        private long vendorFacts() {
+            return outboxRepository.findAll().stream()
+                    .filter(row -> com.positivity.domainevents.supplier.SupplierVendorUpdatedV1.EVENT_TYPE.equals(
+                            row.getEventType()))
+                    .count();
+        }
+
+        private UUID activeVendor(String number) {
+            return vendorRepository
+                    .saveAndFlush(com.positivity.supplier.internal.entity.SupplierVendorEntity.builder()
+                            .vendorNumber(number)
+                            .legalName(number + " Inc.")
+                            .displayName(number)
+                            .defaultPaymentTerms("NET30")
+                            .defaultCurrency("USD")
+                            .status(com.positivity.supplier.internal.enums.VendorStatus.ACTIVE)
+                            .createdBy("test")
+                            .build())
+                    .getVendorId();
+        }
+
+        @Test
+        @DisplayName("one enabled non-sandbox profile is the channel; a second one unseats it; disabling restores it")
+        void designationFollowsTheProfiles() {
+            UUID vendor = activeVendor("CHANNEL-1");
+            long facts = vendorFacts();
+
+            assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor)).isEmpty();
+            var first = adminService.createProfile(profileFor("channel-one", vendor, true, false));
+            assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor)).contains("channel-one");
+            assertThat(vendorFacts()).as("the vendor fact is republished").isEqualTo(facts + 1);
+
+            adminService.createProfile(profileFor("channel-sandbox", vendor, true, true));
+            assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor))
+                    .as("a sandbox profile is never the channel and moves nothing")
+                    .contains("channel-one");
+            assertThat(vendorFacts()).isEqualTo(facts + 1);
+
+            var second = adminService.createProfile(profileFor("channel-two", vendor, true, false));
+            assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor))
+                    .as("two enabled profiles: none designated until the owner's mechanics exist")
+                    .isEmpty();
+            assertThat(vendorFacts()).isEqualTo(facts + 2);
+
+            adminService.updateProfile(second.vendorProfileId(), profileFor("channel-two", vendor, false, false));
+            assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor)).contains("channel-one");
+            assertThat(vendorFacts()).isEqualTo(facts + 3);
+
+            adminService.deleteProfile(first.vendorProfileId());
+            assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor)).isEmpty();
+            assertThat(vendorFacts()).isEqualTo(facts + 4);
+        }
+
+        @Test
+        @DisplayName("re-pointing the channel profile to another vendor republishes both vendors")
+        void repointRepublishesBoth() {
+            UUID one = activeVendor("CHANNEL-A");
+            UUID two = activeVendor("CHANNEL-B");
+            var profile = adminService.createProfile(profileFor("channel-ab", one, true, false));
+            long facts = vendorFacts();
+
+            adminService.updateProfile(profile.vendorProfileId(), profileFor("channel-ab", two, true, false));
+
+            assertThat(purchasingProfile.purchaseOrderSupplierRef(one)).isEmpty();
+            assertThat(purchasingProfile.purchaseOrderSupplierRef(two)).contains("channel-ab");
+            assertThat(vendorFacts()).isEqualTo(facts + 2);
         }
     }
 }

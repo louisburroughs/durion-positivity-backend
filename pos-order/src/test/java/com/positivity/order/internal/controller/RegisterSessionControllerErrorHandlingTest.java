@@ -58,6 +58,29 @@ class RegisterSessionControllerErrorHandlingTest extends BaseControllerSliceTest
     }
 
     @Test
+    @DisplayName("#2651: a sub-minor-unit countedCash at begin-close answers 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY")
+    void subMinorUnitCountedCashAnswers422() throws Exception {
+        when(registerSessionService.beginClose(any(), any()))
+                .thenThrow(new com.positivity.order.internal.exception.CashMovementTaxRefusedException(
+                        com.positivity.order.internal.exception.CashMovementTaxRefusedException.Code
+                                .AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                        "countedCash has more decimals than the drawer's currency allows; nothing is rounded",
+                        java.util.List.of(new com.positivity.shared.error.ApiError.FieldError(
+                                "countedCash", "has more decimals than USD allows"))));
+
+        mockMvc.perform(withGatewayAuth(
+                        org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                                        "/v1/orders/sessions/{sessionId}/begin-close", SESSION_ID)
+                                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                                .content("{\"countedCash\":100.005}"),
+                        "order:session:close"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("AMOUNT_PRECISION_EXCEEDS_CURRENCY"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("countedCash"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
     @DisplayName("an unexpected IllegalArgumentException answers 500 without leaking its message")
     void anUnexpectedIllegalArgumentExceptionAnswers500WithoutLeakingItsMessage() throws Exception {
         String leakCanary = "org.hibernate.query.sqm.UnknownPathException: Could not resolve attribute";

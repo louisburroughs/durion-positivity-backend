@@ -7,6 +7,7 @@ import com.positivity.domainevents.supplier.SupplierOrderRequestedV1;
 import com.positivity.order.internal.config.OutboxEventWriter;
 import com.positivity.order.internal.entity.ExtProductCode;
 import com.positivity.order.internal.entity.ExtSupplierArticleCode;
+import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
@@ -25,11 +26,13 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -97,9 +100,17 @@ public class PurchaseOrderTransmissionService {
             throw PurchaseOrderNotTransmittableException.publishingUnavailable();
         }
 
-        guardTransmittable(order);
+        // #2713: a vendor that gained (or moved) its channel before anything reached it is sent through the channel
+        // it has now; once a send reached the vendor the stamp is frozen so a revision reaches the channel the
+        // original did. One read of the copy serves the stamp, the refusal and the active check.
+        Optional<ExtSupplierVendor> copy = vendorGuard.copyOf(order.getVendorId());
+        if (stampsAtTransmit(order.getTransmissionState())) {
+            copy.filter(ExtSupplierVendor::hasPurchasingChannel)
+                    .ifPresent(vendor -> order.setSupplierRef(vendor.getPurchaseOrderSupplierRef()));
+        }
+        guardTransmittable(order, copy);
         // An inactive vendor, or one outside the copy, is sent nothing (S24, #2517).
-        vendorGuard.requireActive(order.getVendorId());
+        vendorGuard.requireActive(order.getVendorId(), copy);
         List<SupplierOrderRequestedLine> lines = resolveLines(order);
         SupplierOrderRequestedV1.IntentType intentType = intentTypeFor(order);
 
@@ -157,9 +168,21 @@ public class PurchaseOrderTransmissionService {
                 order.getTransmissionCount());
     }
 
-    private static void guardTransmittable(PurchaseOrderEntity order) {
+    /**
+     * The states in which transmit stamps the vendor's current channel (#2713): nothing has reached the vendor yet.
+     * {@code NOT_DISPATCHED} is the vendor-not-set-up refusal (#2492): the buyer re-sends once an administrator has
+     * set the vendor up, which may have designated a different profile than the one the first send named.
+     */
+    static boolean stampsAtTransmit(@Nullable TransmissionState state) {
+        return state == TransmissionState.NOT_TRANSMITTED || state == TransmissionState.NOT_DISPATCHED;
+    }
+
+    private static void guardTransmittable(PurchaseOrderEntity order, Optional<ExtSupplierVendor> copy) {
         if (order.getSupplierRef() == null || order.getSupplierRef().isBlank()) {
-            throw PurchaseOrderNotTransmittableException.noSupplierRef();
+            // The copy holds the vendor, so a missing channel is a fact about the vendor, not replication lag (#2713).
+            throw copy.map(vendor -> PurchaseOrderNotTransmittableException.noPurchasingChannel(
+                            vendor.getVendorId(), vendor.getVendorNumber(), vendor.getDisplayName()))
+                    .orElseGet(PurchaseOrderNotTransmittableException::noSupplierRef);
         }
         // A draft is not a commitment. Sending one would put an order in front of a vendor that
         // nobody inside has yet agreed to place.

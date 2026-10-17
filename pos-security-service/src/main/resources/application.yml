@@ -26,6 +26,10 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+    hikari:
+      data-source-properties:
+        # ADR-0072 (#2650): no pgjdbc "Failing row contains" detail in driver messages; guarded by PgjdbcServerErrorDetailTest.
+        logServerErrorDetail: false
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:

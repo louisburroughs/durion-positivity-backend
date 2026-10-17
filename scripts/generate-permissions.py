@@ -81,19 +81,39 @@ PLATFORM_SEED_SQL_RELPATH = (
 )
 PLATFORM_DOMAIN = "platform"
 
-# The only roles the repeatable seed may grant to (#1613 D8): the
-# ADMIN / SYSTEM_ADMINISTRATOR bootstrap floor plus the four checksum-frozen roles
-# still created by versioned migrations. RoleBaselineDriftTest#seedGrantsOnlyToRolesItCreates
-# fails the build on anything else, and the seed's own section-4 guard raises on a role
-# it cannot resolve. Every other role's grants live in the alpha baseline CSV only.
+# The only roles the repeatable seed may grant to (#1613 D8, #2625): the ADMIN /
+# SYSTEM_ADMINISTRATOR bootstrap floor, the four checksum-frozen roles still created by
+# versioned migrations, and the template floor every tenant receives from the platform role
+# template. RoleBaselineDriftTest#seedGrantsOnlyToRolesItCreates fails the build on anything
+# else, and the seed's own section-4 guard raises on a role it cannot resolve. Every other
+# role's grants live in the alpha baseline CSV only (see baseline_only_roles).
 SEED_GRANT_ROLES = frozenset({
+    # Bootstrap floor and versioned residue (V3): the roles Flyway creates before any load runs.
     "ADMIN",
     "CONTROLLER",
     "DISPATCHER",
     "SELF_SERVICE_CUSTOMER",
     "SHOP_MANAGER",
     "SYSTEM_ADMINISTRATOR",
+    # Template floor (RoleBaselineDriftTest.TEMPLATE_FLOOR): SUPPORT (ADR-0062 §7) and the accounting
+    # workspace roles (CAP:550 S3) that every tenant receives from the platform role template, so
+    # their grants must reach the SQL seed too (#2625: they were silently dropped before).
+    "ACCOUNTING_CLERK",
+    "GENERAL_MANAGER",
+    "SUPPORT",
 })
+
+
+
+def baseline_only_roles(root: "Path") -> frozenset[str]:
+    """Every platform role whose grants live in the alpha baseline CSV only.
+
+    Derived from the CSV rows (the role set RoleBaselineDriftTest pins) minus SEED_GRANT_ROLES, so
+    a role added to the baseline is known here without another hand-maintained list. A grantTo
+    role in neither set is a typo or a role nobody creates: the seed-grant audit reports it and
+    --check fails (#2625), instead of the CSV grant being written and the seed grant dropped.
+    """
+    return frozenset(parse_baseline_grants(root)) - SEED_GRANT_ROLES
 
 # ADMIN is the all-domain role and a strict superset of every other role, so a new
 # permission granted nowhere else is still reachable by an administrator. It is the
@@ -842,7 +862,8 @@ def collect_manifest_grant_targets(root: Path) -> dict[str, list[str]]:
             if isinstance(grant_to, str):
                 grant_to = [grant_to]
             if grant_to:
-                targets[entry["name"]] = [str(role) for role in grant_to]
+                roles = targets.setdefault(entry["name"], [])
+                roles.extend(str(role) for role in grant_to if str(role) not in roles)
     return targets
 
 
@@ -899,9 +920,13 @@ def sync_seed_sql(
     }
     additions = []
     seed_granted: set[str] = set()
+    known_roles = SEED_GRANT_ROLES | baseline_only_roles(root)
+    unknown_roles: dict[str, set[str]] = {}
     for permission in sorted(grants):
         for role in sorted(grants[permission]):
             if role not in SEED_GRANT_ROLES:
+                if role not in known_roles:
+                    unknown_roles.setdefault(role, set()).add(permission)
                 continue
             seed_granted.add(permission)
             if (role, permission) in existing_grants:
@@ -910,6 +935,12 @@ def sync_seed_sql(
     if additions:
         text = text[:start] + insert_rows_sorted(block, additions, _grant_row_key) + text[end:]
         messages.append(f"seed role grants: +{len(additions)}")
+    for role in sorted(unknown_roles):
+        permissions = ", ".join(sorted(unknown_roles[role]))
+        messages.append(
+            f"WARNING: grantTo names {role}, a role in neither SEED_GRANT_ROLES nor "
+            f"BASELINE_ONLY_ROLES; its seed grant was skipped for: {permissions}"
+        )
 
     # 3. self-check list (section 4)
     start, end = _values_block_bounds(text, SEED_SELF_CHECK_MARKER)
@@ -1003,6 +1034,39 @@ def validate_grant_roles(root: Path, roles: list[str]) -> None:
             f"{', '.join(unknown)}. Add the role to the baseline (and to "
             "RoleBaselineDriftTest) first."
         )
+
+
+def missing_seed_grants(root: Path) -> dict[str, list[str]]:
+    """permission → declared grantTo roles (seed roles only) that R__seed_role_permissions.sql lacks.
+
+    The grant sync above runs for newly registered permissions only, so a grantTo that was
+    dropped earlier (#2625: SUPPORT, ACCOUNTING_CLERK and GENERAL_MANAGER were not seed roles
+    until then) stays missing until something re-reads the manifests against the seed. This is
+    the reverse of RoleBaselineDriftTest#baselineGrantsSupersetOfSeed, which checks one direction
+    only.
+    """
+    seeded = parse_seed_grants(root)
+    missing: dict[str, list[str]] = {}
+    for permission, roles in sorted(collect_manifest_grant_targets(root).items()):
+        if permission.split(":", 1)[0] == PLATFORM_DOMAIN:
+            # platform:* never enters the tenant seed (ADR-0062 §7); resolve_grant_roles refuses it too.
+            continue
+        for role in sorted(roles):
+            if role in SEED_GRANT_ROLES and role not in UNGRANTABLE_ROLES:
+                if permission not in seeded.get(role, ()):
+                    missing.setdefault(permission, []).append(role)
+    return missing
+
+
+def unknown_grant_roles(root: Path) -> dict[str, list[str]]:
+    """grantTo roles no source knows (neither a seed role nor a baseline CSV row) → permissions."""
+    known = SEED_GRANT_ROLES | baseline_only_roles(root)
+    unknown: dict[str, list[str]] = {}
+    for permission, roles in sorted(collect_manifest_grant_targets(root).items()):
+        for role in sorted(roles):
+            if role not in known:
+                unknown.setdefault(role, []).append(permission)
+    return unknown
 
 
 def sync_grant_sources(
@@ -1191,6 +1255,54 @@ def main() -> None:
                 sys.exit(1)
         else:
             print("Grant sync: up-to-date")
+
+        # Seed grant audit (#2625): every grantTo to a seed role must be in the SQL seed, not
+        # only in the alpha CSV, or a tenant provisioned from the template 403s on a permission
+        # its role was declared to hold.
+        if grant_sources_present(root):
+            unknown = unknown_grant_roles(root)
+            if unknown:
+                print(
+                    f"\nERROR: {len(unknown)} grantTo role(s) are neither a seed role nor a row of the alpha "
+                    "role baseline (a typo, or a role nobody creates):",
+                    file=sys.stderr,
+                )
+                for role, permissions in unknown.items():
+                    print(f"  - {role}: {', '.join(permissions)}", file=sys.stderr)
+                catalog_error = True
+            # A dry run wrote nothing above, so the grants it would have written are not "dropped".
+            missing_seed = {
+                permission: roles
+                for permission, roles in missing_seed_grants(root).items()
+                if not (args.dry_run and permission in ungranted)
+            }
+            if not missing_seed:
+                print("Seed grant audit: up-to-date")
+            elif args.check:
+                print(
+                    f"\nERROR: {len(missing_seed)} permission(s) declare grantTo seed roles that "
+                    "R__seed_role_permissions.sql does not grant:",
+                    file=sys.stderr,
+                )
+                for permission, roles in missing_seed.items():
+                    print(f"  - {permission} → {', '.join(roles)}", file=sys.stderr)
+                print("Run scripts/generate-permissions.sh --sync to add them.", file=sys.stderr)
+                catalog_error = True
+            else:
+                prefix = DRY_RUN_PREFIX if args.dry_run else ""
+                print(f"{prefix}Seed grant audit — {len(missing_seed)} permission(s) with dropped seed grants:")
+                for permission, roles in missing_seed.items():
+                    print(f"  + {permission} → {', '.join(roles)}")
+                try:
+                    # Both grant sources, as the grant sync writes them, so the seed and the baseline CSV
+                    # cannot diverge (RoleBaselineDriftTest#baselineGrantsSupersetOfSeed).
+                    messages = sync_seed_sql(root, missing_seed, bit_by_permission, args.dry_run)
+                    messages += sync_role_permissions_csv(root, missing_seed, args.dry_run)
+                except ValueError as exc:
+                    print(f"ERROR: {exc}", file=sys.stderr)
+                    sys.exit(1)
+                for message in messages:
+                    print(f"  {message}")
 
     if args.modules:
         module_paths = [root / m for m in args.modules]

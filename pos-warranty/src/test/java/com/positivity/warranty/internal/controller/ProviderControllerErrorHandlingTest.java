@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.security.common.GatewayAuthoritiesFilter;
 import com.positivity.warranty.internal.config.SecurityConfig;
 import com.positivity.warranty.internal.exception.WarrantyValidationException;
 import com.positivity.warranty.internal.security.WarrantyPermissions;
@@ -20,7 +19,6 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -116,22 +114,6 @@ class ProviderControllerErrorHandlingTest {
         @Bean
         Clock clock() {
             return TEST_CLOCK;
-        }
-
-        /**
-         * The MockMvc auto-configuration registers every {@code Filter} bean directly, which
-         * would run {@code GatewayAuthoritiesFilter} (a {@code OncePerRequestFilter}) BEFORE the
-         * security chain and mark it already-filtered — the in-chain instance then skips, and
-         * {@code SecurityContextHolderFilter} wipes the authentication, failing every request
-         * with 401. Disable the direct registration so the filter runs exactly where production
-         * runs it: inside {@code gatewaySecurityFilterChain}.
-         */
-        @Bean
-        FilterRegistrationBean<GatewayAuthoritiesFilter> gatewayAuthoritiesFilterRegistration(
-                GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration = new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
         }
     }
 }

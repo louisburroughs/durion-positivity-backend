@@ -1,5 +1,6 @@
 package com.positivity.order.internal.controller;
 
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.SessionPolicyConflictException;
 import com.positivity.order.internal.exception.SessionPolicyValidationException;
@@ -39,6 +40,21 @@ public class SessionPolicyExceptionHandler {
                         Instant.now(clock).toString(),
                         correlationId,
                         List.of(new ApiError.FieldError(ex.getField(), ex.getMessage()))));
+    }
+
+    /** ADR-0067 PC-6 (#2651): a limit or tolerance finer than the currency's minor unit; nothing is rounded. */
+    @ExceptionHandler(CashMovementTaxRefusedException.class)
+    public ResponseEntity<ApiError> handlePrecision(CashMovementTaxRefusedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.withFieldErrors(
+                        ex.code().name(),
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                        Instant.now(clock).toString(),
+                        correlationId,
+                        ex.fieldErrors()));
     }
 
     /** ADR-0067 R-1: a policy stated in a currency other than the functional currency. */

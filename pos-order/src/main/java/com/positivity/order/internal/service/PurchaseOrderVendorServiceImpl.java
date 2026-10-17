@@ -159,6 +159,7 @@ public class PurchaseOrderVendorServiceImpl implements PurchaseOrderVendorServic
                 vendor.getVendorId(),
                 vendor.getVendorNumber(),
                 vendor.getDisplayName(),
-                toResponse(vendor.getStatus()));
+                toResponse(vendor.getStatus()),
+                vendor.hasPurchasingChannel());
     }
 }
