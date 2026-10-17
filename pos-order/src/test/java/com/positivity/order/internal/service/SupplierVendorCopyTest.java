@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -176,6 +177,7 @@ class SupplierVendorCopyTest {
         listener.onSupplierEvent(withChannel);
         assertThat(saved().getPurchaseOrderSupplierRef()).isEqualTo("edi-main");
 
+        clearInvocations(vendorRepository);
         listener.onSupplierEvent(v2Fact("018f0a1b-0000-7000-8000-000000000012", 6L, "ACTIVE"));
         assertThat(saved().getPurchaseOrderSupplierRef())
                 .as("an older producer, or no channel: null")
