@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotReconcilableException;
+import com.positivity.accounting.internal.exception.AccountHasUnpostedPaymentsException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
@@ -294,6 +295,16 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleAccountNotZeroBalance(
             AccountNotZeroBalanceException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, "ACCOUNT_NOT_ZERO_BALANCE", ex.getMessage(), request);
+    }
+
+    /**
+     * Deactivating a bank account that an executed but not yet posted AP payment names (#2645): the state blocks
+     * the operation until the payment posts. 409 per ADR-0017 §2.
+     */
+    @ExceptionHandler(AccountHasUnpostedPaymentsException.class)
+    public ResponseEntity<ApiError> handleAccountHasUnpostedPayments(
+            AccountHasUnpostedPaymentsException ex, HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "ACCOUNT_HAS_UNPOSTED_PAYMENTS", ex.getMessage(), request);
     }
 
     /**

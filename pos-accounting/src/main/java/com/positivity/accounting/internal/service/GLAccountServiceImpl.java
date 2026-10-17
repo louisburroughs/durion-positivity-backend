@@ -14,6 +14,9 @@ import com.positivity.accounting.internal.exception.DuplicateAccountCodeExceptio
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.exception.AccountHasUnpostedPaymentsException;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -85,6 +88,19 @@ public class GLAccountServiceImpl implements GLAccountService {
 
     private final GLAccountRepository glAccountRepository;
     private final JournalEntryLineRepository journalEntryLineRepository;
+    private final APPaymentRepository apPaymentRepository;
+
+    /**
+     * AP payment states whose entry has not reached the ledger yet (#2645): in flight at the gateway, executed and
+     * waiting for the posting outbox, or {@code GL_POST_FAILED} awaiting {@code gl-posting-retry}. {@code
+     * GATEWAY_FAILED} never posts and {@code GL_POSTED} already did.
+     */
+    static final List<APPaymentStatus> UNPOSTED_PAYMENT_STATES = List.of(
+            APPaymentStatus.INITIATED,
+            APPaymentStatus.GATEWAY_PENDING,
+            APPaymentStatus.GATEWAY_SUCCEEDED,
+            APPaymentStatus.GL_POST_PENDING,
+            APPaymentStatus.GL_POST_FAILED);
 
     /**
      * Creates a new GL account.
@@ -249,6 +265,7 @@ public class GLAccountServiceImpl implements GLAccountService {
      * @return deactivated GL account response
      * @throws GLAccountNotFoundException     if account not found
      * @throws AccountNotZeroBalanceException if account has non-zero balance
+     * @throws AccountHasUnpostedPaymentsException if an AP payment naming the account has not posted yet (#2645)
      */
     @Override
     public GLAccountResponse deactivateGLAccount(@NonNull UUID glAccountId) {
@@ -264,6 +281,15 @@ public class GLAccountServiceImpl implements GLAccountService {
             String msg = "Cannot deactivate account " + account.getAccountCode() + " with non-zero balance: " + balance;
             log.warn("Cannot deactivate account with non-zero balance");
             throw new AccountNotZeroBalanceException(msg);
+        }
+        // #2645: a zero posted balance is not enough. An executed AP payment that names the account posts at the
+        // start of its execution day (S42) or after a retry; it would land on an inactive account nobody reconciles.
+        long unposted = apPaymentRepository.countByBankAccountIdAndStatusIn(glAccountId, UNPOSTED_PAYMENT_STATES);
+        if (unposted > 0) {
+            log.warn("Cannot deactivate account with unposted AP payments");
+            throw new AccountHasUnpostedPaymentsException("Cannot deactivate account " + account.getAccountCode()
+                    + ": " + unposted + " AP payment(s) naming it have not posted yet; wait for the posting, or"
+                    + " resolve the GL_POST_FAILED ones, then deactivate");
         }
 
         account.setDeactivationDate(zoneResolver.postingDateTime(clock.instant()));

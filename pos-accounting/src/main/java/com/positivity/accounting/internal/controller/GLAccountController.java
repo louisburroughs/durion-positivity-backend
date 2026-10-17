@@ -305,8 +305,10 @@ public class GLAccountController {
                     Required inputs: glAccountId (UUID) as a path parameter; the request body is optional and \
                     ignored.
                     Emits an ACCOUNTING_GL_ACCOUNT_DEACTIVATE event; historical journal entries remain intact.
-                    Returns 404 when no GL account exists for the supplied id, and 409 ACCOUNT_NOT_ZERO_BALANCE \
-                    when the account balance is not zero.
+                    Returns 404 when no GL account exists for the supplied id, 409 ACCOUNT_NOT_ZERO_BALANCE \
+                    when the account balance is not zero, and 409 ACCOUNT_HAS_UNPOSTED_PAYMENTS when an AP \
+                    payment naming the (bank) account has not posted yet: wait for the posting or resolve the \
+                    GL_POST_FAILED payments first (#2645).
                     """,
             tags = {"GL Accounts"})
     @ApiResponse(responseCode = "200", description = "GL account deactivated")
@@ -316,7 +318,8 @@ public class GLAccountController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE)",
+            description = "Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE), or an AP payment naming the"
+                    + " account has not posted yet (ACCOUNT_HAS_UNPOSTED_PAYMENTS)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_GL_ACCOUNT_DEACTIVATE", apiVersion = "1")
     public ResponseEntity<GLAccountResponse> deactivateGLAccount(

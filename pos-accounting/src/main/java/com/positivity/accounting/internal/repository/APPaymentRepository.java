@@ -36,6 +36,9 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
      */
     List<APPayment> findByStatus(APPaymentStatus status);
 
+    /** Payments naming a bank account in any of the given states (#2645: the ones not yet in the ledger). */
+    long countByBankAccountIdAndStatusIn(UUID bankAccountId, java.util.Collection<APPaymentStatus> statuses);
+
     /**
      * The payment, row-locked to the end of the transaction (CAP:550 S42, #2603): its outbox posting and a
      * {@code gl-posting-retry} serialize here, so a payment is posted once.

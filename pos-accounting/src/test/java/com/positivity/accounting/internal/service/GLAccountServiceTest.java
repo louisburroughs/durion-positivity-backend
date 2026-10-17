@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -73,6 +74,9 @@ class GLAccountServiceTest {
 
     @Mock
     private JournalEntryLineRepository journalEntryLineRepository;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.APPaymentRepository apPaymentRepository;
 
     @InjectMocks
     private GLAccountServiceImpl service;
@@ -674,6 +678,54 @@ class GLAccountServiceTest {
             assertThatThrownBy(() -> service.validateAccountForPosting(testAccountId, transactionDate))
                     .isInstanceOf(GLAccountNotActiveException.class)
                     .hasMessageContaining("inactive");
+        }
+    }
+
+    @Nested
+    @DisplayName("#2645: a bank account with unposted AP payments is not deactivated")
+    class UnpostedPayments {
+
+        @Test
+        @DisplayName("refused with 409 ACCOUNT_HAS_UNPOSTED_PAYMENTS while a payment naming it has not posted")
+        void refusedWhilePaymentsAreUnposted() {
+            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
+            when(apPaymentRepository.countByBankAccountIdAndStatusIn(
+                            testAccountId, GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES))
+                    .thenReturn(2L);
+
+            assertThatThrownBy(() -> service.deactivateGLAccount(testAccountId))
+                    .isInstanceOf(com.positivity.accounting.internal.exception.AccountHasUnpostedPaymentsException.class)
+                    .hasMessageContaining("2 AP payment(s)");
+            assertThat(testAccount.getDeactivationDate()).isNull();
+            verify(glAccountRepository, never()).save(any(GLAccount.class));
+        }
+
+        @Test
+        @DisplayName("proceeds once every payment naming it has posted")
+        void proceedsOncePosted() {
+            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
+            when(apPaymentRepository.countByBankAccountIdAndStatusIn(
+                            testAccountId, GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES))
+                    .thenReturn(0L);
+            when(glAccountRepository.save(any(GLAccount.class))).thenAnswer(saved -> saved.getArgument(0));
+
+            service.deactivateGLAccount(testAccountId);
+
+            assertThat(testAccount.getDeactivationDate()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("the unposted states are every state before GL_POSTED except GATEWAY_FAILED")
+        void unpostedStates() {
+            assertThat(GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES)
+                    .containsExactlyInAnyOrder(
+                            com.positivity.accounting.internal.enums.APPaymentStatus.INITIATED,
+                            com.positivity.accounting.internal.enums.APPaymentStatus.GATEWAY_PENDING,
+                            com.positivity.accounting.internal.enums.APPaymentStatus.GATEWAY_SUCCEEDED,
+                            com.positivity.accounting.internal.enums.APPaymentStatus.GL_POST_PENDING,
+                            com.positivity.accounting.internal.enums.APPaymentStatus.GL_POST_FAILED);
         }
     }
 
