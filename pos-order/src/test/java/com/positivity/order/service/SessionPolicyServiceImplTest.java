@@ -245,6 +245,14 @@ class SessionPolicyServiceImplTest {
                         e -> assertThat(e.fieldErrors())
                                 .extracting(f -> f.field())
                                 .containsExactly("overShortTolerance"));
+        // Every offending field in one refusal.
+        assertThatThrownBy(() -> service.update(put(null, true, "50.005", false, null, "5.005", JUSTIFICATION)))
+                .isInstanceOfSatisfying(CashMovementTaxRefusedException.class, e -> assertThat(e.fieldErrors())
+                        .extracting(f -> f.field())
+                        .containsExactly("pettyExpense.cashierLimit", "overShortTolerance"));
+        // A wrong currency is answered as such, before any precision judgement.
+        assertThatThrownBy(() -> service.update(put(null, "JPY", true, "50.50", false, null, "5.00", JUSTIFICATION)))
+                .isInstanceOf(CurrencyNotSupportedException.class);
     }
 
     @Test
