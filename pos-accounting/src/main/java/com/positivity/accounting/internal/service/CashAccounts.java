@@ -135,28 +135,30 @@ public class CashAccounts {
         Map<UUID, BigDecimal> balances = balancesOf(ids);
 
         List<Row> bankRows = bank.stream()
-                .map(account -> row(
-                        account.glAccountId(),
-                        account.accountCode(),
-                        account.accountName(),
-                        balances,
-                        currency))
+                .map(account ->
+                        row(account.glAccountId(), account.accountCode(), account.accountName(), balances, currency))
                 .toList();
         List<Row> waitingRows = waitingAccounts.values().stream()
                 .sorted(Comparator.comparing(GLAccount::getAccountCode))
                 .map(account -> row(
-                        account.getGlAccountId(), account.getAccountCode(), account.getAccountName(), balances, currency))
+                        account.getGlAccountId(),
+                        account.getAccountCode(),
+                        account.getAccountName(),
+                        balances,
+                        currency))
                 .toList();
         List<Row> drawerRows = drawerAccounts.stream()
                 .map(account -> row(
-                        account.getGlAccountId(), account.getAccountCode(), account.getAccountName(), balances, currency))
+                        account.getGlAccountId(),
+                        account.getAccountCode(),
+                        account.getAccountName(),
+                        balances,
+                        currency))
                 .toList();
-        BigDecimal suspenseBalance = suspense
-                .map(id -> InvoiceBalanceCalculator.atCurrencyScale(
-                        balances.getOrDefault(id, BigDecimal.ZERO), currency))
+        BigDecimal suspenseBalance = suspense.map(id ->
+                        InvoiceBalanceCalculator.atCurrencyScale(balances.getOrDefault(id, BigDecimal.ZERO), currency))
                 .orElse(InvoiceBalanceCalculator.atCurrencyScale(BigDecimal.ZERO, currency));
-        return new Components(
-                bankRows, waitingRows, drawerRows, suspenseBalance, clearing.orElse(null), excluded);
+        return new Components(bankRows, waitingRows, drawerRows, suspenseBalance, clearing.orElse(null), excluded);
     }
 
     private Map<UUID, BigDecimal> balancesOf(Collection<UUID> ids) {

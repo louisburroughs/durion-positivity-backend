@@ -26,7 +26,8 @@ public record CashOutlookResponse(
         @Schema(description = "The first day, today in the tenant's accounting time zone", example = "2026-10-17")
         LocalDate startDate,
 
-        @Schema(description = "Days projected after the first", example = "30") int days,
+        @Schema(description = "Days projected after the first", example = "30")
+        int days,
 
         @Schema(
                 description = "Where the projection starts: in the bank plus waiting to be deposited, never drawers or"
@@ -37,11 +38,14 @@ public record CashOutlookResponse(
         @Schema(description = "The projected balance at the end of each day, days plus one points from today")
         List<Point> points,
 
-        @Schema(description = "The lowest projected balance and its first day") Point lowPoint,
+        @Schema(description = "The lowest projected balance and its first day")
+        Point lowPoint,
 
-        @Schema(description = "Money in over the period: open invoices on their due dates") BigDecimal expectedIn,
+        @Schema(description = "Money in over the period: open invoices on their due dates")
+        BigDecimal expectedIn,
 
-        @Schema(description = "Money out over the period: approved bills on their due dates") BigDecimal expectedOut,
+        @Schema(description = "Money out over the period: approved bills on their due dates")
+        BigDecimal expectedOut,
 
         @Schema(
                 description = "Open bills not yet approved, shown apart and not in the projection; a pending bill's"
@@ -59,9 +63,11 @@ public record CashOutlookResponse(
         @Schema(description = "Approved bills whose due date is an estimate, and their open amount")
         Figure estimatedDueDates,
 
-        @Schema(description = "Open approved bills split by due state, for the bills lane") BillsLane billsLane,
+        @Schema(description = "Open approved bills split by due state, for the bills lane")
+        BillsLane billsLane,
 
-        @Schema(description = "The tenant's cash safety cushion; null while unset") @Nullable BigDecimal safetyCushion,
+        @Schema(description = "The tenant's cash safety cushion; null while unset") @Nullable
+        BigDecimal safetyCushion,
 
         @Schema(
                 description = "True when the low point is strictly below the cushion; false while no cushion is set",
@@ -71,12 +77,14 @@ public record CashOutlookResponse(
     /** One day of the projection. */
     @Schema(name = "CashOutlookPoint", description = "The projected balance at the end of one day")
     public record Point(
-            @Schema(description = "The day", example = "2026-10-17") LocalDate date,
+            @Schema(description = "The day", example = "2026-10-17")
+            LocalDate date,
 
             @Schema(description = "The projected balance at the end of the day", example = "13640.00")
             BigDecimal balance,
 
-            @Schema(description = "Money in that day", example = "0.00") BigDecimal moneyIn,
+            @Schema(description = "Money in that day", example = "0.00")
+            BigDecimal moneyIn,
 
             @Schema(description = "Money out that day, estimated due dates included", example = "500.00")
             BigDecimal moneyOut,
@@ -89,21 +97,27 @@ public record CashOutlookResponse(
     /** An amount and how many items make it up. */
     @Schema(name = "CashOutlookFigure", description = "An amount and the number of items behind it")
     public record Figure(
-            @Schema(description = "The amount", example = "300.00") BigDecimal amount,
+            @Schema(description = "The amount", example = "300.00")
+            BigDecimal amount,
 
-            @Schema(description = "How many items", example = "2") int count) {}
+            @Schema(description = "How many items", example = "2")
+            int count) {}
 
     /** The open approved bills by due state; the server adds them up (P7). */
     @Schema(name = "CashOutlookBillsLane", description = "Open approved bills by due state")
     public record BillsLane(
-            @Schema(description = "Past their real due date") Figure overdue,
+            @Schema(description = "Past their real due date")
+            Figure overdue,
 
             @Schema(description = "Due from today through the seventh day after, by their real due date")
             Figure dueIn7Days,
 
-            @Schema(description = "Due later, by their real due date") Figure dueLater,
+            @Schema(description = "Due later, by their real due date")
+            Figure dueLater,
 
-            @Schema(description = "Without a real due date: their due date is estimated") Figure dueDateEstimated,
+            @Schema(description = "Without a real due date: their due date is estimated")
+            Figure dueDateEstimated,
 
-            @Schema(description = "The four added up", example = "1150.00") BigDecimal total) {}
+            @Schema(description = "The four added up", example = "1150.00")
+            BigDecimal total) {}
 }

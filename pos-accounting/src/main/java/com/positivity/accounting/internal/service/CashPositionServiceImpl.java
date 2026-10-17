@@ -16,9 +16,9 @@ import com.positivity.accounting.internal.enums.CashAttentionCode;
 import com.positivity.accounting.internal.enums.CashAttentionReason;
 import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
-import com.positivity.accounting.internal.service.CashAttentionSources.AgedSession;
 import com.positivity.accounting.internal.service.CashAccounts.Components;
 import com.positivity.accounting.internal.service.CashAccounts.Row;
+import com.positivity.accounting.internal.service.CashAttentionSources.AgedSession;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -141,9 +141,11 @@ public class CashPositionServiceImpl implements CashPositionService {
                         : null);
     }
 
-    private static Component component(List<Row> rows, Map<UUID, Facts> facts, boolean statementFields, String currency) {
+    private static Component component(
+            List<Row> rows, Map<UUID, Facts> facts, boolean statementFields, String currency) {
         List<AccountRow> accounts = rows.stream()
-                .map(row -> accountRow(row, statementFields ? facts.get(row.glAccountId()) : null, statementFields, currency))
+                .map(row -> accountRow(
+                        row, statementFields ? facts.get(row.glAccountId()) : null, statementFields, currency))
                 .toList();
         return new Component(scaled(Components.total(rows), currency), accounts);
     }
@@ -151,7 +153,16 @@ public class CashPositionServiceImpl implements CashPositionService {
     private static AccountRow accountRow(Row row, @Nullable Facts facts, boolean statementFields, String currency) {
         if (!statementFields || facts == null) {
             return new AccountRow(
-                    row.glAccountId(), row.accountCode(), row.accountName(), row.balance(), null, null, null, null, null, null);
+                    row.glAccountId(),
+                    row.accountCode(),
+                    row.accountName(),
+                    row.balance(),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
         return new AccountRow(
                 row.glAccountId(),
@@ -201,9 +212,8 @@ public class CashPositionServiceImpl implements CashPositionService {
 
         List<APPayment> cod = attentionSources.agedUnappliedVendorCod(today, thresholds.vendorCodUnappliedAgedDays());
         if (!cod.isEmpty()) {
-            BigDecimal unapplied = cod.stream()
-                    .map(APPayment::getUnappliedAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal unapplied =
+                    cod.stream().map(APPayment::getUnappliedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
             LocalDate since = cod.stream()
                     .map(APPayment::getPaymentDate)
                     .min(Comparator.naturalOrder())
@@ -229,9 +239,7 @@ public class CashPositionServiceImpl implements CashPositionService {
         if (sessions.isEmpty()) {
             return Optional.empty();
         }
-        BigDecimal amount = sessions.stream()
-                .map(AgedSession::depositAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal amount = sessions.stream().map(AgedSession::depositAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         LocalDate since = sessions.stream()
                 .map(AgedSession::businessDate)
                 .min(Comparator.naturalOrder())

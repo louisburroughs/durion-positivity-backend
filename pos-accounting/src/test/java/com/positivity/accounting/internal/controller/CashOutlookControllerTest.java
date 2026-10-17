@@ -96,8 +96,7 @@ class CashOutlookControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("400 VALIDATION_ERROR when days is outside 1 to 90")
     void daysOutOfRange() throws Exception {
-        when(service.outlook(91))
-                .thenThrow(InvalidRequestParameterException.forField("days", "must be from 1 to 90"));
+        when(service.outlook(91)).thenThrow(InvalidRequestParameterException.forField("days", "must be from 1 to 90"));
 
         mockMvc.perform(withAuth(get(PATH).param("days", "91"), VIEW))
                 .andExpect(status().isBadRequest())

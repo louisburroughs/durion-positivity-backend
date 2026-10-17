@@ -136,8 +136,11 @@ class CashOutlookServiceTest {
         assertThat(outlook.points().getFirst().date()).isEqualTo(TODAY);
         assertThat(outlook.points().getLast().date()).isEqualTo(TODAY.plusDays(30));
         assertThat(outlook.startingBalance()).isEqualByComparingTo("11000.00");
-        assertThat(outlook.points()).allSatisfy(point -> assertThat(point.balance()).isEqualByComparingTo("11000.00"));
-        assertThat(outlook.lowPoint().date()).as("the first of equal low points").isEqualTo(TODAY);
+        assertThat(outlook.points())
+                .allSatisfy(point -> assertThat(point.balance()).isEqualByComparingTo("11000.00"));
+        assertThat(outlook.lowPoint().date())
+                .as("the first of equal low points")
+                .isEqualTo(TODAY);
         assertThat(outlook.asOf()).isEqualTo(NOW);
         assertThat(outlook.currencyCode()).isEqualTo("USD");
     }
@@ -188,7 +191,8 @@ class CashOutlookServiceTest {
 
         CashOutlookResponse outlook = service.outlook(30);
 
-        assertThat(point(outlook, LocalDate.of(2026, 10, 31)).estimatedMoneyOut()).isEqualByComparingTo("500.00");
+        assertThat(point(outlook, LocalDate.of(2026, 10, 31)).estimatedMoneyOut())
+                .isEqualByComparingTo("500.00");
         assertThat(point(outlook, LocalDate.of(2026, 10, 30)).moneyOut()).isEqualByComparingTo("0.00");
     }
 
@@ -248,7 +252,8 @@ class CashOutlookServiceTest {
     }
 
     @Test
-    @DisplayName("AC 5: unapproved bills are possibleOut; held, voided, rejected, paid and foreign bills are out entirely")
+    @DisplayName(
+            "AC 5: unapproved bills are possibleOut; held, voided, rejected, paid and foreign bills are out entirely")
     void possibleOutAndExclusions() {
         bill(VendorBillStatus.AWAITING_APPROVAL, "300.00", null, TODAY.minusDays(2), "USD");
         bill(VendorBillStatus.PENDING_RECEIPT_MATCH, "50.00", null, TODAY.minusDays(2), "USD");
@@ -264,7 +269,8 @@ class CashOutlookServiceTest {
         assertThat(outlook.possibleOut().amount()).isEqualByComparingTo("375.00");
         assertThat(outlook.possibleOut().count()).isEqualTo(3);
         assertThat(outlook.expectedOut()).isEqualByComparingTo("0.00");
-        assertThat(outlook.points()).allSatisfy(point -> assertThat(point.moneyOut()).isEqualByComparingTo("0.00"));
+        assertThat(outlook.points())
+                .allSatisfy(point -> assertThat(point.moneyOut()).isEqualByComparingTo("0.00"));
         assertThat(outlook.billsLane().total()).isEqualByComparingTo("0.00");
     }
 
@@ -356,7 +362,8 @@ class CashOutlookServiceTest {
         assertThat(outlook.overdueIn().amount()).isEqualByComparingTo("200.00");
         assertThat(outlook.overdueIn().count()).isEqualTo(1);
         assertThat(outlook.expectedIn()).isEqualByComparingTo("0.00");
-        assertThat(outlook.points()).allSatisfy(point -> assertThat(point.moneyIn()).isEqualByComparingTo("0.00"));
+        assertThat(outlook.points())
+                .allSatisfy(point -> assertThat(point.moneyIn()).isEqualByComparingTo("0.00"));
     }
 
     @Test
@@ -579,6 +586,9 @@ class CashOutlookServiceTest {
     }
 
     private static ExtCustomerBillingRules rules(String terms) {
-        return ExtCustomerBillingRules.builder().partyId(CUSTOMER).paymentTerms(terms).build();
+        return ExtCustomerBillingRules.builder()
+                .partyId(CUSTOMER)
+                .paymentTerms(terms)
+                .build();
     }
 }

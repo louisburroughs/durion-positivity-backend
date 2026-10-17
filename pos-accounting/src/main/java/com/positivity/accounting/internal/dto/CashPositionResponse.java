@@ -43,14 +43,16 @@ public record CashPositionResponse(
                 example = "14197.00")
         BigDecimal total,
 
-        @Schema(description = "Money in the bank: the active bank accounts' books balances") Component inTheBank,
+        @Schema(description = "Money in the bank: the active bank accounts' books balances")
+        Component inTheBank,
 
         @Schema(
                 description = "Money waiting to be deposited: undeposited funds (1090) and register cash clearing"
                         + " (1095), shown and netted")
         Component waitingToBeDeposited,
 
-        @Schema(description = "Cash kept in drawers: the cash-on-hand accounts (1080)") Component keptInDrawers,
+        @Schema(description = "Cash kept in drawers: the cash-on-hand accounts (1080)")
+        Component keptInDrawers,
 
         @Schema(
                 description = "Active bank accounts left out because they are in a currency other than the"
@@ -61,17 +63,18 @@ public record CashPositionResponse(
         @Schema(description = "What needs attention, in a fixed order; empty when nothing does")
         List<NeedsAttention> needsAttention,
 
-        @Schema(
-                description = "The CASH walk-in house account's balance; null when it is zero and the account is known")
+        @Schema(description = "The CASH walk-in house account's balance; null when it is zero and the account is known")
         @Nullable
         UnpaidWalkInSales unpaidWalkInSales) {
 
     /** One component of the total with the accounts behind it. */
     @Schema(name = "CashPositionComponent", description = "One component of your cash and the accounts behind it")
     public record Component(
-            @Schema(description = "The accounts' balances added up", example = "12400.00") BigDecimal total,
+            @Schema(description = "The accounts' balances added up", example = "12400.00")
+            BigDecimal total,
 
-            @Schema(description = "One row per account, by account code") List<AccountRow> accounts) {}
+            @Schema(description = "One row per account, by account code")
+            List<AccountRow> accounts) {}
 
     /**
      * One account of a component. The statement fields exist only on bank rows, only for a caller who also holds
@@ -99,7 +102,8 @@ public record CashPositionResponse(
             @Nullable
             BigDecimal statementClosingBalance,
 
-            @Schema(description = "End date of that statement") @Nullable LocalDate statementEndDate,
+            @Schema(description = "End date of that statement") @Nullable
+            LocalDate statementEndDate,
 
             @Schema(description = "The date the account is reconciled through; null when never reconciled") @Nullable
             LocalDate reconciledThrough,
@@ -116,7 +120,8 @@ public record CashPositionResponse(
     /** Open outstanding items of one kind. */
     @Schema(name = "CashPositionTimingItems", description = "Open outstanding items of one kind")
     public record TimingItems(
-            @Schema(description = "How many are open", example = "1") long count,
+            @Schema(description = "How many are open", example = "1")
+            long count,
 
             @Schema(description = "Their total, signed as the ledger line (debit minus credit)", example = "450.00")
             BigDecimal amount) {}
@@ -125,24 +130,29 @@ public record CashPositionResponse(
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @Schema(name = "CashNeedsAttention", description = "One thing about the cash that needs attention")
     public record NeedsAttention(
-            @Schema(description = "What kind of thing it is") CashAttentionCode code,
+            @Schema(description = "What kind of thing it is")
+            CashAttentionCode code,
 
             @Schema(description = "Why it stands apart from its kind; null when there is no such reason") @Nullable
             CashAttentionReason reason,
 
-            @Schema(description = "The money at stake", example = "35.00") @Nullable BigDecimal amount,
+            @Schema(description = "The money at stake", example = "35.00") @Nullable
+            BigDecimal amount,
 
             @Schema(description = "How many sources make it up; null for a ledger balance", example = "2") @Nullable
             Integer count,
 
-            @Schema(description = "The date it has stood since; null when it has none") @Nullable LocalDate since) {}
+            @Schema(description = "The date it has stood since; null when it has none") @Nullable
+            LocalDate since) {}
 
     /** The CASH walk-in house account. */
     @Schema(name = "CashPositionUnpaidWalkInSales", description = "Unpaid walk-in sales on the CASH house account")
     public record UnpaidWalkInSales(
-            @Schema(description = "What is still owed on the CASH account", example = "86.00") BigDecimal balance,
+            @Schema(description = "What is still owed on the CASH account", example = "86.00")
+            BigDecimal balance,
 
-            @Schema(description = "Open walk-in invoices", example = "3") int invoiceCount,
+            @Schema(description = "Open walk-in invoices", example = "3")
+            int invoiceCount,
 
             @Schema(
                     description = "False when accounting has not yet received the CASH account: the zero cannot be"

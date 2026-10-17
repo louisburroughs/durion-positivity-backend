@@ -81,7 +81,8 @@ public class OpenVendorBills {
     }
 
     /** The open bills: the approved ones with their due dates, and those not yet approved. */
-    public record Open(@NonNull List<OpenBill> approved, @NonNull List<OpenBill> unapproved) {}
+    public record Open(
+            @NonNull List<OpenBill> approved, @NonNull List<OpenBill> unapproved) {}
 
     /** Every open bill, in one pass: one query for the bills, one for their allocations, and the estimate's own. */
     public @NonNull Open load() {
@@ -93,13 +94,14 @@ public class OpenVendorBills {
         if (bills.isEmpty()) {
             return new Open(List.of(), List.of());
         }
-        Map<UUID, BigDecimal> allocated = allocations
-                .sumAllocatedAmountByVendorBillIdIn(
-                        bills.stream().map(VendorBill::getVendorBillId).toList())
-                .stream()
-                .collect(Collectors.toMap(
-                        APPaymentAllocationRepository.VendorBillAllocationSum::getVendorBillId,
-                        APPaymentAllocationRepository.VendorBillAllocationSum::getAllocated));
+        Map<UUID, BigDecimal> allocated =
+                allocations
+                        .sumAllocatedAmountByVendorBillIdIn(
+                                bills.stream().map(VendorBill::getVendorBillId).toList())
+                        .stream()
+                        .collect(Collectors.toMap(
+                                APPaymentAllocationRepository.VendorBillAllocationSum::getVendorBillId,
+                                APPaymentAllocationRepository.VendorBillAllocationSum::getAllocated));
         Map<VendorBill, EstimatedDueDate> estimates = estimatedDueDates.estimateAll(bills.stream()
                 .filter(bill -> COMMITTED.contains(bill.getStatus()))
                 .toList());
@@ -117,7 +119,8 @@ public class OpenVendorBills {
                 continue; // held, voided, rejected or paid: neither committed nor pending (AW11)
             }
             if (COMMITTED.contains(bill.getStatus())) {
-                LocalDate real = bill.getDueDate() == null ? null : bill.getDueDate().toLocalDate();
+                LocalDate real =
+                        bill.getDueDate() == null ? null : bill.getDueDate().toLocalDate();
                 approved.add(new OpenBill(bill, open, real, real == null ? estimates.get(bill) : null));
             } else {
                 unapproved.add(new OpenBill(bill, open, null, null));

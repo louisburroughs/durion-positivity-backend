@@ -41,7 +41,8 @@ public class CashAttentionSources {
      * An undeposited session with its business date (its close date in the tenant accounting time zone) and whether its
      * deposit balances: the bank drops equal the expected cash plus the clearing net.
      */
-    public record AgedSession(@NonNull UndepositedSession session, @NonNull LocalDate businessDate, boolean balanced) {
+    public record AgedSession(
+            @NonNull UndepositedSession session, @NonNull LocalDate businessDate, boolean balanced) {
 
         /** The money the session's bank drops would put in the bank. */
         public @NonNull BigDecimal depositAmount() {

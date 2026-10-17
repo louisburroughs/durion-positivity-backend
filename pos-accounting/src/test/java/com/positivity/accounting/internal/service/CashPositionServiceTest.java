@@ -126,17 +126,17 @@ class CashPositionServiceTest {
                         eq(SettlementReconciliationServiceImpl.SUSPENSE_MAPPING_KEY),
                         any()))
                 .thenReturn(Optional.of(SUSPENSE));
-        when(glAccounts.findAllById(any())).thenReturn(List.of(account(UNDEPOSITED, "1090"), account(CLEARING, "1095")));
+        when(glAccounts.findAllById(any()))
+                .thenReturn(List.of(account(UNDEPOSITED, "1090"), account(CLEARING, "1095")));
         when(glAccounts.findBySubtypeActiveAt(eq(AccountSubtype.CASH_ON_HAND), any(), any()))
                 .thenReturn(List.of(account(DRAWERS, "1080")));
-        when(journalEntryLines.getAccountBalances(anyCollection()))
-                .thenAnswer(invocation -> {
-                    List<JournalEntryLineRepository.AccountBalance> rows = new ArrayList<>();
-                    for (Map.Entry<UUID, String> entry : balances.entrySet()) {
-                        rows.add(balance(entry.getKey(), entry.getValue()));
-                    }
-                    return rows;
-                });
+        when(journalEntryLines.getAccountBalances(anyCollection())).thenAnswer(invocation -> {
+            List<JournalEntryLineRepository.AccountBalance> rows = new ArrayList<>();
+            for (Map.Entry<UUID, String> entry : balances.entrySet()) {
+                rows.add(balance(entry.getKey(), entry.getValue()));
+            }
+            return rows;
+        });
         balances.put(BANK, "12400.00");
         balances.put(UNDEPOSITED, "1240.00");
         balances.put(CLEARING, "-43.00");
@@ -193,9 +193,7 @@ class CashPositionServiceTest {
         assertThat(position.keptInDrawers().total()).isEqualByComparingTo("600.00");
         assertThat(position.waitingToBeDeposited().accounts())
                 .extracting(AccountRow::accountCode, row -> row.balance().toPlainString())
-                .containsExactly(
-                        tuple("1090", "1240.00"),
-                        tuple("1095", "-43.00"));
+                .containsExactly(tuple("1090", "1240.00"), tuple("1095", "-43.00"));
         assertThat(position.asOf()).isEqualTo(NOW);
         assertThat(position.currencyCode()).isEqualTo("USD");
     }
@@ -208,11 +206,15 @@ class CashPositionServiceTest {
         CashPositionResponse position = service.read();
 
         assertThat(position.total()).isEqualByComparingTo("14197.00");
-        assertThat(position.inTheBank().accounts()).extracting(AccountRow::glAccountId).doesNotContain(SUSPENSE);
+        assertThat(position.inTheBank().accounts())
+                .extracting(AccountRow::glAccountId)
+                .doesNotContain(SUSPENSE);
         assertThat(position.waitingToBeDeposited().accounts())
                 .extracting(AccountRow::glAccountId)
                 .doesNotContain(SUSPENSE);
-        assertThat(position.keptInDrawers().accounts()).extracting(AccountRow::glAccountId).doesNotContain(SUSPENSE);
+        assertThat(position.keptInDrawers().accounts())
+                .extracting(AccountRow::glAccountId)
+                .doesNotContain(SUSPENSE);
         assertThat(attention(position, CashAttentionCode.SETTLEMENT_SUSPENSE_NOT_ZERO))
                 .singleElement()
                 .satisfies(item -> assertThat(item.amount()).isEqualByComparingTo("35.00"));
@@ -253,7 +255,9 @@ class CashPositionServiceTest {
         CashPositionResponse position = service.read();
 
         assertThat(position.excludedForeignCurrencyAccounts()).isEqualTo(1);
-        assertThat(position.inTheBank().accounts()).extracting(AccountRow::accountCode).containsExactly("1000");
+        assertThat(position.inTheBank().accounts())
+                .extracting(AccountRow::accountCode)
+                .containsExactly("1000");
         assertThat(position.total()).isEqualByComparingTo("14197.00");
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<UUID>> asked = ArgumentCaptor.forClass(Collection.class);
@@ -280,7 +284,8 @@ class CashPositionServiceTest {
     }
 
     @Test
-    @DisplayName("with accounting:reconciliation:view each bank row adds the statement facts, never blended into the total")
+    @DisplayName(
+            "with accounting:reconciliation:view each bank row adds the statement facts, never blended into the total")
     void statementFieldsWithReconciliationView() {
         signIn(AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS, AccountingPermissions.RECONCILIATION_VIEW);
         when(bankPositionFacts.factsOf(anyCollection()))
@@ -359,7 +364,9 @@ class CashPositionServiceTest {
 
         List<NeedsAttention> items = attention(service.read(), CashAttentionCode.UNDEPOSITED_CASH_AGED);
 
-        assertThat(items).singleElement().satisfies(item -> assertThat(item.reason()).isNull());
+        assertThat(items)
+                .singleElement()
+                .satisfies(item -> assertThat(item.reason()).isNull());
     }
 
     @Test
@@ -398,7 +405,8 @@ class CashPositionServiceTest {
     void agedVendorCod() {
         when(apPayments.findUnappliedByMethodBefore(any(), any(), any(), any()))
                 .thenReturn(List.of(
-                        codPayment(LocalDate.of(2026, 9, 20), "145.00"), codPayment(LocalDate.of(2026, 10, 1), "55.00")));
+                        codPayment(LocalDate.of(2026, 9, 20), "145.00"),
+                        codPayment(LocalDate.of(2026, 10, 1), "55.00")));
 
         List<NeedsAttention> items = attention(service.read(), CashAttentionCode.VENDOR_COD_UNAPPLIED_AGED);
 
@@ -522,9 +530,7 @@ class CashPositionServiceTest {
         UsernamePasswordAuthenticationToken caller = new UsernamePasswordAuthenticationToken(
                 "clerk.ann",
                 "n/a",
-                Arrays.stream(authorities)
-                        .map(SimpleGrantedAuthority::new)
-                        .toList());
+                Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList());
         SecurityContextHolder.getContext().setAuthentication(caller);
     }
 

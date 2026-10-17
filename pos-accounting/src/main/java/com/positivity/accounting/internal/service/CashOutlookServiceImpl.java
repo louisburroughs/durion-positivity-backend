@@ -93,7 +93,8 @@ public class CashOutlookServiceImpl implements CashOutlookService {
         String currency = ledgerCurrency.code();
         LocalDate today = zoneResolver.today();
         BigDecimal start = scaled(
-                CashAccounts.Components.total(cash.bank()).add(CashAccounts.Components.total(cash.waiting())), currency);
+                CashAccounts.Components.total(cash.bank()).add(CashAccounts.Components.total(cash.waiting())),
+                currency);
 
         BigDecimal[] moneyIn = zeros(days + 1);
         BigDecimal[] moneyOut = zeros(days + 1);
@@ -185,12 +186,7 @@ public class CashOutlookServiceImpl implements CashOutlookService {
                 dueSoon.figure(currency),
                 dueLater.figure(currency),
                 estimated.figure(currency),
-                scaled(
-                        overdue.amount
-                                .add(dueSoon.amount)
-                                .add(dueLater.amount)
-                                .add(estimated.amount),
-                        currency));
+                scaled(overdue.amount.add(dueSoon.amount).add(dueLater.amount).add(estimated.amount), currency));
         return new CashOutlookResponse(
                 clock.instant(),
                 true,
@@ -212,14 +208,15 @@ public class CashOutlookServiceImpl implements CashOutlookService {
     }
 
     /** An open, collectible-in-time invoice with its due date. */
-    private record Receivable(@NonNull BigDecimal balance, @NonNull LocalDate dueDate) {}
+    private record Receivable(
+            @NonNull BigDecimal balance, @NonNull LocalDate dueDate) {}
 
     private List<Receivable> receivables(LocalDate today, String currency) {
         Set<UUID> walkIn = invoiceBalanceCalculator.walkInPartyIds();
-        List<ExtInvoice> candidates = extInvoiceRepository.findByStatusIn(InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES)
-                .stream()
-                .filter(invoice -> !InvoiceBalanceCalculator.isWalkIn(invoice, walkIn))
-                .toList();
+        List<ExtInvoice> candidates =
+                extInvoiceRepository.findByStatusIn(InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES).stream()
+                        .filter(invoice -> !InvoiceBalanceCalculator.isWalkIn(invoice, walkIn))
+                        .toList();
         if (candidates.isEmpty()) {
             return List.of();
         }
