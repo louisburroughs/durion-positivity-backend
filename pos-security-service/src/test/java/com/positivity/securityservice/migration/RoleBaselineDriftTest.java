@@ -229,7 +229,9 @@ class RoleBaselineDriftTest {
                     continue;
                 }
                 for (Object entry : entries) {
-                    if (entry instanceof Map<?, ?> permission && permission.get("grantTo") != null) {
+                    if (entry instanceof Map<?, ?> permission
+                            && permission.get("name") != null
+                            && permission.get("grantTo") != null) {
                         Object grantTo = permission.get("grantTo");
                         List<Object> roles = grantTo instanceof List<?> list ? (List<Object>) list : List.of(grantTo);
                         Set<String> names = targets.computeIfAbsent(
