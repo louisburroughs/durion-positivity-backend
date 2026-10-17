@@ -18,6 +18,7 @@ import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
@@ -140,7 +141,7 @@ class CashMovementApprovalServiceTest {
         assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
                         SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", new BigDecimal("30.005"), "CAD", null, null)))
                 .isInstanceOfSatisfying(
-                        com.positivity.order.internal.exception.CashMovementTaxRefusedException.class, e -> {
+                        CashMovementTaxRefusedException.class, e -> {
                             assertThat(e.code())
                                     .isEqualTo(
                                             com.positivity.order.internal.exception.CashMovementTaxRefusedException.Code
@@ -153,7 +154,7 @@ class CashMovementApprovalServiceTest {
         session.setCurrencyCode("JPY");
         assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
                         SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", new BigDecimal("30.5"), "JPY", null, null)))
-                .isInstanceOf(com.positivity.order.internal.exception.CashMovementTaxRefusedException.class);
+                .isInstanceOf(CashMovementTaxRefusedException.class);
         verify(stepUp, never()).verify(any(), any(), any(), any());
     }
 

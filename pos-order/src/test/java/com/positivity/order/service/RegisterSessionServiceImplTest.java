@@ -25,6 +25,7 @@ import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
@@ -502,7 +503,7 @@ class RegisterSessionServiceImplTest {
 
         assertThatThrownBy(() -> service.beginClose(id, new BigDecimal("100.005")))
                 .isInstanceOfSatisfying(
-                        com.positivity.order.internal.exception.CashMovementTaxRefusedException.class,
+                        CashMovementTaxRefusedException.class,
                         e -> assertThat(e.fieldErrors())
                                 .extracting(f -> f.field())
                                 .containsExactly("countedCash"));

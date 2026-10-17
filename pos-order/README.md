@@ -535,7 +535,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
 | `TAX_CHECK_UNAVAILABLE` | 503 | A petty expense carried the supplier's number and pos-tax could not check it (unreachable, timed out, failed, or disagreed with pos-order's replicas); `Retry-After` is set (`pos.order.tax-check.retry-after-seconds`); nothing recorded (CAP:550 S32d) |
-| `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`); `Retry-After` (5 s) says when to try again (ADR-0017 §1, #2651) |
+| `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`); `Retry-After` says when to try again (ADR-0017 §1, #2651; `pos.security-service.retry-after-seconds`, default 7 = the client's connect + read timeouts) |
 
 ## Configuration
 

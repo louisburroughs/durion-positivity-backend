@@ -163,7 +163,12 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
             throw new CurrencyNotSupportedException("This drawer's cash is counted in " + drawerCurrency + "; "
                     + command.currencyCode().trim() + " is not supported");
         }
+        if (session.getStatus() != RegisterSessionStatus.OPEN) {
+            throw new RegisterSessionConflictException("Cash movement approvals require an OPEN session; session "
+                    + session.getSessionId() + " is " + session.getStatus());
+        }
         // ADR-0067 PC-6 (#2651): an amount finer than the drawer currency's minor unit is refused, never rounded.
+        // After the state checks, in the movement path's order: the drawer's state first, then the amount.
         if (!DrawerAmounts.representable(amount, drawerCurrency)) {
             throw new CashMovementTaxRefusedException(
                     CashMovementTaxRefusedException.Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
@@ -171,10 +176,6 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
                     List.of(new ApiError.FieldError("amount", "has more decimals than " + drawerCurrency + " allows")));
         }
         BigDecimal stated = DrawerAmounts.atExponent(amount, drawerCurrency);
-        if (session.getStatus() != RegisterSessionStatus.OPEN) {
-            throw new RegisterSessionConflictException("Cash movement approvals require an OPEN session; session "
-                    + session.getSessionId() + " is " + session.getStatus());
-        }
         UUID callerUserId = currentUserId()
                 .orElseThrow(() -> new CashMovementRefusedException(
                         Refusal.CALLER_UNIDENTIFIED,
