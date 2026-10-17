@@ -1,16 +1,16 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
-import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
+import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
+import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
-import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
 import com.positivity.accounting.internal.entity.APPaymentAllocationRequest;
+import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
@@ -26,8 +26,8 @@ import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository;
-import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -697,7 +697,9 @@ public class APPaymentServiceImpl implements APPaymentService {
                 currentUser,
                 before,
                 saved.getStatus().name() + ";outcome=" + request.getGatewayOutcome()
-                        + (saved.getGatewayTransactionId() == null ? "" : ";gatewayTransactionId=" + saved.getGatewayTransactionId())
+                        + (saved.getGatewayTransactionId() == null
+                                ? ""
+                                : ";gatewayTransactionId=" + saved.getGatewayTransactionId())
                         + ";justification=" + request.getJustification());
         log.info(
                 "AP payment reconciled with the gateway | paymentId={} | outcome={} | status={} | by={}",
@@ -711,11 +713,14 @@ public class APPaymentServiceImpl implements APPaymentService {
     /** The remedy for a payment that is not a GATEWAY_PENDING orphan (#2729 ruling 2). */
     private static @NonNull String notVoidableRemedy(@NonNull APPayment payment) {
         return switch (payment.getStatus()) {
-            case GL_POST_FAILED -> "PERIOD_HARD_LOCKED".equals(payment.getGlPostError())
-                    ? "Post it again with retryApPaymentGlPosting and deferPastHardLock: true"
-                    : "Post it again with retryApPaymentGlPosting once glPostError is fixed";
-            case GL_POST_PENDING -> "Wait for the outbox delivery, or retryApPaymentGlPosting if its outbox row is FAILED";
-            case GL_POSTED, GATEWAY_SUCCEEDED -> "The charge moved money: a return is #2642 (mirror entry, reopened allocations)";
+            case GL_POST_FAILED ->
+                "PERIOD_HARD_LOCKED".equals(payment.getGlPostError())
+                        ? "Post it again with retryApPaymentGlPosting and deferPastHardLock: true"
+                        : "Post it again with retryApPaymentGlPosting once glPostError is fixed";
+            case GL_POST_PENDING ->
+                "Wait for the outbox delivery, or retryApPaymentGlPosting if its outbox row is FAILED";
+            case GL_POSTED, GATEWAY_SUCCEEDED ->
+                "The charge moved money: a return is #2642 (mirror entry, reopened allocations)";
             case VOIDED -> "Already voided; nothing to do";
             case GATEWAY_FAILED -> "The gateway declined it; nothing moved and nothing to void";
             default -> "Nothing to reconcile";
@@ -737,7 +742,9 @@ public class APPaymentServiceImpl implements APPaymentService {
     public @NonNull APPaymentResponse retryGLPosting(
             @NonNull UUID paymentId, @NonNull APPaymentGLPostingRetryRequest request, @NonNull String currentUser) {
         boolean defer = Boolean.TRUE.equals(request.getDeferPastHardLock());
-        if (defer && (request.getJustification() == null || request.getJustification().isBlank())) {
+        if (defer
+                && (request.getJustification() == null
+                        || request.getJustification().isBlank())) {
             throw new VendorBillException(
                     VendorBillException.Code.AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED,
                     "deferPastHardLock needs a justification: the entry will be dated today, not the payment's date");
@@ -758,8 +765,9 @@ public class APPaymentServiceImpl implements APPaymentService {
                     "AP_PAYMENT_GL_POSTING_DEFERRED",
                     currentUser,
                     "paymentDate=" + posted.getPaymentDate(),
-                    "journalEntryId=" + posted.getGlJournalEntryId() + ";rule=" + APPaymentPostingService.DEFERRED_PAST_HARD_LOCK
-                            + ";justification=" + request.getJustification());
+                    "journalEntryId=" + posted.getGlJournalEntryId() + ";rule="
+                            + APPaymentPostingService.DEFERRED_PAST_HARD_LOCK + ";justification="
+                            + request.getJustification());
         }
         return toResponse(posted);
     }

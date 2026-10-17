@@ -2,8 +2,8 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
-import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
@@ -14,8 +14,8 @@ import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetExcep
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
-import com.positivity.accounting.internal.repository.EventOutboxRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.EventOutboxRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.math.BigDecimal;
@@ -143,11 +143,12 @@ public class APPaymentPostingService {
                 && outbox.countByAggregateIdAndStatus(paymentId, EventOutbox.OutboxStatus.FAILED) > 0
                 && outbox.countByAggregateIdAndStatus(paymentId, EventOutbox.OutboxStatus.PENDING) == 0;
         if (payment.getStatus() != APPaymentStatus.GL_POST_FAILED && !failedOutbox) {
-            String remedy = switch (payment.getStatus()) {
-                case GATEWAY_PENDING -> "; reconcile it with the gateway first (reconcileApPaymentGateway)";
-                case GL_POST_PENDING -> "; its outbox delivery is still live, wait for it";
-                default -> "";
-            };
+            String remedy =
+                    switch (payment.getStatus()) {
+                        case GATEWAY_PENDING -> "; reconcile it with the gateway first (reconcileApPaymentGateway)";
+                        case GL_POST_PENDING -> "; its outbox delivery is still live, wait for it";
+                        default -> "";
+                    };
             throw new VendorBillException(
                     VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE,
                     "AP payment " + payment.getPaymentRef() + " is " + payment.getStatus()
@@ -192,7 +193,10 @@ public class APPaymentPostingService {
     }
 
     private UUID post(
-            APPayment payment, @Nullable String callerOverride, boolean applyRecordedOverride, boolean deferPastHardLock) {
+            APPayment payment,
+            @Nullable String callerOverride,
+            boolean applyRecordedOverride,
+            boolean deferPastHardLock) {
         UUID paymentId = payment.getPaymentId();
         if (payment.getPaymentMethod() == PaymentMethod.CASH) {
             // A drawer cash-on-delivery payment (S17, #2513; AW41 ruling 2): its session-close entry

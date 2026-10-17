@@ -1,10 +1,10 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
-import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
+import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import java.util.Optional;
 import java.util.UUID;
@@ -144,9 +144,7 @@ public interface APPaymentService {
      */
     @NonNull
     APPaymentResponse retryGLPosting(
-            @NonNull UUID paymentId,
-            @NonNull APPaymentGLPostingRetryRequest request,
-            @NonNull String currentUser);
+            @NonNull UUID paymentId, @NonNull APPaymentGLPostingRetryRequest request, @NonNull String currentUser);
 
     /**
      * Reconciles a {@code GATEWAY_PENDING} orphan with the gateway's outcome (#2729): {@code NOT_CHARGED} voids it
@@ -156,9 +154,7 @@ public interface APPaymentService {
      */
     @NonNull
     APPaymentResponse reconcileGateway(
-            @NonNull UUID paymentId,
-            @NonNull ReconcileAPPaymentGatewayRequest request,
-            @NonNull String currentUser);
+            @NonNull UUID paymentId, @NonNull ReconcileAPPaymentGatewayRequest request, @NonNull String currentUser);
 
     /**
      * Allocate an unapplied {@code CASH} payment (a drawer cash-on-delivery payout, S17 #2513) to the vendor's

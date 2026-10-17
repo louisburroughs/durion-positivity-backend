@@ -73,7 +73,15 @@ class APPaymentPostingServiceTest {
     @BeforeEach
     void wire() {
         service = new APPaymentPostingService(
-                CLOCK, payments, mappings, journalEntries, journalEntryRows, lockTimeout, outbox, periodGate, zoneResolver);
+                CLOCK,
+                payments,
+                mappings,
+                journalEntries,
+                journalEntryRows,
+                lockTimeout,
+                outbox,
+                periodGate,
+                zoneResolver);
         payment = new APPayment(PAYMENT_ID);
         payment.setPaymentRef("PAY-412");
         payment.setVendorName("Acme Brakes");
@@ -298,9 +306,11 @@ class APPaymentPostingServiceTest {
     void retryPendingWithFailedOutbox() {
         payment.setStatus(APPaymentStatus.GL_POST_PENDING);
         when(payments.lockById(PAYMENT_ID)).thenReturn(Optional.of(payment));
-        when(outbox.countByAggregateIdAndStatus(PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.FAILED))
+        when(outbox.countByAggregateIdAndStatus(
+                        PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.FAILED))
                 .thenReturn(1L);
-        when(outbox.countByAggregateIdAndStatus(PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.PENDING))
+        when(outbox.countByAggregateIdAndStatus(
+                        PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.PENDING))
                 .thenReturn(0L);
 
         assertThat(service.retry(PAYMENT_ID, null, false)).isEqualTo(ENTRY);
@@ -312,12 +322,14 @@ class APPaymentPostingServiceTest {
     void retryPendingWithLiveOutboxIsRefused() {
         payment.setStatus(APPaymentStatus.GL_POST_PENDING);
         when(payments.lockById(PAYMENT_ID)).thenReturn(Optional.of(payment));
-        when(outbox.countByAggregateIdAndStatus(PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.FAILED))
+        when(outbox.countByAggregateIdAndStatus(
+                        PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.FAILED))
                 .thenReturn(0L);
 
         assertThatThrownBy(() -> service.retry(PAYMENT_ID, null, false))
-                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE))
                 .hasMessageContaining("wait for it");
     }
 

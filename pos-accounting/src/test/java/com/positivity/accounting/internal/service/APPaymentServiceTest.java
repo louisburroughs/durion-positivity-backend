@@ -1284,8 +1284,9 @@ class APPaymentServiceTest {
         APPaymentResponse response = service.reconcileGateway(
                 paymentId,
                 com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
-                        .gatewayOutcome(com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
-                                .GatewayOutcome.NOT_CHARGED)
+                        .gatewayOutcome(
+                                com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.GatewayOutcome
+                                        .NOT_CHARGED)
                         .justification("Gateway console shows no charge; the request timed out")
                         .build(),
                 "controller.c");
@@ -1294,10 +1295,11 @@ class APPaymentServiceTest {
         assertThat(response.getVoidedBy()).isEqualTo("controller.c");
         assertThat(response.getVoidReason()).contains("no charge");
         org.mockito.Mockito.verifyNoInteractions(outboxService, postingService);
-        verify(auditLogs).save(org.mockito.ArgumentMatchers.argThat(row ->
-                "AP_PAYMENT_RECONCILE_GATEWAY".equals(row.getOperation())
-                        && "GATEWAY_PENDING".equals(row.getOldValue())
-                        && row.getNewValue().startsWith("VOIDED")));
+        verify(auditLogs)
+                .save(org.mockito.ArgumentMatchers.argThat(
+                        row -> "AP_PAYMENT_RECONCILE_GATEWAY".equals(row.getOperation())
+                                && "GATEWAY_PENDING".equals(row.getOldValue())
+                                && row.getNewValue().startsWith("VOIDED")));
     }
 
     @Test
@@ -1311,8 +1313,9 @@ class APPaymentServiceTest {
         APPaymentResponse response = service.reconcileGateway(
                 paymentId,
                 com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
-                        .gatewayOutcome(com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
-                                .GatewayOutcome.CHARGED)
+                        .gatewayOutcome(
+                                com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.GatewayOutcome
+                                        .CHARGED)
                         .gatewayTransactionId("ch_123")
                         .justification("Gateway console shows the charge settled on the 16th")
                         .build(),
@@ -1334,21 +1337,25 @@ class APPaymentServiceTest {
         assertThatThrownBy(() -> service.reconcileGateway(
                         paymentId,
                         com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
-                                .gatewayOutcome(com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
-                                        .GatewayOutcome.CHARGED)
+                                .gatewayOutcome(
+                                        com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
+                                                .GatewayOutcome.CHARGED)
                                 .justification("Charged, id to follow (not acceptable)")
                                 .build(),
                         "c"))
-                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED));
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(VendorBillException.Code.AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED));
 
         payment.setStatus(APPaymentStatus.GL_POST_FAILED);
         payment.setGlPostError("PERIOD_HARD_LOCKED");
         assertThatThrownBy(() -> service.reconcileGateway(
                         paymentId,
                         com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
-                                .gatewayOutcome(com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
-                                        .GatewayOutcome.NOT_CHARGED)
+                                .gatewayOutcome(
+                                        com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
+                                                .GatewayOutcome.NOT_CHARGED)
                                 .justification("Trying to void a posted-but-locked payment")
                                 .build(),
                         "c"))
@@ -1370,8 +1377,10 @@ class APPaymentServiceTest {
                                 .deferPastHardLock(true)
                                 .build(),
                         "controller.c"))
-                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED));
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(VendorBillException.Code.AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED));
         verify(postingService, never()).retry(any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
 
         APPayment posted = orphan(paymentId);
@@ -1390,7 +1399,9 @@ class APPaymentServiceTest {
                 "controller.c");
 
         assertThat(response.getPostingDateRule()).isEqualTo("DEFERRED_PAST_HARD_LOCK");
-        verify(auditLogs).save(org.mockito.ArgumentMatchers.argThat(row ->
-                "AP_PAYMENT_GL_POSTING_DEFERRED".equals(row.getOperation()) && "controller.c".equals(row.getUserId())));
+        verify(auditLogs)
+                .save(org.mockito.ArgumentMatchers.argThat(
+                        row -> "AP_PAYMENT_GL_POSTING_DEFERRED".equals(row.getOperation())
+                                && "controller.c".equals(row.getUserId())));
     }
 }

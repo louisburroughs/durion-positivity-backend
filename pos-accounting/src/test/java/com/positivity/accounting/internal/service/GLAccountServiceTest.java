@@ -720,10 +720,12 @@ class GLAccountServiceTest {
         }
 
         @Test
-        @DisplayName("every APPaymentStatus but the two terminal ones counts as unposted, new constants included")
+        @DisplayName("every APPaymentStatus but the terminal ones (declined, posted, voided) counts as unposted")
         void unpostedStates() {
             for (APPaymentStatus status : APPaymentStatus.values()) {
-                boolean terminal = status == APPaymentStatus.GATEWAY_FAILED || status == APPaymentStatus.GL_POSTED;
+                boolean terminal = status == APPaymentStatus.GATEWAY_FAILED
+                        || status == APPaymentStatus.GL_POSTED
+                        || status == APPaymentStatus.VOIDED;
                 assertThat(GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES.contains(status))
                         .as(status.name())
                         .isEqualTo(!terminal);

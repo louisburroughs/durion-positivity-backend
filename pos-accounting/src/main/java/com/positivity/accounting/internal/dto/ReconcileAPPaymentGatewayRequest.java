@@ -53,7 +53,8 @@ public class ReconcileAPPaymentGatewayRequest {
     @Size(min = 10, max = 1000, message = "justification must be 10-1000 characters")
     @Schema(
             description = "Why this outcome is asserted (what was checked at the gateway); audited under the caller",
-            example = "Gateway console shows no charge for PAY-412 on 2026-10-16; the request timed out before an answer",
+            example =
+                    "Gateway console shows no charge for PAY-412 on 2026-10-16; the request timed out before an answer",
             requiredMode = REQUIRED)
     private String justification;
 }
