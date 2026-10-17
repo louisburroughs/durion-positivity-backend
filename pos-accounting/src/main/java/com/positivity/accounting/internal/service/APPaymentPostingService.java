@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
+import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
@@ -13,6 +14,7 @@ import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetExcep
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
+import com.positivity.accounting.internal.repository.EventOutboxRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -20,6 +22,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +84,12 @@ public class APPaymentPostingService {
     private final JournalEntryService journalEntryService;
     private final JournalEntryRepository journalEntryRepository;
     private final ApLockTimeout lockTimeout;
+    private final EventOutboxRepository outbox;
+    private final AccountingPeriodGate periodGate;
+    private final AccountingCalendarZoneResolver zoneResolver;
+
+    /** {@code posting_date_rule} of an entry dated the retry's business date because the payment date is hard-locked. */
+    public static final String DEFERRED_PAST_HARD_LOCK = "DEFERRED_PAST_HARD_LOCK";
 
     /**
      * The outbox delivery: posts a {@code GL_POST_PENDING} payment. A payment already posted, or left {@code
@@ -115,16 +124,37 @@ public class APPaymentPostingService {
      */
     @Transactional
     public @NonNull UUID retry(@NonNull UUID paymentId, @Nullable String overrideJustification) {
+        return retry(paymentId, overrideJustification, false);
+    }
+
+    /**
+     * {@link #retry(UUID, String)} with the #2729 remedies: a {@code GL_POST_PENDING} payment whose outbox row is
+     * {@code FAILED} (its retries exhausted while the refusal could not be recorded) is retryable too, and {@code
+     * deferPastHardLock} dates the entry on the retry's business date when the payment's own date is hard-locked
+     * (AW42: never back into the original period); the payment then records {@value #DEFERRED_PAST_HARD_LOCK}.
+     */
+    @Transactional
+    public @NonNull UUID retry(
+            @NonNull UUID paymentId, @Nullable String overrideJustification, boolean deferPastHardLock) {
         lockTimeout.apply();
         APPayment payment =
                 payments.lockById(paymentId).orElseThrow(() -> new EntityNotFoundException("AP payment not found"));
-        if (payment.getStatus() != APPaymentStatus.GL_POST_FAILED) {
+        boolean failedOutbox = payment.getStatus() == APPaymentStatus.GL_POST_PENDING
+                && outbox.countByAggregateIdAndStatus(paymentId, EventOutbox.OutboxStatus.FAILED) > 0
+                && outbox.countByAggregateIdAndStatus(paymentId, EventOutbox.OutboxStatus.PENDING) == 0;
+        if (payment.getStatus() != APPaymentStatus.GL_POST_FAILED && !failedOutbox) {
+            String remedy = switch (payment.getStatus()) {
+                case GATEWAY_PENDING -> "; reconcile it with the gateway first (reconcileApPaymentGateway)";
+                case GL_POST_PENDING -> "; its outbox delivery is still live, wait for it";
+                default -> "";
+            };
             throw new VendorBillException(
                     VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE,
                     "AP payment " + payment.getPaymentRef() + " is " + payment.getStatus()
-                            + "; only a payment whose posting failed (GL_POST_FAILED) can be posted again");
+                            + "; only a payment whose posting failed (GL_POST_FAILED, or GL_POST_PENDING with its"
+                            + " outbox row FAILED) can be posted again" + remedy);
         }
-        return post(payment, overrideJustification, false);
+        return post(payment, overrideJustification, false, deferPastHardLock);
     }
 
     /**
@@ -158,6 +188,11 @@ public class APPaymentPostingService {
      * @param applyRecordedOverride true on the outbox delivery only: the payer's stored override applies
      */
     private UUID post(APPayment payment, @Nullable String callerOverride, boolean applyRecordedOverride) {
+        return post(payment, callerOverride, applyRecordedOverride, false);
+    }
+
+    private UUID post(
+            APPayment payment, @Nullable String callerOverride, boolean applyRecordedOverride, boolean deferPastHardLock) {
         UUID paymentId = payment.getPaymentId();
         if (payment.getPaymentMethod() == PaymentMethod.CASH) {
             // A drawer cash-on-delivery payment (S17, #2513; AW41 ruling 2): its session-close entry
@@ -189,10 +224,20 @@ public class APPaymentPostingService {
         }
 
         LocalDateTime transactionDate = payment.getPaymentDate().atStartOfDay();
-        BigDecimal gross = payment.getGrossAmount();
-        BigDecimal fee = payment.getFeeAmount() == null ? BigDecimal.ZERO : payment.getFeeAmount();
         String label =
                 payment.getPaymentRef() + (payment.getVendorName() == null ? "" : " to " + payment.getVendorName());
+        boolean deferred = false;
+        if (deferPastHardLock && periodGate.isHardLocked(payment.getPaymentDate())) {
+            // #2729 (AW42): the cash left the bank on payment_date, but that period is final. The entry is dated the
+            // retry's business date, says where it came from, and the payment records the rule; the locked period
+            // keeps the payment as a reconciling item.
+            LocalDate today = zoneResolver.today();
+            transactionDate = today.atStartOfDay();
+            label = label + " (paid " + payment.getPaymentDate() + "; posted after the hard lock)";
+            deferred = true;
+        }
+        BigDecimal gross = payment.getGrossAmount();
+        BigDecimal fee = payment.getFeeAmount() == null ? BigDecimal.ZERO : payment.getFeeAmount();
 
         List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
         lines.add(line(
@@ -227,11 +272,15 @@ public class APPaymentPostingService {
             // A retry: the caller's own override (or none), checked against the caller's authority by the gate.
             posted = journalEntryService.postJournalEntry(entryId, callerOverride);
         }
+        if (deferred) {
+            payment.setPostingDateRule(DEFERRED_PAST_HARD_LOCK);
+        }
         markPosted(payment, posted.getJournalEntryId());
         log.info(
-                "AP payment posted | paymentId={} | paymentDate={} | journalEntryId={}",
+                "AP payment posted | paymentId={} | paymentDate={} | postedOn={} | journalEntryId={}",
                 paymentId,
                 payment.getPaymentDate(),
+                transactionDate.toLocalDate(),
                 posted.getJournalEntryId());
         return posted.getJournalEntryId();
     }

@@ -111,6 +111,9 @@ class APPaymentServiceTest {
     @Mock
     private com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository allocationRequests;
 
+    @Mock
+    private com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogs;
+
     @InjectMocks
     private APPaymentServiceImpl service;
 
@@ -1252,5 +1255,142 @@ class APPaymentServiceTest {
                 .isEqualTo("Disputed delivery 4471, awaiting credit");
         assertThat(page.getContent().get(1).getVendorApHoldReason()).isNull();
         verify(vendorCopies, org.mockito.Mockito.times(1)).heldVendors(any());
+    }
+
+    // ========================================
+    // reconcile-gateway and the retry remedies (#2729)
+    // ========================================
+
+    private APPayment orphan(UUID paymentId) {
+        APPayment payment = new APPayment(paymentId);
+        payment.setPaymentRef("PAY-ORPHAN");
+        payment.setVendorId(testVendorId);
+        payment.setPaymentMethod(com.positivity.accounting.internal.enums.PaymentMethod.ACH);
+        payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
+        payment.setGrossAmount(new BigDecimal("412.00"));
+        payment.setCurrency("USD");
+        payment.setBankAccountId(UUID.randomUUID());
+        return payment;
+    }
+
+    @Test
+    @DisplayName("#2729: NOT_CHARGED voids a GATEWAY_PENDING orphan: nothing posted, nothing queued, an audit row")
+    void reconcileNotChargedVoids() {
+        UUID paymentId = UUID.randomUUID();
+        APPayment payment = orphan(paymentId);
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        APPaymentResponse response = service.reconcileGateway(
+                paymentId,
+                com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
+                        .gatewayOutcome(com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
+                                .GatewayOutcome.NOT_CHARGED)
+                        .justification("Gateway console shows no charge; the request timed out")
+                        .build(),
+                "controller.c");
+
+        assertThat(response.getStatus()).isEqualTo(APPaymentStatus.VOIDED);
+        assertThat(response.getVoidedBy()).isEqualTo("controller.c");
+        assertThat(response.getVoidReason()).contains("no charge");
+        org.mockito.Mockito.verifyNoInteractions(outboxService, postingService);
+        verify(auditLogs).save(org.mockito.ArgumentMatchers.argThat(row ->
+                "AP_PAYMENT_RECONCILE_GATEWAY".equals(row.getOperation())
+                        && "GATEWAY_PENDING".equals(row.getOldValue())
+                        && row.getNewValue().startsWith("VOIDED")));
+    }
+
+    @Test
+    @DisplayName("#2729: CHARGED records the transaction id and posts the orphan as an unapplied payment")
+    void reconcileChargedPostsUnapplied() {
+        UUID paymentId = UUID.randomUUID();
+        APPayment payment = orphan(paymentId);
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        APPaymentResponse response = service.reconcileGateway(
+                paymentId,
+                com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
+                        .gatewayOutcome(com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
+                                .GatewayOutcome.CHARGED)
+                        .gatewayTransactionId("ch_123")
+                        .justification("Gateway console shows the charge settled on the 16th")
+                        .build(),
+                "controller.c");
+
+        assertThat(response.getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
+        assertThat(response.getUnappliedAmount()).isEqualByComparingTo("412.00");
+        assertThat(response.getGatewayTransactionId()).isEqualTo("ch_123");
+        verify(outboxService).saveToOutbox(any(), eq("APPayment"), eq(paymentId), any(), any());
+        verify(auditLogs).save(any());
+    }
+
+    @Test
+    @DisplayName("#2729: CHARGED without a transaction id is 422; a non-orphan is 409 with the remedy as nextAction")
+    void reconcileRefusals() {
+        UUID paymentId = UUID.randomUUID();
+        APPayment payment = orphan(paymentId);
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        assertThatThrownBy(() -> service.reconcileGateway(
+                        paymentId,
+                        com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
+                                .gatewayOutcome(com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
+                                        .GatewayOutcome.CHARGED)
+                                .justification("Charged, id to follow (not acceptable)")
+                                .build(),
+                        "c"))
+                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
+                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED));
+
+        payment.setStatus(APPaymentStatus.GL_POST_FAILED);
+        payment.setGlPostError("PERIOD_HARD_LOCKED");
+        assertThatThrownBy(() -> service.reconcileGateway(
+                        paymentId,
+                        com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
+                                .gatewayOutcome(com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
+                                        .GatewayOutcome.NOT_CHARGED)
+                                .justification("Trying to void a posted-but-locked payment")
+                                .build(),
+                        "c"))
+                .isInstanceOfSatisfying(VendorBillException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_VOIDABLE);
+                    assertThat(e.getNextAction()).contains("deferPastHardLock");
+                });
+        verify(paymentRepository, never()).save(any());
+        verify(auditLogs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2729: deferPastHardLock needs a justification; with one, the deferred posting is audited")
+    void retryDeferValidationAndAudit() {
+        UUID paymentId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.retryGLPosting(
+                        paymentId,
+                        com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest.builder()
+                                .deferPastHardLock(true)
+                                .build(),
+                        "controller.c"))
+                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
+                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED));
+        verify(postingService, never()).retry(any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+
+        APPayment posted = orphan(paymentId);
+        posted.setStatus(APPaymentStatus.GL_POSTED);
+        posted.setPaymentDate(java.time.LocalDate.of(2026, 5, 12));
+        posted.setPostingDateRule(APPaymentPostingService.DEFERRED_PAST_HARD_LOCK);
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(posted));
+        when(postingService.retry(eq(paymentId), any(), eq(true))).thenReturn(UUID.randomUUID());
+
+        APPaymentResponse response = service.retryGLPosting(
+                paymentId,
+                com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest.builder()
+                        .deferPastHardLock(true)
+                        .justification("May is hard-locked after the audit; posting in June")
+                        .build(),
+                "controller.c");
+
+        assertThat(response.getPostingDateRule()).isEqualTo("DEFERRED_PAST_HARD_LOCK");
+        verify(auditLogs).save(org.mockito.ArgumentMatchers.argThat(row ->
+                "AP_PAYMENT_GL_POSTING_DEFERRED".equals(row.getOperation()) && "controller.c".equals(row.getUserId())));
     }
 }

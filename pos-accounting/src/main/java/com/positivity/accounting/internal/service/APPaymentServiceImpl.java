@@ -1,10 +1,13 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
+import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
+import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
 import com.positivity.accounting.internal.entity.APPaymentAllocationRequest;
@@ -23,6 +26,7 @@ import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
@@ -78,6 +82,7 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final ApLockTimeout lockTimeout;
     private final SupplierVendorCopies vendorCopies;
     private final APPaymentAllocationRequestRepository allocationRequests;
+    private final AccountingAuditLogRepository auditLogs;
 
     /** One allocation of the plan: the bill, locked, and the amount applied to it. */
     record PlannedAllocation(
@@ -216,52 +221,7 @@ public class APPaymentServiceImpl implements APPaymentService {
             // Persist event to outbox for at-least-once delivery guarantee
             payment.setStatus(APPaymentStatus.GL_POST_PENDING);
             payment = paymentRepository.save(payment);
-
-            List<APPaymentAllocation> savedAllocations =
-                    allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
-
-            APPaymentGLPostingEvent glPostingEvent = APPaymentGLPostingEvent.builder()
-                    .eventId(UUIDv7Generator.generate())
-                    .organizationId(DEFAULT_ORGANIZATION_ID)
-                    .paymentId(payment.getPaymentId())
-                    .paymentRef(payment.getPaymentRef())
-                    .vendorId(payment.getVendorId())
-                    .vendorName(payment.getVendorName())
-                    .grossAmount(payment.getGrossAmount())
-                    .feeAmount(payment.getFeeAmount())
-                    .unappliedAmount(payment.getUnappliedAmount())
-                    .currency(payment.getCurrency())
-                    .paymentMethod(
-                            payment.getPaymentMethod() != null
-                                    ? payment.getPaymentMethod().name()
-                                    : PaymentMethod.OTHER.name())
-                    .gatewayTransactionId(payment.getGatewayTransactionId())
-                    .gatewayTimestamp(payment.getGatewayTimestamp())
-                    .memo(payment.getMemo())
-                    .allocations(savedAllocations.stream()
-                            .map(a -> APPaymentGLPostingEvent.AllocationLine.builder()
-                                    .allocationId(a.getAllocationId())
-                                    .vendorBillId(a.getVendorBillId())
-                                    .appliedAmount(a.getAppliedAmount())
-                                    .allocationSequence(
-                                            a.getAllocationSequence() != null ? a.getAllocationSequence() : 0)
-                                    .build())
-                            .toList())
-                    .build();
-
-            // Save to outbox for reliable delivery (atomic with payment transaction)
-            outboxService.saveToOutbox(
-                    glPostingEvent.getEventId(),
-                    "APPayment",
-                    payment.getPaymentId(),
-                    glPostingEvent.getClass().getName(),
-                    glPostingEvent);
-
-            log.info(
-                    "GL posting event persisted to outbox | paymentId={} | eventId={} | grossAmount={}",
-                    payment.getPaymentId(),
-                    glPostingEvent.getEventId(),
-                    payment.getGrossAmount());
+            enqueueGlPosting(payment);
 
             log.info(
                     "Payment {} executed successfully for vendor {}, amount {}",
@@ -645,6 +605,165 @@ public class APPaymentServiceImpl implements APPaymentService {
         log.error("GL posting failed for payment {}: {}", paymentId, errorMessage);
     }
 
+    /** Queues the payment's GL posting event (atomic with the caller's transaction). */
+    private void enqueueGlPosting(@NonNull APPayment payment) {
+        List<APPaymentAllocation> savedAllocations =
+                allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc(payment.getPaymentId());
+        APPaymentGLPostingEvent glPostingEvent = APPaymentGLPostingEvent.builder()
+                .eventId(UUIDv7Generator.generate())
+                .organizationId(DEFAULT_ORGANIZATION_ID)
+                .paymentId(payment.getPaymentId())
+                .paymentRef(payment.getPaymentRef())
+                .vendorId(payment.getVendorId())
+                .vendorName(payment.getVendorName())
+                .grossAmount(payment.getGrossAmount())
+                .feeAmount(payment.getFeeAmount())
+                .unappliedAmount(payment.getUnappliedAmount())
+                .currency(payment.getCurrency())
+                .paymentMethod(
+                        payment.getPaymentMethod() != null
+                                ? payment.getPaymentMethod().name()
+                                : PaymentMethod.OTHER.name())
+                .gatewayTransactionId(payment.getGatewayTransactionId())
+                .gatewayTimestamp(payment.getGatewayTimestamp())
+                .memo(payment.getMemo())
+                .allocations(savedAllocations.stream()
+                        .map(a -> APPaymentGLPostingEvent.AllocationLine.builder()
+                                .allocationId(a.getAllocationId())
+                                .vendorBillId(a.getVendorBillId())
+                                .appliedAmount(a.getAppliedAmount())
+                                .allocationSequence(a.getAllocationSequence() != null ? a.getAllocationSequence() : 0)
+                                .build())
+                        .toList())
+                .build();
+        outboxService.saveToOutbox(
+                glPostingEvent.getEventId(),
+                "APPayment",
+                payment.getPaymentId(),
+                glPostingEvent.getClass().getName(),
+                glPostingEvent);
+        log.info(
+                "GL posting event persisted to outbox | paymentId={} | eventId={} | grossAmount={}",
+                payment.getPaymentId(),
+                glPostingEvent.getEventId(),
+                payment.getGrossAmount());
+    }
+
+    @Override
+    @Transactional
+    public @NonNull APPaymentResponse reconcileGateway(
+            @NonNull UUID paymentId, @NonNull ReconcileAPPaymentGatewayRequest request, @NonNull String currentUser) {
+        lockTimeout.apply();
+        APPayment payment = paymentRepository.lockById(paymentId).orElseThrow(() -> notFound(paymentId));
+        if (payment.getStatus() != APPaymentStatus.GATEWAY_PENDING) {
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_PAYMENT_NOT_VOIDABLE,
+                    "AP payment " + payment.getPaymentRef() + " is " + payment.getStatus()
+                            + "; only a GATEWAY_PENDING orphan (no gateway answer recorded) is reconciled here",
+                    List.of(),
+                    notVoidableRemedy(payment));
+        }
+        String before = payment.getStatus().name();
+        if (request.getGatewayOutcome() == ReconcileAPPaymentGatewayRequest.GatewayOutcome.NOT_CHARGED) {
+            // No money moved: void. Nothing was posted (the posting follows the gateway answer) and no allocation
+            // exists yet (they are applied after a gateway success), so there is nothing to reverse or reopen.
+            payment.setStatus(APPaymentStatus.VOIDED);
+            payment.setVoidReason(request.getJustification());
+            payment.setVoidedAt(Instant.now(clock));
+            payment.setVoidedBy(currentUser);
+            payment.setGatewayResponse("Reconciled by operator: NOT_CHARGED");
+        } else {
+            if (request.getGatewayTransactionId() == null
+                    || request.getGatewayTransactionId().isBlank()) {
+                throw new VendorBillException(
+                        VendorBillException.Code.AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED,
+                        "CHARGED needs the gateway's transaction id for AP payment " + payment.getPaymentRef());
+            }
+            // Money moved: the payment posts as an unapplied payment (the plan the pay command built in memory is
+            // lost with the crash); the vendor's bills are allocated to it later, as cash-on-delivery payments are.
+            payment.setGatewayTransactionId(request.getGatewayTransactionId().trim());
+            payment.setGatewayTimestamp(Instant.now(clock));
+            payment.setGatewayResponse("Reconciled by operator: CHARGED");
+            payment.setUnappliedAmount(payment.getGrossAmount());
+            payment.setStatus(APPaymentStatus.GL_POST_PENDING);
+        }
+        APPayment saved = paymentRepository.save(payment);
+        if (saved.getStatus() == APPaymentStatus.GL_POST_PENDING) {
+            enqueueGlPosting(saved);
+        }
+        audit(
+                saved,
+                "AP_PAYMENT_RECONCILE_GATEWAY",
+                currentUser,
+                before,
+                saved.getStatus().name() + ";outcome=" + request.getGatewayOutcome()
+                        + (saved.getGatewayTransactionId() == null ? "" : ";gatewayTransactionId=" + saved.getGatewayTransactionId())
+                        + ";justification=" + request.getJustification());
+        log.info(
+                "AP payment reconciled with the gateway | paymentId={} | outcome={} | status={} | by={}",
+                paymentId,
+                request.getGatewayOutcome(),
+                saved.getStatus(),
+                currentUser);
+        return toResponse(saved);
+    }
+
+    /** The remedy for a payment that is not a GATEWAY_PENDING orphan (#2729 ruling 2). */
+    private static @NonNull String notVoidableRemedy(@NonNull APPayment payment) {
+        return switch (payment.getStatus()) {
+            case GL_POST_FAILED -> "PERIOD_HARD_LOCKED".equals(payment.getGlPostError())
+                    ? "Post it again with retryApPaymentGlPosting and deferPastHardLock: true"
+                    : "Post it again with retryApPaymentGlPosting once glPostError is fixed";
+            case GL_POST_PENDING -> "Wait for the outbox delivery, or retryApPaymentGlPosting if its outbox row is FAILED";
+            case GL_POSTED, GATEWAY_SUCCEEDED -> "The charge moved money: a return is #2642 (mirror entry, reopened allocations)";
+            case VOIDED -> "Already voided; nothing to do";
+            case GATEWAY_FAILED -> "The gateway declined it; nothing moved and nothing to void";
+            default -> "Nothing to reconcile";
+        };
+    }
+
+    private void audit(APPayment payment, String operation, String user, String oldValue, String newValue) {
+        AccountingAuditLog row = new AccountingAuditLog();
+        row.setEntityType("AP_PAYMENT");
+        row.setEntityId(payment.getPaymentId());
+        row.setOperation(operation);
+        row.setUserId(user);
+        row.setOldValue(oldValue);
+        row.setNewValue(newValue.length() > 2000 ? newValue.substring(0, 2000) : newValue);
+        auditLogs.save(row);
+    }
+
+    @Override
+    public @NonNull APPaymentResponse retryGLPosting(
+            @NonNull UUID paymentId, @NonNull APPaymentGLPostingRetryRequest request, @NonNull String currentUser) {
+        boolean defer = Boolean.TRUE.equals(request.getDeferPastHardLock());
+        if (defer && (request.getJustification() == null || request.getJustification().isBlank())) {
+            throw new VendorBillException(
+                    VendorBillException.Code.AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED,
+                    "deferPastHardLock needs a justification: the entry will be dated today, not the payment's date");
+        }
+        try {
+            postingService.retry(paymentId, request.getOverrideJustification(), defer);
+        } catch (RuntimeException e) {
+            APPaymentPostingService.refusalCode(e)
+                    .ifPresent(code -> paymentFailurePersistenceService.persistGLPostRefusal(paymentId, code));
+            throw e;
+        }
+        APPayment posted = paymentRepository
+                .findById(paymentId)
+                .orElseThrow(() -> new IllegalStateException("AP payment " + paymentId + " vanished after posting"));
+        if (defer && APPaymentPostingService.DEFERRED_PAST_HARD_LOCK.equals(posted.getPostingDateRule())) {
+            audit(
+                    posted,
+                    "AP_PAYMENT_GL_POSTING_DEFERRED",
+                    currentUser,
+                    "paymentDate=" + posted.getPaymentDate(),
+                    "journalEntryId=" + posted.getGlJournalEntryId() + ";rule=" + APPaymentPostingService.DEFERRED_PAST_HARD_LOCK
+                            + ";justification=" + request.getJustification());
+        }
+        return toResponse(posted);
+    }
+
     /**
      * {@inheritDoc}
      *
@@ -691,6 +810,10 @@ public class APPaymentServiceImpl implements APPaymentService {
                 .glJournalEntryId(payment.getGlJournalEntryId())
                 .glPostedAt(payment.getGlPostedAt())
                 .glPostError(payment.getGlPostError())
+                .postingDateRule(payment.getPostingDateRule())
+                .voidReason(payment.getVoidReason())
+                .voidedAt(payment.getVoidedAt())
+                .voidedBy(payment.getVoidedBy())
                 .memo(payment.getMemo())
                 .allocations(allocations.stream()
                         .map(a -> APPaymentResponse.AllocationLineResponse.builder()

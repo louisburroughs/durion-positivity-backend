@@ -86,6 +86,12 @@ public class VendorBillException extends RuntimeException {
          * or never past the gateway (CAP:550 S42, #2603). 409.
          */
         AP_PAYMENT_NOT_RETRYABLE(HttpStatus.CONFLICT),
+        /** A reconcile-gateway on a payment that is not a GATEWAY_PENDING orphan (#2729). */
+        AP_PAYMENT_NOT_VOIDABLE(HttpStatus.CONFLICT),
+        /** CHARGED asserted without the gateway's transaction id (#2729). */
+        AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT),
+        /** deferPastHardLock without a justification (#2729). */
+        AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT),
         /** The payment is not a {@code CASH} payment, or nothing of it is unapplied (S17, #2513). */
         AP_PAYMENT_NOT_ALLOCATABLE(HttpStatus.UNPROCESSABLE_CONTENT),
         /** The allocation command's {@code requestId} was used before with another body (S17, #2513). */

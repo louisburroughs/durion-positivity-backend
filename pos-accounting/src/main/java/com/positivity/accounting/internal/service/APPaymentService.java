@@ -136,6 +136,29 @@ public interface APPaymentService {
     APPaymentResponse retryGLPosting(@NonNull UUID paymentId, @Nullable String overrideJustification);
 
     /**
+     * The retry with the #2729 remedies: {@code deferPastHardLock} (needs {@code justification}, audited) dates the
+     * entry on the retry's business date when the payment's own date is hard-locked; a {@code GL_POST_PENDING}
+     * payment whose outbox row is FAILED is retryable too.
+     */
+    @NonNull
+    APPaymentResponse retryGLPosting(
+            @NonNull UUID paymentId,
+            @NonNull com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest request,
+            @NonNull String currentUser);
+
+    /**
+     * Reconciles a {@code GATEWAY_PENDING} orphan with the gateway's outcome (#2729): {@code NOT_CHARGED} voids it
+     * (posts nothing, nothing to reopen); {@code CHARGED} posts it as an unapplied payment (the vendor's bills are
+     * allocated later). 409 {@code AP_PAYMENT_NOT_VOIDABLE} in any other status (with the remedy as {@code
+     * nextAction}); 422 {@code AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED} for {@code CHARGED} without a transaction id.
+     */
+    @NonNull
+    APPaymentResponse reconcileGateway(
+            @NonNull UUID paymentId,
+            @NonNull com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest request,
+            @NonNull String currentUser);
+
+    /**
      * Allocate an unapplied {@code CASH} payment (a drawer cash-on-delivery payout, S17 #2513) to the vendor's
      * approved bills. Posts nothing (AW41 ruling 3): AP was debited at session close and credited at bill approval,
      * so the allocation only matches the subledger. Idempotent on {@code requestId}: the same lines answer the same

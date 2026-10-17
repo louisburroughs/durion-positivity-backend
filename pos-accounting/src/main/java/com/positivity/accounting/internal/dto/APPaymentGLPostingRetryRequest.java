@@ -32,4 +32,25 @@ public class APPaymentGLPostingRetryRequest {
             requiredMode = NOT_REQUIRED)
     @JsonProperty("overrideJustification")
     private String overrideJustification;
+
+    @Nullable
+    @Schema(
+            description = "When the payment's own date is now hard-locked (glPostError PERIOD_HARD_LOCKED), post the"
+                    + " entry on today's business date instead (#2729, AW42: never back into the original period);"
+                    + " the entry's description carries the original payment date and the payment records"
+                    + " postingDateRule DEFERRED_PAST_HARD_LOCK. Needs justification. Default false",
+            example = "true",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("deferPastHardLock")
+    private Boolean deferPastHardLock;
+
+    @Nullable
+    @Size(min = 10, max = 1000, message = "justification must be 10-1000 characters")
+    @Schema(
+            description = "Why the posting is deferred past the hard lock; required with deferPastHardLock, audited"
+                    + " under the caller",
+            example = "May is hard-locked after the audit; the June business date carries the May check",
+            requiredMode = NOT_REQUIRED)
+    @JsonProperty("justification")
+    private String justification;
 }
