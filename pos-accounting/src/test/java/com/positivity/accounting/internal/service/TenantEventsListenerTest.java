@@ -41,6 +41,8 @@ class TenantEventsListenerTest {
     private final AccountingTemplateReader reader = mock(AccountingTemplateReader.class);
     private final AccountingTenantProvisioner provisioner = mock(AccountingTenantProvisioner.class);
     private final TenantLocaleReplicaWriter localeWriter = mock(TenantLocaleReplicaWriter.class);
+    private final ReadingAllowanceReplicaWriter allowanceWriter = mock(ReadingAllowanceReplicaWriter.class);
+    private final List<Optional<UUID>> boundAtAllowance = new ArrayList<>();
     private final List<Optional<UUID>> boundAtRead = new ArrayList<>();
     private final List<Optional<UUID>> boundAtProvision = new ArrayList<>();
     private final List<Optional<UUID>> boundAtLocale = new ArrayList<>();
@@ -49,7 +51,10 @@ class TenantEventsListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new TenantEventsListener(new ObjectMapper(), processedEvents, reader, provisioner, localeWriter);
+        listener = new TenantEventsListener(new ObjectMapper(), processedEvents, reader, provisioner, localeWriter, allowanceWriter);
+        doAnswer(invocation -> boundAtAllowance.add(TenantContext.current()))
+                .when(allowanceWriter)
+                .applyAndRecord(any());
         doAnswer(invocation -> boundAtLocale.add(TenantContext.current()))
                 .when(localeWriter)
                 .apply(any());
@@ -99,7 +104,7 @@ class TenantEventsListenerTest {
                  "payload":{"tenantId":"%s"}}
                 """.formatted(NEW_TENANT));
 
-        verifyNoInteractions(processedEvents, reader, provisioner, localeWriter);
+        verifyNoInteractions(processedEvents, reader, provisioner, localeWriter, allowanceWriter);
     }
 
     @Test
@@ -222,6 +227,57 @@ class TenantEventsListenerTest {
         ArgumentCaptor<TenantProjectionEvent> fact = ArgumentCaptor.forClass(TenantProjectionEvent.class);
         verify(localeWriter).apply(fact.capture());
         assertThat(fact.getValue().locale()).isNull();
+    }
+
+    @Test
+    @DisplayName("tenant.reading-allowance.changed is stored bound to the fact's tenant and provisions nothing (#2619)")
+    void allowanceIsStoredUnderTheTenantsBinding() {
+        listener.onTenantEvent(allowance(EVENT_ID, 4, "20.00"));
+
+        ArgumentCaptor<ReadingAllowanceEvent> fact = ArgumentCaptor.forClass(ReadingAllowanceEvent.class);
+        verify(allowanceWriter).applyAndRecord(fact.capture());
+        assertThat(fact.getValue().tenantId()).isEqualTo(NEW_TENANT);
+        assertThat(fact.getValue().tierCode()).isEqualTo("STANDARD");
+        assertThat(fact.getValue().amount()).isEqualByComparingTo("20.00");
+        assertThat(fact.getValue().currencyCode()).isEqualTo("USD");
+        assertThat(fact.getValue().effectiveAt()).isEqualTo(java.time.Instant.parse("2026-10-17T00:00:00Z"));
+        assertThat(fact.getValue().aggregateVersion()).isEqualTo(4);
+        assertThat(boundAtAllowance).containsExactly(Optional.of(NEW_TENANT));
+        assertThat(TenantContext.current()).contains(PlatformTenant.ID);
+        verifyNoInteractions(reader, provisioner, localeWriter);
+    }
+
+    @Test
+    @DisplayName("a replayed reading-allowance eventId is skipped before the write")
+    void replayedAllowanceIsSkipped() {
+        when(processedEvents.existsById(EVENT_ID)).thenReturn(true);
+
+        listener.onTenantEvent(allowance(EVENT_ID, 4, "20.00"));
+
+        verifyNoInteractions(allowanceWriter);
+    }
+
+    @Test
+    @DisplayName("a reading-allowance fact without an eventId or with a malformed payload is skipped, nothing recorded")
+    void malformedAllowanceIsSkipped() {
+        listener.onTenantEvent(allowance(null, 4, "20.00"));
+        listener.onTenantEvent(allowance(EVENT_ID, 4, "-1"));
+        listener.onTenantEvent(allowance(EVENT_ID, 4, "20.00").replace("USD", "usd"));
+        listener.onTenantEvent(allowance(EVENT_ID, 4, "20.00").replace(NEW_TENANT.toString(), "not-a-uuid"));
+        listener.onTenantEvent(allowance(EVENT_ID, 4, "20.00").replace("\"aggregateVersion\":4,", ""));
+        listener.onTenantEvent(allowance(EVENT_ID, 4, "20.00").replace("2026-10-17T00:00:00Z", "yesterday"));
+
+        verifyNoInteractions(allowanceWriter);
+    }
+
+    private static String allowance(String eventId, long version, String amount) {
+        String idField = eventId == null ? "" : "\"eventId\":\"" + eventId + "\",";
+        return """
+                {%s"eventType":"tenant.reading-allowance.changed","aggregateVersion":%d,
+                 "payload":{"tenantId":"%s","tierCode":"STANDARD",
+                            "monthlyAllowance":{"amount":%s,"currencyCode":"USD"},
+                            "effectiveAt":"2026-10-17T00:00:00Z"}}
+                """.formatted(idField, version, NEW_TENANT, amount);
     }
 
     private static String createdWithLocale(String eventId, String tenantId, String locale) {
