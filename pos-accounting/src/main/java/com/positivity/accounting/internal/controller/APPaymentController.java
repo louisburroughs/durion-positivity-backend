@@ -374,35 +374,31 @@ public class APPaymentController {
             operationId = "recordApPaymentReturn",
             summary = "Record a returned AP payment charge: reverse its entry, reopen its allocations",
             description = """
-                The bank or the processor sent back a charge that had moved money (#2642, AW42 applied to a \
-                payment): a bank statement shows the return, or a processor notice names it, and the settlement \
-                job could not read it from the gateway. In one transaction the payment's allocations are reopened \
-                (kept as history; each bill's open amount is restored and the bills are payable again), \
-                unappliedAmount becomes zero, and the mirror entry, the reversal of the payment's own entry (Dr the \
-                bank gross + fee / Cr 2000 / Cr the fee account), is posted on the return date when that period is \
-                open, else on today's business date (returnDateRule RETURN_DATE or DETECTION_DATE). The payment \
-                ends RETURNED; it ends RETURN_PENDING when its original posting is still pending or failed (the \
-                mirror follows the original, posted by the outbox or retryApPaymentGlPosting). A CLOSED period on \
-                today's business date is 422 PERIOD_CLOSED unless the caller holds accounting:period:override and \
-                gives overrideJustification; nothing is held.
-                Use this tool for a late return of a settled charge, or for a gateway this service cannot re-read; \
-                do not use it for a GATEWAY_PENDING orphan (reconcileApPaymentGateway) or to cancel a payment that \
-                never moved money. The payment is never re-sent: pay the bills again with a new paymentRef.
-                Preconditions: the payment is GL_POST_PENDING, GL_POSTED or GL_POST_FAILED and not CASH; the return \
-                is what the bank or the processor reported. The gateway's current answer is recorded with the \
-                attestation but never refuses the command (a bank can return what the processor shows as settled).
-                Required inputs: paymentId; requestId (the caller's idempotency key) and justification (10-1000 \
-                characters); optional returnDate (not after today; today when omitted), failureCode (a code such \
-                as R01, never free text) and overrideJustification (accounting:period:override) for a CLOSED \
-                detection date.
-                Emits ACCOUNTING_AP_PAYMENT_RECORD_RETURN and writes audit rows AP_PAYMENT_RETURN (the reopened \
-                bills and amounts, the gateway's answer) and AP_PAYMENT_RETURN_GL_POSTING (the mirror).
-                Returns 200 with the payment (RETURNED or RETURN_PENDING), 400 VALIDATION_ERROR (a missing \
-                field, a return date after today), 404 NOT_FOUND, 409 AP_PAYMENT_NOT_RETURNABLE when the charge \
-                never moved money or the payment is CASH (nextAction names the remedy), 409 \
-                AP_PAYMENT_ALREADY_RETURNED, 409 IDEMPOTENCY_CONFLICT (the requestId was used with another body), \
-                409 LOCK_TIMEOUT, 422 PERIOD_CLOSED (today's period is CLOSED and no override) or \
-                PERIOD_HARD_LOCKED.
+                Records a charge the bank or the processor sent back after it had moved money (#2642, AW42 applied \
+                to a payment): a statement return, or a processor notice the settlement job could not read from the \
+                gateway. In one transaction the payment's allocations are reopened (kept as history; each bill's open \
+                amount is restored and the bills are payable again), unappliedAmount becomes zero, and the mirror \
+                entry, the reversal of the payment's own entry (Dr the bank gross + fee / Cr 2000 / Cr the fee \
+                account), is posted on the return date when that period is open, else on today's business date \
+                (returnDateRule RETURN_DATE or DETECTION_DATE). The payment ends RETURNED, or RETURN_PENDING while \
+                its original posting is still pending or failed (the mirror follows the original, posted by the \
+                outbox or retryApPaymentGlPosting); a CLOSED period on today's business date is 422 PERIOD_CLOSED \
+                unless the caller holds accounting:period:override and gives overrideJustification. Use this tool \
+                for a late return of a settled charge or for a gateway this service cannot re-read; do not use it \
+                for a GATEWAY_PENDING orphan (reconcileApPaymentGateway) or to cancel a payment that never moved \
+                money, and never re-send the payment (pay the bills again with a new paymentRef). Preconditions: the \
+                payment is GL_POST_PENDING, GL_POSTED or GL_POST_FAILED and not CASH; the return is what the bank or \
+                the processor reported (the gateway's current answer is recorded with the attestation but never \
+                refuses the command). Required inputs: paymentId; requestId (the caller's idempotency key) and \
+                justification (10-1000 characters); optional returnDate (not after today; today when omitted), \
+                failureCode (a code such as R01, never free text) and overrideJustification for a CLOSED detection \
+                date. Emits ACCOUNTING_AP_PAYMENT_RECORD_RETURN and writes audit rows AP_PAYMENT_RETURN (the \
+                reopened bills and amounts, the gateway's answer) and AP_PAYMENT_RETURN_GL_POSTING (the mirror). \
+                Returns 200 with the payment (RETURNED or RETURN_PENDING), 400 VALIDATION_ERROR (a missing field, a \
+                return date after today), 404 NOT_FOUND, 409 AP_PAYMENT_NOT_RETURNABLE when the charge never moved \
+                money or the payment is CASH (nextAction names the remedy), 409 AP_PAYMENT_ALREADY_RETURNED, 409 \
+                IDEMPOTENCY_CONFLICT (the requestId was used with another body), 409 LOCK_TIMEOUT, 422 \
+                PERIOD_CLOSED or PERIOD_HARD_LOCKED.
                 """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Returned: RETURNED, or RETURN_PENDING while the mirror is owed")
@@ -439,7 +435,25 @@ public class APPaymentController {
                     @Parameter(description = "Payment UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
                     @NonNull
                     UUID paymentId,
-            @Valid @RequestBody @NonNull RecordAPPaymentReturnRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The return as the bank or the processor reported it: the caller's"
+                                    + " requestId, the reported date, the return code and the justification",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "ACH return from the statement",
+                                                            value = """
+                                                {"requestId":"0199c2d4-8f1a-7b3c-9d4e-5f6a7b8c9d0e","returnDate":"2026-10-15",\
+                                                "failureCode":"R01","justification":"Bank statement 2026-10-15: ACH return R01 \
+                                                (insufficient funds) for PAY-2026-0412"}
+                                                """)))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    RecordAPPaymentReturnRequest request) {
         String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         return ResponseEntity.ok(apPaymentService.recordReturn(paymentId, request, currentUser));
     }
@@ -506,15 +520,16 @@ public class APPaymentController {
             operationId = "listApPaymentsInFlight",
             summary = "AP payments the gateway has not settled yet",
             description = """
-                Lists the AP payments whose charge the gateway accepted as PENDING or AUTHORIZED (an ACH in flight) \
+                Lists the AP payments whose charge the gateway accepted as PENDING or AUTHORIZED (an ACH in flight), \
                 or that an operator reconciled as CHARGED, and that the settlement job has not yet seen settled or \
                 returned (#2642): settlementStatus IN_FLIGHT, oldest payment date first. Each row carries its age in \
-                days on today's business date and aged = true once older than accounting.ap.settlement.in-flight-warning \
-                (default P7D; ACH settles in three to five banking days), with settlementCheckedAt, the job's last re-read.
+                days on today's business date, aged = true once older than the in-flight warning (seven days by \
+                default; ACH settles in three to five banking days), and settlementCheckedAt, the job's last re-read. \
                 Use this tool to see what money is still on its way to vendors and which charges have taken too long; \
-                from here the operator waits, checks with the bank or the processor, and records a return with \
-                recordApPaymentReturn when the bank says so. Nothing here is re-sent: the charge exists.
-                Emits ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST. Returns 200 with the list (empty when nothing is in flight).
+                from here the operator waits or checks with the bank or the processor. Do not use it to re-send a \
+                payment (the charge exists); use recordApPaymentReturn instead when the bank reports a return. \
+                Emits ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST and returns 200 with the list (empty when nothing is in \
+                flight).
                 """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "The payments in flight, oldest first")
