@@ -65,9 +65,7 @@ class VendorSelectionServiceTest {
                     Collection<String> refs = inv.getArgument(1);
                     Map<String, VendorFeedMappingService.ResolvedFeedVendor> out = new HashMap<>();
                     for (String ref : refs) {
-                        String key =
-                                type == FeedVendorType.MANUFACTURER ? ref.trim().toLowerCase(Locale.ROOT) : ref.trim();
-                        out.put(key, activeVendor(ref));
+                        out.put(FeedVendorType.canonical(ref), activeVendor(ref));
                     }
                     return out;
                 });

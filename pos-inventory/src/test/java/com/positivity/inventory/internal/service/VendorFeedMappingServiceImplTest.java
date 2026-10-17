@@ -214,8 +214,8 @@ class VendorFeedMappingServiceImplTest {
     @DisplayName("a feed vendor that already has a mapping is 409 VENDOR_FEED_MAPPING_EXISTS")
     void create_existingMapping_is409() {
         when(vendorCopy.find(VENDOR_ID)).thenReturn(Optional.of(vendor(VENDOR_ID, VendorStatus.ACTIVE)));
-        when(mappings.findByFeedTypeAndFeedVendorRef(FeedVendorType.DISTRIBUTOR, "D1"))
-                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", OTHER_VENDOR_ID)));
+        when(mappings.findByFeedTypeAndFeedVendorRef(FeedVendorType.DISTRIBUTOR, "d1"))
+                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "d1", OTHER_VENDOR_ID)));
 
         assertThatThrownBy(() -> service.create(request(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)))
                 .isInstanceOfSatisfying(VendorFeedMappingException.class, e -> {
@@ -256,7 +256,7 @@ class VendorFeedMappingServiceImplTest {
     @DisplayName("update re-points the mapping and its open suggestions")
     void update_repointsMappingAndSuggestions() {
         when(mappings.findById(MAPPING_ID))
-                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)));
+                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "d1", VENDOR_ID)));
         when(vendorCopy.find(OTHER_VENDOR_ID)).thenReturn(Optional.of(vendor(OTHER_VENDOR_ID, VendorStatus.ACTIVE)));
 
         VendorFeedMappingResponse response =
@@ -273,7 +273,7 @@ class VendorFeedMappingServiceImplTest {
     @DisplayName("update with a stale version is 409 CONFLICT and changes nothing")
     void update_staleVersion_is409() {
         when(mappings.findById(MAPPING_ID))
-                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)));
+                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "d1", VENDOR_ID)));
         when(vendorCopy.find(OTHER_VENDOR_ID)).thenReturn(Optional.of(vendor(OTHER_VENDOR_ID, VendorStatus.ACTIVE)));
 
         assertThatThrownBy(
@@ -290,7 +290,7 @@ class VendorFeedMappingServiceImplTest {
     @DisplayName("an optimistic-lock failure on save is also 409 CONFLICT")
     void update_optimisticLockFailure_is409() {
         when(mappings.findById(MAPPING_ID))
-                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)));
+                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "d1", VENDOR_ID)));
         when(vendorCopy.find(OTHER_VENDOR_ID)).thenReturn(Optional.of(vendor(OTHER_VENDOR_ID, VendorStatus.ACTIVE)));
         when(mappings.saveAndFlush(any(VendorFeedMapping.class)))
                 .thenThrow(new ObjectOptimisticLockingFailureException(VendorFeedMapping.class, MAPPING_ID));
@@ -318,7 +318,7 @@ class VendorFeedMappingServiceImplTest {
     @DisplayName("update to an inactive or unknown vendor is refused")
     void update_inactiveVendor_is422() {
         when(mappings.findById(MAPPING_ID))
-                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)));
+                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "d1", VENDOR_ID)));
         when(vendorCopy.find(OTHER_VENDOR_ID)).thenReturn(Optional.of(vendor(OTHER_VENDOR_ID, VendorStatus.INACTIVE)));
 
         assertThatThrownBy(
@@ -364,8 +364,8 @@ class VendorFeedMappingServiceImplTest {
     @Test
     @DisplayName("resolve returns the vendor from the copy, in any status")
     void resolve_returnsVendorAnyStatus() {
-        when(mappings.findByFeedTypeAndFeedVendorRef(FeedVendorType.DISTRIBUTOR, "D1"))
-                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)));
+        when(mappings.findByFeedTypeAndFeedVendorRef(FeedVendorType.DISTRIBUTOR, "d1"))
+                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "d1", VENDOR_ID)));
         when(vendorCopy.find(VENDOR_ID)).thenReturn(Optional.of(vendor(VENDOR_ID, VendorStatus.INACTIVE)));
 
         Optional<ResolvedFeedVendor> resolved = service.resolve(FeedVendorType.DISTRIBUTOR, " D1 ");
@@ -381,8 +381,8 @@ class VendorFeedMappingServiceImplTest {
     void resolve_emptyWhenUnmappedOrVendorMissing() {
         assertThat(service.resolve(FeedVendorType.DISTRIBUTOR, "D1")).isEmpty();
 
-        when(mappings.findByFeedTypeAndFeedVendorRef(FeedVendorType.DISTRIBUTOR, "D2"))
-                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D2", VENDOR_ID)));
+        when(mappings.findByFeedTypeAndFeedVendorRef(FeedVendorType.DISTRIBUTOR, "d2"))
+                .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "d2", VENDOR_ID)));
         when(vendorCopy.find(VENDOR_ID)).thenReturn(Optional.empty());
         assertThat(service.resolve(FeedVendorType.DISTRIBUTOR, "D2")).isEmpty();
     }
@@ -402,8 +402,8 @@ class VendorFeedMappingServiceImplTest {
     @Test
     @DisplayName("resolveAll keys resolved vendors by ref and omits unmapped refs and vendors missing from the copy")
     void resolveAll_batch() {
-        VendorFeedMapping mapped = mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID);
-        VendorFeedMapping orphan = mapping(FeedVendorType.DISTRIBUTOR, "D2", OTHER_VENDOR_ID);
+        VendorFeedMapping mapped = mapping(FeedVendorType.DISTRIBUTOR, "d1", VENDOR_ID);
+        VendorFeedMapping orphan = mapping(FeedVendorType.DISTRIBUTOR, "d2", OTHER_VENDOR_ID);
         when(mappings.findAllByFeedTypeAndFeedVendorRefIn(eq(FeedVendorType.DISTRIBUTOR), anyCollection()))
                 .thenReturn(List.of(mapped, orphan));
         when(vendorCopy.byIds(anyCollection())).thenReturn(Map.of(VENDOR_ID, vendor(VENDOR_ID, VendorStatus.ACTIVE)));
@@ -429,7 +429,7 @@ class VendorFeedMappingServiceImplTest {
     void list_decoratesWithVendor() {
         PageRequest pageable = PageRequest.of(0, 20);
         Page<VendorFeedMapping> page =
-                new PageImpl<>(List.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)), pageable, 1);
+                new PageImpl<>(List.of(mapping(FeedVendorType.DISTRIBUTOR, "d1", VENDOR_ID)), pageable, 1);
         when(mappings.findAllByFeedTypeAndVendorId(FeedVendorType.DISTRIBUTOR, VENDOR_ID, pageable))
                 .thenReturn(page);
         when(vendorCopy.byIds(anyCollection())).thenReturn(Map.of(VENDOR_ID, vendor(VENDOR_ID, VendorStatus.ACTIVE)));
@@ -453,9 +453,9 @@ class VendorFeedMappingServiceImplTest {
         when(distributorFeed.summarizeDistributors()).thenReturn(feedVendors);
         when(mappings.findAllByFeedType(FeedVendorType.DISTRIBUTOR))
                 .thenReturn(List.of(
-                        mapping(FeedVendorType.DISTRIBUTOR, "D-MISSING", OTHER_VENDOR_ID),
-                        mapping(FeedVendorType.DISTRIBUTOR, "D-INACTIVE", VENDOR_ID),
-                        mapping(FeedVendorType.DISTRIBUTOR, "D-OK", activeVendor)));
+                        mapping(FeedVendorType.DISTRIBUTOR, "d-missing", OTHER_VENDOR_ID),
+                        mapping(FeedVendorType.DISTRIBUTOR, "d-inactive", VENDOR_ID),
+                        mapping(FeedVendorType.DISTRIBUTOR, "d-ok", activeVendor)));
         when(vendorCopy.byIds(anyCollection()))
                 .thenReturn(Map.of(
                         VENDOR_ID, vendor(VENDOR_ID, VendorStatus.INACTIVE),
