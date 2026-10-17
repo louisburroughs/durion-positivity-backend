@@ -12,6 +12,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
 
@@ -89,4 +90,18 @@ public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
      */
     List<ExtInvoice> findByStatusInAndFinalizedAtGreaterThanEqualAndFinalizedAtLessThanOrderByFinalizedAtAsc(
             Collection<String> statuses, Instant from, Instant to, Limit limit);
+
+    /**
+     * Replicated invoices in the given lifecycle statuses whose party is not one of {@code excludedParties} (#2515):
+     * the cash outlook's candidates, with the CASH walk-in account left out in the query so its invoices are never
+     * loaded or balanced. Parties match as {@code InvoiceBalanceCalculator.isWalkIn} reads them, trimmed and
+     * case-insensitive, so {@code excludedParties} must be lower case and not empty (pass a placeholder such as
+     * {@code "-"}); an invoice with no party is kept.
+     */
+    @Query("SELECT i FROM ExtInvoice i WHERE i.status IN :statuses"
+            + " AND (i.partyId IS NULL OR lower(trim(i.partyId)) NOT IN :excludedParties)")
+    @NonNull
+    List<ExtInvoice> findByStatusInExcludingParties(
+            @Param("statuses") @NonNull Collection<String> statuses,
+            @Param("excludedParties") @NonNull Collection<String> excludedParties);
 }

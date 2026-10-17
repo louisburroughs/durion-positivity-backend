@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.bankrec.repository;
 
 import com.positivity.accounting.internal.bankrec.entity.BankReconciliationOutstandingItem;
+import com.positivity.accounting.internal.bankrec.enums.OutstandingItemKind;
 import com.positivity.accounting.internal.bankrec.enums.OutstandingItemStatus;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -71,4 +72,21 @@ public interface BankReconciliationOutstandingItemRepository
     List<AccountCount> countSinceBaselineByGlAccountIdIn(
             @Param("ids") @NonNull Collection<UUID> glAccountIds,
             @Param("status") @NonNull OutstandingItemStatus status);
+
+    /**
+     * Items in {@code status} of the given kinds, counted and summed (signed, debit minus credit) per account and kind,
+     * counting only items dated on or after the account's baseline when it has one (§4.1), as {@link
+     * #countSinceBaselineByGlAccountIdIn}: one grouped query for the cash position (#2515).
+     */
+    @Query(
+            "SELECT new com.positivity.accounting.internal.bankrec.repository.AccountKindTotals(i.glAccountId, i.itemKind, COUNT(i), SUM(i.signedAmount)) FROM BankReconciliationOutstandingItem i"
+                    + " LEFT JOIN BankAccountProfile p ON p.glAccountId = i.glAccountId"
+                    + " WHERE i.glAccountId IN :ids AND i.status = :status AND i.itemKind IN :kinds"
+                    + " AND (p.reconciliationBaselineDate IS NULL OR i.itemDate >= p.reconciliationBaselineDate)"
+                    + " GROUP BY i.glAccountId, i.itemKind")
+    @NonNull
+    List<AccountKindTotals> totalsSinceBaselineByGlAccountIdIn(
+            @Param("ids") @NonNull Collection<UUID> glAccountIds,
+            @Param("status") @NonNull OutstandingItemStatus status,
+            @Param("kinds") @NonNull Collection<OutstandingItemKind> kinds);
 }

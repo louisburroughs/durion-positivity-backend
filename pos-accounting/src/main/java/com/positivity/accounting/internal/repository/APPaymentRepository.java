@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.enums.PaymentMethod;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -126,4 +127,19 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
      */
     List<APPayment> findByStatusInAndPaymentDateBetween(
             Collection<APPaymentStatus> statuses, LocalDate startDate, LocalDate endDate);
+
+    /**
+     * Vendor cash-on-delivery payments still holding money (#2515, S19): payments of {@code method} in {@code currency}
+     * whose status is not in {@code excluded}, with an unapplied amount above zero, dated before {@code before},
+     * oldest first. The cash position's {@code VENDOR_COD_UNAPPLIED_AGED} item and the work-items read use it.
+     */
+    @Query("SELECT p FROM APPayment p WHERE p.paymentMethod = :method AND p.currency = :currency"
+            + " AND p.unappliedAmount > 0 AND p.status NOT IN :excluded AND p.paymentDate < :before"
+            + " ORDER BY p.paymentDate ASC, p.paymentId ASC")
+    @NonNull
+    List<APPayment> findUnappliedByMethodBefore(
+            @Param("method") @NonNull PaymentMethod method,
+            @Param("currency") @NonNull String currency,
+            @Param("excluded") @NonNull Collection<APPaymentStatus> excluded,
+            @Param("before") @NonNull LocalDate before);
 }
