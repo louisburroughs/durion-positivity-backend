@@ -170,8 +170,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
                     "Mapping key inactive: " + postingCategoryName + "/" + mappingKeyName);
         }
 
-        return resolveActive(
-                category.getPostingCategoryId(), mappingKey.getMappingKeyId(), transactionDate, Map.of());
+        return resolveActive(category.getPostingCategoryId(), mappingKey.getMappingKeyId(), transactionDate, Map.of());
     }
 
     /**
@@ -378,9 +377,10 @@ public class GLMappingResolverImpl implements GLMappingResolver {
             throw new IllegalArgumentException("Effective from date is required");
         }
         // A mapping against a retired category or key would resolve nothing (#2612); refuse it up front.
-        inactiveReason(mapping.getPostingCategoryId(), mapping.getMappingKeyId()).ifPresent(reason -> {
-            throw new IllegalArgumentException(reason);
-        });
+        inactiveReason(mapping.getPostingCategoryId(), mapping.getMappingKeyId())
+                .ifPresent(reason -> {
+                    throw new IllegalArgumentException(reason);
+                });
         if (mapping.getEffectiveEndDate() != null
                 && mapping.getEffectiveStartDate().isAfter(mapping.getEffectiveEndDate())) {
             throw new IllegalArgumentException("Effective from date must be on or before effective to date");

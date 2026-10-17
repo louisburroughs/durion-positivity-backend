@@ -485,7 +485,8 @@ class GLMappingResolverTest {
                             resolver.resolveGLAccount("PAYMENT_APPLICATION", "UNDEPOSITED_FUNDS", transactionDate))
                     .isInstanceOf(GLMappingNotConfiguredException.class)
                     .hasMessageContaining("Mapping key inactive");
-            verify(mappingRepository, never()).findEffectiveMapping(any(), any(), any());
+            verify(mappingRepository, never())
+                    .findEffectiveMapping(any(UUID.class), any(UUID.class), any(LocalDateTime.class));
         }
 
         @Test
@@ -493,11 +494,12 @@ class GLMappingResolverTest {
         void inactiveCategoryById() {
             when(postingCategoryRepository.findById(postingCategoryId)).thenReturn(Optional.of(category(false)));
 
-            assertThatThrownBy(() ->
-                            resolver.resolveGLAccount(postingCategoryId, mappingKeyId, transactionDate, Map.of()))
+            assertThatThrownBy(
+                            () -> resolver.resolveGLAccount(postingCategoryId, mappingKeyId, transactionDate, Map.of()))
                     .isInstanceOf(GLMappingNotConfiguredException.class)
                     .hasMessageContaining("Posting category inactive");
-            verify(mappingRepository, never()).findEffectiveMapping(any(), any(), any());
+            verify(mappingRepository, never())
+                    .findEffectiveMapping(any(UUID.class), any(UUID.class), any(LocalDateTime.class));
         }
 
         @Test
