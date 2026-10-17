@@ -369,9 +369,16 @@ public class APPaymentController {
                             content =
                                     @Content(
                                             mediaType = "application/json",
-                                            examples = @ExampleObject(name = "Gateway charged", value = """
-                                                {"gatewayOutcome":"CHARGED","gatewayTransactionId":"txn_8f3a2c91","justification":"Confirmed charged in the gateway dashboard"}
-                                                """)))
+                                            examples = {
+                                                @ExampleObject(name = "Gateway charged", value = """
+                                                {"gatewayOutcome":"CHARGED","gatewayTransactionId":"ch_3Q2abcDEF",\
+                                                "justification":"Confirmed charged in the gateway dashboard"}
+                                                """),
+                                                @ExampleObject(name = "Gateway did not charge", value = """
+                                                {"gatewayOutcome":"NOT_CHARGED",\
+                                                "justification":"No charge under this reference in the gateway dashboard"}
+                                                """)
+                                            }))
                     @Valid
                     @RequestBody
                     @NonNull

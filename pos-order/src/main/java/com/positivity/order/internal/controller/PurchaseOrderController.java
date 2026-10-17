@@ -571,7 +571,7 @@ public class PurchaseOrderController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = @ExampleObject(name = "Reopen two units", value = """
-                                                {"quantity":2,"vendorReturnId":"01936e5c-7890-7a3d-8b6e-2b3456789012"}
+                                                {"quantity":2,"vendorReturnId":"019a0000-0000-7000-8000-000000002635"}
                                                 """)))
                     @Valid
                     @RequestBody
@@ -595,8 +595,8 @@ public class PurchaseOrderController {
                     #2635): the line's cancelled figures take the quantity and its value, open and balance fall by \
                     the same, the status is re-derived (CLOSED once every line is settled with a short-closed \
                     remainder) and the order's state is published, so receiving expects nothing more for it.
-                    Use this tool for one line; do not use it to cancel every remainder at once, use closePurchaseOrder \
-                    instead, and do not use it for an order nothing arrived on, use cancelPurchaseOrder instead.
+                    Use this tool for one line; do not use it for every remainder at once (closePurchaseOrder) or \
+                    for an order nothing arrived on (cancelPurchaseOrder instead).
                     Preconditions: the order is APPROVED, PARTIALLY_RECEIVED or FULLY_RECEIVED (a DRAFT is \
                     revised, not short-closed); the line belongs to the order; quantity is at most the line's open \
                     quantity.
@@ -665,9 +665,8 @@ public class PurchaseOrderController {
                     Short-closes a purchase order something was received on (CAP:550 #2635): every remaining open \
                     quantity on every line is cancelled with its value, the balance falls to what was received, the \
                     order is CLOSED and its state is published, so receiving expects nothing more.
-                    Use this tool when the vendor will not ship the rest; do not use it for one line, use \
-                    cancelPurchaseOrderLine instead, and do not use it for an order nothing arrived on, use \
-                    cancelPurchaseOrder instead.
+                    Use this tool when the vendor will not ship the rest; do not use it for one line \
+                    (cancelPurchaseOrderLine) or for an order nothing arrived on (cancelPurchaseOrder instead).
                     Preconditions: the order is APPROVED, PARTIALLY_RECEIVED or FULLY_RECEIVED and something was \
                     received on it.
                     Required inputs: poId path parameter and a reason.
