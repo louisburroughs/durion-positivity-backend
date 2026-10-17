@@ -14,7 +14,6 @@ import com.positivity.accounting.internal.dto.CashOutlookResponse.BillsLane;
 import com.positivity.accounting.internal.dto.CashOutlookResponse.Figure;
 import com.positivity.accounting.internal.dto.CashOutlookResponse.Point;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
-import com.positivity.accounting.internal.service.CashOutlookService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import java.lang.reflect.Method;
@@ -32,7 +31,6 @@ class CashOutlookControllerTest extends CashWorkspaceControllerTestBase {
 
     private static final String VIEW = "reporting:view:financial-statements";
     private static final String PATH = "/v1/accounting/cash-outlook";
-
 
     private static CashOutlookResponse outlook(int days) {
         Figure none = new Figure(new BigDecimal("0.00"), 0);
@@ -92,7 +90,8 @@ class CashOutlookControllerTest extends CashWorkspaceControllerTestBase {
     @Test
     @DisplayName("400 VALIDATION_ERROR when days is outside 1 to 90")
     void daysOutOfRange() throws Exception {
-        when(cashOutlookService.outlook(91)).thenThrow(InvalidRequestParameterException.forField("days", "must be from 1 to 90"));
+        when(cashOutlookService.outlook(91))
+                .thenThrow(InvalidRequestParameterException.forField("days", "must be from 1 to 90"));
 
         mockMvc.perform(withAuth(get(PATH).param("days", "91"), VIEW))
                 .andExpect(status().isBadRequest())

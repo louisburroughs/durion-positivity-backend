@@ -13,7 +13,6 @@ import com.positivity.accounting.internal.dto.CashPositionResponse.AccountRow;
 import com.positivity.accounting.internal.dto.CashPositionResponse.Component;
 import com.positivity.accounting.internal.dto.CashPositionResponse.NeedsAttention;
 import com.positivity.accounting.internal.enums.CashAttentionCode;
-import com.positivity.accounting.internal.service.CashPositionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import java.lang.reflect.Method;
@@ -33,7 +32,6 @@ class CashPositionControllerTest extends CashWorkspaceControllerTestBase {
     private static final String VIEW = "reporting:view:financial-statements";
     private static final String PATH = "/v1/accounting/cash-position";
     private static final UUID BANK = UUID.fromString("019a0000-0000-7000-8000-000000001000");
-
 
     @Test
     @DisplayName("200 with the total, the components and the needs-attention items")

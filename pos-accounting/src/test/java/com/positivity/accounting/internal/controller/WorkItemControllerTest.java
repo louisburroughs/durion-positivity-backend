@@ -23,8 +23,6 @@ import com.positivity.accounting.internal.enums.WorkItemArea;
 import com.positivity.accounting.internal.enums.WorkItemType;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.WorkItemsCursorInvalidException;
-import com.positivity.accounting.internal.service.WorkItemAutomaticService;
-import com.positivity.accounting.internal.service.WorkItemService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import java.lang.reflect.Method;
@@ -47,8 +45,6 @@ class WorkItemControllerTest extends CashWorkspaceControllerTestBase {
 
     private static final String LIST = "/v1/accounting/work-items";
     private static final String AUTOMATIC = "/v1/accounting/work-items/automatic";
-
-
 
     private static WorkItemsResponse page() {
         UUID billId = UUID.fromString("0198a000-0000-7000-8000-000000000001");
