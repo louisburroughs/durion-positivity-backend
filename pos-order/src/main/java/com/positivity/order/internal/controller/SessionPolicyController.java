@@ -71,14 +71,14 @@ public class SessionPolicyController {
             summary = "Replace the Drawer Policy",
             description = """
                     Replaces the two configurable movement types (petty expenses and vendor cash on delivery: \
-                    allowed and cashier limit) and the over/short tolerance, with a justification. Each changed \
-                    setting writes one history row (old and new value, actor, justification); a request that \
+                    allowed and cashier limit) and the over/short tolerance, with a justification: each changed \
+                    setting writes one history row (old and new value, actor, justification), and a request that \
                     changes nothing writes nothing. Switching a type off is never retroactive: recorded movements \
                     stand and are carried on the close fact.
                     Use this tool to change the drawer limits after reading them with getSessionPolicy; do not use \
                     it to see what one register session may record now — use getCashMovementOptions instead.
-                    Preconditions: an allowed type needs a cashier limit. Vendor cash on delivery may be switched on \
-                    (#2576): a VENDOR_COD movement then names an ACTIVE vendor of pos-order's vendor copy.
+                    Preconditions: an allowed type needs a cashier limit; vendor cash on delivery may be switched on \
+                    (#2576), and a VENDOR_COD movement then names an ACTIVE vendor of pos-order's vendor copy.
                     Required inputs: the version read (null only while the defaults apply), currencyCode (the \
                     functional currency, ISO 4217), pettyExpense and vendorCod (allowed, cashierLimit), \
                     overShortTolerance and a justification of at least 10 characters; limits and the tolerance \

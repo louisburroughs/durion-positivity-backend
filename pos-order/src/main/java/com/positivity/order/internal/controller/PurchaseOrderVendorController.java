@@ -60,7 +60,9 @@ public class PurchaseOrderVendorController {
             description = """
                     Returns a page of the vendors a purchase order may name, from pos-order's own copy of the \
                     pos-supplier vendor master: vendorId, vendorNumber, displayName and status, nothing else.
-                    Use this tool to pick the vendorId for createPurchaseOrder or a vendor-changing revision; a \
+                    Use this tool to pick the vendorId for createPurchaseOrder or a vendor-changing revision; do not use it \
+                    to read or change the vendor master itself, which is supplier-owned (use the pos-supplier vendor \
+                    endpoints instead); a \
                     vendor listed here as ACTIVE never answers 503 VENDOR_REPLICATION_PENDING on create, and a \
                     DRAFT order whose vendor is not in the ACTIVE list is one approvePurchaseOrder will refuse.
                     Preconditions: none; the copy is fed by supplier.vendor.updated, so a vendor created in \
@@ -106,7 +108,7 @@ public class PurchaseOrderVendorController {
                     Returns one vendor of pos-order's vendor copy by its pos-supplier vendor id: vendorNumber, \
                     displayName and status.
                     Use this tool to name the vendor on a purchase-order screen when the vendorId is already \
-                    known; use listPurchaseOrderVendors to find one.
+                    known; do not use it to search, use listPurchaseOrderVendors instead to find one.
                     Preconditions: none. An INACTIVE vendor is returned as such (200), since that is a fact about \
                     the vendor, not a refusal of this read.
                     Required inputs: vendorId (path).

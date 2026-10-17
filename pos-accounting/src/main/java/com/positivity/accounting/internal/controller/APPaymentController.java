@@ -360,7 +360,16 @@ public class APPaymentController {
                     @Parameter(description = "Payment UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
                     @NonNull
                     UUID paymentId,
-            @Valid @RequestBody @NonNull ReconcileAPPaymentGatewayRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "What the gateway actually did, with the operator's justification.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Gateway charged", value = """
+                                                {"gatewayOutcome":"CHARGED","gatewayTransactionId":"txn_8f3a2c91","justification":"Confirmed charged in the gateway dashboard"}
+                                                """)))
+                    @Valid @RequestBody @NonNull ReconcileAPPaymentGatewayRequest request) {
         String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         return ResponseEntity.ok(apPaymentService.reconcileGateway(paymentId, request, currentUser));
     }
@@ -371,9 +380,11 @@ public class APPaymentController {
             operationId = "allocateApPayment",
             summary = "Allocate an AP payment's unapplied amount to the vendor's approved bills",
             description = """
-                    Use when a vendor paid cash on delivery from a register drawer (an AP payment with method CASH, \
-                    created at session close, CAP:550 S17) and the vendor's bill has since been approved: apply the \
-                    payment's unapplied amount to one or more of that vendor's APPROVED bills.
+                    Applies the unapplied amount of a cash-on-delivery AP payment (method CASH, created at session \
+                    close, CAP:550 S17) to one or more of that vendor's APPROVED bills.
+                    Use this tool when a vendor was paid cash on delivery from a register drawer and the vendor's \
+                    bill has since been approved; do not use executeApPayment for it, which would pay the vendor \
+                    twice, and do not use the journal-entry endpoints instead, which would change the ledger.
                     Preconditions: the payment exists, its method is CASH and something of it is unapplied; every \
                     bill is APPROVED, belongs to the payment's vendor and has at least the applied amount open; the \
                     caller did not approve any of the bills (approver is not payer, AW6.2); the lines total at most \
@@ -416,7 +427,16 @@ public class APPaymentController {
     @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     public ResponseEntity<APPaymentResponse> allocateApPayment(
             @Parameter(description = "AP payment id", required = true) @PathVariable @NonNull UUID paymentId,
-            @Valid @RequestBody @NonNull AllocateAPPaymentRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The caller-minted requestId and the approved bills to apply the unapplied amount to.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Allocate to one bill", value = """
+                                                {"requestId":"01936e5c-7890-7a3d-8b6e-2b3456789abc","allocations":[{"vendorBillId":"01936e5c-7890-7a3d-8b6e-2b3456789def","appliedAmount":750.00}]}
+                                                """)))
+                    @Valid @RequestBody @NonNull AllocateAPPaymentRequest request) {
         String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         return ResponseEntity.ok(apPaymentService.allocateCashPayment(paymentId, request, currentUser));
     }
