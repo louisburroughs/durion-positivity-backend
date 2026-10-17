@@ -2049,11 +2049,11 @@ class SecurityGatewayConfigTest {
         // catalog v106 (#2497): the tenant's audit export webhook destination (bit 563)
         assertThat(GatewayPermissionCatalog.authorityForBit(563))
                 .isEqualTo("PERM_security:audit_export:webhook_manage");
-        // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(564)).isNull();
-    }
         // catalog v107 (#2635): reopen a returned purchase-order quantity for a replacement (bit 564)
         assertThat(GatewayPermissionCatalog.authorityForBit(564)).isEqualTo("PERM_order:purchase_order:reopen");
+        // beyond array must return null
+        assertThat(GatewayPermissionCatalog.authorityForBit(565)).isNull();
+    }
 
     @Test
     @DisplayName("every bit index in AUTHORITY_BY_BIT has a PERM_ prefixed entry")

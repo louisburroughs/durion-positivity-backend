@@ -313,7 +313,8 @@ public class InventoryEventsListener {
 
         // #2635: a receipt adds to the line's received figures; open and status are derived from them, and the
         // balance takes the receipt's accrual off (as before). A line without a poLineId, or naming a line the order
-        // does not hold, moves only the balance.        boolean receivedOffLines = false;
+        // does not hold, moves only the balance.
+        boolean receivedOffLines = false;
         for (GoodsReceiptLine line : receipt.lines()) {
             PurchaseOrderLineEntity orderLine = line.poLineId() == null ? null : linesById.get(line.poLineId());
             if (orderLine == null) {
