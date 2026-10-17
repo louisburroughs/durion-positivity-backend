@@ -13,9 +13,11 @@ import com.positivity.accounting.internal.dto.GLAccountListResponse;
 import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
 import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
+import com.positivity.accounting.internal.exception.AccountHasUnpostedPaymentsException;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -23,6 +25,7 @@ import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import java.math.BigDecimal;
@@ -76,7 +79,7 @@ class GLAccountServiceTest {
     private JournalEntryLineRepository journalEntryLineRepository;
 
     @Mock
-    private com.positivity.accounting.internal.repository.APPaymentRepository apPaymentRepository;
+    private APPaymentRepository apPaymentRepository;
 
     @InjectMocks
     private GLAccountServiceImpl service;
@@ -231,7 +234,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("returns account response when found")
         void success() {
-            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
 
             GLAccountResponse result = service.getGLAccount(testAccountId);
 
@@ -361,7 +364,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("deactivates when balance is zero")
         void success() {
-            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
             when(glAccountRepository.save(any(GLAccount.class))).thenReturn(testAccount);
 
@@ -373,7 +376,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("throws AccountNotZeroBalanceException when balance is non-zero")
         void nonZeroBalance() {
-            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(new BigDecimal("500.00"));
 
             assertThatThrownBy(() -> service.deactivateGLAccount(testAccountId))
@@ -688,7 +691,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("refused with 409 ACCOUNT_HAS_UNPOSTED_PAYMENTS while a payment naming it has not posted")
         void refusedWhilePaymentsAreUnposted() {
-            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
             when(apPaymentRepository.countByBankAccountIdAndStatusIn(
                             testAccountId, GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES))
@@ -696,7 +699,7 @@ class GLAccountServiceTest {
 
             assertThatThrownBy(() -> service.deactivateGLAccount(testAccountId))
                     .isInstanceOf(
-                            com.positivity.accounting.internal.exception.AccountHasUnpostedPaymentsException.class)
+                            AccountHasUnpostedPaymentsException.class)
                     .hasMessageContaining("2 AP payment(s)");
             assertThat(testAccount.getDeactivationDate()).isNull();
             verify(glAccountRepository, never()).save(any(GLAccount.class));
@@ -705,7 +708,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("proceeds once every payment naming it has posted")
         void proceedsOncePosted() {
-            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
             when(apPaymentRepository.countByBankAccountIdAndStatusIn(
                             testAccountId, GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES))
@@ -718,15 +721,14 @@ class GLAccountServiceTest {
         }
 
         @Test
-        @DisplayName("the unposted states are every state before GL_POSTED except GATEWAY_FAILED")
+        @DisplayName("every APPaymentStatus but the two terminal ones counts as unposted, new constants included")
         void unpostedStates() {
-            assertThat(GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES)
-                    .containsExactlyInAnyOrder(
-                            com.positivity.accounting.internal.enums.APPaymentStatus.INITIATED,
-                            com.positivity.accounting.internal.enums.APPaymentStatus.GATEWAY_PENDING,
-                            com.positivity.accounting.internal.enums.APPaymentStatus.GATEWAY_SUCCEEDED,
-                            com.positivity.accounting.internal.enums.APPaymentStatus.GL_POST_PENDING,
-                            com.positivity.accounting.internal.enums.APPaymentStatus.GL_POST_FAILED);
+            for (APPaymentStatus status : APPaymentStatus.values()) {
+                boolean terminal = status == APPaymentStatus.GATEWAY_FAILED || status == APPaymentStatus.GL_POSTED;
+                assertThat(GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES.contains(status))
+                        .as(status.name())
+                        .isEqualTo(!terminal);
+            }
         }
     }
 
@@ -744,6 +746,7 @@ class GLAccountServiceTest {
             org.springframework.test.util.ReflectionTestUtils.setField(
                     service, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, at10Chicago));
             when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(glAccountRepository.save(any(GLAccount.class))).thenAnswer(saved -> saved.getArgument(0));
         }
 

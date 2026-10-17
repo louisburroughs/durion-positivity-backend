@@ -24,7 +24,10 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -91,16 +94,13 @@ public class GLAccountServiceImpl implements GLAccountService {
     private final APPaymentRepository apPaymentRepository;
 
     /**
-     * AP payment states whose entry has not reached the ledger yet (#2645): in flight at the gateway, executed and
-     * waiting for the posting outbox, or {@code GL_POST_FAILED} awaiting {@code gl-posting-retry}. {@code
-     * GATEWAY_FAILED} never posts and {@code GL_POSTED} already did.
+     * AP payment states whose entry has not reached the ledger yet (#2645): every state except the two terminal ones,
+     * {@code GATEWAY_FAILED} (never posts) and {@code GL_POSTED} (already did), so a state added later is counted
+     * until someone decides otherwise. In flight at the gateway, executed and waiting for the posting outbox, or
+     * {@code GL_POST_FAILED} awaiting {@code gl-posting-retry}.
      */
-    static final List<APPaymentStatus> UNPOSTED_PAYMENT_STATES = List.of(
-            APPaymentStatus.INITIATED,
-            APPaymentStatus.GATEWAY_PENDING,
-            APPaymentStatus.GATEWAY_SUCCEEDED,
-            APPaymentStatus.GL_POST_PENDING,
-            APPaymentStatus.GL_POST_FAILED);
+    static final Set<APPaymentStatus> UNPOSTED_PAYMENT_STATES = Collections.unmodifiableSet(
+            EnumSet.complementOf(EnumSet.of(APPaymentStatus.GATEWAY_FAILED, APPaymentStatus.GL_POSTED)));
 
     /**
      * Creates a new GL account.
@@ -271,8 +271,11 @@ public class GLAccountServiceImpl implements GLAccountService {
     public GLAccountResponse deactivateGLAccount(@NonNull UUID glAccountId) {
         log.info("Deactivating GL account");
 
+        // Under the row lock (#2645): the pay command locks the bank account it funds from while it checks
+        // eligibility and writes the payment, so a payment cannot slip onto the account between the count below
+        // and the deactivation stamp.
         GLAccount account = glAccountRepository
-                .findById(glAccountId)
+                .lockById(glAccountId)
                 .orElseThrow(() -> new GLAccountNotFoundException(GL_ACCOUNT_NOT_FOUND + glAccountId));
 
         // Verify zero balance
@@ -288,8 +291,8 @@ public class GLAccountServiceImpl implements GLAccountService {
         if (unposted > 0) {
             log.warn("Cannot deactivate account with unposted AP payments");
             throw new AccountHasUnpostedPaymentsException("Cannot deactivate account " + account.getAccountCode()
-                    + ": " + unposted + " AP payment(s) naming it have not posted yet; wait for the posting, or"
-                    + " resolve the GL_POST_FAILED ones, then deactivate");
+                    + ": " + unposted + " AP payment(s) naming it have not posted yet; wait for the posting, retry the"
+                    + " GL_POST_FAILED ones, then deactivate (a payment that can never post is #2729)");
         }
 
         account.setDeactivationDate(zoneResolver.postingDateTime(clock.instant()));

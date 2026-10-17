@@ -1342,9 +1342,12 @@ outbox event, the entity and the table: the bank pays gross + fee. An idempotent
 account (an omitted one resolves to the one account active at the start of the stored date; a replay funds nothing,
 so a deactivation since does not change it). The response adds `bankAccountId`
 and `paymentDate`. The converse guard (#2645): a bank account with a zero posted balance still cannot be deactivated
-while an AP payment naming it is in flight, executed and awaiting its posting, or `GL_POST_FAILED` (409
-`ACCOUNT_HAS_UNPOSTED_PAYMENTS`); once every such payment has posted, deactivation proceeds. Deposits post in their own
-command, so no deposit is ever unposted.
+while an AP payment naming it is in any state but `GATEWAY_FAILED` or `GL_POSTED` (409
+`ACCOUNT_HAS_UNPOSTED_PAYMENTS`); once every such payment has posted, deactivation proceeds. The pay command and the
+deactivation take the account's row lock, so neither slips past the other. Three states can never post today (a
+hard-locked `GL_POST_FAILED`, an orphaned `GATEWAY_PENDING`, a `GL_POST_PENDING` whose outbox row is exhausted) and
+keep the account open until #2729 gives such a payment a void path. Deposits post in their own command, so no deposit
+is ever unposted.
 
 **Guard order** (`APPaymentServiceImpl.executePayment`, `APPaymentPreGatewayChecks`). Every refusal comes before the
 gateway is called, charges nothing and saves no payment, so the same `paymentRef` may be sent again; the first refusal
@@ -1872,7 +1875,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
 | `AP_BILL_DUPLICATE` | 409 | A live vendor bill (any status except `VOIDED` or `REJECTED`) already has the same vendor, normalised bill number and bill date; `referenceId` is that bill's `vendorBillId` and `nextAction` is `Open the existing bill.` Raised by vendor-bill create and match (#2501) |
 | `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
-| `ACCOUNT_HAS_UNPOSTED_PAYMENTS` | 409 | GL (bank) account cannot be deactivated while an AP payment naming it is in flight, executed and awaiting its posting, or `GL_POST_FAILED` (#2645); wait for the posting or resolve the failed payments first |
+| `ACCOUNT_HAS_UNPOSTED_PAYMENTS` | 409 | GL (bank) account cannot be deactivated while an AP payment naming it is in any state but `GATEWAY_FAILED` or `GL_POSTED` (#2645); wait for the posting or retry the `GL_POST_FAILED` ones first. A payment that can never post (a hard-locked `GL_POST_FAILED`, an orphaned `GATEWAY_PENDING`, an exhausted outbox row) keeps the account open until #2729 gives it a void path |
 | `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
 | `ENTRY_ALREADY_POSTED` | 409 | Posting a journal entry that is already POSTED or REVERSED |
 | `JE_ALREADY_REVERSED` | 409 | Reversing a journal entry that is already REVERSED |
