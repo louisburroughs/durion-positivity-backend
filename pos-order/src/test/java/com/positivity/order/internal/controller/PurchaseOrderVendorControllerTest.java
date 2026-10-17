@@ -136,8 +136,10 @@ class PurchaseOrderVendorControllerTest extends BaseControllerSliceTest {
         mockMvc.perform(withGatewayAuth(get("/v1/orders/purchase-order-vendors").param("sort", "remitTo"), VIEW))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PURCHASE_ORDER_BAD_REQUEST"))
-                .andExpect(jsonPath("$.message")
-                        .value("Unsupported sort property 'remitTo'; sort by vendorNumber, displayName, status or vendorId"))
+                .andExpect(
+                        jsonPath("$.message")
+                                .value(
+                                        "Unsupported sort property 'remitTo'; sort by vendorNumber, displayName, status or vendorId"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
     }
 

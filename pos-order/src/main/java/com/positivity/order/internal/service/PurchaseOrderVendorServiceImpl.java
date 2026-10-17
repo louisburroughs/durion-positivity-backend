@@ -10,8 +10,10 @@ import com.positivity.web.common.ReplicationPendingException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -70,7 +72,11 @@ public class PurchaseOrderVendorServiceImpl implements PurchaseOrderVendorServic
 
     private static @NonNull Specification<ExtSupplierVendor> specification(
             @NonNull ListPurchaseOrderVendorsRequest filter) {
-        return Specification.allOf(statusIs(filter.getStatus()), numberOrNameContains(filter.getQ()));
+        List<Specification<ExtSupplierVendor>> predicates = Stream.of(
+                        statusIs(filter.getStatus()), numberOrNameContains(filter.getQ()))
+                .filter(Objects::nonNull)
+                .toList();
+        return predicates.isEmpty() ? Specification.unrestricted() : Specification.allOf(predicates);
     }
 
     private static @Nullable Specification<ExtSupplierVendor> statusIs(@Nullable PurchaseOrderVendorStatus status) {
@@ -150,6 +156,9 @@ public class PurchaseOrderVendorServiceImpl implements PurchaseOrderVendorServic
 
     private static @NonNull PurchaseOrderVendorResponse toResponse(@NonNull ExtSupplierVendor vendor) {
         return new PurchaseOrderVendorResponse(
-                vendor.getVendorId(), vendor.getVendorNumber(), vendor.getDisplayName(), toResponse(vendor.getStatus()));
+                vendor.getVendorId(),
+                vendor.getVendorNumber(),
+                vendor.getDisplayName(),
+                toResponse(vendor.getStatus()));
     }
 }
