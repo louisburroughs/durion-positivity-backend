@@ -141,4 +141,11 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
             @Param("currency") @NonNull String currency,
             @Param("excluded") @NonNull Collection<APPaymentStatus> excluded,
             @Param("before") @NonNull LocalDate before);
+
+    /**
+     * The payments in {@code status}, oldest payment date first (#2515, S19): the work items of AP payments that did
+     * not reach the ledger.
+     */
+    @NonNull
+    List<APPayment> findByStatusOrderByPaymentDateAscPaymentIdAsc(@NonNull APPaymentStatus status);
 }

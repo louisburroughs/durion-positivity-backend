@@ -31,6 +31,7 @@ import com.positivity.accounting.internal.exception.HeldEventNotReleasableExcept
 import com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.exception.WorkItemsCursorInvalidException;
 import com.positivity.accounting.internal.exception.JournalEntryNotFoundException;
 import com.positivity.accounting.internal.exception.JournalEntryNotReversibleException;
 import com.positivity.accounting.internal.exception.MatchAmountMismatchException;
@@ -189,6 +190,13 @@ public class AccountingExceptionHandler {
                         List.of(new ApiError.FieldError(ex.getField(), ex.getMessage()))),
                 headers,
                 HttpStatus.BAD_REQUEST);
+    }
+
+    /** A work-items cursor that cannot be used: the client restarts from the first page (#2515). */
+    @ExceptionHandler(WorkItemsCursorInvalidException.class)
+    public ResponseEntity<ApiError> handleWorkItemsCursorInvalid(
+            WorkItemsCursorInvalidException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, WorkItemsCursorInvalidException.CODE, ex.getMessage(), request);
     }
 
     @ExceptionHandler(EventValidationException.class)

@@ -15,4 +15,9 @@ public interface ProcessorSettlementLineRepository extends JpaRepository<Process
             String settlementId, SettlementLineMatchStatus matchStatus);
 
     List<ProcessorSettlementLine> findByMatchStatus(SettlementLineMatchStatus matchStatus);
+
+
+    /** The lines in {@code matchStatus} last changed at or after {@code since} (#2515, S19: matched automatically). */
+    List<ProcessorSettlementLine> findByMatchStatusAndUpdatedAtGreaterThanEqual(
+            SettlementLineMatchStatus matchStatus, java.time.Instant since);
 }
