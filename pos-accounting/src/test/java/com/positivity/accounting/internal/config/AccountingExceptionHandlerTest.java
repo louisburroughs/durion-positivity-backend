@@ -231,8 +231,8 @@ class AccountingExceptionHandlerTest {
                     }),
                     Named.of("handleIllegalState", (HandlerInvocation) request ->
                             handler.handleIllegalState(new IllegalStateException("Some other invalid state"), request)),
-                    Named.of("handleHeldEventNotReleasable", (HandlerInvocation) request ->
-                            handler.handleHeldEventNotReleasable(
+                    Named.of("handleHeldEventNotReleasable", (HandlerInvocation)
+                            request -> handler.handleHeldEventNotReleasable(
                                     new com.positivity.accounting.internal.exception.HeldEventNotReleasableException(
                                             "held", "no action now"),
                                     request)),

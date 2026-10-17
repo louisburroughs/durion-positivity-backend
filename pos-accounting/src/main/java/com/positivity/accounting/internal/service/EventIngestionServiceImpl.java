@@ -27,8 +27,8 @@ import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.IdempotencyOutcome;
-import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.enums.ReprocessingOutcome;
 import com.positivity.accounting.internal.exception.EventNotFoundException;
 import com.positivity.accounting.internal.exception.EventNotRetryableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
@@ -356,7 +356,8 @@ public class EventIngestionServiceImpl implements EventIngestionService {
                 + " and has no release path by reprocess; it is not run through the posting engine";
         String nextAction;
         if (PostingFailureReason.CURRENCY_NOT_SUPPORTED.name().equals(reason)) {
-            Object currency = event.getPayload() == null ? null : event.getPayload().get("currencyCode");
+            Object currency =
+                    event.getPayload() == null ? null : event.getPayload().get("currencyCode");
             nextAction = "Released when the tenant's ledger accepts " + (currency == null ? "that currency" : currency)
                     + " (ADR-0067 Stage B1 replays the stored fact); no action now";
         } else {

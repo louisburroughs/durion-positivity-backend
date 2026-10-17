@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
-import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
@@ -76,6 +75,8 @@ class EventIngestionSettledPaymentReprocessTest {
         event = new AccountingEvent();
         event.setEventId(EVENT_ID);
         event.setEventType(PaymentSettledV1.EVENT_TYPE);
+        // A Kafka fact row carries the envelope's event id (KafkaFactIngestionRecorder.newEvent).
+        event.setIngestionId(UUID.fromString("0199b000-0000-7000-8000-0000000025e2"));
         event.setSourceSystem("pos-invoice");
         event.setStatus(AccountingEventStatus.SUSPENDED);
         event.setFailureReasonCode("PERIOD_CLOSED");
@@ -163,8 +164,9 @@ class EventIngestionSettledPaymentReprocessTest {
     }
 
     @Test
-    @DisplayName("#2620: a settled payment held for its currency has no release path: 409, the row untouched, no attempt,"
-            + " never the posting engine")
+    @DisplayName(
+            "#2620: a settled payment held for its currency has no release path: 409, the row untouched, no attempt,"
+                    + " never the posting engine")
     void currencyHoldIsRefusedNotEngineRouted() {
         event.setFailureReasonCode("CURRENCY_NOT_SUPPORTED");
         event.setFailureDetails("held: CAD");
