@@ -1671,13 +1671,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 106")
+    @DisplayName("CATALOG_VERSION is 107")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(106);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(107);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 548")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 564")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -2049,8 +2049,10 @@ class SecurityGatewayConfigTest {
         // catalog v106 (#2497): the tenant's audit export webhook destination (bit 563)
         assertThat(GatewayPermissionCatalog.authorityForBit(563))
                 .isEqualTo("PERM_security:audit_export:webhook_manage");
+        // catalog v107 (#2635): reopen a returned purchase-order quantity for a replacement (bit 564)
+        assertThat(GatewayPermissionCatalog.authorityForBit(564)).isEqualTo("PERM_order:purchase_order:reopen");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(564)).isNull();
+        assertThat(GatewayPermissionCatalog.authorityForBit(565)).isNull();
     }
 
     @Test

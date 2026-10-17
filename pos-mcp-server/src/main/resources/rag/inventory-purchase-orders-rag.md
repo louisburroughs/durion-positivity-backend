@@ -51,6 +51,9 @@ All paths below are served by pos-order.
 | Transmit to the vendor | `POST /v1/orders/purchase-orders/{poId}/transmit` | `order:purchase_order:transmit` | `ORDER_PURCHASE_ORDER_TRANSMIT` |
 | Read live vendor availability | `GET /v1/orders/purchase-orders/{poId}/supplier-availability` | `order:purchase_order:availability_view` | `ORDER_PURCHASE_ORDER_AVAILABILITY` |
 | List transmission events | `GET /v1/orders/purchase-orders/{poId}/transmission-events` | `order:purchase_order:view` | `ORDER_PURCHASE_ORDER_TRANSMISSION_EVENTS` |
+| Reopen a returned quantity of a line for a replacement | `POST /v1/orders/purchase-orders/{poId}/lines/{lineId}/reopen` | `order:purchase_order:reopen` | `ORDER_PURCHASE_ORDER_LINE_REOPEN` |
+| Cancel a remainder of one line (short-close) | `POST /v1/orders/purchase-orders/{poId}/lines/{lineId}/cancel` | `order:purchase_order:approve` | `ORDER_PURCHASE_ORDER_LINE_CANCEL` |
+| Close a purchase order (cancel every remainder) | `POST /v1/orders/purchase-orders/{poId}/close` | `order:purchase_order:approve` | `ORDER_PURCHASE_ORDER_CLOSE` |
 
 ## Permission codes
 
@@ -60,9 +63,10 @@ pos-order registers five purchase-order permission codes.
 | --- | --- |
 | `order:purchase_order:view` | Get, list and summarize purchase orders, and list an order's transmission events |
 | `order:purchase_order:create` | Create a purchase order and revise one |
-| `order:purchase_order:approve` | Approve a purchase order and cancel one |
+| `order:purchase_order:approve` | Approve a purchase order, cancel one, cancel a line's remainder, or close an order (short-close) |
 | `order:purchase_order:transmit` | Send an approved purchase order to its vendor |
 | `order:purchase_order:availability_view` | Ask a vendor what it can supply against the lines of a purchase order |
+| `order:purchase_order:reopen` | Reopen a returned quantity of a purchase-order line because the vendor will replace the goods (#2635) |
 
 Approving and transmitting are separate codes. Approving commits the business to the spend and sends nothing to
 anyone. Transmitting puts the order in front of the vendor.
@@ -106,6 +110,17 @@ anyone. Transmitting puts the order in front of the vendor.
   status is decided from the lines, not from the balance.
 - Every one of these changes publishes a `purchaseorder.updated` fact that carries the order's full state.
 - A purchase order that does not exist is answered with 404 `PURCHASE_ORDER_NOT_FOUND`.
+
+- Per-line figures (#2635): a line carries `receivedQuantityDecimal`, `returnedQuantityDecimal` and
+  `cancelledQuantityDecimal`; `openQuantityDecimal` is what the vendor still owes (ordered minus received, returned
+  and cancelled, never negative). A receipt correction from receiving reopens the line; a return to vendor is a credit
+  and reopens nothing. "Vendor will replace" reopens the returned quantity on the original line
+  (`POST .../lines/{lineId}/reopen`, `order:purchase_order:reopen`). A remainder the vendor will not ship is
+  short-closed line by line (`POST .../lines/{lineId}/cancel`) or all at once (`POST .../close`); an order whose lines
+  are all settled with a short-closed remainder is `CLOSED`, which always means something was delivered. These refuse
+  with 409 `PURCHASE_ORDER_INVALID_STATE` on a `CANCELLED` or `CLOSED` order, on a `DRAFT` (revise it), above the
+  returned or open quantity, or when nothing was ever received (cancel the order instead); the error's `nextAction`
+  names the remedy.
 
 ## Listing and summarizing
 

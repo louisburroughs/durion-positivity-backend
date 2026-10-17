@@ -8,4 +8,9 @@ public class PurchaseOrderNotFoundException extends RuntimeException {
     public PurchaseOrderNotFoundException(UUID purchaseOrderId) {
         super("Purchase order not found: " + purchaseOrderId);
     }
+
+    /** A line the order does not hold (#2635). */
+    public PurchaseOrderNotFoundException(UUID purchaseOrderId, UUID lineId) {
+        super("Purchase order " + purchaseOrderId + " has no line " + lineId);
+    }
 }

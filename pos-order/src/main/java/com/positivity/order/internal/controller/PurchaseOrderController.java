@@ -2,12 +2,15 @@ package com.positivity.order.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
+import com.positivity.order.internal.dto.purchaseorder.CancelPurchaseOrderLineRequest;
+import com.positivity.order.internal.dto.purchaseorder.ClosePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.ProcurementAvailabilityResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderSummaryResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
+import com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.security.PurchaseOrderPermissions;
@@ -505,6 +508,182 @@ public class PurchaseOrderController {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrder(poId, actorUserId));
+    }
+
+    @PostMapping("/{poId}/lines/{lineId}/reopen")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"order:purchase_order:reopen"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_REOPEN + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_LINE_REOPEN", apiVersion = "1")
+    @Operation(
+            operationId = "reopenPurchaseOrderLine",
+            summary = "Reopen a returned quantity of a purchase-order line for a replacement",
+            description = """
+                    Reopens part or all of a line's returned quantity because the vendor will replace the goods on \
+                    this order (CAP:550 #2635): the quantity leaves the line's returned figures and is open again, \
+                    the open balance rises by its value, the status is re-derived (FULLY_RECEIVED becomes \
+                    PARTIALLY_RECEIVED) and the order's state is published, so receiving expects the replacement on \
+                    the original line. Never a new purchase order (ADR-0052).
+                    Use this tool after pos-inventory recorded a RETURN_TO_VENDOR and the vendor agreed to replace; \
+                    do not use it for a receipt correction, which reopens the line by itself.
+                    Preconditions: the order is not CANCELLED or CLOSED; the line belongs to the order; quantity is \
+                    at most the line's returned quantity.
+                    Required inputs: poId and lineId path parameters; quantity (base units, > 0); vendorReturnId is \
+                    optional, kept for the audit trail.
+                    Emits an ORDER_PURCHASE_ORDER_LINE_REOPEN event and publishes purchaseorder.updated.
+                    Returns 200 with the order, 400 PURCHASE_ORDER_BAD_REQUEST for a quantity that is not positive, \
+                    404 PURCHASE_ORDER_NOT_FOUND for an unknown order or line, and 409 PURCHASE_ORDER_INVALID_STATE \
+                    on a CANCELLED or CLOSED order or a quantity above what was returned.
+                    """,
+            tags = {"Purchase Orders"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Line reopened",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Quantity is not positive",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks order:purchase_order:reopen",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order or line not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "PURCHASE_ORDER_INVALID_STATE: the order is CANCELLED or CLOSED, or the quantity exceeds"
+                    + " what the line has returned",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<PurchaseOrderResponse> reopenPurchaseOrderLine(
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
+            @Parameter(description = "Purchase order line identifier", required = true) @PathVariable UUID lineId,
+            @Valid @RequestBody ReopenPurchaseOrderLineRequest request) {
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
+        return ResponseEntity.ok(purchaseOrderService.reopenPurchaseOrderLine(poId, lineId, request, actorUserId));
+    }
+
+    @PostMapping("/{poId}/lines/{lineId}/cancel")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"order:purchase_order:approve"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_APPROVE + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_LINE_CANCEL", apiVersion = "1")
+    @Operation(
+            operationId = "cancelPurchaseOrderLine",
+            summary = "Cancel a remainder of a purchase-order line",
+            description = """
+                    Cancels part or all of one line's open quantity because the vendor will not ship it (CAP:550 \
+                    #2635): the line's cancelled figures take the quantity and its value, open and balance fall by \
+                    the same, the status is re-derived (CLOSED once every line is settled with a short-closed \
+                    remainder) and the order's state is published, so receiving expects nothing more for it.
+                    Use this tool for one line; use closePurchaseOrder to cancel every remainder at once, and \
+                    cancelPurchaseOrder for an order nothing arrived on.
+                    Preconditions: the order is APPROVED, PARTIALLY_RECEIVED or FULLY_RECEIVED (a DRAFT is \
+                    revised, not short-closed); the line belongs to the order; quantity is at most the line's open \
+                    quantity.
+                    Required inputs: poId and lineId path parameters; quantity (base units, > 0) and a reason.
+                    Emits an ORDER_PURCHASE_ORDER_LINE_CANCEL event and publishes purchaseorder.updated.
+                    Returns 200 with the order, 400 PURCHASE_ORDER_BAD_REQUEST for a missing reason or a quantity \
+                    that is not positive, 404 PURCHASE_ORDER_NOT_FOUND for an unknown order or line, and 409 \
+                    PURCHASE_ORDER_INVALID_STATE on a DRAFT (nextAction: revise), CANCELLED or CLOSED order or a \
+                    quantity above the open quantity.
+                    """,
+            tags = {"Purchase Orders"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Remainder cancelled",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "Quantity is not positive or the reason is missing",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order approval authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order or line not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "PURCHASE_ORDER_INVALID_STATE: the order is DRAFT (nextAction names revise), CANCELLED or"
+                    + " CLOSED, or the quantity exceeds the line's open quantity",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<PurchaseOrderResponse> cancelPurchaseOrderLine(
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
+            @Parameter(description = "Purchase order line identifier", required = true) @PathVariable UUID lineId,
+            @Valid @RequestBody CancelPurchaseOrderLineRequest request) {
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
+        return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrderLine(poId, lineId, request, actorUserId));
+    }
+
+    @PostMapping("/{poId}/close")
+    @io.swagger.v3.oas.annotations.security.SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"order:purchase_order:approve"})
+    @PreAuthorize("hasAuthority('" + PurchaseOrderPermissions.PURCHASE_ORDER_APPROVE + "')")
+    @EmitEvent(id = "ORDER_PURCHASE_ORDER_CLOSE", apiVersion = "1")
+    @Operation(
+            operationId = "closePurchaseOrder",
+            summary = "Close a purchase order: cancel every remaining open quantity",
+            description = """
+                    Short-closes a purchase order something was received on (CAP:550 #2635): every remaining open \
+                    quantity on every line is cancelled with its value, the balance falls to what was received, the \
+                    order is CLOSED and its state is published, so receiving expects nothing more.
+                    Use this tool when the vendor will not ship the rest; use cancelPurchaseOrderLine for one line \
+                    and cancelPurchaseOrder for an order nothing arrived on.
+                    Preconditions: the order is APPROVED, PARTIALLY_RECEIVED or FULLY_RECEIVED and something was \
+                    received on it.
+                    Required inputs: poId path parameter and a reason.
+                    Emits an ORDER_PURCHASE_ORDER_CLOSE event and publishes purchaseorder.updated.
+                    Returns 200 with the order, 400 PURCHASE_ORDER_BAD_REQUEST for a missing reason, 404 \
+                    PURCHASE_ORDER_NOT_FOUND, and 409 PURCHASE_ORDER_INVALID_STATE on a DRAFT, CANCELLED or CLOSED \
+                    order, or on an order with nothing received (nextAction names cancelPurchaseOrder).
+                    """,
+            tags = {"Purchase Orders"})
+    @ApiResponse(
+            responseCode = "200",
+            description = "Purchase order closed",
+            content =
+                    @Content(
+                            mediaType = "application/json",
+                            schema = @Schema(implementation = PurchaseOrderResponse.class)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "The reason is missing",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "User lacks required purchase order approval authority",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Purchase order not found",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "PURCHASE_ORDER_INVALID_STATE: the order is DRAFT, CANCELLED or CLOSED, or nothing was"
+                    + " received on it (nextAction names cancelPurchaseOrder)",
+            content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
+    public ResponseEntity<PurchaseOrderResponse> closePurchaseOrder(
+            @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
+            @Valid @RequestBody ClosePurchaseOrderRequest request) {
+        String actorUserId = SecurityContextHelper.getCurrentUsername()
+                .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
+        return ResponseEntity.ok(purchaseOrderService.closePurchaseOrder(poId, request, actorUserId));
     }
 
     @PostMapping("/{poId}/transmit")

@@ -160,6 +160,16 @@ public final class EventTypes {
                     .apiVersion("1")
                     .build(),
             EventTypeRegistration.write("ORDER_PURCHASE_ORDER_CANCEL", "Cancel a purchase order")
+                    .build(),
+            EventTypeRegistration.write(
+                            "ORDER_PURCHASE_ORDER_LINE_REOPEN",
+                            "Reopen a returned quantity of a purchase-order line for a replacement (#2635)")
+                    .build(),
+            EventTypeRegistration.write(
+                            "ORDER_PURCHASE_ORDER_LINE_CANCEL", "Cancel a remainder of a purchase-order line (#2635)")
+                    .build(),
+            EventTypeRegistration.write(
+                            "ORDER_PURCHASE_ORDER_CLOSE", "Close a purchase order: cancel every open remainder (#2635)")
                     .apiVersion("1")
                     .build(),
             EventTypeRegistration.write(

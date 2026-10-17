@@ -78,3 +78,9 @@ permissions:
     description: "Send an approved purchase order to its vendor"
   - name: "order:purchase_order:availability_view"
     description: "Ask a vendor what it can supply against a purchase order"
+  - name: "order:purchase_order:reopen"
+    description: "Reopen a returned quantity of a purchase-order line for the vendor's replacement shipment (CAP:550 #2635)"
+    grantTo:
+      - "ADMIN"
+      - "LOCATION_MANAGER"
+      - "INVENTORY_MANAGER"

@@ -365,10 +365,11 @@ token unspent, so the register may resend the same `requestId` with a corrected 
 ## Consumed inventory facts: goods receipts on a purchase order
 
 `InventoryEventsListener` is the module's one consumer of `inventory.events.v1`. For
-`goodsreceipt.recorded` it applies the receipt to the purchase order it names: each line's open
-quantity drops by the quantity received (floored at zero), the open balance drops by
-`totalAccruedAmountMinor` (floored at zero), and the order's `purchaseorder.updated` fact is
-republished. A receipt is a delta, so the `processed_events` mark commits with it.
+`goodsreceipt.recorded` it applies the receipt to the purchase order it names: each line's received
+figures grow by the quantity and accrual received, the open quantity and the balance are re-derived
+(#2635: `open = max(0, ordered − received − returned − cancelled)`, the balance from the lines' values), and
+the order's `purchaseorder.updated` fact is republished. A receipt is a delta, so the `processed_events` mark
+commits with it. `vendorreturn.recorded` is consumed the same way (see the line-lifecycle section).
 
 **The status moves only while the order is being received (#2634).** From `APPROVED`,
 `PARTIALLY_RECEIVED` or `FULLY_RECEIVED` the status is recomputed from the lines: `FULLY_RECEIVED`
@@ -384,6 +385,46 @@ shelf and is not refused (ADR-0044 §4), so for such an order:
 
 Before this rule, a receipt recomputed the status unconditionally, so a cancelled order became
 `PARTIALLY_RECEIVED` (or `FULLY_RECEIVED`), counted as supply again, and receiving accepted further receipts against it.
+
+## Purchase-order line lifecycle: receipts, returns, replacements, short-close (CAP:550 #2635)
+
+A line carries what was received, returned, cancelled and what it was worth, all written only by pos-order
+(Order ruling on #2598; `purchase_order_line.received_quantity`, `received_accrued_minor`, `returned_quantity`,
+`returned_value_minor`, `cancelled_quantity`, `cancelled_value_minor`, V14). `openQuantityDecimal` stays the stored and
+published figure, now derived (`PurchaseOrderLineFigures`):
+
+- `open = max(0, ordered − received − returned − cancelled)`; a quantity's value is `lineTotalMinor × quantity ÷
+  ordered`, HALF_UP to minor units;
+- the balance, ex-tax (#2633), moves with each event and never below zero: a receipt takes its accrual off, a
+  correction puts it back (bounded by the order's total), a reopen puts the quantity's value back, a short-close
+  takes it off; a credited return leaves it alone. A line written before the figures existed (open below ordered,
+  every figure zero) adopts `received = ordered − open` on first touch, as V14 backfills stored rows;
+- the status, from the lines, only from `APPROVED`, `PARTIALLY_RECEIVED` or `FULLY_RECEIVED` (#2634): every line open
+  0 → `CLOSED` if anything was short-closed on the order, else `FULLY_RECEIVED`; else Σ received > 0 →
+  `PARTIALLY_RECEIVED`; else `APPROVED`. `CANCELLED` and `CLOSED` orders keep their status; the figures still move.
+
+**Consumed facts** (`InventoryEventsListener`, same `REQUIRES_NEW` and `processed_events` rails):
+
+| Fact | Effect |
+| --- | --- |
+| `goodsreceipt.recorded` | per line `received += quantityReceived`, `receivedAccrued += accruedAmountMinor` (over-receipt may exceed ordered; open floors at zero); the balance drops by `totalAccruedAmountMinor` (so a line without a `poLineId` or naming an unknown line moves only the balance); re-derive open and status; publish `purchaseorder.updated` |
+| `vendorreturn.recorded`, `RECEIPT_CORRECTION` | per line `received −= quantityReturned`, `receivedAccrued −= accruedAmount` (a decimal at the currency exponent, converted with the order's currency); the goods are still owed, so the line reopens from the net received quantity and the accrual goes back on the balance; re-derive; publish |
+| `vendorreturn.recorded`, `RETURN_TO_VENDOR` | the same subtraction, then whatever it reopened goes on the line's returned figures (`returned += open' − open`, `returnedValue += accruedAmount`): open, balance and status unchanged, nothing published (credit by default). An unknown `returnKind` is logged and not applied |
+
+**Commands** (every one re-derives the figures, bumps `versionNumber` and publishes `purchaseorder.updated`;
+`CANCELLED` and `CLOSED` are terminal for all three, for revise and for transmit):
+
+| Method · path | Permission | Effect and codes |
+| --- | --- | --- |
+| `POST /v1/orders/purchase-orders/{poId}/lines/{lineId}/reopen` `{quantity, vendorReturnId?}` (`reopenPurchaseOrderLine`, event `ORDER_PURCHASE_ORDER_LINE_REOPEN`) | `order:purchase_order:reopen` | the vendor will replace: `returned −= quantity`, its value back on the balance, open up, `FULLY_RECEIVED` → `PARTIALLY_RECEIVED`; 409 `PURCHASE_ORDER_INVALID_STATE` on `CANCELLED`/`CLOSED` or above the line's returned quantity; 404 `PURCHASE_ORDER_NOT_FOUND` for an unknown line; 400 for `quantity ≤ 0`. The UI offers "vendor will replace" on the return screen and calls this after Inventory recorded the return; neither module calls the other (ADR-0044 §2 R1) |
+| `POST /v1/orders/purchase-orders/{poId}/lines/{lineId}/cancel` `{quantity, reason}` (`cancelPurchaseOrderLine`, event `ORDER_PURCHASE_ORDER_LINE_CANCEL`) | `order:purchase_order:approve` | short-close part of a line: `cancelled += quantity` with its value, open and balance down, `CLOSED` once every line is settled; 409 on `DRAFT` (`nextAction`: revise), `CANCELLED`, `CLOSED` or above the open quantity |
+| `POST /v1/orders/purchase-orders/{poId}/close` `{reason}` (`closePurchaseOrder`, event `ORDER_PURCHASE_ORDER_CLOSE`) | `order:purchase_order:approve` | cancels every remaining open quantity on every line and sets `CLOSED`; 409 on `DRAFT`, `CANCELLED`, `CLOSED`, and on an order with nothing received (`nextAction` names `cancelPurchaseOrder`) |
+
+State transitions: `APPROVED` → receipt → `PARTIALLY_RECEIVED` → every line settled → `FULLY_RECEIVED` (`CLOSED` if any
+short-closed quantity); a correction or reopen takes `FULLY_RECEIVED` back to `PARTIALLY_RECEIVED` and a correction that
+returns everything received takes `PARTIALLY_RECEIVED` back to `APPROVED`; `RETURN_TO_VENDOR` changes no status; close
+→ `CLOSED`; whole-order cancel (existing) → `CANCELLED`. The fact `PurchaseOrderUpdatedV1` is unchanged in v1; the read
+(`PurchaseOrderLineResponse`) adds `receivedQuantityDecimal`, `returnedQuantityDecimal` and `cancelledQuantityDecimal`.
 
 ## Purchase order transmission timeline (issue #1638)
 
@@ -510,7 +551,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_INVALID_STATE_TRANSITION` | 409 | The requested status transition is not allowed from the order's current status |
 | `ORDER_CONFLICT` | 409 | The order was modified concurrently; retry with fresh state |
 | `ORDER_VOID_BLOCKED` | 409 | A void was requested on an order that already has settled payments; use cancellation so the money is reversed |
-| `PURCHASE_ORDER_INVALID_STATE` | 409 | The purchase order's status does not allow the operation, including a revise of an order that is not `DRAFT` or `APPROVED`, or has goods received on any line (#2632) |
+| `PURCHASE_ORDER_INVALID_STATE` | 409 | The purchase order's status does not allow the operation, including a revise of an order that is not `DRAFT` or `APPROVED`, or has goods received on any line (#2632); a reopen, line cancel or close on a `CANCELLED`/`CLOSED` order, a line cancel on a `DRAFT` (`nextAction`: revise), a close with nothing received (`nextAction`: cancel), a reopen above the returned quantity or a line cancel above the open quantity (#2635) |
 | `PURCHASE_ORDER_VERSION_CONFLICT` | 409 | A revise, or an approve that sends one, whose `expectedVersionNumber` is not the order's current `versionNumber`; nothing changes and no fact is published. Re-read the order and apply the change to the current version (#2681) |
 | `REGISTER_SESSION_CONFLICT` | 409 | A second open on a terminal that already has an OPEN session, a cash movement or close against a non-OPEN session, or a confirm-close before begin-close |
 | `SESSION_CLOSE_BLOCKED` | 409 | The register session cannot close while one or more of its orders are still in PENDING_PAYMENT |
