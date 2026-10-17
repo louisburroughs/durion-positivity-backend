@@ -163,7 +163,8 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
         if (status == 409) {
             // PAYMENT_IDEMPOTENCY_CONFLICT: another payload under the key, or the key being recorded concurrently;
             // the message says which (a concurrent one asks for a retry).
-            return new CartIdempotencyConflictException("pos-invoice refused the Idempotency-Key: " + message);
+            return new CartIdempotencyConflictException(
+                    "pos-invoice refused the Idempotency-Key (" + code + "): " + message);
         }
         if (status == 403) {
             return new AccessDeniedException("pos-invoice refused the cash tender: " + message + " (" + code + ")");
@@ -188,9 +189,15 @@ public class RestInvoicingPortAdapter implements InvoicingPort {
      */
     private static String cashTenderAuthorities() {
         String base = "invoice:manage,invoice:payment:process";
-        return SecurityContextHelper.hasAuthority(INVOICE_PAYMENT_LIMIT_OVERRIDE)
-                ? base + "," + INVOICE_PAYMENT_LIMIT_OVERRIDE
-                : base;
+        return callerHoldsLimitOverride() ? base + "," + INVOICE_PAYMENT_LIMIT_OVERRIDE : base;
+    }
+
+    private static boolean callerHoldsLimitOverride() {
+        try {
+            return SecurityContextHelper.hasAuthority(INVOICE_PAYMENT_LIMIT_OVERRIDE);
+        } catch (IllegalStateException noAuthentication) {
+            return false;
+        }
     }
 
     private static String errorMessage(RestClientResponseException e) {
