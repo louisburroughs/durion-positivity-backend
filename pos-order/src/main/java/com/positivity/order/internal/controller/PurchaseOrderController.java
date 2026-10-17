@@ -573,7 +573,9 @@ public class PurchaseOrderController {
                                             examples = @ExampleObject(name = "Reopen two units", value = """
                                                 {"quantity":2,"vendorReturnId":"01936e5c-7890-7a3d-8b6e-2b3456789012"}
                                                 """)))
-                    @Valid @RequestBody ReopenPurchaseOrderLineRequest request) {
+                    @Valid
+                    @RequestBody
+                    ReopenPurchaseOrderLineRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.reopenPurchaseOrderLine(poId, lineId, request, actorUserId));
@@ -642,7 +644,9 @@ public class PurchaseOrderController {
                                             examples = @ExampleObject(name = "Cancel five units", value = """
                                                 {"quantity":5,"reason":"Vendor discontinued the item"}
                                                 """)))
-                    @Valid @RequestBody CancelPurchaseOrderLineRequest request) {
+                    @Valid
+                    @RequestBody
+                    CancelPurchaseOrderLineRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrderLine(poId, lineId, request, actorUserId));
@@ -708,7 +712,9 @@ public class PurchaseOrderController {
                                             examples = @ExampleObject(name = "Short-close with a reason", value = """
                                                 {"reason":"Vendor will not ship the rest"}
                                                 """)))
-                    @Valid @RequestBody ClosePurchaseOrderRequest request) {
+                    @Valid
+                    @RequestBody
+                    ClosePurchaseOrderRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.closePurchaseOrder(poId, request, actorUserId));

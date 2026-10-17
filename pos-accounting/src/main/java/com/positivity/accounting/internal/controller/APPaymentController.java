@@ -369,7 +369,10 @@ public class APPaymentController {
                                             examples = @ExampleObject(name = "Gateway charged", value = """
                                                 {"gatewayOutcome":"CHARGED","gatewayTransactionId":"txn_8f3a2c91","justification":"Confirmed charged in the gateway dashboard"}
                                                 """)))
-                    @Valid @RequestBody @NonNull ReconcileAPPaymentGatewayRequest request) {
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    ReconcileAPPaymentGatewayRequest request) {
         String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         return ResponseEntity.ok(apPaymentService.reconcileGateway(paymentId, request, currentUser));
     }
@@ -428,7 +431,8 @@ public class APPaymentController {
     public ResponseEntity<APPaymentResponse> allocateApPayment(
             @Parameter(description = "AP payment id", required = true) @PathVariable @NonNull UUID paymentId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
-                            description = "The caller-minted requestId and the approved bills to apply the unapplied amount to.",
+                            description =
+                                    "The caller-minted requestId and the approved bills to apply the unapplied amount to.",
                             required = true,
                             content =
                                     @Content(
@@ -436,7 +440,10 @@ public class APPaymentController {
                                             examples = @ExampleObject(name = "Allocate to one bill", value = """
                                                 {"requestId":"01936e5c-7890-7a3d-8b6e-2b3456789abc","allocations":[{"vendorBillId":"01936e5c-7890-7a3d-8b6e-2b3456789def","appliedAmount":750.00}]}
                                                 """)))
-                    @Valid @RequestBody @NonNull AllocateAPPaymentRequest request) {
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    AllocateAPPaymentRequest request) {
         String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         return ResponseEntity.ok(apPaymentService.allocateCashPayment(paymentId, request, currentUser));
     }
