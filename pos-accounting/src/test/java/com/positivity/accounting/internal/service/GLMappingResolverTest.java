@@ -534,8 +534,8 @@ class GLMappingResolverTest {
             when(mappingKeyRepository.findByPostingCategory_PostingCategoryIdAndKeyName(
                             postingCategoryId, "TAX_RECOVERABLE_GST_HST"))
                     .thenReturn(Optional.of(key));
-            when(mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate))
-                    .thenReturn(Optional.of(createMapping(glAccountId, null)));
+            when(mappingRepository.findAllEffectiveMappings(postingCategoryId, mappingKeyId, transactionDate))
+                    .thenReturn(List.of(createMapping(glAccountId, null)));
 
             assertThat(resolver.findGLAccount("VENDOR_BILL", "TAX_RECOVERABLE_GST_HST", transactionDate))
                     .contains(glAccountId);
@@ -561,11 +561,33 @@ class GLMappingResolverTest {
             when(mappingKeyRepository.findByPostingCategory_PostingCategoryIdAndKeyName(
                             postingCategoryId, "TAX_RECOVERABLE_GST_HST"))
                     .thenReturn(Optional.of(key));
-            when(mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate))
-                    .thenReturn(Optional.empty());
+            when(mappingRepository.findAllEffectiveMappings(postingCategoryId, mappingKeyId, transactionDate))
+                    .thenReturn(List.of());
 
             assertThat(resolver.findGLAccount("VENDOR_BILL", "TAX_RECOVERABLE_GST_HST", transactionDate))
                     .isEmpty();
+        }
+
+        @Test
+        @DisplayName("two effective mappings are not an error: the category default (no dimensions) wins")
+        void twoEffectiveMappingsPreferTheCategoryDefault() {
+            UUID dimensioned = UUID.fromString("00000000-0000-0000-0000-000000001251");
+            UUID categoryDefault = UUID.fromString("00000000-0000-0000-0000-000000001250");
+            PostingCategory category = new PostingCategory();
+            category.setPostingCategoryId(postingCategoryId);
+            when(postingCategoryRepository.findByCategoryName("VENDOR_BILL")).thenReturn(Optional.of(category));
+            MappingKey key = new MappingKey();
+            key.setMappingKeyId(mappingKeyId);
+            when(mappingKeyRepository.findByPostingCategory_PostingCategoryIdAndKeyName(
+                            postingCategoryId, "TAX_RECOVERABLE_GST_HST"))
+                    .thenReturn(Optional.of(key));
+            when(mappingRepository.findAllEffectiveMappings(postingCategoryId, mappingKeyId, transactionDate))
+                    .thenReturn(List.of(
+                            createMapping(dimensioned, Map.of("locationId", "L1")),
+                            createMapping(categoryDefault, null)));
+
+            assertThat(resolver.findGLAccount("VENDOR_BILL", "TAX_RECOVERABLE_GST_HST", transactionDate))
+                    .contains(categoryDefault);
         }
     }
 }

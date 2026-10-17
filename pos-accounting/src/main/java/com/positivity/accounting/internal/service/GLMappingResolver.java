@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface GLMappingResolver {
 
@@ -55,10 +56,9 @@ public interface GLMappingResolver {
     /**
      * The same lookup as {@link #resolveGLAccount(String, String, LocalDateTime)}, for a read that shows an unmapped
      * key rather than refusing (#2677): the category, key or effective mapping missing is an empty result, never an
-     * exception. A posting must keep using the throwing form, whose {@code GLMappingNotConfiguredException} is the
-     * refusal; a reader inside a caller's transaction must use this one, because an exception leaving the resolver's
-     * transactional proxy marks the surrounding transaction rollback-only even when the caller catches it, and the
-     * commit then fails with {@code UnexpectedRollbackException}.
+     * exception, and never a multiplicity error either: of the mappings effective on the date, the category default
+     * (no dimensions) is preferred, else the first. A posting keeps using the throwing form, whose {@code
+     * GLMappingNotConfiguredException} is the refusal; a reader that would show "unmapped" uses this one.
      *
      * @param postingCategoryName posting category name
      * @param mappingKeyName      mapping key name within the category
@@ -66,7 +66,10 @@ public interface GLMappingResolver {
      * @return the GL account id, or empty when the category, the key or a mapping effective on the date is not
      *         configured
      */
-    Optional<UUID> findGLAccount(String postingCategoryName, String mappingKeyName, LocalDateTime transactionDate);
+    Optional<UUID> findGLAccount(
+            @NonNull String postingCategoryName,
+            @NonNull String mappingKeyName,
+            @NonNull LocalDateTime transactionDate);
 
     /**
      * Validates a GL mapping for consistency and non-overlapping effective dates.

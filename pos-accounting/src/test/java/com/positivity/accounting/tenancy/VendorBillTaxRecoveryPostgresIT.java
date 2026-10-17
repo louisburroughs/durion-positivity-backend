@@ -17,6 +17,8 @@ import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
+import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
 import com.positivity.accounting.internal.service.VendorBillStatedTax;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -78,6 +80,9 @@ class VendorBillTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private VendorBillApprovalService approvals;
+
+    @Autowired
+    private GLMappingResolver glMappingResolver;
 
     @Autowired
     private VendorBillRepository billRows;
@@ -312,6 +317,25 @@ class VendorBillTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
                         billId))
                 .as("the void committed")
                 .isEqualTo("VOIDED");
+    }
+
+    /**
+     * #2677, root cause: a caller that catches the resolver's refusal inside its own transaction must still be able to
+     * commit. Through the proxy, in a transaction of this test's own, with nothing else in it: the commit itself is
+     * what used to fail ({@code UnexpectedRollbackException}, "marked as rollback-only").
+     */
+    @Test
+    @DisplayName("#2677: a caught GLMappingNotConfiguredException from the resolver proxy no longer poisons the"
+            + " caller's transaction")
+    void caughtResolverRefusalLeavesTheTransactionCommittable() {
+        UUID tenant = tenant();
+        String committed = asTenant(tenant, () -> new TransactionTemplate(transactionManager).execute(_ -> {
+            assertThatThrownBy(() -> glMappingResolver.resolveGLAccount(
+                            "VENDOR_BILL", "NO_SUCH_KEY_" + tenant.toString().substring(0, 8), today().atStartOfDay()))
+                    .isInstanceOf(GLMappingNotConfiguredException.class);
+            return "committed";
+        }));
+        assertThat(committed).isEqualTo("committed");
     }
 
     private LocalDate today() {

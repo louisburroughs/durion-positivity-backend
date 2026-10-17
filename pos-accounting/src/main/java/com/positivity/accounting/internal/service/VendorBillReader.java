@@ -41,6 +41,7 @@ import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -857,11 +858,13 @@ public class VendorBillReader {
         if (rows.isEmpty() || posting == null) {
             return null;
         }
+        Map<String, Optional<GLAccount>> accountsByKey = new HashMap<>();
         return rows.stream()
                 .map(row -> {
                     Optional<GLAccount> account = row.getMappingKey() == null
                             ? Optional.empty()
-                            : recoveryAccount(row.getMappingKey(), posting.getPostingDate());
+                            : accountsByKey.computeIfAbsent(
+                                    row.getMappingKey(), key -> recoveryAccount(key, posting.getPostingDate()));
                     return new VendorBillReview.InputTaxRecovery(
                             row.getTaxType(),
                             row.getRegime(),
