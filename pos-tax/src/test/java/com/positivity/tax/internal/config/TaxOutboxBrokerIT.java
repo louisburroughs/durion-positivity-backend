@@ -95,19 +95,19 @@ class TaxOutboxBrokerIT {
             // The writer joins the caller's transaction (MANDATORY), as a service method's would.
             new org.springframework.transaction.support.TransactionTemplate(transactionManager)
                     .executeWithoutResult(_ -> outboxWriter.publish(
-                    EVENTS_TOPIC,
-                    new DomainEventEnvelope<>(
-                            eventId,
-                            "tax.broker.it",
-                            1,
-                            aggregate,
-                            1L,
-                            Instant.now(clock),
-                            "pos-tax",
-                            null,
-                            null,
-                            "broker-it",
-                            Map.of("hello", "broker"))));
+                            EVENTS_TOPIC,
+                            new DomainEventEnvelope<>(
+                                    eventId,
+                                    "tax.broker.it",
+                                    1,
+                                    aggregate,
+                                    1L,
+                                    Instant.now(clock),
+                                    "pos-tax",
+                                    null,
+                                    null,
+                                    "broker-it",
+                                    Map.of("hello", "broker"))));
         } finally {
             TenantContext.clear();
         }
