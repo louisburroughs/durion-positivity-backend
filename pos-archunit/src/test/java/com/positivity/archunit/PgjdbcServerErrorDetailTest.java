@@ -72,7 +72,7 @@ class PgjdbcServerErrorDetailTest {
             }
             dir = dir.getParent();
         }
-        throw new IllegalStateException(
-                "repository root with pos-archunit not found above " + Path.of("").toAbsolutePath());
+        throw new IllegalStateException("repository root with pos-archunit not found above "
+                + Path.of("").toAbsolutePath());
     }
 }
