@@ -2056,7 +2056,8 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(565)).isEqualTo("PERM_platform:reading_tier:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(566)).isEqualTo("PERM_platform:reading_tier:read");
         // catalog v109 (#2525): maintain the feed vendor to pos-supplier vendor mapping (bit 567)
-        assertThat(GatewayPermissionCatalog.authorityForBit(567)).isEqualTo("PERM_inventory:vendor_feed_mapping:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(567))
+                .isEqualTo("PERM_inventory:vendor_feed_mapping:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(568)).isNull();
     }
 
