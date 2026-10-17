@@ -18,8 +18,8 @@ import com.positivity.accounting.internal.dto.CashSafetyCushionResponse;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException;
 import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
-import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException;
+import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.service.AccountingConfigurationService;
 import com.positivity.accounting.internal.service.AccountingPeriodService;
 import java.math.BigDecimal;
@@ -118,7 +118,8 @@ class AccountingConfigurationControllerTest extends BaseIntegrationTest {
     @DisplayName("GET cash-safety-cushion: 200 with a null amount while unset")
     void getsTheUnsetCushion() throws Exception {
         when(accountingConfigurationService.getCashSafetyCushion())
-                .thenReturn(CashSafetyCushionResponse.builder().currencyCode("USD").build());
+                .thenReturn(
+                        CashSafetyCushionResponse.builder().currencyCode("USD").build());
 
         mockMvc.perform(withAuth(get(CUSHION_PATH)))
                 .andExpect(status().isOk())
@@ -154,7 +155,8 @@ class AccountingConfigurationControllerTest extends BaseIntegrationTest {
     @DisplayName("PUT cash-safety-cushion: a null amount is present (clears); an absent key is not")
     void nullAmountIsPresent() throws Exception {
         when(accountingConfigurationService.setCashSafetyCushion(any(CashSafetyCushionRequest.class)))
-                .thenReturn(CashSafetyCushionResponse.builder().currencyCode("USD").build());
+                .thenReturn(
+                        CashSafetyCushionResponse.builder().currencyCode("USD").build());
 
         mockMvc.perform(withAuth(put(CUSHION_PATH))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -271,7 +273,8 @@ class AccountingConfigurationControllerTest extends BaseIntegrationTest {
 
         mockMvc.perform(withAuth(put(THRESHOLDS_PATH))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(THRESHOLDS_BODY.replace("\"deliveriesNotBilledDays\":30", "\"deliveriesNotBilledDays\":6")))
+                        .content(THRESHOLDS_BODY.replace(
+                                "\"deliveriesNotBilledDays\":30", "\"deliveriesNotBilledDays\":6")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -291,7 +294,8 @@ class AccountingConfigurationControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("aged-thresholds: 403 without accounting:period:hard_lock, for GET and PUT")
     void thresholdsRequireTheHardLockAuthority() throws Exception {
-        mockMvc.perform(withAuth(get(THRESHOLDS_PATH), "accounting:period:view")).andExpect(status().isForbidden());
+        mockMvc.perform(withAuth(get(THRESHOLDS_PATH), "accounting:period:view"))
+                .andExpect(status().isForbidden());
         mockMvc.perform(withAuth(put(THRESHOLDS_PATH), "accounting:period:view")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(THRESHOLDS_BODY))

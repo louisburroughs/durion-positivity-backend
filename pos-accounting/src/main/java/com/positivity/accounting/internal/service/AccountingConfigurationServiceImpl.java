@@ -9,11 +9,11 @@ import com.positivity.accounting.internal.dto.AgedThresholdsRequest;
 import com.positivity.accounting.internal.dto.AgedThresholdsResponse;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
+import com.positivity.accounting.internal.dto.CashRequests;
 import com.positivity.accounting.internal.dto.CashSafetyCushionRequest;
 import com.positivity.accounting.internal.dto.CashSafetyCushionResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingConfiguration;
-import com.positivity.accounting.internal.dto.CashRequests;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
@@ -480,8 +480,8 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
                         "deliveriesNotBilledDays",
                         CashAndPayablesSettings.MIN_DELIVERIES_NOT_BILLED_DAYS,
                         CashAndPayablesSettings.MAX_DELIVERIES_NOT_BILLED_DAYS));
-        String fingerprint = requested.values().stream().map(String::valueOf).collect(Collectors.joining("|"))
-                + "|" + justification;
+        String fingerprint =
+                requested.values().stream().map(String::valueOf).collect(Collectors.joining("|")) + "|" + justification;
         if (replayed(AUDIT_OPERATION_AGED_THRESHOLDS_REQUEST, requestId, fingerprint)) {
             return getAgedThresholds();
         }
@@ -531,7 +531,8 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
             UUID requestId) {
         UUID entityId;
         if (newValue == null) {
-            entityId = Objects.requireNonNull(row, "a clear of an unset setting is no change").getConfigId();
+            entityId = Objects.requireNonNull(row, "a clear of an unset setting is no change")
+                    .getConfigId();
             configurationRepository.delete(row);
         } else {
             AccountingConfiguration target = row;

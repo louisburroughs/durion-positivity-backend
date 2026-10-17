@@ -47,7 +47,8 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
             + " AND p.status NOT IN :excluded GROUP BY p.vendorId")
     @NonNull
     List<VendorUnappliedSum> sumUnappliedByVendor(
-            @Param("currency") @NonNull String currency, @Param("excluded") @NonNull Collection<APPaymentStatus> excluded);
+            @Param("currency") @NonNull String currency,
+            @Param("excluded") @NonNull Collection<APPaymentStatus> excluded);
 
     /**
      * Find all payments for a vendor.

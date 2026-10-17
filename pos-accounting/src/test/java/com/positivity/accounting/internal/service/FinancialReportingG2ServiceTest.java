@@ -740,7 +740,8 @@ class FinancialReportingG2ServiceTest {
     }
 
     @Test
-    @DisplayName("Aged AP: the PO's terms beat the vendor's and the tenant's; a bill with a real due date has no estimate")
+    @DisplayName(
+            "Aged AP: the PO's terms beat the vendor's and the tenant's; a bill with a real due date has no estimate")
     void agedPayablesEstimateUsesThePurchaseOrderTermsFirst() {
         UUID vendorId = UUID.randomUUID();
         UUID poId = UUID.randomUUID();

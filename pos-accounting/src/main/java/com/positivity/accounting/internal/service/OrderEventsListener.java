@@ -180,7 +180,8 @@ public class OrderEventsListener {
             return;
         }
         if (PurchaseOrderUpdatedV1.EVENT_TYPE.equals(eventType)) {
-            onPurchaseOrderUpdated(envelope, eventId, envelope.path("aggregateVersion").longValue(0L));
+            onPurchaseOrderUpdated(
+                    envelope, eventId, envelope.path("aggregateVersion").longValue(0L));
             return;
         }
         boolean opened = RegisterSessionOpenedV1.EVENT_TYPE.equals(eventType);

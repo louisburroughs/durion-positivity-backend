@@ -89,10 +89,11 @@ class CashSafetyCushionAndAgedThresholdsTest {
             audits.add(row);
             return row;
         });
-        when(auditLogs.findFirstByOperationAndEntityId(anyString(), any())).thenAnswer(invocation -> audits.stream()
-                .filter(a -> a.getOperation().equals(invocation.getArgument(0))
-                        && a.getEntityId().equals(invocation.getArgument(1)))
-                .findFirst());
+        when(auditLogs.findFirstByOperationAndEntityId(anyString(), any()))
+                .thenAnswer(invocation -> audits.stream()
+                        .filter(a -> a.getOperation().equals(invocation.getArgument(0))
+                                && a.getEntityId().equals(invocation.getArgument(1)))
+                        .findFirst());
     }
 
     private static CashSafetyCushionRequest cushion(String amount, String currency, String justification, UUID id) {
@@ -160,11 +161,13 @@ class CashSafetyCushionAndAgedThresholdsTest {
         assertThat(service.getCashSafetyCushion().getAmount()).isEqualByComparingTo("0");
 
         UUID id = UUID.randomUUID();
-        CashSafetyCushionResponse cleared = service.setCashSafetyCushion(cushion(null, "USD", "Removing the cushion", id));
+        CashSafetyCushionResponse cleared =
+                service.setCashSafetyCushion(cushion(null, "USD", "Removing the cushion", id));
 
         assertThat(cleared.getAmount()).isNull();
         assertThat(rows).doesNotContainKey(CUSHION);
-        assertThat(audits("CASH_SAFETY_CUSHION_SET").get(1).getNewValue()).isEqualTo("CASH_SAFETY_CUSHION=;requestId=" + id);
+        assertThat(audits("CASH_SAFETY_CUSHION_SET").get(1).getNewValue())
+                .isEqualTo("CASH_SAFETY_CUSHION=;requestId=" + id);
     }
 
     @Test
@@ -191,15 +194,16 @@ class CashSafetyCushionAndAgedThresholdsTest {
     @CsvSource({"100,XXQ", "100,usd", "-0.01,USD", "10.001,USD"})
     @DisplayName("an unknown code, a negative amount or too many decimals is 400 VALIDATION_ERROR")
     void invalidAmountOrCode(String amount, String currency) {
-        assertThatThrownBy(() ->
-                        service.setCashSafetyCushion(cushion(amount, currency, "A valid justification", UUID.randomUUID())))
+        assertThatThrownBy(() -> service.setCashSafetyCushion(
+                        cushion(amount, currency, "A valid justification", UUID.randomUUID())))
                 .isInstanceOf(InvalidRequestParameterException.class);
 
         assertThat(rows).isEmpty();
     }
 
     @Test
-    @DisplayName("a missing amount key, requestId or justification is refused; 1-9 characters is JUSTIFICATION_REQUIRED")
+    @DisplayName(
+            "a missing amount key, requestId or justification is refused; 1-9 characters is JUSTIFICATION_REQUIRED")
     void missingFields() {
         CashSafetyCushionRequest noAmountKey = new CashSafetyCushionRequest();
         noAmountKey.setCurrencyCode("USD");
@@ -213,8 +217,9 @@ class CashSafetyCushionAndAgedThresholdsTest {
                 .isInstanceOfSatisfying(
                         BankRecException.class, e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.VALIDATION_ERROR));
         assertThatThrownBy(() -> service.setCashSafetyCushion(cushion("1", "USD", "too short", UUID.randomUUID())))
-                .isInstanceOfSatisfying(BankRecException.class, e -> assertThat(e.code())
-                        .isEqualTo(BankRecErrorCode.JUSTIFICATION_REQUIRED));
+                .isInstanceOfSatisfying(
+                        BankRecException.class,
+                        e -> assertThat(e.code()).isEqualTo(BankRecErrorCode.JUSTIFICATION_REQUIRED));
         assertThat(rows).isEmpty();
     }
 
@@ -225,7 +230,8 @@ class CashSafetyCushionAndAgedThresholdsTest {
         service.setCashSafetyCushion(cushion("500", "USD", "First and only change", id));
         int auditRows = audits.size();
 
-        CashSafetyCushionResponse replay = service.setCashSafetyCushion(cushion("500", "USD", "First and only change", id));
+        CashSafetyCushionResponse replay =
+                service.setCashSafetyCushion(cushion("500", "USD", "First and only change", id));
 
         assertThat(replay.getAmount()).isEqualByComparingTo("500");
         assertThat(audits).hasSize(auditRows);
@@ -293,7 +299,8 @@ class CashSafetyCushionAndAgedThresholdsTest {
     void missingDayCount() {
         AgedThresholdsRequest missing = thresholds(3, 14, 30, UUID.randomUUID());
         missing.setDeliveriesNotBilledDays(null);
-        assertThatThrownBy(() -> service.setAgedThresholds(missing)).isInstanceOf(InvalidRequestParameterException.class);
+        assertThatThrownBy(() -> service.setAgedThresholds(missing))
+                .isInstanceOf(InvalidRequestParameterException.class);
 
         AgedThresholdsRequest shortReason = thresholds(3, 14, 30, UUID.randomUUID());
         shortReason.setJustification("short");

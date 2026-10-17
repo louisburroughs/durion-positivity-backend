@@ -32,6 +32,7 @@ import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.JournalEntryLine;
 import com.positivity.accounting.internal.entity.StatementLineMapping;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.CreditMemoStatus;
@@ -39,12 +40,11 @@ import com.positivity.accounting.internal.enums.DisplayReferenceType;
 import com.positivity.accounting.internal.enums.NormalSide;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
-import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
-import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
 import com.positivity.accounting.internal.repository.CreditMemoTaxRepository;
@@ -802,7 +802,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         // As-of semantics (finding 10): an item whose DOCUMENT (bill) date is after asOfDate
         // did not exist yet and is excluded; everything that did exist is bucketed on asOfDate,
         // not-yet-due items in `notYetDue`. Aging basis is the due date, falling back to the
-        // estimated due date of a bill with none (#2515); receivables fall back to the document date. Only APPROVED bills are aged
+        // estimated due date of a bill with none (#2515); receivables fall back to the document date. Only APPROVED
+        // bills are aged
         // (AW11): a bill not yet approved is reported beside the buckets, unaged.
         // KNOWN LIMITATION: the open balance is the bill's CURRENT balance (total minus all
         // allocations to date), not a balance reconstructed as-of asOfDate. A true
@@ -821,9 +822,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
         // Approved bills without a due date age from their estimate (#2515): terms from the PO copy, the vendor
         // copy, or the tenant default, loaded in one query each. Nothing is written to the bill.
-        Map<VendorBill, EstimatedDueDateService.EstimatedDueDate> estimates = estimatedDueDates.estimateAll(bills.stream()
-                .filter(bill -> APPROVED_PAYABLE_STATUSES.contains(bill.getStatus()))
-                .toList());
+        Map<VendorBill, EstimatedDueDateService.EstimatedDueDate> estimates =
+                estimatedDueDates.estimateAll(bills.stream()
+                        .filter(bill -> APPROVED_PAYABLE_STATUSES.contains(bill.getStatus()))
+                        .toList());
 
         Map<UUID, VendorAging> byVendor = new LinkedHashMap<>();
         for (VendorBill bill : bills) {
@@ -868,13 +870,13 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         // Unapplied AP payments net against what is owed (durion#551 ruling, item 4): voided and returned ones are
         // gone, a foreign-currency one is never summed into ledger totals (ADR-0067 PC-9). A vendor with only an
         // unapplied payment still gets a row, so the rows add up to the report's netOwed.
-        for (APPaymentRepository.VendorUnappliedSum unapplied : apPaymentRepository.sumUnappliedByVendor(
-                ledgerCurrency.code(), UNCOUNTED_PAYMENT_STATUSES)) {
+        for (APPaymentRepository.VendorUnappliedSum unapplied :
+                apPaymentRepository.sumUnappliedByVendor(ledgerCurrency.code(), UNCOUNTED_PAYMENT_STATUSES)) {
             if (unapplied.getUnapplied() == null || unapplied.getUnapplied().signum() <= 0) {
                 continue;
             }
-            VendorAging aging =
-                    byVendor.computeIfAbsent(unapplied.getVendorId(), key -> new VendorAging(unapplied.getVendorName()));
+            VendorAging aging = byVendor.computeIfAbsent(
+                    unapplied.getVendorId(), key -> new VendorAging(unapplied.getVendorName()));
             aging.unappliedPayments = unapplied.getUnapplied().negate();
         }
 

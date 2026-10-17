@@ -99,13 +99,12 @@ public class CashAndPayablesSettings {
     /** All settings, read in one query. */
     public @NonNull Settings settings() {
         Map<String, String> stored = new HashMap<>();
-        for (AccountingConfiguration row :
-                configuration.findByConfigKeyIn(List.of(
-                        AP_DEFAULT_TERMS,
-                        CASH_SAFETY_CUSHION,
-                        UNDEPOSITED_CASH_AGED_DAYS,
-                        VENDOR_COD_UNAPPLIED_AGED_DAYS,
-                        DELIVERIES_NOT_BILLED_DAYS))) {
+        for (AccountingConfiguration row : configuration.findByConfigKeyIn(List.of(
+                AP_DEFAULT_TERMS,
+                CASH_SAFETY_CUSHION,
+                UNDEPOSITED_CASH_AGED_DAYS,
+                VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                DELIVERIES_NOT_BILLED_DAYS))) {
             stored.put(row.getConfigKey(), row.getConfigValue());
         }
         return new Settings(

@@ -86,7 +86,9 @@ class EstimatedDueDateServiceTest {
         Optional<EstimatedDueDate> estimate = service.estimate(bill);
 
         assertThat(estimate).contains(new EstimatedDueDate(BILL_DATE.plusDays(45), TermsSource.PURCHASE_ORDER));
-        assertThat(bill.getDueDate()).as("the estimate is never written to the bill").isNull();
+        assertThat(bill.getDueDate())
+                .as("the estimate is never written to the bill")
+                .isNull();
     }
 
     @Test
@@ -140,7 +142,8 @@ class EstimatedDueDateServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", " ", "NET0", "NET121", "NET", "NET-5", "NET_30", "NET  30", "2/10 NET 30", "soon", "30"})
+    @ValueSource(
+            strings = {"", " ", "NET0", "NET121", "NET", "NET-5", "NET_30", "NET  30", "2/10 NET 30", "soon", "30"})
     @DisplayName("anything else does not parse")
     void doesNotParse(String terms) {
         assertThat(EstimatedDueDateService.parseDays(terms)).isEmpty();

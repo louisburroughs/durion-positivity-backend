@@ -49,7 +49,8 @@ public class EstimatedDueDateService {
     private static final Pattern DUE_ON_RECEIPT = Pattern.compile("(?i)due[_ ]on[_ ]receipt");
 
     /** An estimated due date and the terms source behind it. */
-    public record EstimatedDueDate(@NonNull LocalDate dueDate, @NonNull TermsSource termsSource) {}
+    public record EstimatedDueDate(
+            @NonNull LocalDate dueDate, @NonNull TermsSource termsSource) {}
 
     private final ExtOrderPurchaseOrderRepository purchaseOrders;
     private final ExtSupplierVendorRepository vendors;
@@ -98,7 +99,8 @@ public class EstimatedDueDateService {
             }
             Objects.requireNonNull(bill.getBillDate(), "bill date");
             LocalDate billDate = bill.getBillDate().toLocalDate();
-            OptionalInt days = parseDays(bill.getPurchaseOrderId() == null ? null : poTerms.get(bill.getPurchaseOrderId()));
+            OptionalInt days =
+                    parseDays(bill.getPurchaseOrderId() == null ? null : poTerms.get(bill.getPurchaseOrderId()));
             TermsSource source = TermsSource.PURCHASE_ORDER;
             if (days.isEmpty()) {
                 days = parseDays(vendorTerms.get(bill.getVendorId()));
