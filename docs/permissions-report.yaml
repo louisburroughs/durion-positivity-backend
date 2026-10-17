@@ -1,9 +1,9 @@
-generatedAt: "2026-10-17T12:23:57.379163+00:00"
+generatedAt: "2026-10-17T15:19:26.318104+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 531
-  uniquePermissionCount: 531
+  permissionCount: 533
+  uniquePermissionCount: 533
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -1013,7 +1013,7 @@ manifests:
     domain: "platform"
     serviceName: "pos-tenant"
     version: "1.0"
-    permissionCount: 11
+    permissionCount: 13
     permissions:
       - name: "platform:tenant:create"
         description: "Register a tenant under an account"
@@ -1037,6 +1037,10 @@ manifests:
         description: "Read accounts, their contacts and billing profile"
       - name: "platform:account:update"
         description: "Update an account, its contacts and billing profile"
+      - name: "platform:reading_tier:read"
+        description: "List reading tiers"
+      - name: "platform:reading_tier:manage"
+        description: "Create and change reading tiers (allowance, active flag)"
   - module: "pos-vehicle-fitment"
     path: "pos-vehicle-fitment/src/main/resources/permissions.yaml"
     domain: "vehicle-fitment"
@@ -3370,6 +3374,18 @@ permissions:
     source: "pos-tenant/src/main/resources/permissions.yaml"
   - name: "platform:account:update"
     description: "Update an account, its contacts and billing profile"
+    domain: "platform"
+    serviceName: "pos-tenant"
+    module: "pos-tenant"
+    source: "pos-tenant/src/main/resources/permissions.yaml"
+  - name: "platform:reading_tier:manage"
+    description: "Create and change reading tiers (allowance, active flag)"
+    domain: "platform"
+    serviceName: "pos-tenant"
+    module: "pos-tenant"
+    source: "pos-tenant/src/main/resources/permissions.yaml"
+  - name: "platform:reading_tier:read"
+    description: "List reading tiers"
     domain: "platform"
     serviceName: "pos-tenant"
     module: "pos-tenant"

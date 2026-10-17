@@ -1391,6 +1391,103 @@ paths:
       - Payment
       x-required-permissions:
       - invoice:payment:process
+  /v1/invoices/{invoiceId}/payments/cash:
+    post:
+      description: 'Records a cash tender taken at the register against an invoice as a CAPTURED payment intent without calling the payment gateway, keeping the invoice amount and the cash that changed hands apart (settledAmount, cashRoundingAmount, cashIncrement).
+
+        Use this tool when the register has already rounded the cash to the currency''s smallest coin; do not use initiatePayment, which takes card tender through the gateway, and do not round here, because pos-order owns the cash increment and the HALF_UP rounding at the register.
+
+        Preconditions: the invoice must exist and must name a customer (partyId); currencyCode must be the functional currency pos-invoice records in; the caller needs the invoice:payment:process authority scoped to the invoice''s location (ADR-0061) and invoice:payment:limit_override when the amount exceeds 500.00.
+
+        Required inputs: idempotencyKey, amount (the invoice amount applied), settledAmount (the cash taken), cashRoundingAmount (settledAmount minus amount, 0 when no increment applies), currencyCode and, when the currency rounds, cashIncrement; sessionId, terminalId and cashierId are optional receipt context.
+
+        The rounding triple is checked, not trusted: settledAmount must be amount rounded HALF_UP to a multiple of cashIncrement, the difference may not exceed half an increment, and without a cashIncrement the three must agree exactly.
+
+        Emits an INVOICE_PAYMENT_CASH_RECORD event and publishes payment.payment.settled with the three additive fields so pos-accounting can post the rounding.
+
+        Returns 201 with the intent, 403 when the authority is missing or the location is outside the caller''s reach, 404 when the invoice does not exist, 409 when the idempotencyKey was already used with a different payload or is being recorded concurrently, 422 with INVOICE_PARTY_REQUIRED when the invoice has no customer and 422 with CASH_ROUNDING_INVALID when the triple or the currency does not hold together.
+
+        '
+      operationId: recordCashPayment
+      parameters:
+      - in: path
+        name: invoiceId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              CAD tender rounded to the nickel:
+                description: CAD tender rounded to the nickel
+                value:
+                  amount: 149.98
+                  cashIncrement: 0.05
+                  cashRoundingAmount: 0.02
+                  cashierId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61
+                  currencyCode: CAD
+                  idempotencyKey: cash-018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a51
+                  sessionId: 018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60
+                  settledAmount: 150.0
+                  terminalId: REG-01
+              USD tender, no rounding:
+                description: USD tender, no rounding
+                value:
+                  amount: 149.99
+                  cashRoundingAmount: 0.0
+                  currencyCode: USD
+                  idempotencyKey: cash-018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a52
+                  settledAmount: 149.99
+            schema:
+              $ref: '#/components/schemas/RecordCashPaymentRequest'
+        description: 'Cash tender details: the invoice amount applied, the rounded cash taken, the signed rounding difference, the increment the register rounded to and the register context.'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitiatePaymentResponse'
+          description: Cash payment recorded
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Invalid or missing required fields
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN when the caller lacks invoice:payment:process; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: INVOICE_NOT_FOUND when the invoice does not exist
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: PAYMENT_IDEMPOTENCY_CONFLICT when the idempotencyKey was already used with a different payload
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: CASH_ROUNDING_INVALID when settledAmount, cashRoundingAmount and cashIncrement do not agree or currencyCode is not the functional currency; INVOICE_PARTY_REQUIRED when the invoice has no customer
+      security:
+      - bearerAuth: []
+      summary: Record Cash Payment on Invoice
+      tags:
+      - Payment
+      x-required-permissions:
+      - invoice:payment:process
   /v1/invoices/{invoiceId}/payments/{paymentId}:
     get:
       description: 'Returns the full detail of a single payment intent under an invoice, including its captured, voided and refunded amounts and the balance still refundable — never the tokenised card reference or the raw gateway response.
@@ -2683,6 +2780,14 @@ components:
           description: Amount captured (funds moved)
           example: 149.99
           type: number
+        cashIncrement:
+          description: 'Cash tender only: the increment applied; absent when the currency has none'
+          example: 0.05
+          type: number
+        cashRoundingAmount:
+          description: 'Cash tender only: signed rounding, settledAmount minus the amount applied'
+          example: -0.02
+          type: number
         gatewayProvider:
           description: Gateway provider identifier (e.g., stripe)
           example: stripe
@@ -2693,11 +2798,22 @@ components:
             id: pi_3NXyZ2eZvKYlo2Ca
             status: requires_capture
           type: string
+        methodType:
+          description: CARD (gateway capture) or CASH (register tender, ADR-0067 A8)
+          enum:
+          - CARD
+          - CASH
+          example: CARD
+          type: string
         paymentIntentId:
           description: Payment intent identifier
           example: 01960003-0000-7000-8000-000000000020
           format: uuid
           type: string
+        settledAmount:
+          description: 'Cash tender only: the cash actually taken after rounding to the currency''s cash increment'
+          example: 10.0
+          type: number
         status:
           description: Current lifecycle status of the payment intent
           enum:
@@ -3464,6 +3580,14 @@ components:
           description: Amount captured (funds moved)
           example: 149.99
           type: number
+        cashIncrement:
+          description: 'Cash tender only: the increment applied; absent when the currency has none'
+          example: 0.05
+          type: number
+        cashRoundingAmount:
+          description: 'Cash tender only: signed rounding, settledAmount minus the amount applied'
+          example: -0.02
+          type: number
         createdAt:
           description: When the payment intent was created
           format: date-time
@@ -3480,6 +3604,13 @@ components:
           description: Invoice the payment intent belongs to
           example: 01960003-0000-7000-8000-000000000001
           format: uuid
+          type: string
+        methodType:
+          description: CARD (gateway capture) or CASH (register tender, ADR-0067 A8)
+          enum:
+          - CARD
+          - CASH
+          example: CARD
           type: string
         paymentFlow:
           description: SALE_CAPTURE or AUTH_ONLY
@@ -3502,6 +3633,10 @@ components:
         refundedAmount:
           description: Sum of non-FAILED refunds recorded against this payment intent
           example: 0.0
+          type: number
+        settledAmount:
+          description: 'Cash tender only: the cash actually taken after rounding to the currency''s cash increment'
+          example: 10.0
           type: number
         status:
           description: Current lifecycle status of the payment intent
@@ -3672,6 +3807,61 @@ components:
       - templateId
       - templateVersion
       - terminalId
+      type: object
+    RecordCashPaymentRequest:
+      description: 'Record a cash tender taken at the register: the amount applied, the cash taken after rounding and the signed rounding'
+      properties:
+        amount:
+          description: 'The amount applied to the invoice: the due before rounding'
+          example: 10.02
+          minimum: 0
+          type: number
+        cashIncrement:
+          description: The cash increment applied (0.05 for CAD); omitted when the currency has none, then settledAmount equals amount and the rounding is 0.00
+          example: 0.05
+          minimum: 0
+          type: number
+        cashRoundingAmount:
+          description: Signed rounding, settledAmount minus amount (negative when rounded down)
+          example: -0.02
+          type: number
+        cashierId:
+          description: Cashier who took the tender
+          maxLength: 100
+          minLength: 0
+          type: string
+        currencyCode:
+          description: ISO 4217 code; must be the invoice's currency
+          example: CAD
+          minLength: 1
+          pattern: ^[A-Z]{3}$
+          type: string
+        idempotencyKey:
+          description: Client-provided idempotency key for safe retry (the register's tender key)
+          example: cash-01960003-0000-7000-8000-000000000010
+          maxLength: 128
+          minLength: 0
+          type: string
+        sessionId:
+          description: The register session (drawer) that holds the cash
+          format: uuid
+          type: string
+        settledAmount:
+          description: The cash actually taken, after rounding to the currency's cash increment
+          example: 10.0
+          minimum: 0
+          type: number
+        terminalId:
+          description: Terminal that took the tender
+          maxLength: 100
+          minLength: 0
+          type: string
+      required:
+      - amount
+      - cashRoundingAmount
+      - currencyCode
+      - idempotencyKey
+      - settledAmount
       type: object
     RefundPaymentRequest:
       description: Request to refund a captured payment
