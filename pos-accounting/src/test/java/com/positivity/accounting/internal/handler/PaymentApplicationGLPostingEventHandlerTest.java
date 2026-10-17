@@ -331,6 +331,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         postDateCaptor.capture(),
                         any(String.class));
         assertThat(postDateCaptor.getValue()).isEqualTo(expectedTransactionDate).isNotEqualTo(clockNow);
@@ -418,6 +420,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         eq(LocalDateTime.of(2026, 1, 31, 23, 30)),
                         any(String.class));
     }
