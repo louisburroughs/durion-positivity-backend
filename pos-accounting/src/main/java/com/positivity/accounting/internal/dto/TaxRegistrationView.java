@@ -64,47 +64,7 @@ public record TaxRegistrationView(
         @Nullable
         String regimeLabel) {
 
-    /** Without a label. */
-    public TaxRegistrationView(
-            @NonNull UUID registrationId,
-            @NonNull String countryCode,
-            @NonNull String regime,
-            @NonNull String registrationNumber,
-            @Nullable String jurisdictionCode,
-            @NonNull LocalDate effectiveFrom,
-            @Nullable LocalDate effectiveTo,
-            @NonNull String status,
-            long version,
-            @NonNull Instant changedAt) {
-        this(
-                registrationId,
-                countryCode,
-                regime,
-                registrationNumber,
-                jurisdictionCode,
-                effectiveFrom,
-                effectiveTo,
-                status,
-                version,
-                changedAt,
-                null);
-    }
-
-    /** This view with its regime label (#2679). */
-    public TaxRegistrationView withRegimeLabel(@Nullable String label) {
-        return new TaxRegistrationView(
-                registrationId,
-                countryCode,
-                regime,
-                registrationNumber,
-                jurisdictionCode,
-                effectiveFrom,
-                effectiveTo,
-                status,
-                version,
-                changedAt,
-                label);
-    }
+    // #2679: regimeLabel is set where the view is built, never copied in afterwards.
 
     /** Every field but the number, which is never logged. */
     @Override

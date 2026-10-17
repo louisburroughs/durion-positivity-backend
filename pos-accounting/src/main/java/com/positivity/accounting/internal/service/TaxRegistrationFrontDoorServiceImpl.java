@@ -7,7 +7,6 @@ import com.positivity.accounting.internal.dto.RecordTaxRegistrationRequest;
 import com.positivity.accounting.internal.dto.TaxRegistrationListResponse;
 import com.positivity.accounting.internal.dto.TaxRegistrationView;
 import com.positivity.accounting.internal.entity.ExtTaxRegistration;
-import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.repository.ExtTaxRegistrationRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -19,7 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -31,17 +29,19 @@ import org.springframework.transaction.annotation.Transactional;
  * dates on the reference date ({@code asOf}, else today in UTC); it is never stored.
  */
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class TaxRegistrationFrontDoorServiceImpl implements TaxRegistrationFrontDoorService {
 
     private final ExtTaxRegistrationRepository registrations;
     private final TaxRegistrationClient client;
     private final Clock clock;
-    private final TaxProfileClient taxProfiles;
+    private final TaxProfileReads profileReads;
 
+    /**
+     * Not transactional (#2679 review): one repository read, then the regime labels from pos-tax's profile per
+     * country, which must not hold a pooled connection while a remote call waits.
+     */
     @Override
-    @Transactional(readOnly = true)
     public @NonNull TaxRegistrationListResponse list(@Nullable LocalDate asOf) {
         LocalDate reference = asOf != null ? asOf : LocalDate.ofInstant(Instant.now(clock), ZoneOffset.UTC);
         List<ExtTaxRegistration> rows = asOf == null
@@ -51,7 +51,7 @@ public class TaxRegistrationFrontDoorServiceImpl implements TaxRegistrationFront
         return new TaxRegistrationListResponse(
                 asOf,
                 rows.stream()
-                        .map(row -> labelled(view(row, reference), profiles))
+                        .map(row -> view(row, reference, regimeLabel(row.getCountryCode(), row.getRegime(), profiles)))
                         .toList());
     }
 
@@ -59,36 +59,29 @@ public class TaxRegistrationFrontDoorServiceImpl implements TaxRegistrationFront
     public @NonNull Result create(@NonNull RecordTaxRegistrationRequest request, @NonNull UUID actor) {
         request.requireValid();
         TaxRegistrationClient.Written written = client.create(request, actor.toString());
-        return new Result(labelled(view(written.registration()), new HashMap<>()), written.replayed());
+        return new Result(view(written.registration()), written.replayed());
     }
 
     @Override
     public @NonNull TaxRegistrationView update(
             @NonNull UUID registrationId, @NonNull ChangeTaxRegistrationRequest request, @NonNull UUID actor) {
         request.requireValid();
-        return labelled(
-                view(client.update(registrationId, request, actor.toString()).registration()), new HashMap<>());
+        return view(client.update(registrationId, request, actor.toString()).registration());
     }
 
     /**
      * The regime's configured label from the country's profile (#2679), once per country per response; null when
      * pos-tax cannot answer, never the code. A registration read never fails for want of a label.
      */
-    private TaxRegistrationView labelled(
-            TaxRegistrationView view, Map<String, Optional<TaxProfileClient.TaxTypes>> profiles) {
-        return view.withRegimeLabel(profiles.computeIfAbsent(view.countryCode(), country -> {
-                    try {
-                        return Optional.ofNullable(taxProfiles.taxTypes(country));
-                    } catch (TaxServiceUnavailableException e) {
-                        log.warn("Tax registrations read without the regime labels: the tax service did not answer");
-                        return Optional.empty();
-                    }
-                })
-                .map(profile -> profile.regimeLabel(view.regime()))
-                .orElse(null));
+    private @Nullable String regimeLabel(
+            String countryCode, String regime, Map<String, Optional<TaxProfileClient.TaxTypes>> profiles) {
+        return profiles.computeIfAbsent(countryCode, profileReads::taxTypesIfAvailable)
+                .map(profile -> profile.regimeLabel(regime))
+                .orElse(null);
     }
 
-    private static TaxRegistrationView view(ExtTaxRegistration row, LocalDate reference) {
+    private static TaxRegistrationView view(
+            ExtTaxRegistration row, LocalDate reference, @Nullable String regimeLabel) {
         return new TaxRegistrationView(
                 row.getRegistrationId(),
                 row.getCountryCode(),
@@ -99,7 +92,8 @@ public class TaxRegistrationFrontDoorServiceImpl implements TaxRegistrationFront
                 row.getEffectiveTo(),
                 status(row.getEffectiveFrom(), row.getEffectiveTo(), reference),
                 row.getAggregateVersion(),
-                row.getChangedAt());
+                row.getChangedAt(),
+                regimeLabel);
     }
 
     private TaxRegistrationView view(TaxRegistrationClient.Registration registration) {
@@ -113,7 +107,8 @@ public class TaxRegistrationFrontDoorServiceImpl implements TaxRegistrationFront
                 registration.effectiveTo(),
                 registration.status(),
                 registration.version(),
-                registration.updatedAt() != null ? registration.updatedAt() : Instant.now(clock));
+                registration.updatedAt() != null ? registration.updatedAt() : Instant.now(clock),
+                regimeLabel(registration.countryCode(), registration.regime(), new HashMap<>()));
     }
 
     /** SCHEDULED before the start, ENDED after the inclusive end, ACTIVE otherwise. */
