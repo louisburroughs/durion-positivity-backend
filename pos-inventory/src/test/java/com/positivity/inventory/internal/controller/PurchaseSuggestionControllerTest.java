@@ -76,7 +76,7 @@ class PurchaseSuggestionControllerTest {
 
     @Test
     void list_withViewAuthority_returns200() throws Exception {
-        when(purchaseSuggestionService.listPurchaseSuggestions(any(), any(), any(), any()))
+        when(purchaseSuggestionService.listPurchaseSuggestions(any(), any(), any(), any(), any()))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse("SUGGESTED"))));
 
         mockMvc.perform(get("/v1/inventory/purchase-suggestions").header("X-Authorities", VIEW))
