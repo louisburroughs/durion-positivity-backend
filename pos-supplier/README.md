@@ -70,9 +70,12 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
   stub (`TaxRegistrationSchemeClient`, one read per request, only when an entry carries a number): `scheme`, trimmed
   and upper-cased, must be a listed code and is stored as it; where the scheme is regional, `region` is required and
   one of its regions; otherwise `region` is absent (a blank is absent) and stored null. Every violation is reported in
-  one 400 `VALIDATION_ERROR` (`fieldErrors[taxRegistrations[i].scheme]` "unknown scheme", `[...region]` "region
-  required" / "not allowed" / "not valid"); the list unreadable is 503 `SERVICE_UNAVAILABLE` and nothing is stored
-  (fail closed). Personal-id schemes (`holderType = PERSON`: SSN, SIN, ITIN in the placeholder list) are accepted and
+  one 400 `VALIDATION_ERROR` (`fieldErrors[taxRegistrations[i].scheme]` "scheme is not a listed code",
+  `[...region]` "region required for this scheme" / "not allowed for this scheme" / "not valid for this scheme";
+  messages name the rule only, never the value); a region sent with its country prefix (`CA-QC`) is stored as the
+  listed subdivision (`QC`). The list unreadable is 503 `SERVICE_UNAVAILABLE` with `Retry-After` and nothing is
+  stored (fail closed); the full list is cached for `pos.tax.registration-schemes-cache-ttl` (default 60 s), filled
+  only by a successful read. The call carries the bound tenant and the correlation id. Personal-id schemes (`holderType = PERSON`: SSN, SIN, ITIN in the placeholder list) are accepted and
   protected exactly like a business scheme; no class outside the client reads `holderType`
   (`TaxRegistrationHolderTypeIsolationTest`). The vendor form reads the list through
   `GET /v1/supplier/vendors/tax-registration-schemes` (ADR-0071: people never call pos-tax).

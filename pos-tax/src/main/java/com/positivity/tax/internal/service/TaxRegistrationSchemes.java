@@ -49,7 +49,6 @@ public class TaxRegistrationSchemes {
     public static final Pattern REGION_CODE = Pattern.compile("^[A-Z]{1,3}$");
 
     private static final String PREFIX = "pos.tax.registration-schemes.";
-    private static final Pattern ALPHA_2 = Pattern.compile("^[A-Z]{2}$");
     private static final int MAX_LABEL = 100;
 
     /** ISO 3166-1 alpha-2: the assigned codes plus the user-assigned elements ISO reserves for private use. */
@@ -62,7 +61,7 @@ public class TaxRegistrationSchemes {
         Set<String> codes = new HashSet<>();
         properties.getRegistrationSchemes().forEach((country, configured) -> {
             String prefix = PREFIX + country;
-            if (!ALPHA_2.matcher(country).matches() || !ALPHA_2_CODES.contains(country)) {
+            if (!ALPHA_2_CODES.contains(country)) {
                 throw invalid(prefix, "the country code is not an upper-case ISO 3166-1 alpha-2 code");
             }
             List<RegistrationScheme> source = configured == null ? List.of() : configured;

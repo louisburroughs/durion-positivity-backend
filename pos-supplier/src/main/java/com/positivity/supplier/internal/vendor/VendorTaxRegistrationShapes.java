@@ -17,8 +17,12 @@ public final class VendorTaxRegistrationShapes {
     /** Letters, spaces, {@code _}, {@code /} and {@code -}, at most 16, starting with a letter; never a digit. */
     public static final Pattern SCHEME = Pattern.compile("^[A-Z][A-Z _/-]{0,15}$");
 
-    /** Two letters, optionally {@code -} and one to three letters ({@code QC}, {@code CA-QC}); never a digit. */
-    public static final Pattern REGION = Pattern.compile("^[A-Z]{2}(-[A-Z]{1,3})?$");
+    /**
+     * One to three letters, optionally after a country prefix and {@code -} ({@code QC}, {@code ENG}, {@code CA-QC});
+     * never a digit. The subdivision part is pos-tax's region grammar (#2623), so every region the vocabulary can list
+     * is enterable; the prefixed form is read as its subdivision at entry.
+     */
+    public static final Pattern REGION = Pattern.compile("^[A-Z]{1,3}(-[A-Z]{1,3})?$");
 
     private VendorTaxRegistrationShapes() {}
 

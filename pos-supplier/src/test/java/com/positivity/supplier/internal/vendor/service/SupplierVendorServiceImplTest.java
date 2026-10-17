@@ -985,6 +985,9 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             assertThat(vendor.taxRegistrations())
                     .extracting(r -> r.scheme() + "/" + r.region() + "/" + r.last4())
                     .containsExactly("GST_HST/null/0001", "QST/QC/0001");
+            // A region sent with its country prefix is stored as the listed subdivision (#2733 review).
+            VendorView prefixed = createWith(new TaxRegistrationDto(null, "QST", QST_NUMBER, "ca-qc"));
+            assertThat(prefixed.taxRegistrations().getFirst().region()).isEqualTo("QC");
             JsonNode stored = stored(vendor.vendorId());
             assertThat(stored.get(0).path("scheme").stringValue()).isEqualTo("GST_HST");
             assertThat(stored.get(0).path("region").isNull()).isTrue();
@@ -1034,10 +1037,13 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             SupplierValidationException both = refusal(() -> createWith(
                     new TaxRegistrationDto(null, "TAXID", GST, null),
                     new TaxRegistrationDto(null, "QST", QST_NUMBER, "ON")));
-            assertThat(fields(both)).containsExactly("taxRegistrations[0].scheme", "taxRegistrations[1].region");
-            assertThat(both.getMessage() + both.getFieldErrors())
-                    .doesNotContain(GST)
-                    .doesNotContain(QST_NUMBER);
+            assertThat(fields(both))
+                    .containsExactly("taxRegistrations[0].scheme", "taxRegistrations[1].region");
+            String said = both.getMessage() + both.getFieldErrors();
+            assertThat(said).doesNotContain(GST).doesNotContain(QST_NUMBER).doesNotContain("TAXID");
+            assertThat(both.getFieldErrors())
+                    .extracting(ApiError.FieldError::message)
+                    .containsExactly("scheme is not a listed code", "region not valid for this scheme");
 
             entityManager.flush();
             assertThat(vendorRepository.count()).isEqualTo(vendorsBefore);

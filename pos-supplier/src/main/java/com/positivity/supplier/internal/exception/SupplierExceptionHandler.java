@@ -51,6 +51,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class SupplierExceptionHandler {
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
+    /** Seconds a client waits before retrying a 503 of a dependency read (#2623), as pos-accounting answers. */
+    private static final int SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
+
     private static final Logger log = LoggerFactory.getLogger(SupplierExceptionHandler.class);
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
 
@@ -182,7 +185,11 @@ public class SupplierExceptionHandler {
     @ExceptionHandler(SupplierServiceUnavailableException.class)
     public ResponseEntity<ApiError> handleServiceUnavailable(
             SupplierServiceUnavailableException ex, HttpServletRequest request) {
-        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getCode(), ex.getMessage(), request);
+        ResponseEntity<ApiError> response = build(HttpStatus.SERVICE_UNAVAILABLE, ex.getCode(), ex.getMessage(), request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(response.getHeaders());
+        headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
+        return new ResponseEntity<>(response.getBody(), headers, HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @ExceptionHandler(SupplierConflictException.class)
