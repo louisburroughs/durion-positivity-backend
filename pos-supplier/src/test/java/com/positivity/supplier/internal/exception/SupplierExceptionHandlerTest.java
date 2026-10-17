@@ -489,6 +489,10 @@ class SupplierExceptionHandlerTest {
                             new SupplierUnprocessableException(
                                     SupplierUnprocessableException.VENDOR_INACTIVE, "vendor inactive"),
                             request)),
+                    Named.of("handleServiceUnavailable", (HandlerInvocation)
+                            request -> handler.handleServiceUnavailable(
+                                    new SupplierServiceUnavailableException("pos-tax could not be reached"),
+                                    request)),
                     Named.of("handleConflict", (HandlerInvocation) request -> handler.handleConflict(
                             new SupplierConflictException(SupplierConflictException.SUPPLIER_REF_CONFLICT, "ref taken"),
                             request)),

@@ -3,6 +3,8 @@ package com.positivity.supplier.internal.vendor.service;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.supplier.internal.client.TaxRegistrationSchemeClient;
+import com.positivity.supplier.internal.client.TaxRegistrationSchemes;
 import com.positivity.supplier.internal.entity.SupplierVendorCreateRequestEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorRemitChangeEntity;
@@ -103,6 +105,7 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
     private final VendorNumberAllocator numberAllocator;
     private final VendorFactPublisher factPublisher;
     private final VendorTaxIdCipher taxIdCipher;
+    private final TaxRegistrationSchemeClient schemeClient;
     private final Clock clock;
 
     // ── Reads ───────────────────────────────────────────────────────────────────────
@@ -590,11 +593,18 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         }
         Set<UUID> seen = new HashSet<>();
         List<VendorTaxRegistration> resolved = new ArrayList<>();
+        // #2623: every entry that carries a number is checked against pos-tax's closed vocabulary, read once per
+        // request and only when an entry needs it (a kept registration is not checked). All violations answer together.
+        boolean anyNumber = requested.stream().anyMatch(entry -> entry.number() != null);
+        Map<String, TaxRegistrationSchemes.Scheme> vocabulary =
+                anyNumber ? schemeClient.fetch(null).byCode() : Map.of();
+        List<ApiError.FieldError> schemeViolations = new ArrayList<>();
         for (int i = 0; i < requested.size(); i++) {
             TaxRegistrationDto entry = requested.get(i);
             String field = "taxRegistrations[" + i + "].";
             if (entry.number() != null) {
                 requireShapes(entry, field);
+                schemeViolations.addAll(checkScheme(entry, field, vocabulary));
             }
             UUID registrationId = entry.registrationId();
             if (registrationId == null) {
@@ -620,7 +630,38 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
                 resolved.add(seal(tenantId, vendorId, registrationId, entry));
             }
         }
+        if (!schemeViolations.isEmpty()) {
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR,
+                    "Tax registration refused: " + schemeViolations.size() + " scheme or region "
+                            + (schemeViolations.size() == 1 ? "violation" : "violations"),
+                    schemeViolations);
+        }
         return resolved;
+    }
+
+    /**
+     * #2623 rule 6: the scheme is a listed code; the region is required and listed where the scheme is regional, and
+     * absent otherwise. Messages name the rule, the scheme and the region only, never the number.
+     */
+    private static List<ApiError.FieldError> checkScheme(
+            TaxRegistrationDto entry, String field, Map<String, TaxRegistrationSchemes.Scheme> vocabulary) {
+        TaxRegistrationSchemes.Scheme scheme = vocabulary.get(entry.scheme());
+        if (scheme == null) {
+            return List.of(new ApiError.FieldError(field + "scheme", "unknown scheme " + entry.scheme()));
+        }
+        if (scheme.regional()) {
+            if (entry.region() == null) {
+                return List.of(new ApiError.FieldError(field + "region", "region required for " + entry.scheme()));
+            }
+            if (scheme.regions() == null || !scheme.regions().contains(entry.region())) {
+                return List.of(new ApiError.FieldError(
+                        field + "region", "region " + entry.region() + " not valid for " + entry.scheme()));
+            }
+        } else if (entry.region() != null) {
+            return List.of(new ApiError.FieldError(field + "region", "region not allowed for " + entry.scheme()));
+        }
+        return List.of();
     }
 
     /** The value is never echoed: the message names the rule only. */

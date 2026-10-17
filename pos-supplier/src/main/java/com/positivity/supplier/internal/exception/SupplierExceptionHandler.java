@@ -175,6 +175,16 @@ public class SupplierExceptionHandler {
     }
 
     /** Configuration-state collisions, including YAML-managed profile mutation (ADR-0050 §6). */
+    /**
+     * A dependency the request needs did not answer (#2623: pos-tax's registration-scheme list). 503, nothing was
+     * written, the request may be retried as sent.
+     */
+    @ExceptionHandler(SupplierServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleServiceUnavailable(
+            SupplierServiceUnavailableException ex, HttpServletRequest request) {
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getCode(), ex.getMessage(), request);
+    }
+
     @ExceptionHandler(SupplierConflictException.class)
     public ResponseEntity<ApiError> handleConflict(SupplierConflictException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), request);

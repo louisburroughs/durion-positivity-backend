@@ -77,6 +77,7 @@ import tools.jackson.databind.json.JsonMapper;
     SupplierOutboxReplayService.class,
     VendorTaxIdRevealServiceImpl.class,
     VendorTaxIdRevealRecorder.class,
+    com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig.class,
     VendorTaxIdRevealServiceTest.SupportConfig.class
 })
 @DisplayName("VendorTaxIdRevealService — reveal and its audit (#2621)")

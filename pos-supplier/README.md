@@ -41,8 +41,9 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
 | --- | --- | --- | --- |
 | GET | `/v1/supplier/vendors?q=&status=&page=&size=` | `supplier:vendor:read` | 200 |
 | GET | `/v1/supplier/vendors/{vendorId}` | `supplier:vendor:read` | 200, 404 `SUPPLIER_VENDOR_NOT_FOUND` |
-| POST | `/v1/supplier/vendors` | `supplier:vendor:write` | 201, 400 `VALIDATION_ERROR`, 409 `SUPPLIER_VENDOR_NUMBER_TAKEN`; optional `requestId` idempotency key (#2678): same key + same payload replays the original 201, same key + another payload (or a concurrent use) is 409 `IDEMPOTENCY_CONFLICT`; keys live in `supplier_vendor_create_request` (V8; own generated key, `requestId` unique per tenant) with the payload hash (length-prefixed canonical form) and the kept body, never the payload |
-| PUT | `/v1/supplier/vendors/{vendorId}` (carries `version`) | `supplier:vendor:write` | 200, 400, 404, 409 `CONFLICT` |
+| GET | `/v1/supplier/vendors/tax-registration-schemes?countryCode=` | `supplier:vendor:read` | 200 (pos-tax's `GET /v1/tax/registration-schemes` relayed unchanged, `source = STUB`; CAP:550 #2623), 400 `VALIDATION_ERROR` (malformed `countryCode`), 503 `SERVICE_UNAVAILABLE` (pos-tax unreachable) |
+| POST | `/v1/supplier/vendors` | `supplier:vendor:write` | 201, 400 `VALIDATION_ERROR` (incl. `fieldErrors[taxRegistrations[i].scheme|region]`, #2623), 503 `SERVICE_UNAVAILABLE` (a registration carries a number and pos-tax's scheme list cannot be read; nothing stored), 409 `SUPPLIER_VENDOR_NUMBER_TAKEN`; optional `requestId` idempotency key (#2678): same key + same payload replays the original 201, same key + another payload (or a concurrent use) is 409 `IDEMPOTENCY_CONFLICT`; keys live in `supplier_vendor_create_request` (V8; own generated key, `requestId` unique per tenant) with the payload hash (length-prefixed canonical form) and the kept body, never the payload |
+| PUT | `/v1/supplier/vendors/{vendorId}` (carries `version`) | `supplier:vendor:write` | 200, 400 (incl. the #2623 scheme/region field errors), 404, 409 `CONFLICT`, 503 `SERVICE_UNAVAILABLE` (as on create; a kept registration is not re-checked and makes no pos-tax call) |
 | POST | `…/{vendorId}/deactivation` · `…/reactivation` `{reason}` | `supplier:vendor:write` | 200, 400, 404, 409 `CONFLICT` |
 | POST | `…/{vendorId}/remit-to-changes` `{remitTo, reason}` | `supplier:vendor:write` | 201, 400, 404, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_PENDING` |
 | GET | `…/{vendorId}/remit-to-changes?status=` | `supplier:vendor:read` | 200 |
@@ -64,6 +65,17 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
 - **Status** is `ACTIVE ⇄ INACTIVE` with a reason. Deactivation does not disable the vendor's profiles:
   its EDI documents still arrive, and accounting records them as exceptions.
 - **No bank details** — not on the record, not on Kafka (OI-14).
+- **Tax-registration schemes are a closed vocabulary (#2623, Security ruling on #2617 ruling 5).** Every
+  registration entered with a `number` is checked, before anything is written, against pos-tax's registration-schemes
+  stub (`TaxRegistrationSchemeClient`, one read per request, only when an entry carries a number): `scheme`, trimmed
+  and upper-cased, must be a listed code and is stored as it; where the scheme is regional, `region` is required and
+  one of its regions; otherwise `region` is absent (a blank is absent) and stored null. Every violation is reported in
+  one 400 `VALIDATION_ERROR` (`fieldErrors[taxRegistrations[i].scheme]` "unknown scheme", `[...region]` "region
+  required" / "not allowed" / "not valid"); the list unreadable is 503 `SERVICE_UNAVAILABLE` and nothing is stored
+  (fail closed). Personal-id schemes (`holderType = PERSON`: SSN, SIN, ITIN in the placeholder list) are accepted and
+  protected exactly like a business scheme; no class outside the client reads `holderType`
+  (`TaxRegistrationHolderTypeIsolationTest`). The vendor form reads the list through
+  `GET /v1/supplier/vendors/tax-registration-schemes` (ADR-0071: people never call pos-tax).
 - **Tax registrations are RESTRICTED, encrypted and masked (#2621, Security ruling on #2617).** Every
   number, whatever its scheme, is sealed with AES-256-GCM under `SUPPLIER_VENDOR_TAXID_ENC_KEY` (its own
   key, never the exchange-audit one; same envelope and fail-closed key policy, see "Encryption" below),

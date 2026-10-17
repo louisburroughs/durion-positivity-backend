@@ -4,6 +4,8 @@ import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
 import com.positivity.supplier.internal.exception.TaxIdRevealReasonRejectedException;
 import com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException;
+import com.positivity.supplier.internal.client.TaxRegistrationSchemeClient;
+import com.positivity.supplier.internal.client.TaxRegistrationSchemes;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import com.positivity.supplier.internal.service.model.PagedResponse;
 import com.positivity.supplier.internal.vendor.service.SupplierVendorService;
@@ -33,6 +35,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -116,8 +119,56 @@ public class SupplierVendorController {
 
     private final SupplierVendorService vendorService;
     private final VendorTaxIdRevealService taxIdRevealService;
+    private final TaxRegistrationSchemeClient schemeClient;
 
     // ── Reads ───────────────────────────────────────────────────────────────────────
+
+    @Operation(
+            operationId = "listSupplierVendorTaxRegistrationSchemes",
+            summary = "List the tax-registration schemes a vendor may be filed under",
+            description = """
+                    Returns pos-tax's closed vocabulary of tax-registration schemes, unchanged: per country, each
+                    scheme's code, label, holder type (BUSINESS or PERSON) and whether a registration under it
+                    belongs to one region, with the allowed regions. Codes are unique across countries.
+                    Use this tool to fill the vendor form's scheme picker (and its region picker where the scheme
+                    is regional) before creating or updating a vendor's tax registrations; do not use it to read a
+                    vendor, which is getSupplierVendor.
+                    Preconditions: none; the list is reference configuration, not tenant data, so every holder of
+                    supplier:vendor:read may read it. People never call pos-tax directly (ADR-0071).
+                    Required inputs: none; countryCode, two upper-case letters, narrows the list to one country.
+                    Emits a SUPPLIER_VENDOR_TAX_REGISTRATION_SCHEME_LIST audit event; nothing is changed.
+                    Returns 200 with the list (source is STUB while the vocabulary is a placeholder; empty for a
+                    country without a scheme), 400 VALIDATION_ERROR for a malformed countryCode, and 503
+                    SERVICE_UNAVAILABLE when pos-tax cannot be reached.
+                    """)
+    @ApiResponse(responseCode = "200", description = "The schemes, by country then code.")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: countryCode is not two upper-case letters.",
+            content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "SERVICE_UNAVAILABLE: pos-tax could not answer the list; retry.",
+            content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "401",
+            description = UNAUTHENTICATED,
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "403",
+            description = FORBIDDEN,
+            content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
+    @PreAuthorize("hasAuthority('" + SupplierPermissions.VENDOR_READ + "')")
+    @EmitEvent(id = "SUPPLIER_VENDOR_TAX_REGISTRATION_SCHEME_LIST", apiVersion = "1")
+    @GetMapping("/tax-registration-schemes")
+    public ResponseEntity<TaxRegistrationSchemes> listTaxRegistrationSchemes(
+            @Parameter(description = "ISO 3166-1 alpha-2 country code; omit for every country", example = "CA")
+                    @RequestParam(required = false)
+                    @Pattern(regexp = "^[A-Z]{2}$", message = "countryCode must be two upper-case letters")
+                    @Nullable
+                    String countryCode) {
+        return ResponseEntity.ok(schemeClient.fetch(countryCode));
+    }
 
     @Operation(operationId = "listSupplierVendors", summary = "List vendors", description = """
                     Returns one page of the tenant's vendors ordered by vendorNumber, each with its approved
@@ -271,14 +322,26 @@ public class SupplierVendorController {
                     timeout or 5xx with the same requestId and the same payload answers the original 201 body and
                     creates nothing; the same requestId with another payload is refused. Reuse a requestId only for
                     an identical payload.
-                    Returns 201 with the vendor, 400 VALIDATION_ERROR when a field is missing or malformed,
-                    409 SUPPLIER_VENDOR_NUMBER_TAKEN when the number is in use, and 409 IDEMPOTENCY_CONFLICT when
-                    the requestId was used with a different payload or is in use by a concurrent create.
+                    Every registration entered with a number is filed under a listed scheme (#2623): scheme is
+                    one of listSupplierVendorTaxRegistrationSchemes' codes (stored as that code), and region is
+                    required and listed where the scheme is regional, absent otherwise.
+                    Returns 201 with the vendor, 400 VALIDATION_ERROR when a field is missing or malformed or a
+                    registration's scheme or region is not listed (fieldErrors names taxRegistrations[i].scheme or
+                    .region; every violation is reported), 409 SUPPLIER_VENDOR_NUMBER_TAKEN when the number is in
+                    use, 409 IDEMPOTENCY_CONFLICT when the requestId was used with a different payload or is in use
+                    by a concurrent create, and 503 SERVICE_UNAVAILABLE when a registration carries a number and
+                    pos-tax's scheme list cannot be read (nothing is stored).
                     """)
     @ApiResponse(responseCode = "201", description = "Vendor created.")
     @ApiResponse(
             responseCode = "400",
-            description = "VALIDATION_ERROR: a field is missing or malformed.",
+            description = "VALIDATION_ERROR: a field is missing or malformed, or a registration's scheme or region"
+                    + " is not in pos-tax's list (fieldErrors[taxRegistrations[i].scheme|region], #2623).",
+            content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "SERVICE_UNAVAILABLE: a registration carries a number and pos-tax's scheme list could not"
+                    + " be read; nothing was stored, retry.",
             content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
@@ -328,18 +391,28 @@ public class SupplierVendorController {
                     the number, and send a new registration without registrationId and with its number.
                     Emits a SUPPLIER_VENDOR_UPDATE audit event and queues one supplier.vendor.updated fact in the
                     same transaction.
+                    A registration entered or re-keyed with a number is filed under a listed scheme (#2623): a
+                    code of listSupplierVendorTaxRegistrationSchemes, with a region exactly where the scheme is
+                    regional; a kept registration (registrationId without number) is not re-checked.
                     Returns 200 with the vendor, 400 VALIDATION_ERROR for a malformed field or a refused
                     registration (fieldErrors names taxRegistrations[i].number, .registrationId, .scheme or
-                    .region), 404
-                    SUPPLIER_VENDOR_NOT_FOUND, and 409 CONFLICT when version is stale.
+                    .region; every scheme or region violation is reported), 404 SUPPLIER_VENDOR_NOT_FOUND, 409
+                    CONFLICT when version is stale, and 503 SERVICE_UNAVAILABLE when a registration carries a
+                    number and pos-tax's scheme list cannot be read (nothing is stored).
                     """)
     @ApiResponse(responseCode = "200", description = "Vendor updated.")
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: a field is missing or malformed, a registrationId is not this"
                     + " vendor's, a new registration has no number, a kept registration changed its scheme or"
-                    + " region without its number, or a scheme or region carrying a number breaks its shape (no"
-                    + " digits). No message echoes a submitted value.",
+                    + " region without its number, a scheme or region carrying a number breaks its shape (no"
+                    + " digits), or its scheme or region is not in pos-tax's list (#2623). No message echoes a"
+                    + " submitted number.",
+            content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "503",
+            description = "SERVICE_UNAVAILABLE: a registration carries a number and pos-tax's scheme list could not"
+                    + " be read; nothing was stored, retry.",
             content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",

@@ -60,7 +60,8 @@ public record TaxRegistrationDto(
 
     public TaxRegistrationDto {
         scheme = VendorTaxRegistrationShapes.normalise(VendorFields.required(scheme, "taxRegistrations[].scheme", 32));
-        region = VendorFields.optional(region, "taxRegistrations[].region", 32);
+        // A blank region is no region (#2623 rule 6: absent or blank where the scheme is not regional).
+        region = region != null && region.isBlank() ? null : VendorFields.optional(region, "taxRegistrations[].region", 32);
         region = VendorTaxRegistrationShapes.normalise(region);
         if (number != null) {
             number = number.strip();
