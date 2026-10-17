@@ -66,8 +66,31 @@ public class PurchaseOrderLineResponse {
             requiredMode = NOT_REQUIRED)
     private Long taxMinor;
 
-    @Schema(description = "Quantity on this line not yet received", example = "4", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Quantity on this line the vendor still owes: ordered − received − returned − cancelled,"
+                    + " never negative (#2635)",
+            example = "4",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal openQuantityDecimal;
+
+    @Schema(
+            description = "Base units received, net of receipt corrections and returns (#2635)",
+            example = "6",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal receivedQuantityDecimal;
+
+    @Schema(
+            description = "Base units returned to the vendor for credit; a reopen for replacement takes them back"
+                    + " (#2635)",
+            example = "0",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal returnedQuantityDecimal;
+
+    @Schema(
+            description = "Base units short-closed: the vendor will not ship them (#2635)",
+            example = "2",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal cancelledQuantityDecimal;
 
     @Schema(
             description = "Tax code the line was written with; null when none. Returned so a read, edited and revised"

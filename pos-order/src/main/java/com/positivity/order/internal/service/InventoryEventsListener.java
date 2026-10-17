@@ -2,6 +2,7 @@ package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.inventory.GoodsReceiptLine;
 import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
+import com.positivity.domainevents.inventory.VendorReturnRecordedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.ReservationOutcomeV1;
 import com.positivity.kafka.common.KafkaRails;
@@ -11,7 +12,6 @@ import com.positivity.order.internal.entity.ProcessedEvent;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.entity.SalesOrderLine;
-import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.repository.ExtInventoryAvailabilityRepository;
 import com.positivity.order.internal.repository.ProcessedEventRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
@@ -20,9 +20,7 @@ import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.EnumSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -106,9 +104,6 @@ import tools.jackson.databind.ObjectMapper;
 public class InventoryEventsListener {
     private static final String PAYLOAD = "payload";
 
-    /** Statuses a receipt may move along the receiving lifecycle; every other status is kept (#2634). */
-    private static final Set<PurchaseOrderStatus> RECEIVING_STATUSES = EnumSet.of(
-            PurchaseOrderStatus.APPROVED, PurchaseOrderStatus.PARTIALLY_RECEIVED, PurchaseOrderStatus.FULLY_RECEIVED);
 
     /** Producing domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "inventory";
@@ -169,6 +164,7 @@ public class InventoryEventsListener {
             handlerTransaction.executeWithoutResult(_ -> {
                 switch (eventType == null ? "" : eventType) {
                     case GoodsReceiptRecordedV1.EVENT_TYPE -> apply(envelope);
+                    case VendorReturnRecordedV1.EVENT_TYPE -> applyVendorReturn(envelope);
                     case InventoryAvailabilityUpdatedV1.EVENT_TYPE -> applyAvailabilityUpdated(envelope);
                     case ReservationOutcomeV1.EVENT_TYPE -> applyReservationOutcome(envelope);
                     // Ignored types still fall through to the processed_events insert below: the
@@ -316,29 +312,27 @@ public class InventoryEventsListener {
                 .filter(line -> line.getLineId() != null)
                 .collect(Collectors.toMap(PurchaseOrderLineEntity::getLineId, Function.identity(), (a, b) -> a));
 
+        // #2635: a receipt adds to the line's received figures; open, balance and status are derived from them.
+        // A line without a poLineId, or naming a line the order does not hold, moves only the balance (as before).
         for (GoodsReceiptLine line : receipt.lines()) {
-            if (line.poLineId() == null) {
-                continue;
-            }
-            PurchaseOrderLineEntity orderLine = linesById.get(line.poLineId());
+            PurchaseOrderLineEntity orderLine = line.poLineId() == null ? null : linesById.get(line.poLineId());
             if (orderLine == null) {
-                log.warn("Goods receipt {} references unknown line {}", receipt.receiptId(), line.poLineId());
+                if (line.poLineId() != null) {
+                    log.warn("Goods receipt {} references unknown line {}", receipt.receiptId(), line.poLineId());
+                }
+                order.setUnallocatedAccruedMinor(PurchaseOrderLineFigures.zeroIfNull(order.getUnallocatedAccruedMinor())
+                        + line.accruedAmountMinor());
                 continue;
             }
-            BigDecimal open = orderLine.getOpenQuantityDecimal() == null
-                    ? orderLine.getQuantityDecimal()
-                    : orderLine.getOpenQuantityDecimal();
-            BigDecimal next = (open == null ? BigDecimal.ZERO : open).subtract(line.quantityReceived());
-            // Floored at zero: an over-receipt settles the line rather than making it negative,
-            // which would otherwise read downstream as supply flowing the wrong way.
-            orderLine.setOpenQuantityDecimal(next.signum() < 0 ? BigDecimal.ZERO : next);
+            // Over-receipt: received may exceed ordered; the derived open quantity floors at zero, so the line
+            // settles rather than reading downstream as supply flowing the wrong way.
+            orderLine.setReceivedQuantity(PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedQuantity())
+                    .add(line.quantityReceived()));
+            orderLine.setReceivedAccruedMinor(PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedAccruedMinor())
+                    + line.accruedAmountMinor());
         }
 
-        long openBalance = order.getOpenBalanceMinor() == null ? 0L : order.getOpenBalanceMinor();
-        order.setOpenBalanceMinor(Math.max(0L, openBalance - receipt.totalAccruedAmountMinor()));
-        if (RECEIVING_STATUSES.contains(order.getStatus())) {
-            order.setStatus(nextStatus(order));
-        } else {
+        if (!PurchaseOrderLineFigures.RECEIVING_STATUSES.contains(order.getStatus())) {
             log.warn(
                     "Goods receipt {} applied to purchase order {} in status {}: quantities and balance recorded, "
                             + "status kept",
@@ -346,6 +340,7 @@ public class InventoryEventsListener {
                     order.getPurchaseOrderId(),
                     order.getStatus());
         }
+        PurchaseOrderLineFigures.refresh(order);
         order.setVersionNumber(order.getVersionNumber() == null ? 1 : order.getVersionNumber() + 1);
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(order);
@@ -362,19 +357,97 @@ public class InventoryEventsListener {
     }
 
     /**
-     * Fully received only when every line is settled. Applied only to an order in
-     * {@link #RECEIVING_STATUSES}.
-     *
-     * <p>Deliberately decided from the lines rather than from the balance reaching zero. A price
-     * concession can zero the balance while goods are still owed, and an order closed on that basis
-     * would drop its outstanding quantities out of supply while the vendor was still shipping them.
+     * A vendor return or a receipt correction (CAP:550 #2635, Order ruling on #2598). Both take the returned units
+     * off the line's received figures. A {@code RECEIPT_CORRECTION} then reopens the line from the net received
+     * quantity (the goods are still owed) and republishes the order. A {@code RETURN_TO_VENDOR} defaults to credit:
+     * whatever the subtraction reopened is put on the line's returned figures, so open, balance and status are
+     * unchanged and nothing is published; a replacement is a per-return choice made by reopening the line.
+     * {@code CANCELLED} and {@code CLOSED} orders keep their status; the figures still move (#2634).
      */
-    private static PurchaseOrderStatus nextStatus(PurchaseOrderEntity order) {
-        boolean allSettled = order.getLines().stream()
-                .map(line -> line.getOpenQuantityDecimal() == null
-                        ? line.getQuantityDecimal()
-                        : line.getOpenQuantityDecimal())
-                .allMatch(open -> open == null || open.signum() <= 0);
-        return allSettled ? PurchaseOrderStatus.FULLY_RECEIVED : PurchaseOrderStatus.PARTIALLY_RECEIVED;
+    private void applyVendorReturn(JsonNode envelope) {
+        VendorReturnRecordedV1 vendorReturn =
+                objectMapper.treeToValue(envelope.path(PAYLOAD), VendorReturnRecordedV1.class);
+        boolean correction;
+        switch (vendorReturn.returnKind()) {
+            case VendorReturnRecordedV1.RECEIPT_CORRECTION -> correction = true;
+            case VendorReturnRecordedV1.RETURN_TO_VENDOR -> correction = false;
+            default -> {
+                log.warn(
+                        "Vendor return {} of purchase order {} has unknown returnKind {}; not applied",
+                        vendorReturn.vendorReturnId(),
+                        vendorReturn.purchaseOrderId(),
+                        vendorReturn.returnKind());
+                return;
+            }
+        }
+        PurchaseOrderEntity order = purchaseOrderRepository
+                .findByIdForUpdate(vendorReturn.purchaseOrderId())
+                .orElse(null);
+        if (order == null) {
+            log.warn(
+                    "Vendor return {} references unknown purchase order {}",
+                    vendorReturn.vendorReturnId(),
+                    vendorReturn.purchaseOrderId());
+            return;
+        }
+        String currency = order.getCurrency() != null ? order.getCurrency() : vendorReturn.currencyCode();
+        Map<UUID, PurchaseOrderLineEntity> linesById = order.getLines().stream()
+                .filter(line -> line.getLineId() != null)
+                .collect(Collectors.toMap(PurchaseOrderLineEntity::getLineId, Function.identity(), (a, b) -> a));
+        boolean anyLineMoved = false;
+        for (VendorReturnRecordedV1.VendorReturnLine line : vendorReturn.lines()) {
+            long accrued = PurchaseOrderLineFigures.toMinor(line.accruedAmount(), currency);
+            PurchaseOrderLineEntity orderLine = line.poLineId() == null ? null : linesById.get(line.poLineId());
+            if (orderLine == null) {
+                if (line.poLineId() != null) {
+                    log.warn(
+                            "Vendor return {} references unknown line {}", vendorReturn.vendorReturnId(), line.poLineId());
+                }
+                // The receipt moved only the balance; its return gives that back, never below zero.
+                order.setUnallocatedAccruedMinor(Math.max(
+                        0L, PurchaseOrderLineFigures.zeroIfNull(order.getUnallocatedAccruedMinor()) - accrued));
+                continue;
+            }
+            BigDecimal openBefore = PurchaseOrderLineFigures.open(orderLine);
+            BigDecimal received = PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedQuantity())
+                    .subtract(line.quantityReturned());
+            orderLine.setReceivedQuantity(received.signum() < 0 ? BigDecimal.ZERO : received);
+            orderLine.setReceivedAccruedMinor(Math.max(
+                    0L, PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedAccruedMinor()) - accrued));
+            if (!correction) {
+                BigDecimal reopened = PurchaseOrderLineFigures.open(orderLine).subtract(openBefore);
+                if (reopened.signum() > 0) {
+                    orderLine.setReturnedQuantity(
+                            PurchaseOrderLineFigures.zeroIfNull(orderLine.getReturnedQuantity()).add(reopened));
+                }
+                orderLine.setReturnedValueMinor(
+                        PurchaseOrderLineFigures.zeroIfNull(orderLine.getReturnedValueMinor()) + accrued);
+            }
+            anyLineMoved = true;
+        }
+        if (!PurchaseOrderLineFigures.RECEIVING_STATUSES.contains(order.getStatus())) {
+            log.warn(
+                    "Vendor return {} applied to purchase order {} in status {}: figures recorded, status kept",
+                    vendorReturn.vendorReturnId(),
+                    order.getPurchaseOrderId(),
+                    order.getStatus());
+        }
+        PurchaseOrderLineFigures.refresh(order);
+        if (correction) {
+            order.setVersionNumber(order.getVersionNumber() == null ? 1 : order.getVersionNumber() + 1);
+            PurchaseOrderEntity saved = purchaseOrderRepository.save(order);
+            purchaseOrderFactPublisher.publish(saved, saved.getLines());
+        } else {
+            // Credit: no published figure changed, so no fact. The figures are still stored.
+            purchaseOrderRepository.save(order);
+        }
+        log.debug(
+                "Applied vendor return {} ({}) to purchase order {}: status={} openBalanceMinor={} linesMoved={}",
+                vendorReturn.vendorReturnId(),
+                vendorReturn.returnKind(),
+                order.getPurchaseOrderId(),
+                order.getStatus(),
+                order.getOpenBalanceMinor(),
+                anyLineMoved);
     }
 }

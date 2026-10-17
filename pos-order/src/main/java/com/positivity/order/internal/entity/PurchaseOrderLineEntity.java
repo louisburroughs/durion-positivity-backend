@@ -64,8 +64,39 @@ public class PurchaseOrderLineEntity extends TenantScopedEntity {
 
     private String glAccountId;
 
+    /** Open quantity: derived (#2635) as {@code max(0, ordered − received − returned − cancelled)}, stored and published. */
     @Column(precision = 18, scale = 6)
     private BigDecimal openQuantityDecimal;
+
+    /** Base units received, net of receipt corrections and returns (CAP:550 #2635). */
+    @Builder.Default
+    @Column(name = "received_quantity", nullable = false, precision = 18, scale = 6)
+    private BigDecimal receivedQuantity = BigDecimal.ZERO;
+
+    /** Minor units accrued for the received quantity (GRNI, 2100), net of corrections and returns. */
+    @Builder.Default
+    @Column(name = "received_accrued_minor", nullable = false)
+    private Long receivedAccruedMinor = 0L;
+
+    /** Base units returned to the vendor for credit (not reopened); a reopen for replacement takes them back. */
+    @Builder.Default
+    @Column(name = "returned_quantity", nullable = false, precision = 18, scale = 6)
+    private BigDecimal returnedQuantity = BigDecimal.ZERO;
+
+    /** The returned quantity's value, minor units. */
+    @Builder.Default
+    @Column(name = "returned_value_minor", nullable = false)
+    private Long returnedValueMinor = 0L;
+
+    /** Base units short-closed: the vendor will not ship them (line cancel, close). */
+    @Builder.Default
+    @Column(name = "cancelled_quantity", nullable = false, precision = 18, scale = 6)
+    private BigDecimal cancelledQuantity = BigDecimal.ZERO;
+
+    /** The cancelled quantity's value, minor units. */
+    @Builder.Default
+    @Column(name = "cancelled_value_minor", nullable = false)
+    private Long cancelledValueMinor = 0L;
 
     /** UoM the line was keyed in, when it differed from base (odoo-parity B2, #1034). */
     @Column(name = "document_uom", length = 32)

@@ -12,7 +12,19 @@ package com.positivity.order.internal.exception;
  */
 public class PurchaseOrderStateConflictException extends RuntimeException {
 
+    private final transient String nextAction;
+
     public PurchaseOrderStateConflictException(String message) {
+        this(message, null);
+    }
+
+    /** With what the caller does instead (ADR-0017 {@code nextAction}), e.g. "cancel the order" on a close. */
+    public PurchaseOrderStateConflictException(String message, String nextAction) {
         super(message);
+        this.nextAction = nextAction;
+    }
+
+    public String getNextAction() {
+        return nextAction;
     }
 }

@@ -37,6 +37,15 @@ public final class PurchaseOrderPermissions {
      */
     public static final String PURCHASE_ORDER_AVAILABILITY_VIEW = "order:purchase_order:availability_view";
 
+    /**
+     * Reopening a returned quantity of a line because the vendor will replace the goods (CAP:550 #2635).
+     *
+     * <p>Its own permission: a reopen puts supply the order had written off back in front of receiving, on the
+     * original line and never through a new order (ADR-0052), so the shop decides who may say "the vendor will
+     * replace it" separately from who approves spend.
+     */
+    public static final String PURCHASE_ORDER_REOPEN = "order:purchase_order:reopen";
+
     private PurchaseOrderPermissions() {
         // Utility class
     }

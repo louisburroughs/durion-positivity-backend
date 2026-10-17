@@ -72,4 +72,37 @@ public interface PurchaseOrderService {
 
     @NonNull
     PurchaseOrderResponse cancelPurchaseOrder(@NonNull UUID poId, @NonNull String actorId);
+
+    /**
+     * Reopens a returned quantity of a line for the vendor's replacement shipment (CAP:550 #2635): the quantity
+     * leaves the line's returned figures and is open again; the balance rises by its value; the status is
+     * re-derived; the fact is published. 409 on a {@code CANCELLED} or {@code CLOSED} order, or when the quantity
+     * exceeds what the line has returned; 404 for a line the order does not hold.
+     */
+    PurchaseOrderResponse reopenPurchaseOrderLine(
+            @NonNull UUID poId,
+            @NonNull UUID lineId,
+            @NonNull com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest request,
+            @NonNull String actorId);
+
+    /**
+     * Cancels a remainder of one line the vendor will not ship (CAP:550 #2635): open and balance fall by the
+     * quantity and its value; {@code CLOSED} once every line is settled; the fact is published. 409 on {@code DRAFT}
+     * (revise instead), {@code CANCELLED} or {@code CLOSED}, or when the quantity exceeds the line's open quantity.
+     */
+    PurchaseOrderResponse cancelPurchaseOrderLine(
+            @NonNull UUID poId,
+            @NonNull UUID lineId,
+            @NonNull com.positivity.order.internal.dto.purchaseorder.CancelPurchaseOrderLineRequest request,
+            @NonNull String actorId);
+
+    /**
+     * Short-closes the order (CAP:550 #2635): every remaining open quantity on every line is cancelled and the order
+     * is {@code CLOSED}; the fact is published. 409 on {@code DRAFT}, {@code CANCELLED} or {@code CLOSED}, and, with
+     * {@code nextAction} naming cancel, on an order with nothing received.
+     */
+    PurchaseOrderResponse closePurchaseOrder(
+            @NonNull UUID poId,
+            @NonNull com.positivity.order.internal.dto.purchaseorder.ClosePurchaseOrderRequest request,
+            @NonNull String actorId);
 }

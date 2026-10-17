@@ -1,6 +1,9 @@
 package com.positivity.order.internal.service;
 
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
+import com.positivity.order.internal.dto.purchaseorder.CancelPurchaseOrderLineRequest;
+import com.positivity.order.internal.dto.purchaseorder.ClosePurchaseOrderRequest;
+import com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRequest;
@@ -462,6 +465,136 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         return toResponse(saved);
     }
 
+    @Override
+    @Transactional
+    public @NonNull PurchaseOrderResponse reopenPurchaseOrderLine(
+            @NonNull UUID poId,
+            @NonNull UUID lineId,
+            @NonNull ReopenPurchaseOrderLineRequest request,
+            @NonNull String actorId) {
+        PurchaseOrderEntity po = lockedForLineAction(poId);
+        PurchaseOrderLineEntity line = lineOf(po, lineId);
+        BigDecimal quantity = request.getQuantity();
+        BigDecimal returned = PurchaseOrderLineFigures.zeroIfNull(line.getReturnedQuantity());
+        if (quantity.compareTo(returned) > 0) {
+            throw new PurchaseOrderStateConflictException("Line " + line.getLineNumber() + " of purchase order "
+                    + po.getPoNumber() + " has " + returned.stripTrailingZeros().toPlainString()
+                    + " returned; " + quantity.stripTrailingZeros().toPlainString() + " cannot be reopened");
+        }
+        long value = PurchaseOrderLineFigures.valueOf(line, quantity);
+        line.setReturnedQuantity(returned.subtract(quantity));
+        line.setReturnedValueMinor(
+                Math.max(0L, PurchaseOrderLineFigures.zeroIfNull(line.getReturnedValueMinor()) - value));
+        log.info(
+                "Purchase order {} line {} reopened for replacement | quantity={} | vendorReturnId={} | by={}",
+                po.getPoNumber(),
+                line.getLineNumber(),
+                quantity,
+                request.getVendorReturnId(),
+                actorId);
+        return finishLineAction(po, actorId);
+    }
+
+    @Override
+    @Transactional
+    public @NonNull PurchaseOrderResponse cancelPurchaseOrderLine(
+            @NonNull UUID poId,
+            @NonNull UUID lineId,
+            @NonNull CancelPurchaseOrderLineRequest request,
+            @NonNull String actorId) {
+        PurchaseOrderEntity po = lockedForLineAction(poId);
+        if (po.getStatus() == PurchaseOrderStatus.DRAFT) {
+            throw new PurchaseOrderStateConflictException(
+                    "A DRAFT purchase order has no remainder to cancel; revise its lines instead",
+                    "Revise the purchase order (revisePurchaseOrder) to change its quantities");
+        }
+        PurchaseOrderLineEntity line = lineOf(po, lineId);
+        cancelRemainder(po, line, request.getQuantity());
+        log.info(
+                "Purchase order {} line {} remainder cancelled | quantity={} | reason={} | by={}",
+                po.getPoNumber(),
+                line.getLineNumber(),
+                request.getQuantity(),
+                request.getReason(),
+                actorId);
+        return finishLineAction(po, actorId);
+    }
+
+    @Override
+    @Transactional
+    public @NonNull PurchaseOrderResponse closePurchaseOrder(
+            @NonNull UUID poId, @NonNull ClosePurchaseOrderRequest request, @NonNull String actorId) {
+        PurchaseOrderEntity po = lockedForLineAction(poId);
+        if (po.getStatus() == PurchaseOrderStatus.DRAFT) {
+            throw new PurchaseOrderStateConflictException(
+                    "A DRAFT purchase order cannot be closed; cancel it or revise it",
+                    "Cancel the purchase order (cancelPurchaseOrder) or revise it (revisePurchaseOrder)");
+        }
+        if (!PurchaseOrderLineFigures.anythingReceived(po)) {
+            // Nothing arrived: this is a cancellation, and the order should say so rather than read as CLOSED.
+            throw new PurchaseOrderStateConflictException(
+                    "Nothing has been received on purchase order " + po.getPoNumber()
+                            + "; cancel it rather than close it",
+                    "Cancel the purchase order (cancelPurchaseOrder)");
+        }
+        for (PurchaseOrderLineEntity line : po.getLines()) {
+            BigDecimal open = PurchaseOrderLineFigures.open(line);
+            if (open.signum() > 0) {
+                cancelRemainder(po, line, open);
+            }
+        }
+        PurchaseOrderLineFigures.refresh(po);
+        po.setStatus(PurchaseOrderStatus.CLOSED);
+        log.info("Purchase order {} closed | reason={} | by={}", po.getPoNumber(), request.getReason(), actorId);
+        return finishLineAction(po, actorId);
+    }
+
+    /** The row-locked order (#2681) in a status the per-line actions may change: not CANCELLED or CLOSED. */
+    private PurchaseOrderEntity lockedForLineAction(UUID poId) {
+        PurchaseOrderEntity po = purchaseOrderRepository
+                .findByIdForUpdate(poId)
+                .orElseThrow(() -> new PurchaseOrderNotFoundException(poId));
+        if (po.getStatus() == PurchaseOrderStatus.CANCELLED || po.getStatus() == PurchaseOrderStatus.CLOSED) {
+            throw new PurchaseOrderStateConflictException(
+                    "Purchase order " + po.getPoNumber() + " is " + po.getStatus() + " and its lines are final");
+        }
+        return po;
+    }
+
+    private static PurchaseOrderLineEntity lineOf(PurchaseOrderEntity po, UUID lineId) {
+        return po.getLines().stream()
+                .filter(line -> lineId.equals(line.getLineId()))
+                .findFirst()
+                .orElseThrow(() -> new PurchaseOrderNotFoundException(po.getPurchaseOrderId(), lineId));
+    }
+
+    /** Short-closes {@code quantity} of the line: at most its open quantity. */
+    private static void cancelRemainder(PurchaseOrderEntity po, PurchaseOrderLineEntity line, BigDecimal quantity) {
+        BigDecimal open = PurchaseOrderLineFigures.open(line);
+        if (quantity.compareTo(open) > 0) {
+            throw new PurchaseOrderStateConflictException("Line " + line.getLineNumber() + " of purchase order "
+                    + po.getPoNumber() + " has " + open.stripTrailingZeros().toPlainString() + " open; "
+                    + quantity.stripTrailingZeros().toPlainString() + " cannot be cancelled");
+        }
+        line.setCancelledQuantity(PurchaseOrderLineFigures.zeroIfNull(line.getCancelledQuantity()).add(quantity));
+        line.setCancelledValueMinor(PurchaseOrderLineFigures.zeroIfNull(line.getCancelledValueMinor())
+                + PurchaseOrderLineFigures.valueOf(line, quantity));
+    }
+
+    /** Re-derives the figures, bumps the version, saves and publishes: every per-line action ends here. */
+    private PurchaseOrderResponse finishLineAction(PurchaseOrderEntity po, String actorId) {
+        PurchaseOrderStatus closed = po.getStatus() == PurchaseOrderStatus.CLOSED ? PurchaseOrderStatus.CLOSED : null;
+        PurchaseOrderLineFigures.refresh(po);
+        if (closed != null) {
+            po.setStatus(closed);
+        }
+        po.setVersionNumber(po.getVersionNumber() == null ? 1 : po.getVersionNumber() + 1);
+        po.setUpdatedBy(actorId);
+        PurchaseOrderEntity saved = purchaseOrderRepository.save(po);
+        purchaseOrderFactPublisher.publish(saved, saved.getLines());
+        return toResponse(saved);
+    }
+
     /**
      * The revise gate (#2632). A revision replaces every line with new line ids and resets the open quantities and
      * the balance, so it is allowed only before anything was received: a {@code DRAFT} order, or an {@code APPROVED}
@@ -658,6 +791,9 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .lineTotalMinor(line.getLineTotalMinor())
                 .taxMinor(safeLong(line.getTaxMinor()))
                 .openQuantityDecimal(line.getOpenQuantityDecimal())
+                .receivedQuantityDecimal(PurchaseOrderLineFigures.zeroIfNull(line.getReceivedQuantity()))
+                .returnedQuantityDecimal(PurchaseOrderLineFigures.zeroIfNull(line.getReturnedQuantity()))
+                .cancelledQuantityDecimal(PurchaseOrderLineFigures.zeroIfNull(line.getCancelledQuantity()))
                 .taxCodeId(line.getTaxCodeId())
                 .glAccountId(line.getGlAccountId())
                 .documentUom(line.getDocumentUom())

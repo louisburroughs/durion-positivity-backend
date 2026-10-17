@@ -109,7 +109,23 @@ public class PurchaseOrderExceptionHandler {
     @ExceptionHandler(PurchaseOrderStateConflictException.class)
     public ResponseEntity<ApiError> handleInvalidState(
             PurchaseOrderStateConflictException ex, HttpServletRequest request) {
-        return respond(HttpStatus.CONFLICT, "PURCHASE_ORDER_INVALID_STATE", ex.getMessage(), request);
+        if (ex.getNextAction() == null) {
+            return respond(HttpStatus.CONFLICT, "PURCHASE_ORDER_INVALID_STATE", ex.getMessage(), request);
+        }
+        String correlationId = correlationId(request);
+        ApiError body = new ApiError(
+                "PURCHASE_ORDER_INVALID_STATE",
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                null,
+                null,
+                ex.getNextAction(),
+                null);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(body);
     }
 
     /**
