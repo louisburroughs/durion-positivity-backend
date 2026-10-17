@@ -77,4 +77,13 @@ public class PaymentApplicationGLPostingEvent {
     @NonNull
     @JsonProperty("applicationTimestamp")
     private Instant applicationTimestamp;
+
+    /**
+     * ADR-0067 A8 (#2662): on the automatic application of a cash tender, the signed cash rounding
+     * ({@code settledAmount − amount}; positive when the customer paid more than due). The cash-receipt entry then
+     * debits Undeposited Funds for {@code appliedAmount + cashRoundingAmount} and books the rounding to 6050
+     * ({@code CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE}: credit when positive, debit when negative). Null on every
+     * other application (two lines, as before).
+     */
+    private BigDecimal cashRoundingAmount;
 }

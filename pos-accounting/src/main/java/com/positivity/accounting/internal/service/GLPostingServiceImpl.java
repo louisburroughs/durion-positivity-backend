@@ -234,22 +234,73 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification) {
-
-        log.info(
-                "Posting payment application GL entry {}: debit undeposited funds {}, credit AR {}",
+        return postPaymentApplicationEntry(
                 paymentApplicationId,
+                undepositedFundsAccountId,
+                arAccountId,
                 amount,
-                amount);
+                null,
+                null,
+                transactionDate,
+                description,
+                overrideJustification);
+    }
 
+    @Override
+    public UUID postPaymentApplication(
+            @NonNull UUID paymentApplicationId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @Nullable UUID cashRoundingAccountId,
+            @Nullable BigDecimal cashRoundingAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description) {
+        return postPaymentApplicationEntry(
+                paymentApplicationId,
+                undepositedFundsAccountId,
+                arAccountId,
+                amount,
+                cashRoundingAccountId,
+                cashRoundingAmount,
+                transactionDate,
+                description,
+                null);
+    }
+
+    /**
+     * The cash-receipt entry of an application: Dr Undeposited Funds for the cash taken, Cr AR for the amount
+     * applied, and (ADR-0067 A8, #2662) the tender's signed rounding to 6050 when there is one. The rounding is
+     * always carried in full, never split: the caller claimed it for this entry.
+     */
+    private UUID postPaymentApplicationEntry(
+            @NonNull UUID paymentApplicationId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @Nullable UUID cashRoundingAccountId,
+            @Nullable BigDecimal cashRoundingAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+        BigDecimal rounding = cashRoundingAmount == null ? BigDecimal.ZERO : cashRoundingAmount;
+        BigDecimal cashTaken = amount.add(rounding);
+        log.info(
+                "Posting payment application GL entry {}: debit undeposited funds {}, credit AR {}, cash rounding {}",
+                paymentApplicationId,
+                cashTaken,
+                amount,
+                rounding);
         List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
-
-        // Debit: Undeposited Funds (D-3)
         lines.add(lineRequest(
-                undepositedFundsAccountId, amount, BigDecimal.ZERO, "Cash Receipt - PA#" + paymentApplicationId));
-
-        // Credit: AR
+                undepositedFundsAccountId, cashTaken, BigDecimal.ZERO, "Cash Receipt - PA#" + paymentApplicationId));
         lines.add(lineRequest(arAccountId, BigDecimal.ZERO, amount, "AR Reduction - PA#" + paymentApplicationId));
-
+        if (rounding.signum() != 0) {
+            lines.add(cashRoundingLine(
+                    requireRoundingAccount(cashRoundingAccountId),
+                    rounding,
+                    "Cash Rounding - PA#" + paymentApplicationId));
+        }
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
                 .transactionDate(transactionDate)
                 .description(description)
@@ -257,14 +308,27 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .sourceEventType(JournalEntrySourceTypes.PAYMENT_APPLICATION)
                 .lines(lines)
                 .build();
-
         JournalEntryResponse created = journalEntryService.createJournalEntry(request);
         JournalEntryResponse posted =
                 journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
-
         log.info("Posted payment application GL entry: journal entry ID {}", posted.getJournalEntryId());
-
         return posted.getJournalEntryId();
+    }
+
+    /** Cr 6050 when the customer paid more than due (positive rounding), Dr 6050 when the shop absorbed it. */
+    private static JournalEntryCreateRequest.JournalEntryLineRequest cashRoundingLine(
+            @NonNull UUID cashRoundingAccountId, @NonNull BigDecimal rounding, @NonNull String description) {
+        BigDecimal abs = rounding.abs();
+        return rounding.signum() > 0
+                ? lineRequest(cashRoundingAccountId, BigDecimal.ZERO, abs, description)
+                : lineRequest(cashRoundingAccountId, abs, BigDecimal.ZERO, description);
+    }
+
+    private static UUID requireRoundingAccount(@Nullable UUID cashRoundingAccountId) {
+        if (cashRoundingAccountId == null) {
+            throw new IllegalArgumentException("a non-zero cash rounding needs the CASH_ROUNDING account");
+        }
+        return cashRoundingAccountId;
     }
 
     @Override
@@ -277,24 +341,51 @@ public class GLPostingServiceImpl implements GLPostingService {
             @NonNull LocalDateTime transactionDate,
             @NonNull String description,
             @Nullable String overrideJustification) {
+        return postCustomerCreditIssuance(
+                sourceEventId,
+                creditId,
+                undepositedFundsAccountId,
+                creditLiabilityAccountId,
+                amount,
+                null,
+                null,
+                transactionDate,
+                description,
+                overrideJustification);
+    }
 
+    @Override
+    public UUID postCustomerCreditIssuance(
+            @NonNull UUID sourceEventId,
+            @NonNull UUID creditId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID creditLiabilityAccountId,
+            @NonNull BigDecimal amount,
+            @Nullable UUID cashRoundingAccountId,
+            @Nullable BigDecimal cashRoundingAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description,
+            @Nullable String overrideJustification) {
+        BigDecimal rounding = cashRoundingAmount == null ? BigDecimal.ZERO : cashRoundingAmount;
+        BigDecimal cashTaken = amount.add(rounding);
         log.info(
                 "Posting customer credit issuance GL entry {}: debit undeposited funds {}, "
-                        + "credit customer credit liability {}",
+                        + "credit customer credit liability {}, cash rounding {}",
                 sourceEventId,
+                cashTaken,
                 amount,
-                amount);
-
+                rounding);
         List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
-
-        // Debit: Undeposited Funds (the overpayment cash received).
+        // Debit: Undeposited Funds (the overpayment cash received; ADR-0067 A8: the cash taken, rounding included).
         lines.add(lineRequest(
-                undepositedFundsAccountId, amount, BigDecimal.ZERO, "Overpayment Cash - Credit#" + creditId));
-
+                undepositedFundsAccountId, cashTaken, BigDecimal.ZERO, "Overpayment Cash - Credit#" + creditId));
         // Credit: Customer Credit Liability (obligation now owed to the customer).
         lines.add(lineRequest(
                 creditLiabilityAccountId, BigDecimal.ZERO, amount, "Customer Credit Issued - Credit#" + creditId));
-
+        if (rounding.signum() != 0) {
+            lines.add(cashRoundingLine(
+                    requireRoundingAccount(cashRoundingAccountId), rounding, "Cash Rounding - Credit#" + creditId));
+        }
         JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
                 .transactionDate(transactionDate)
                 .description(description)
@@ -302,13 +393,10 @@ public class GLPostingServiceImpl implements GLPostingService {
                 .sourceEventType(JournalEntrySourceTypes.CUSTOMER_CREDIT_ISSUANCE)
                 .lines(lines)
                 .build();
-
         JournalEntryResponse created = journalEntryService.createJournalEntry(request);
         JournalEntryResponse posted =
                 journalEntryService.postJournalEntry(created.getJournalEntryId(), overrideJustification);
-
         log.info("Posted customer credit issuance GL entry: journal entry ID {}", posted.getJournalEntryId());
-
         return posted.getJournalEntryId();
     }
 

@@ -134,6 +134,29 @@ public class PaymentApplicationServiceImpl
             @NonNull UUID sourceEventId,
             @Nullable UUID sourceInvoiceId,
             @Nullable String paymentMethod) {
+        return handlePaymentCleared(
+                paymentId,
+                customerId,
+                currency,
+                totalAmount,
+                clearedAt,
+                sourceEventId,
+                sourceInvoiceId,
+                paymentMethod,
+                null);
+    }
+
+    @Override
+    public ReceivablePayment handlePaymentCleared(
+            @NonNull UUID paymentId,
+            @NonNull UUID customerId,
+            @NonNull String currency,
+            @NonNull BigDecimal totalAmount,
+            @NonNull Instant clearedAt,
+            @NonNull UUID sourceEventId,
+            @Nullable UUID sourceInvoiceId,
+            @Nullable String paymentMethod,
+            @Nullable BigDecimal cashRoundingAmount) {
 
         // Idempotency check
         if (receivablePaymentRepository.existsBySourceEventId(sourceEventId)) {
@@ -177,6 +200,9 @@ public class PaymentApplicationServiceImpl
         payment.setSourceEventId(sourceEventId);
         payment.setSourceInvoiceId(sourceInvoiceId);
         payment.setPaymentMethod(knownPaymentMethod(paymentMethod));
+        // ADR-0067 A8 (#2662): a zero rounding is none; the first cash-receipt entry books a non-zero one.
+        payment.setCashRoundingAmount(
+                cashRoundingAmount == null || cashRoundingAmount.signum() == 0 ? null : cashRoundingAmount);
         payment.setCreatedBy(getCurrentUser()); // From PaymentCleared event
 
         ReceivablePayment saved = receivablePaymentRepository.save(payment);
@@ -287,6 +313,9 @@ public class PaymentApplicationServiceImpl
         BigDecimal totalApplicationAmount = calculateTotalApplicationAmount(request);
         validateSufficientFunds(payment, totalApplicationAmount);
         InvoiceApplicationValidation validation = validateAndCapApplications(request);
+        // ADR-0067 A8 (#2662): the first cash-receipt entry for a cash tender carries its rounding; the application
+        // entry claims it here, before the overpayment excess can (claimCashRounding marks it so no entry repeats it).
+        BigDecimal applicationCashRounding = payment.claimCashRounding(validation.actualTotalApplicationAmount());
 
         // Never a customer credit on the CASH walk-in account (#2508, §4.4 item 4): it would be a liability to
         // no identifiable person. A person is refused before anything is written; an automatic path applies up to
@@ -338,7 +367,8 @@ public class PaymentApplicationServiceImpl
                     payment,
                     creditInfo.getCreditId(),
                     unappliedAfterApplication,
-                    applicationTimestamp);
+                    applicationTimestamp,
+                    payment.claimCashRounding(unappliedAfterApplication));
 
             // Mark payment as fully applied by converting remaining balance to credit
             // This ensures payment status becomes FULLY_APPLIED
@@ -365,7 +395,12 @@ public class PaymentApplicationServiceImpl
         // back, the work item rolls back with it, so only committed applications
         // ever reach the ledger.
         enqueueGLPostingWorkItem(
-                paymentId, request.getApplicationRequestId(), payment, validation, applicationTimestamp);
+                paymentId,
+                request.getApplicationRequestId(),
+                payment,
+                validation,
+                applicationTimestamp,
+                applicationCashRounding);
 
         // 10. Build response
         return PaymentApplicationResponse.builder()
@@ -569,7 +604,13 @@ public class PaymentApplicationServiceImpl
         // Same transaction as the CustomerCredit insert (transactional outbox, #975): the issuance
         // leg posts Dr Undeposited Funds / Cr Customer Credit Liability for the whole amount.
         enqueueCustomerCreditIssuanceGLPostingWorkItem(
-                payment.getPaymentId(), creditRequestId, payment, creditInfo.getCreditId(), unapplied, timestamp);
+                payment.getPaymentId(),
+                creditRequestId,
+                payment,
+                creditInfo.getCreditId(),
+                unapplied,
+                timestamp,
+                payment.claimCashRounding(unapplied));
 
         payment.applyAmount(unapplied);
         payment.setUpdatedAt(timestamp);
@@ -909,7 +950,8 @@ public class PaymentApplicationServiceImpl
             @NonNull String applicationRequestId,
             @NonNull ReceivablePayment payment,
             @NonNull InvoiceApplicationValidation validation,
-            @NonNull Instant applicationTimestamp) {
+            @NonNull Instant applicationTimestamp,
+            @Nullable BigDecimal cashRoundingAmount) {
         PaymentApplicationGLPostingEvent glPostingEvent = PaymentApplicationGLPostingEvent.builder()
                 .eventId(UUIDv7Generator.generate())
                 .applicationRequestId(applicationRequestId)
@@ -918,6 +960,8 @@ public class PaymentApplicationServiceImpl
                 .currency(payment.getCurrency())
                 .appliedAmount(validation.actualTotalApplicationAmount())
                 .applicationTimestamp(applicationTimestamp)
+                .cashRoundingAmount(
+                        cashRoundingAmount == null || cashRoundingAmount.signum() == 0 ? null : cashRoundingAmount)
                 .build();
 
         outboxService.saveToOutbox(
@@ -949,7 +993,8 @@ public class PaymentApplicationServiceImpl
             @NonNull ReceivablePayment payment,
             @NonNull UUID creditId,
             @NonNull BigDecimal creditAmount,
-            @NonNull Instant applicationTimestamp) {
+            @NonNull Instant applicationTimestamp,
+            @Nullable BigDecimal cashRoundingAmount) {
         CustomerCreditIssuanceGLPostingEvent issuanceEvent = CustomerCreditIssuanceGLPostingEvent.builder()
                 .eventId(UUIDv7Generator.generate())
                 .applicationRequestId(creditRequestId)
@@ -959,6 +1004,7 @@ public class PaymentApplicationServiceImpl
                 .currency(payment.getCurrency())
                 .creditAmount(creditAmount)
                 .applicationTimestamp(applicationTimestamp)
+                .cashRoundingAmount(cashRoundingAmount)
                 .build();
 
         outboxService.saveToOutbox(

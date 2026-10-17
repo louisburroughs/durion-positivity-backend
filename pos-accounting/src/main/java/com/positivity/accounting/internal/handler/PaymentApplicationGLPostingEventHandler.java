@@ -8,6 +8,7 @@ import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver
 import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.GLPostingService;
 import com.positivity.accounting.internal.service.IdempotencyService;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -59,6 +60,10 @@ public class PaymentApplicationGLPostingEventHandler {
     static final String POSTING_CATEGORY_NAME = "PAYMENT_APPLICATION";
     static final String DEBIT_MAPPING_KEY = "UNDEPOSITED_FUNDS";
     static final String CREDIT_MAPPING_KEY = "ACCOUNTS_RECEIVABLE";
+    /** ADR-0067 A8 (#2662): 6050 Cash Rounding, the signed difference between the cash taken and the amount applied. */
+    static final String CASH_ROUNDING_POSTING_CATEGORY = "CASH_ROUNDING";
+
+    static final String CASH_ROUNDING_MAPPING_KEY = "CASH_ROUNDING_DIFFERENCE";
     static final String IDEMPOTENCY_KEY_PREFIX = "PAYMENT_APPLICATION_GL_POSTING:";
 
     private final AccountingCalendarZoneResolver zoneResolver;
@@ -115,14 +120,23 @@ public class PaymentApplicationGLPostingEventHandler {
 
             UUID sourceEventId = toSourceEventId(applicationRequestId);
             String description = "AR cash receipt for payment application request " + applicationRequestId;
-
+            // ADR-0067 A8 (#2662): a rounded cash tender debits the cash taken and books the difference to 6050;
+            // the mapping is resolved only when there is a rounding to book.
+            BigDecimal rounding = event.getCashRoundingAmount();
+            boolean rounded = rounding != null && rounding.signum() != 0;
+            UUID cashRoundingAccountId = rounded
+                    ? glMappingResolver.resolveGLAccount(
+                            CASH_ROUNDING_POSTING_CATEGORY, CASH_ROUNDING_MAPPING_KEY, transactionDate)
+                    : null;
             UUID postedJournalEntryId = glPostingService.postPaymentApplication(
                     sourceEventId,
                     undepositedFundsAccountId,
                     arAccountId,
                     event.getAppliedAmount(),
+                    cashRoundingAccountId,
+                    rounded ? rounding : null,
                     transactionDate,
-                    description);
+                    rounded ? description + " (cash rounding " + rounding + ", ADR-0067 A8)" : description);
 
             idempotencyService.registerKey(idempotencyKey, postedJournalEntryId);
 

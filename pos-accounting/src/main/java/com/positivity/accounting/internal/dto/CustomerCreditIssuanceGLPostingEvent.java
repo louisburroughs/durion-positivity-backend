@@ -90,4 +90,11 @@ public class CustomerCreditIssuanceGLPostingEvent {
     @NonNull
     @JsonProperty("applicationTimestamp")
     private Instant applicationTimestamp;
+
+    /**
+     * ADR-0067 A8 (#2662): the cash tender's signed rounding when this issuance is the first cash-receipt entry for
+     * the payment (the application entry was too small or there was none): Undeposited Funds is debited
+     * {@code creditAmount + cashRoundingAmount} and the rounding booked to 6050. Null otherwise.
+     */
+    private BigDecimal cashRoundingAmount;
 }

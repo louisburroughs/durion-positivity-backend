@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -104,6 +105,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         any(LocalDateTime.class),
                         any(String.class)))
                 .thenReturn(postedEntry);
@@ -122,6 +125,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         debitAccountCaptor.capture(),
                         creditAccountCaptor.capture(),
                         amountCaptor.capture(),
+                        isNull(),
+                        isNull(),
                         any(LocalDateTime.class),
                         descriptionCaptor.capture());
 
@@ -130,6 +135,50 @@ class PaymentApplicationGLPostingEventHandlerTest {
         assertThat(creditAccountCaptor.getValue()).isEqualTo(arAccountId);
         assertThat(amountCaptor.getValue()).isEqualByComparingTo("500.00");
         assertThat(descriptionCaptor.getValue()).contains(APPLICATION_REQUEST_ID);
+    }
+
+    /** ADR-0067 A8 (#2662, AC 20): Dr cash 10.00 / Cr AR 9.98 / Cr 6050 0.02 through the three-line posting. */
+    @Test
+    @DisplayName("a cash tender with rounding posts the three-line entry through the CASH_ROUNDING mapping")
+    void cashRounding_postsThreeLineEntry() {
+        stubAccountResolution();
+        UUID cashRoundingAccountId = UUID.fromString("00000000-0000-0000-0000-000000006050");
+        when(glMappingResolver.resolveGLAccount(
+                        eq("CASH_ROUNDING"), eq("CASH_ROUNDING_DIFFERENCE"), any(LocalDateTime.class)))
+                .thenReturn(cashRoundingAccountId);
+        when(glPostingService.postPaymentApplication(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class)))
+                .thenReturn(postedEntry);
+        PaymentApplicationGLPostingEvent rounded = PaymentApplicationGLPostingEvent.builder()
+                .eventId(testEvent.getEventId())
+                .applicationRequestId(APPLICATION_REQUEST_ID)
+                .paymentId(testEvent.getPaymentId())
+                .customerId(testEvent.getCustomerId())
+                .currency("CAD")
+                .appliedAmount(new BigDecimal("9.98"))
+                .applicationTimestamp(testEvent.getApplicationTimestamp())
+                .cashRoundingAmount(new BigDecimal("0.02"))
+                .build();
+
+        handler.onPaymentApplicationGLPosting(rounded);
+
+        verify(glPostingService)
+                .postPaymentApplication(
+                        eq(UUID.fromString(APPLICATION_REQUEST_ID)),
+                        eq(undepositedFundsAccountId),
+                        eq(arAccountId),
+                        eq(new BigDecimal("9.98")),
+                        eq(cashRoundingAccountId),
+                        eq(new BigDecimal("0.02")),
+                        any(LocalDateTime.class),
+                        org.mockito.ArgumentMatchers.contains("cash rounding"));
     }
 
     @Test
@@ -141,6 +190,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         any(LocalDateTime.class),
                         any(String.class)))
                 .thenReturn(postedEntry);
@@ -207,6 +258,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         any(LocalDateTime.class),
                         any(String.class)))
                 .thenThrow(new AccountingPeriodClosedException("2026-03", "Period 2026-03 is CLOSED"));
@@ -251,6 +304,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         any(LocalDateTime.class),
                         any(String.class)))
                 .thenReturn(postedEntry);
@@ -276,6 +331,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         postDateCaptor.capture(),
                         any(String.class));
         assertThat(postDateCaptor.getValue()).isEqualTo(expectedTransactionDate).isNotEqualTo(clockNow);
@@ -290,6 +347,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         any(LocalDateTime.class),
                         any(String.class)))
                 .thenReturn(postedEntry);
@@ -313,6 +372,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         any(LocalDateTime.class),
                         any(String.class));
     }
@@ -345,6 +406,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         any(LocalDateTime.class),
                         any(String.class)))
                 .thenReturn(postedEntry);
@@ -357,6 +420,8 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(UUID.class),
                         any(UUID.class),
                         any(BigDecimal.class),
+                        isNull(),
+                        isNull(),
                         eq(LocalDateTime.of(2026, 1, 31, 23, 30)),
                         any(String.class));
     }

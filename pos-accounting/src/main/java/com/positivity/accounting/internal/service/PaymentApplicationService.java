@@ -33,6 +33,21 @@ public interface PaymentApplicationService {
             @NonNull Instant clearedAt,
             @NonNull UUID sourceEventId,
             @Nullable UUID sourceInvoiceId,
+            @Nullable String paymentMethod,
+            @Nullable BigDecimal cashRoundingAmount);
+
+    /**
+     * ADR-0067 A8 (#2662): the shape without a cash rounding (card tenders, the REST payment event). The nine-argument
+     * overload records the signed rounding of a cash tender on the payment for its first cash-receipt entry to book.
+     */
+    ReceivablePayment handlePaymentCleared(
+            @NonNull UUID paymentId,
+            @NonNull UUID customerId,
+            @NonNull String currency,
+            @NonNull BigDecimal totalAmount,
+            @NonNull Instant clearedAt,
+            @NonNull UUID sourceEventId,
+            @Nullable UUID sourceInvoiceId,
             @Nullable String paymentMethod);
 
     /**

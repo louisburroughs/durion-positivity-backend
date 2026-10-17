@@ -130,9 +130,10 @@ class FailedAccountingEventRetryJobTest {
                         "MISSING_AMOUNT",
                         "PERIOD_CLOSED",
                         "CURRENCY_NOT_SUPPORTED",
+                        "CASH_ROUNDING_INVALID",
                         "TAX_TYPE_MISSING",
                         "GL_MAPPING_NOT_CONFIGURED");
-        assertThat(PostingFailureReason.autoRetryExcludedCodes()).hasSize(8);
+        assertThat(PostingFailureReason.autoRetryExcludedCodes()).hasSize(9);
     }
 
     @Test

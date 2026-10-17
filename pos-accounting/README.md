@@ -889,10 +889,24 @@ exactly as before.
   as before. The tax-liability reconciliation compares against every account the `SALES_TAX_PAYABLE` and
   `SALES_TAX_PAYABLE_*` keys map to in the period, never a literal code (`taxPayableAccountCode` lists them,
   comma-joined; still `2200` for a USD tenant).
-- **Cash rounding (item 12).** The CAD data provisions 6050 and `CASH_ROUNDING_DIFFERENCE`; the posting waits for
-  ADR-0067 step A8 (its own story), which adds the settled amount and the signed rounding to the cash
-  `PaymentSettledV1`. Release gate: no production tenant whose currency has a cash-rounding increment (CAD first)
-  takes cash until A8 merges.
+- **Cash rounding (item 12, ADR-0067 A8, #2662).** A cash `payment.payment.settled` fact carries the additive
+  triple `settledAmount` (the cash taken after rounding to the register's cash increment), `cashRoundingAmount`
+  (signed, `settledAmount − amount`) and `cashIncrement`; `amount` stays the amount applied to the invoice and to AR.
+  `SettlementEventsListener` checks the triple before recording anything (`CashRoundingFactCheck`: the difference
+  must equal `settledAmount − amount`, `settledAmount` must be `amount` rounded HALF_UP to a multiple of the
+  increment, no rounding without an increment, no rounding fields on a non-cash tender); a fact that fails is held
+  `SUSPENDED / CASH_ROUNDING_INVALID` with no `ReceivablePayment` and no posting, is skipped by the scheduled retry, and
+  a reprocess or retry answers 409 `ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE` (no release path, #2620; the payload
+  never changes, so correct the payment at its source and have the fact republished). A fact that passes is recorded
+  for `amount` with the rounding kept on the `receivable_payment` (`cash_rounding_amount`, V35) until the payment's
+  first cash-receipt entry books it, whichever that is: an application (automatic or manual) or a customer-credit
+  issuance. That entry debits 1090 Undeposited Funds `amount + cashRoundingAmount`, credits 1200 AR (or 2300 Customer
+  Credit) `amount`, and books the rounding to 6050 `CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE` (credit when the
+  customer paid more than due, debit when the shop absorbed it; AC 20: 10.00 / 9.98 / 0.02); `cash_rounding_posted`
+  marks it so no second entry repeats it, and an entry too small to absorb a negative rounding leaves it for the next.
+  A fact without the triple (card, or published before A8) posts the two lines as before. Cash refunds are out of A8.
+  Release gate: no production tenant whose currency has a cash-rounding increment (CAD first) takes cash until all
+  three A8 PRs (pos-invoice #2743, pos-order, this) are merged.
 - **Flyway.** `V23__input_tax_recovery.sql`.
 
 ## Location scope (ADR-0061, #1885)

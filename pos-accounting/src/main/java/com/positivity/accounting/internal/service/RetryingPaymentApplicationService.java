@@ -80,6 +80,30 @@ public class RetryingPaymentApplicationService implements PaymentApplicationServ
 
     @Override
     @NonNull
+    public ReceivablePayment handlePaymentCleared(
+            @NonNull UUID paymentId,
+            @NonNull UUID customerId,
+            @NonNull String currency,
+            @NonNull BigDecimal totalAmount,
+            @NonNull Instant clearedAt,
+            @NonNull UUID sourceEventId,
+            @Nullable UUID sourceInvoiceId,
+            @Nullable String paymentMethod,
+            @Nullable BigDecimal cashRoundingAmount) {
+        return delegate.handlePaymentCleared(
+                paymentId,
+                customerId,
+                currency,
+                totalAmount,
+                clearedAt,
+                sourceEventId,
+                sourceInvoiceId,
+                paymentMethod,
+                cashRoundingAmount);
+    }
+
+    @Override
+    @NonNull
     public PaymentApplicationResponse applyPaymentToInvoices(
             @NonNull UUID paymentId, @NonNull PaymentApplicationRequest request) {
         try {

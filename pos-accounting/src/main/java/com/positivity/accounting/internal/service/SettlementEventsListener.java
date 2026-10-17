@@ -6,6 +6,8 @@ import com.positivity.accounting.internal.entity.ExtInvoiceDepositCreditApplicat
 import com.positivity.accounting.internal.entity.ExtInvoicePaymentReversal;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.ReceivablePayment;
+import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.repository.ExtInvoiceDepositCreditApplicationRepository;
 import com.positivity.accounting.internal.repository.ExtInvoicePaymentReversalRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
@@ -19,6 +21,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -352,6 +355,16 @@ public class SettlementEventsListener {
             });
             return;
         }
+        // ADR-0067 A8 (#2662, item 12): a cash tender whose rounding triple does not hold together is held
+        // before anything is recorded; the payload never changes, so it stays held until corrected at its source.
+        Optional<String> roundingProblem = CashRoundingFactCheck.problem(payload);
+        if (roundingProblem.isPresent()) {
+            handlerTransaction.executeWithoutResult(_ -> {
+                holdInvalidCashRounding(payload, eventId, roundingProblem.get());
+                markProcessed(eventId);
+            });
+            return;
+        }
 
         // Record the payment, then apply it to the invoice it was taken against when the rules allow
         // (#2503, AW14), then take off the unapplied remainder any refund stored for it before this fact
@@ -370,11 +383,55 @@ public class SettlementEventsListener {
                     payload.settledAt(),
                     eventUuid,
                     payload.invoiceId(),
-                    payload.methodType());
+                    payload.methodType(),
+                    // ADR-0067 A8 (#2662): the tender's signed rounding rides on the payment until the first
+                    // cash-receipt entry (this application, or a later one or a credit issuance) books it to 6050.
+                    payload.cashRoundingAmount());
             automaticPaymentApplicationService.applySettled(payment, payload, eventId);
             paymentApplicationService.releaseRefundsRecordedBeforePayment(payment.getPaymentId(), eventUuid);
             markProcessed(eventId);
         });
+    }
+
+    private void holdInvalidCashRounding(PaymentSettledV1 payload, String eventId, String problem) {
+        StringBuilder detail = new StringBuilder("Settled payment of ")
+                .append(payload.amount())
+                .append(' ')
+                .append(payload.currencyCode())
+                .append(" not recorded: ")
+                .append(problem)
+                .append(" (ADR-0067 A8");
+        if (payload.settledAmount() != null) {
+            detail.append("; settledAmount ").append(payload.settledAmount());
+        }
+        if (payload.cashRoundingAmount() != null) {
+            detail.append("; cashRoundingAmount ").append(payload.cashRoundingAmount());
+        }
+        if (payload.cashIncrement() != null) {
+            detail.append("; cashIncrement ").append(payload.cashIncrement());
+        }
+        detail.append("); correct the payment at its source and have the fact republished");
+        boolean recorded = ingestionRecorder.recordSuspended(
+                PAYMENT_SETTLED_SOURCE_SYSTEM,
+                PaymentSettledV1.EVENT_TYPE,
+                eventId,
+                payload.paymentIntentId(),
+                zoneResolver.heldRecordDateTime(payload.settledAt()),
+                payload,
+                AccountingEventStatus.SUSPENDED,
+                PostingFailureReason.CASH_ROUNDING_INVALID.name(),
+                detail.toString());
+        log.warn(
+                "payment.payment.settled held for an invalid cash rounding, no ReceivablePayment | eventId={}"
+                        + " | paymentIntentId={} | amount={} | settledAmount={} | cashRoundingAmount={}"
+                        + " | cashIncrement={} | newRecord={}",
+                eventId,
+                payload.paymentIntentId(),
+                payload.amount(),
+                payload.settledAmount(),
+                payload.cashRoundingAmount(),
+                payload.cashIncrement(),
+                recorded);
     }
 
     private void holdForeignCurrencyPayment(PaymentSettledV1 payload, String eventId) {

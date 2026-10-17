@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -61,14 +62,24 @@ class CustomerCreditIssuanceGLPostingEventHandlerTest {
         LocalDateTime january31 = LocalDateTime.of(2026, 1, 31, 23, 30);
         when(glMappingResolver.resolveGLAccount(anyString(), anyString(), eq(january31)))
                 .thenReturn(UUID.fromString("00000000-0000-7000-8000-000000001090"));
-        when(glPostingService.postCustomerCreditIssuance(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(glPostingService.postCustomerCreditIssuance(
+                        any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(JOURNAL_ENTRY_ID);
 
         handler.onCustomerCreditIssuanceGLPosting(event());
 
         verify(glPostingService)
                 .postCustomerCreditIssuance(
-                        any(), eq(CREDIT_ID), any(), any(), eq(new BigDecimal("5.00")), eq(january31), any(), any());
+                        any(),
+                        eq(CREDIT_ID),
+                        any(),
+                        any(),
+                        eq(new BigDecimal("5.00")),
+                        isNull(),
+                        isNull(),
+                        eq(january31),
+                        any(),
+                        any());
     }
 
     @Test
