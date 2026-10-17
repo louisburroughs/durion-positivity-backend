@@ -52,7 +52,11 @@ import org.springframework.transaction.support.TransactionTemplate;
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(prefix = "accounting.ap.settlement", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(
+        prefix = "accounting.ap.settlement",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 public class APPaymentSettlementJob {
 
     static final String SYSTEM = "system";
@@ -128,13 +132,13 @@ public class APPaymentSettlementJob {
         PaymentGatewayProvider provider = gateway.getObject();
         Instant now = Instant.now(clock);
         int changed = 0;
-        List<UUID> orphans = transaction.execute(status ->
-                payments.findOrphanIds(now.minus(orphanGrace), PageRequest.of(0, batchSize)));
+        List<UUID> orphans = transaction.execute(
+                status -> payments.findOrphanIds(now.minus(orphanGrace), PageRequest.of(0, batchSize)));
         for (UUID paymentId : orphans == null ? List.<UUID>of() : orphans) {
             changed += guarded(paymentId, () -> reconcileOrphan(provider, paymentId, now)) ? 1 : 0;
         }
-        List<UUID> inFlight = transaction.execute(
-                status -> payments.findInFlightIds(POSTING_STATES, PageRequest.of(0, batchSize)));
+        List<UUID> inFlight =
+                transaction.execute(status -> payments.findInFlightIds(POSTING_STATES, PageRequest.of(0, batchSize)));
         for (UUID paymentId : inFlight == null ? List.<UUID>of() : inFlight) {
             changed += guarded(paymentId, () -> checkInFlight(provider, paymentId, now)) ? 1 : 0;
         }
@@ -161,7 +165,8 @@ public class APPaymentSettlementJob {
         }
         Optional<GatewayPaymentResponse> answer = provider.findByReference(payment.getPaymentRef());
         if (answer.isEmpty()) {
-            if (payment.getCreatedAt() != null && payment.getCreatedAt().plus(idempotencyWindow).isBefore(now)) {
+            if (payment.getCreatedAt() != null
+                    && payment.getCreatedAt().plus(idempotencyWindow).isBefore(now)) {
                 // Nothing at the gateway and the window in which a resend could replay it has passed: never charged.
                 paymentService.reconcileGateway(
                         paymentId,
@@ -187,12 +192,13 @@ public class APPaymentSettlementJob {
                                 .build(),
                         SYSTEM);
                 if (charge.getStatus() == PaymentGatewayProvider.GatewayPaymentStatus.SUCCEEDED) {
-                    transaction.executeWithoutResult(status -> payments.lockById(paymentId).ifPresent(locked -> {
-                        locked.setSettlementStatus(APPaymentSettlementStatus.SETTLED);
-                        locked.setSettledAt(now);
-                        locked.setSettlementCheckedAt(now);
-                        payments.save(locked);
-                    }));
+                    transaction.executeWithoutResult(
+                            status -> payments.lockById(paymentId).ifPresent(locked -> {
+                                locked.setSettlementStatus(APPaymentSettlementStatus.SETTLED);
+                                locked.setSettledAt(now);
+                                locked.setSettlementCheckedAt(now);
+                                payments.save(locked);
+                            }));
                 }
                 return true;
             }

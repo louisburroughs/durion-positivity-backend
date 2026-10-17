@@ -1523,9 +1523,11 @@ class APPaymentServiceTest {
 
         List<com.positivity.accounting.internal.dto.APPaymentInFlightResponse> inFlight = service.listInFlight();
 
-        assertThat(inFlight).extracting(com.positivity.accounting.internal.dto.APPaymentInFlightResponse::getAgeDays)
+        assertThat(inFlight)
+                .extracting(com.positivity.accounting.internal.dto.APPaymentInFlightResponse::getAgeDays)
                 .containsExactly(16L, 2L);
-        assertThat(inFlight).extracting(com.positivity.accounting.internal.dto.APPaymentInFlightResponse::isAged)
+        assertThat(inFlight)
+                .extracting(com.positivity.accounting.internal.dto.APPaymentInFlightResponse::isAged)
                 .containsExactly(true, false);
     }
 }

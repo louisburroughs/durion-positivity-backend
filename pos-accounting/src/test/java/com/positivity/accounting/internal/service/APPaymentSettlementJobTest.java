@@ -7,7 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -182,7 +181,8 @@ class APPaymentSettlementJobTest {
     }
 
     @Test
-    @DisplayName("no charge under the reference: left alone inside the idempotency window, VOIDED (NOT_CHARGED) after it")
+    @DisplayName(
+            "no charge under the reference: left alone inside the idempotency window, VOIDED (NOT_CHARGED) after it")
     void orphanNotFound() {
         when(payments.findInFlightIds(any(), any())).thenReturn(List.of());
         assertThat(job.reReadBoundTenant()).isZero();
@@ -222,8 +222,9 @@ class APPaymentSettlementJobTest {
     }
 
     @Test
-    @DisplayName("an in-flight charge the gateway shows FAILED is returned (today, the gateway's code); a period refusal"
-            + " of the mirror holds the payment RETURN_PENDING instead")
+    @DisplayName(
+            "an in-flight charge the gateway shows FAILED is returned (today, the gateway's code); a period refusal"
+                    + " of the mirror holds the payment RETURN_PENDING instead")
     void inFlightReturned() {
         when(payments.findOrphanIds(any(), any())).thenReturn(List.of());
         when(gateway.getPaymentStatus("ch_flight"))

@@ -47,11 +47,14 @@ public class APPaymentInFlightResponse {
     private long ageDays;
 
     @Schema(
-            description = "True once the payment has been in flight longer than accounting.ap.settlement.in-flight-warning"
-                    + " (default P7D): the operator checks with the bank or the processor",
+            description =
+                    "True once the payment has been in flight longer than accounting.ap.settlement.in-flight-warning"
+                            + " (default P7D): the operator checks with the bank or the processor",
             example = "true")
     private boolean aged;
 
-    @Schema(description = "When the settlement job last re-read the gateway", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "When the settlement job last re-read the gateway",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant settlementCheckedAt;
 }
