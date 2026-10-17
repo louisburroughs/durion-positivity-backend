@@ -58,16 +58,6 @@ class SupplierStockAvailabilityControllerWebMvcTest {
             return Clock.fixed(Instant.parse("2026-08-14T12:00:00Z"), ZoneOffset.UTC);
         }
 
-        @Bean
-        org.springframework.boot.web.servlet.FilterRegistrationBean<
-                        com.positivity.security.common.GatewayAuthoritiesFilter>
-                gatewayAuthoritiesFilterRegistration(
-                        com.positivity.security.common.GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration =
-                    new org.springframework.boot.web.servlet.FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
-        }
     }
 
     private static final UUID PRODUCT_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");

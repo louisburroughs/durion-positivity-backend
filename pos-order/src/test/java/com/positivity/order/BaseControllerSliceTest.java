@@ -1,6 +1,5 @@
 package com.positivity.order;
 
-import com.positivity.security.common.GatewayAuthoritiesFilter;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
@@ -9,7 +8,6 @@ import java.util.Base64;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -79,20 +77,5 @@ public abstract class BaseControllerSliceTest {
             return TEST_CLOCK;
         }
 
-        /**
-         * MockMvc's auto-configuration registers every {@code Filter} bean directly, which would
-         * run {@code GatewayAuthoritiesFilter} (a {@code OncePerRequestFilter}) BEFORE the
-         * security chain and mark the request already-filtered; the in-chain instance then skips
-         * and {@code SecurityContextHolderFilter} wipes the authentication, failing every request
-         * with 401. Disabling the direct registration puts the filter exactly where production
-         * runs it — inside {@code gatewaySecurityFilterChain}.
-         */
-        @Bean
-        public FilterRegistrationBean<GatewayAuthoritiesFilter> gatewayAuthoritiesFilterRegistration(
-                GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration = new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
-        }
     }
 }

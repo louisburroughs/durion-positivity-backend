@@ -27,7 +27,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -56,22 +55,6 @@ class TaxControllerRatesTest {
             return Clock.fixed(Instant.parse("2026-08-27T12:00:00Z"), ZoneOffset.UTC);
         }
 
-        /**
-         * The MockMvc auto-configuration registers every {@code Filter} bean directly, which
-         * would run {@code GatewayAuthoritiesFilter} BEFORE the security chain and mark it
-         * already-filtered — the in-chain instance then skips, and
-         * {@code SecurityContextHolderFilter} wipes the authentication, failing every request
-         * with 401. Disable the direct registration so the filter runs exactly where
-         * production runs it: inside {@code gatewaySecurityFilterChain}.
-         */
-        @Bean
-        FilterRegistrationBean<com.positivity.security.common.GatewayAuthoritiesFilter>
-                gatewayAuthoritiesFilterRegistration(
-                        com.positivity.security.common.GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration = new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
-        }
     }
 
     @Autowired
