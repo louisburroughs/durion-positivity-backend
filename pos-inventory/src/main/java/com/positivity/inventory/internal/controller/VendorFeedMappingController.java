@@ -122,8 +122,9 @@ public class VendorFeedMappingController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            array = @io.swagger.v3.oas.annotations.media.ArraySchema(
-                                    schema = @Schema(implementation = UnmappedFeedVendorResponse.class))))
+                            array =
+                                    @io.swagger.v3.oas.annotations.media.ArraySchema(
+                                            schema = @Schema(implementation = UnmappedFeedVendorResponse.class))))
     @ApiResponse(
             responseCode = "403",
             description = "User lacks inventory:replenishment:manage",
@@ -249,7 +250,8 @@ public class VendorFeedMappingController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "VENDOR_FEED_MAPPING_STALE_VERSION: the version is stale, the mapping was changed since it was read",
+            description =
+                    "VENDOR_FEED_MAPPING_STALE_VERSION: the version is stale, the mapping was changed since it was read",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

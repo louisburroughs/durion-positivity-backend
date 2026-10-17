@@ -7,7 +7,6 @@ import com.positivity.inventory.internal.enums.VendorStatus;
 import com.positivity.inventory.internal.repository.ExtSupplierVendorReplicaRepository;
 import com.positivity.inventory.internal.repository.VendorFeedMappingRepository;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.UUID;
 
 /**

@@ -132,9 +132,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                     .map(suggestion -> toResponse(
                             suggestion, vendors.get(suggestion.getVendorId()), assessmentOf(assessments, suggestion)))
                     .toList();
-            return pageable.isUnpaged()
-                    ? new PageImpl<>(content)
-                    : new PageImpl<>(content, pageable, matching.size());
+            return pageable.isUnpaged() ? new PageImpl<>(content) : new PageImpl<>(content, pageable, matching.size());
         }
         Map<UUID, PurchaseSuggestionOrderAttentionService.Assessment> assessments =
                 orderAttentionService.assess(matching);
