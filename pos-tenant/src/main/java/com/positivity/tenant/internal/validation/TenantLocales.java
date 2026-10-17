@@ -18,7 +18,8 @@ public class TenantLocales {
 
     private final List<String> supported;
 
-    public TenantLocales(@Value("${pos.tenant.supported-locales:en-US,es-US,es-MX,fr-CA,fr-FR}") List<String> supported) {
+    public TenantLocales(
+            @Value("${pos.tenant.supported-locales:en-US,es-US,es-MX,fr-CA,fr-FR}") List<String> supported) {
         this.supported = supported.stream()
                 .map(String::trim)
                 .filter(tag -> !tag.isEmpty())
@@ -46,7 +47,6 @@ public class TenantLocales {
 
     /** The canonical tag of a value bean validation already accepted. */
     public @NonNull String canonical(@NonNull String accepted) {
-        return canonicalOf(accepted)
-                .orElseThrow(() -> new IllegalArgumentException("Unsupported locale: " + accepted));
+        return canonicalOf(accepted).orElseThrow(() -> new IllegalArgumentException("Unsupported locale: " + accepted));
     }
 }
