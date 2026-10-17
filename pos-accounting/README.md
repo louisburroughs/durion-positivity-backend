@@ -229,9 +229,19 @@ tenant (the applier holds the tenant's state row `FOR UPDATE` for the length of 
 
 | Path | When | Notes |
 | --- | --- | --- |
-| `TenantEventsListener` | `tenant.created` on `tenant.events.v1` (group `pos-accounting-tenant-events`, `auto.offset.reset=earliest`) | Reads the template under the platform binding, then provisions under the new tenant's. Idempotent on eventId (`processed_events`, owner `tenant`). An empty template or a failure propagates: retry, then `tenant.events.v1.dlq`. `tenant.created` for the platform tenant is recorded and skipped |
+| `TenantEventsListener` | `tenant.created` on `tenant.events.v1` (group `pos-accounting-tenant-events`, `auto.offset.reset=earliest`) | Reads the template under the platform binding, then provisions under the new tenant's. Idempotent on eventId (`processed_events`, owner `tenant`). An empty template or a failure propagates: retry, then `tenant.events.v1.dlq`. `tenant.created` for the platform tenant is recorded and skipped (its locale is still stored). The same listener keeps the locale replica (see below) |
 | `AccountingTemplateStartupSweep` | every start, per `TenantIterator` tenant | The alpha default tenant has no `tenant.created` fact, so this is the path that provisions it; it also carries template additions to tenants provisioned earlier. Logs and continues past a failing tenant; never blocks startup; an empty template (Flyway off) is one ERROR line |
 | Add-on choice | `PUT /v1/accounting/tenant-template/add-ons/retread-plant` | Records the tenant's choice, audits it with the caller, reconciles the tenant |
+
+**Tenant locale (#2618, CAP:550 S44).** `ext_tenant` (V33) is a tenant-scoped replica, one row per tenant, of the locale
+(BCP 47, `character varying(35)`) that pos-tenant records. Its key `ext_tenant_id` holds the tenant's own id, with
+`UNIQUE (tenant_id)` (the entity extends `TenantScopedEntity`, so `tenant_id` cannot also be the `@Id`). `TenantEventsListener`
+writes it through `TenantLocaleReplicaWriter`, bound to the fact's tenant in its own transaction: `tenant.created` after
+provisioning (the platform tenant, never provisioned, still gets its row), and `tenant.updated` or any other projection fact
+that carries a locale, with its eventId recorded in the same transaction. A fact older than the stored row's
+`aggregate_version` is ignored (an equal version applies, so replay repairs); a fact without a locale changes nothing.
+`TenantLocaleResolver.localeOf(tenantId)` / `localeOfCurrentTenant()` return the stored locale or `en-US` (ADR-0030 §2); S26's
+extraction `localeHint` derives from it. Locale is not money, so nothing fails closed on a missing row.
 
 The provisioner also seeds the policy defaults (three override thresholds, one refund policy, the `UTC`
 accounting time zone of #2558, each only when

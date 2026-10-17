@@ -21,9 +21,16 @@ import tools.jackson.databind.ObjectMapper;
  * mapping defaults, statement lines and policy defaults (#2526; ADR-0062 §7), modeled on
  * pos-location's and pos-security-service's {@code TenantEventsListener}.
  *
- * <p>Only {@code tenant.created} does anything here; every other tenant lifecycle fact is skipped
- * without a {@code processed_events} row. The group reads from the earliest offset, so facts
- * retained from before this consumer existed are processed once.
+ * <p>{@code tenant.created} provisions and then stores the tenant's locale in the {@code ext_tenant} replica (#2618);
+ * the other projection facts ({@code tenant.updated} and the status changes) store the locale when they carry one,
+ * guarded by {@code aggregateVersion}, with the eventId recorded in the same transaction as the upsert. A fact
+ * without a locale, and {@code tenant.provisioned}, are skipped without a {@code processed_events} row. Each write
+ * runs bound to the fact's tenant in its own transaction, after provisioning, never nested in it. A failure of the
+ * locale write after provisioning propagates and retries; the retry skips provisioning (eventId recorded) at the
+ * fast check, so a later fact carrying the locale is what repairs it, and until then readers see {@code en-US}.
+ *
+ * <p>The group reads from the earliest offset, so facts retained from before this consumer existed are processed
+ * once.
  *
  * <p>Consumer contract (ADR-0044 §4): {@code processed_events} idempotency, checked here for a
  * fast skip and again inside the provisioning transaction; an unparsable or malformed record is
@@ -46,6 +53,7 @@ public class TenantEventsListener {
     private final ProcessedEventRepository processedEventRepository;
     private final AccountingTemplateReader templateReader;
     private final AccountingTenantProvisioner provisioner;
+    private final TenantLocaleReplicaWriter localeWriter;
 
     @KafkaListener(
             topics = "${pos.accounting.kafka.tenant-events-topic:tenant.events.v1}",
@@ -59,12 +67,17 @@ public class TenantEventsListener {
             log.warn("Skipping unparsable tenant event", e);
             return;
         }
-        if (!TenantEventTypes.CREATED.equals(root.path("eventType").stringValue(null))) {
+        String eventType = root.path("eventType").stringValue(null);
+        if (eventType == null || !TenantProjectionEvent.PROJECTION_EVENT_TYPES.contains(eventType)) {
             return;
         }
+        boolean created = TenantEventTypes.CREATED.equals(eventType);
         String eventId = root.path("eventId").stringValue(null);
         if (eventId == null || eventId.isBlank()) {
-            log.warn("Skipping tenant.created event without eventId");
+            log.warn("Skipping {} event without eventId", eventType);
+            return;
+        }
+        if (!created && !carriesLocale(root)) {
             return;
         }
         if (processedEventRepository.existsById(eventId)) {
@@ -72,7 +85,12 @@ public class TenantEventsListener {
         }
         Optional<TenantProjectionEvent> projection = TenantProjectionEvent.parse(root);
         if (projection.isEmpty()) {
-            log.warn("Skipping malformed tenant.created event eventId={}", eventId);
+            log.warn("Skipping malformed {} event eventId={}", eventType, eventId);
+            return;
+        }
+        if (!created) {
+            TenantProjectionEvent fact = projection.get();
+            TenantContext.runAs(fact.tenantId(), () -> localeWriter.applyAndRecord(fact));
             return;
         }
         UUID tenantId = projection.get().tenantId();
@@ -82,6 +100,8 @@ public class TenantEventsListener {
                             + " never provisioned; recorded and skipped",
                     eventId);
             provisioner.recordSkipped(eventId);
+            // Its locale is still the platform's own (en-US), stored under its own binding.
+            TenantContext.runAs(tenantId, () -> localeWriter.apply(projection.get()));
             return;
         }
         // Read the platform template before binding the new tenant (sequential, not nested), so the
@@ -90,5 +110,13 @@ public class TenantEventsListener {
         // No catch: every failure propagates, so the container error handler retries with backoff
         // and routes to {topic}.dlq (ADR-0044 §4).
         TenantContext.runAs(tenantId, () -> provisioner.provision(tenantId, eventId, snapshot));
+        // Its own transaction under its own binding, after provisioning and never nested in it. The eventId is
+        // already recorded by provisioning, so the write is a plain version-guarded upsert.
+        TenantContext.runAs(tenantId, () -> localeWriter.apply(projection.get()));
+    }
+
+    private static boolean carriesLocale(JsonNode root) {
+        String locale = root.path("payload").path("locale").stringValue(null);
+        return locale != null && !locale.isBlank();
     }
 }
