@@ -4,8 +4,10 @@ name: OpenCode Review
 # comments on the changed lines (the same surface GitHub Copilot code review
 # uses). OpenCode reads the PR diff with the checked-in config at
 # .config/opencode/opencode.json and the prompt at
-# .config/opencode/review-prompt.md, writes its findings to a JSON file, and
-# scripts/ci/post-opencode-review.py turns that file into one review.
+# .config/opencode/review-prompt.md (adapted from the durion Code Review
+# Agent, with ADRs and the knowledge catalog read from a ../durion checkout),
+# writes its findings to a JSON file, and scripts/ci/post-opencode-review.py
+# turns that file into one review.
 #
 # The review is submitted as a comment-only review: it never approves or
 # requests changes, so it does not block merging by itself.
@@ -38,6 +40,7 @@ jobs:
       OLLAMA_CLOUD_API_KEY: ${{ secrets.OLLAMA_CLOUD_API_KEY }}
       BASE_REF: ${{ github.event.pull_request.base.ref }}
       REVIEW_FILE: ${{ runner.temp }}/opencode-review.json
+      PR_BODY_FILE: ${{ runner.temp }}/pull-request.md
 
     steps:
       - name: Checkout code
@@ -45,6 +48,31 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # The review prompt resolves ADRs and the knowledge catalog through the
+      # sibling orchestration repo, at ../durion like a developer workspace.
+      - name: Checkout durion (ADRs and knowledge catalog)
+        uses: actions/checkout@v5
+        with:
+          repository: louisburroughs/durion
+          path: durion
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Place durion beside this repository
+        run: |
+          set -euo pipefail
+          rm -rf "${GITHUB_WORKSPACE}/../durion"
+          mv durion "${GITHUB_WORKSPACE}/../durion"
+          test -d ../durion/knowledge-catalog/adr
+
+      - name: Write pull request description for the reviewer
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          { echo "# ${PR_TITLE}"; echo; printf '%s\n' "${PR_BODY}"; } > "${PR_BODY_FILE}"
 
       - name: Check required secret
         run: |
@@ -69,7 +97,7 @@ jobs:
       - name: Run OpenCode review
         run: |
           set -euo pipefail
-          PROMPT="$(sed -e "s|{{BASE_REF}}|${BASE_REF}|g" -e "s|{{REVIEW_FILE}}|${REVIEW_FILE}|g" .config/opencode/review-prompt.md)"
+          PROMPT="$(sed -e "s|{{BASE_REF}}|${BASE_REF}|g" -e "s|{{REVIEW_FILE}}|${REVIEW_FILE}|g" -e "s|{{PR_BODY_FILE}}|${PR_BODY_FILE}|g" .config/opencode/review-prompt.md)"
           opencode run "${PROMPT}"
           if [[ ! -s "${REVIEW_FILE}" ]]; then
             echo "::error::OpenCode did not write ${REVIEW_FILE}; see the run log above."

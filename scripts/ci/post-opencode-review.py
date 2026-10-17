@@ -119,8 +119,10 @@ def split_comments(comments: list, valid: dict[str, set[int]]) -> tuple[list[dic
         if not (isinstance(path, str) and isinstance(body, str) and body.strip()):
             continue
         severity = item.get("severity")
-        prefix = f"**{severity}**: " if isinstance(severity, str) and severity.strip() else ""
-        text = f"{prefix}{body.strip()}"
+        adr = item.get("adr")
+        prefix = f"**{severity.strip()}**: " if isinstance(severity, str) and severity.strip() else ""
+        suffix = f" ({adr.strip()})" if isinstance(adr, str) and adr.strip() and adr.strip().upper() != "N/A" else ""
+        text = f"{prefix}{body.strip()}{suffix}"
         if isinstance(line, bool) or not isinstance(line, int):
             line = None
         if line is not None and line in valid.get(path, set()) and len(inline) < MAX_INLINE_COMMENTS:
