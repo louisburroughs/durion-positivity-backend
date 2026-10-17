@@ -23,15 +23,17 @@ public record CashPositionResponse(
         Instant asOf,
 
         @Schema(
-                description = "When accounting received the newest invoice or register session fact behind the event-fed"
-                        + " figures (the unpaid walk-in sales); null when it has received none")
+                description =
+                        "When accounting received the newest invoice or register session fact behind the event-fed"
+                                + " figures (the unpaid walk-in sales); null when it has received none")
         @Nullable
         Instant eventFedAsOf,
 
         @Schema(
-                description = "Whether accounting is behind its sources: true when the newest ingested invoice or register"
-                        + " session fact was received more than the fact-lag threshold after the fact's own time"
-                        + " (a proxy for replica lag); false when no such fact exists",
+                description =
+                        "Whether accounting is behind its sources: true when the newest ingested invoice or register"
+                                + " session fact was received more than the fact-lag threshold after the fact's own time"
+                                + " (a proxy for replica lag); false when no such fact exists",
                 example = "false")
         boolean lagging,
 

@@ -143,7 +143,8 @@ class CashPositionServiceTest {
                 .thenReturn(List.of());
         when(apPayments.findUnappliedByMethodBefore(any(), any(), any(), any())).thenReturn(List.of());
         when(walkInSales.read()).thenReturn(walkIn(true, "0.00", 0));
-        when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any())).thenReturn(Optional.empty());
+        when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
+                .thenReturn(Optional.empty());
         when(zoneResolver.zone()).thenReturn(ZoneOffset.UTC);
         when(outlookService.outlook(eq(30), any())).thenReturn(outlook(false));
 
@@ -559,7 +560,9 @@ class CashPositionServiceTest {
         Instant received = NOW.minus(Duration.ofDays(3));
         when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
                 .thenReturn(Optional.of(fact(received, received.minus(Duration.ofMinutes(5)))));
-        assertThat(service.read().lagging()).as("a quiet shop is not a lagging replica").isFalse();
+        assertThat(service.read().lagging())
+                .as("a quiet shop is not a lagging replica")
+                .isFalse();
 
         when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
                 .thenReturn(Optional.of(fact(received, received.minus(Duration.ofMinutes(15)))));

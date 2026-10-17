@@ -33,9 +33,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -272,7 +270,8 @@ public class CashPositionServiceImpl implements CashPositionService {
     }
 
     /** The newest ingested fact: when accounting received it and the fact's own time. */
-    private record NewestFact(@Nullable Instant receivedAt, @Nullable Instant occurredAt) {}
+    private record NewestFact(
+            @Nullable Instant receivedAt, @Nullable Instant occurredAt) {}
 
     private static BigDecimal scaled(BigDecimal amount, String currency) {
         return InvoiceBalanceCalculator.atCurrencyScale(amount, currency);
