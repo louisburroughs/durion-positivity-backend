@@ -74,21 +74,26 @@ class TaxServiceClientTest {
                         .body("{\"code\":\"CURRENCY_NOT_SUPPORTED\",\"message\":\"CAD is not USD\",\"status\":422}"));
 
         assertThatThrownBy(() -> client.calculateTax(oneLine(), montreal(), null))
-                .isInstanceOfSatisfying(InvoiceTaxRefusedException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(InvoiceTaxRefusedException.CURRENCY_NOT_SUPPORTED));
+                .isInstanceOfSatisfying(
+                        InvoiceTaxRefusedException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(InvoiceTaxRefusedException.CURRENCY_NOT_SUPPORTED));
     }
 
     @Test
-    @DisplayName("a 422 TAX_JURISDICTION_NOT_CONFIGURED from pos-tax is 422 INVOICE_TAX_JURISDICTION_NOT_CONFIGURED here")
+    @DisplayName(
+            "a 422 TAX_JURISDICTION_NOT_CONFIGURED from pos-tax is 422 INVOICE_TAX_JURISDICTION_NOT_CONFIGURED here")
     void translatesJurisdictionRefusal() {
         server.expect(requestTo(BASE + "/calculate"))
-                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body("{\"code\":\"TAX_JURISDICTION_NOT_CONFIGURED\",\"message\":\"no rates\",\"status\":422}"));
+                .andRespond(
+                        withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .body(
+                                        "{\"code\":\"TAX_JURISDICTION_NOT_CONFIGURED\",\"message\":\"no rates\",\"status\":422}"));
 
         assertThatThrownBy(() -> client.calculateTax(oneLine(), montreal(), null))
-                .isInstanceOfSatisfying(InvoiceTaxRefusedException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(InvoiceTaxRefusedException.JURISDICTION_NOT_CONFIGURED));
+                .isInstanceOfSatisfying(
+                        InvoiceTaxRefusedException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(InvoiceTaxRefusedException.JURISDICTION_NOT_CONFIGURED));
     }
 
     @Test

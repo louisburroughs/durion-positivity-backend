@@ -48,8 +48,8 @@ class TaxClientTest {
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                         .body("{\"code\":\"CURRENCY_NOT_SUPPORTED\",\"message\":\"CAD is not USD\",\"status\":422}"));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.calculateTax(
-                        com.positivity.tax.common.dto.TaxCalculationRequest.builder()
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> client.calculateTax(com.positivity.tax.common.dto.TaxCalculationRequest.builder()
                                 .currencyCode("CAD")
                                 .lineItems(java.util.List.of())
                                 .build()))
