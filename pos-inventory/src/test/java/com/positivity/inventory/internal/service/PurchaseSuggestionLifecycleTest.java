@@ -48,6 +48,17 @@ class PurchaseSuggestionLifecycleTest {
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     private PurchaseOrderCommandPublisher purchaseOrderCommandPublisher;
 
+    /**
+     * CAP:550 S36 (#2525): without an outbox writer the real publisher now refuses instead of dropping the request;
+     * the test profile wires no outbox, so the spy swallows the call and the captor still sees the command.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void publisherIsInertHere() {
+        org.mockito.Mockito.doNothing()
+                .when(purchaseOrderCommandPublisher)
+                .request(org.mockito.ArgumentMatchers.any());
+    }
+
     @Autowired
     private PurchaseSuggestionService purchaseSuggestionService;
 

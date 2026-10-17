@@ -43,6 +43,10 @@ class PurchaseSuggestionScanTest {
 
     private static final String ACTOR = "f4-test";
 
+    /** CAP:550 S36 (#2525): the test profile wires no outbox; the real publisher would refuse the conversion. */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.positivity.inventory.internal.service.PurchaseOrderCommandPublisher purchaseOrderCommandPublisher;
+
     @Autowired
     private ReplenishmentService replenishmentService;
 
