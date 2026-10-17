@@ -87,12 +87,12 @@ public class EstimateServiceImpl implements EstimateService {
     private final ObjectMapper objectMapper;
     private final CustomerReferenceService customerReferenceService;
     private final VehicleReferenceService vehicleReferenceService;
-    private final FunctionalCurrency functionalCurrency;
     private final EstimateFactPublisher estimateFactPublisher;
     private final PartQuantityDivisibilityService partQuantityDivisibilityService;
     private final LaborTimeDefaultingService laborTimeDefaultingService;
     private final LaborRateDefaultingService laborRateDefaultingService;
     private final DocumentNumberAllocator documentNumberAllocator;
+    private final FunctionalCurrency functionalCurrency;
 
     // Configuration defaults
     private static final String DEFAULT_CURRENCY = "USD";

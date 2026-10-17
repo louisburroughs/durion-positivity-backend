@@ -59,7 +59,10 @@ class TaxServiceClientTest {
     void sendsTheFunctionalCurrency() {
         server.expect(requestTo(BASE + "/calculate"))
                 .andExpect(jsonPath("$.currencyCode").value("CAD"))
-                .andRespond(withSuccess("{\"totalTax\":14.975,\"lineItemTaxes\":[]}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess(
+                        "{\"subtotal\":100.00,\"totalTax\":14.975,\"total\":114.975,"
+                                + "\"effectiveTaxRate\":14.975,\"testMode\":false}",
+                        MediaType.APPLICATION_JSON));
 
         assertThat(client.calculateTax(oneLine(), montreal(), null)).isEqualByComparingTo("14.9750");
         server.verify();
