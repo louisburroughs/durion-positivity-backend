@@ -51,12 +51,15 @@ public class IdempotencyKey extends TenantScopedEntity {
     @CreatedDate
     private Instant createdAt;
 
-    @Column(nullable = false)
+    /**
+     * Historical only (#2595): posting keys never expire, new rows carry null, and nothing reads or deletes by it. Rows
+     * written before V28 keep the value they were given; they are honoured all the same.
+     */
+    @Column
     private Instant expiresAt;
 
-    public IdempotencyKey(String keyValue, UUID invoiceId, Instant expiresAt) {
+    public IdempotencyKey(String keyValue, UUID invoiceId) {
         this.keyValue = keyValue;
         this.invoiceId = invoiceId;
-        this.expiresAt = expiresAt;
     }
 }
