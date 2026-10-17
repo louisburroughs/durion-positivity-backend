@@ -13,7 +13,9 @@ import org.jspecify.annotations.Nullable;
  * One thing the system did without a person (CAP:550 S19, #2515; SPEC-accounting-workspace §7.1 "Done automatically").
  * References are business values, never an identifier as text (ADR-0064); identifiers are in {@code routing}.
  */
-@Schema(name = "AutomaticWorkItem", description = "Something the system did on its own, with the undo the caller may take")
+@Schema(
+        name = "AutomaticWorkItem",
+        description = "Something the system did on its own, with the undo the caller may take")
 public record AutomaticWorkItem(
         @Schema(
                 description = "Stable identifier: the kind, a colon and the source's identifier",
@@ -21,7 +23,8 @@ public record AutomaticWorkItem(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         String itemId,
 
-        @Schema(description = "What was done", requiredMode = Schema.RequiredMode.REQUIRED) AutomaticWorkItemKind kind,
+        @Schema(description = "What was done", requiredMode = Schema.RequiredMode.REQUIRED)
+        AutomaticWorkItemKind kind,
 
         @Schema(
                 description = "The business date it was done, in the tenant's accounting time zone",
@@ -38,14 +41,22 @@ public record AutomaticWorkItem(
                 description = "The amount concerned, in the functional currency",
                 example = "250.00",
                 nullable = true,
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED) @Nullable
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Nullable
         BigDecimal amount,
 
-        @Schema(description = "The source's status; REVERSED for an application already undone", example = "APPLIED", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "The source's status; REVERSED for an application already undone",
+                example = "APPLIED",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String status,
 
-        @Schema(description = "UNDO for a payment application the caller may reverse; empty otherwise", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "UNDO for a payment application the caller may reverse; empty otherwise",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         List<WorkItemAction> actions,
 
-        @Schema(description = "Identifiers for routing, by key; the only place an identifier appears", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "Identifiers for routing, by key; the only place an identifier appears",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         Map<String, UUID> routing) {}

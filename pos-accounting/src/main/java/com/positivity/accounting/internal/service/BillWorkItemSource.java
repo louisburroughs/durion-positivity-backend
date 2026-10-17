@@ -1,9 +1,9 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.dto.WorkItem;
 import com.positivity.accounting.internal.dto.WorkItemAction;
 import com.positivity.accounting.internal.dto.WorkItemPostingLine;
-import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
 import com.positivity.accounting.internal.enums.VendorBillAction;
@@ -41,11 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class BillWorkItemSource {
 
     /** Statuses of the bills that need a person before they are approved. */
-    static final Set<VendorBillStatus> REVIEW =
-            EnumSet.of(
-                    VendorBillStatus.MATCH_EXCEPTION,
-                    VendorBillStatus.PENDING_RECEIPT_MATCH,
-                    VendorBillStatus.AWAITING_APPROVAL);
+    static final Set<VendorBillStatus> REVIEW = EnumSet.of(
+            VendorBillStatus.MATCH_EXCEPTION,
+            VendorBillStatus.PENDING_RECEIPT_MATCH,
+            VendorBillStatus.AWAITING_APPROVAL);
 
     /** {@code blockedReason} of {@code PAY} on a bill its payer approved. */
     static final String BLOCKED_SELF_APPROVED = "AP_PAYMENT_SELF_APPROVED_BILL";
@@ -90,8 +89,7 @@ public class BillWorkItemSource {
             boolean hasCandidates = withCandidates.contains(bill.getVendorBillId());
             WorkItem item =
                     switch (bill.getStatus()) {
-                        case MATCH_EXCEPTION, PENDING_RECEIPT_MATCH ->
-                            matchItem(bill, hasCandidates, settings, caller);
+                        case MATCH_EXCEPTION, PENDING_RECEIPT_MATCH -> matchItem(bill, hasCandidates, settings, caller);
                         case AWAITING_APPROVAL -> awaitingApproval(bill, settings, caller);
                         default -> null;
                     };
@@ -180,7 +178,8 @@ public class BillWorkItemSource {
                         false,
                         VendorBillReader.blocks(bill, settings, creatorFirst)),
                 EnumSet.of(VendorBillAction.APPROVE, VendorBillAction.REJECT));
-        boolean canApprove = actions.stream().anyMatch(action -> VendorBillAction.APPROVE.name().equals(action.action()));
+        boolean canApprove = actions.stream()
+                .anyMatch(action -> VendorBillAction.APPROVE.name().equals(action.action()));
         List<WorkItemPostingLine> preview = canApprove ? approvalPreview.preview(bill) : List.of();
         return WorkItems.item(
                 WorkItemType.BILL_AWAITING_APPROVAL,
@@ -223,12 +222,18 @@ public class BillWorkItemSource {
                             "purchaseOrderNumber", bill.getPurchaseOrderNumber(),
                             "dueDate", dueDate.toString(),
                             "estimated", Boolean.toString(open.estimated()),
-                            "termsSource", open.estimate() == null ? null : open.estimate().termsSource().name()),
+                            "termsSource",
+                                    open.estimate() == null
+                                            ? null
+                                            : open.estimate().termsSource().name()),
                     dueDate.isBefore(today) ? "OVERDUE" : "DUE_SOON",
                     open.openAmount(),
                     bill.getStatus().name(),
                     dueDate,
-                    List.of(selfApproved ? WorkItemAction.blocked(PAY, BLOCKED_SELF_APPROVED) : WorkItemAction.allowed(PAY)),
+                    List.of(
+                            selfApproved
+                                    ? WorkItemAction.blocked(PAY, BLOCKED_SELF_APPROVED)
+                                    : WorkItemAction.allowed(PAY)),
                     List.of(),
                     WorkItems.routing("vendorBillId", bill.getVendorBillId(), "vendorId", bill.getVendorId())));
         }
@@ -248,7 +253,10 @@ public class BillWorkItemSource {
                 "vendor", bill.getVendorName(),
                 "billNumber", bill.getBillNumber(),
                 "purchaseOrderNumber", bill.getPurchaseOrderNumber(),
-                "billDate", bill.getBillDate() == null ? null : bill.getBillDate().toLocalDate().toString());
+                "billDate",
+                        bill.getBillDate() == null
+                                ? null
+                                : bill.getBillDate().toLocalDate().toString());
     }
 
     /** When the bill started waiting: its submission for an approval, else its arrival; its bill date as a last resort. */
@@ -259,6 +267,8 @@ public class BillWorkItemSource {
         if (at != null) {
             return zoneResolver.postingDate(at);
         }
-        return bill.getBillDate() == null ? zoneResolver.today() : bill.getBillDate().toLocalDate();
+        return bill.getBillDate() == null
+                ? zoneResolver.today()
+                : bill.getBillDate().toLocalDate();
     }
 }

@@ -175,13 +175,7 @@ class WorkItemServiceTest {
                         approvalPreview,
                         zoneResolver),
                 new PaymentWorkItemSource(
-                        receivables,
-                        walkInSales,
-                        apPayments,
-                        glAccounts,
-                        glMappingResolver,
-                        periodGate,
-                        zoneResolver),
+                        receivables, walkInSales, apPayments, glAccounts, glMappingResolver, periodGate, zoneResolver),
                 new CashWorkItemSource(attentionSources, settings, depositService, drops, locations),
                 new BankWorkItemSource(reconciliations, transactions, candidateFinder, bankRecPolicy, zoneResolver),
                 new WorkItemPaging("test-secret"),
@@ -293,7 +287,8 @@ class WorkItemServiceTest {
     // ---- bills: AC 9 ------------------------------------------------------------------------------------------
 
     @Test
-    @DisplayName("AC9: an OVER_LIMIT bill awaiting approval is the approver's alone; the clerk sees only CLERK-tier bills")
+    @DisplayName(
+            "AC9: an OVER_LIMIT bill awaiting approval is the approver's alone; the clerk sees only CLERK-tier bills")
     void awaitingApprovalByTier() {
         VendorBill overLimit = reviewBill(VendorBillStatus.AWAITING_APPROVAL, "3000.00", "bob");
         VendorBill small = reviewBill(VendorBillStatus.AWAITING_APPROVAL, "100.00", "bob");
@@ -314,7 +309,8 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("AC9: the creator clerk sees APPROVE allowed:false with AP_BILL_SELF_APPROVAL; another clerk may approve")
+    @DisplayName(
+            "AC9: the creator clerk sees APPROVE allowed:false with AP_BILL_SELF_APPROVAL; another clerk may approve")
     void creatorCannotApprove() {
         reviewBill(VendorBillStatus.AWAITING_APPROVAL, "100.00", "carol");
 
@@ -363,7 +359,8 @@ class WorkItemServiceTest {
     // ---- bills: match, pick, wait ----------------------------------------------------------------------------
 
     @Test
-    @DisplayName("match exception, pick a match and waiting on delivery are told apart; each needs the approve permissions")
+    @DisplayName(
+            "match exception, pick a match and waiting on delivery are told apart; each needs the approve permissions")
     void matchItems() {
         VendorBill exception = reviewBill(VendorBillStatus.MATCH_EXCEPTION, "100.00", "bob");
         VendorBill pick = reviewBill(VendorBillStatus.MATCH_EXCEPTION, "100.00", "bob");
@@ -486,27 +483,26 @@ class WorkItemServiceTest {
         signIn("pat", PAYER);
         WorkItem item = only(list(), WorkItemType.BILLS_DUE_SOON);
 
-        assertThat(item.references())
-                .containsEntry("estimated", "true")
-                .containsEntry("termsSource", "TENANT_DEFAULT");
+        assertThat(item.references()).containsEntry("estimated", "true").containsEntry("termsSource", "TENANT_DEFAULT");
     }
 
     @Test
-    @DisplayName("PAY on a bill the payer approved is blocked AP_PAYMENT_SELF_APPROVED_BILL unless the tenant allows it")
+    @DisplayName(
+            "PAY on a bill the payer approved is blocked AP_PAYMENT_SELF_APPROVED_BILL unless the tenant allows it")
     void payBlockedForTheApprover() {
         approvedBill("MINE-1", TODAY.plusDays(1), "100.00", "pat");
         approvedBill("THEIRS-1", TODAY.plusDays(2), "100.00", "someone");
 
         signIn("pat", PAYER);
         List<WorkItem> items = list().items();
-        assertThat(items.getFirst().actions())
+        assertThat(items.getFirst().actions()).singleElement().satisfies(pay -> {
+            assertThat(pay.action()).isEqualTo("PAY");
+            assertThat(pay.allowed()).isFalse();
+            assertThat(pay.blockedReason()).isEqualTo("AP_PAYMENT_SELF_APPROVED_BILL");
+        });
+        assertThat(items.getLast().actions())
                 .singleElement()
-                .satisfies(pay -> {
-                    assertThat(pay.action()).isEqualTo("PAY");
-                    assertThat(pay.allowed()).isFalse();
-                    assertThat(pay.blockedReason()).isEqualTo("AP_PAYMENT_SELF_APPROVED_BILL");
-                });
-        assertThat(items.getLast().actions()).singleElement().satisfies(pay -> assertThat(pay.allowed()).isTrue());
+                .satisfies(pay -> assertThat(pay.allowed()).isTrue());
 
         when(policy.settings()).thenReturn(policySettings(true));
         assertThat(list().items().getFirst().actions())
@@ -535,7 +531,8 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("PAYMENT_TO_MATCH: OVERPAID when the suggestion leaves money over, SUGGESTED_MATCH else; none without a suggestion")
+    @DisplayName(
+            "PAYMENT_TO_MATCH: OVERPAID when the suggestion leaves money over, SUGGESTED_MATCH else; none without a suggestion")
     void paymentsToMatch() {
         UnappliedPaymentRow over = unapplied("REF-1", "5.00", true);
         UnappliedPaymentRow exact = unapplied("REF-2", "0.00", true);
@@ -560,7 +557,9 @@ class WorkItemServiceTest {
         assertThat(overpaid.references())
                 .containsEntry("customer", "Pat Customer")
                 .containsEntry("paymentReference", "REF-1");
-        assertThat(overpaid.actions()).singleElement().satisfies(match -> assertThat(match.action()).isEqualTo("MATCH"));
+        assertThat(overpaid.actions())
+                .singleElement()
+                .satisfies(match -> assertThat(match.action()).isEqualTo("MATCH"));
         assertThat(overpaid.occurredOn()).isEqualTo(LocalDate.of(2026, 10, 12));
 
         signIn("pat", PAYER);
@@ -589,7 +588,8 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("UNPAID_WALK_IN_SALE: one per open invoice whose business day ended, only for the statements permission")
+    @DisplayName(
+            "UNPAID_WALK_IN_SALE: one per open invoice whose business day ended, only for the statements permission")
     void unpaidWalkInSales() {
         UUID ended = UUID.randomUUID();
         when(walkInSales.read())
@@ -683,13 +683,18 @@ class WorkItemServiceTest {
         signIn("jo", AccountingPermissions.JE_POST);
         WorkItem item = only(list(), WorkItemType.AP_PAYMENT_NOT_POSTED);
 
-        assertThat(item.actions()).singleElement().satisfies(retry -> assertThat(retry.allowed()).isTrue());
+        assertThat(item.actions())
+                .singleElement()
+                .satisfies(retry -> assertThat(retry.allowed()).isTrue());
         assertThat(item.postingPreview())
                 .containsExactly(
                         new WorkItemPostingLine(
                                 "2000", "Accounts Payable", WorkItemPostingLine.Side.DEBIT, new BigDecimal("640.00")),
                         new WorkItemPostingLine(
-                                "1000", "Operating Account", WorkItemPostingLine.Side.CREDIT, new BigDecimal("640.00")));
+                                "1000",
+                                "Operating Account",
+                                WorkItemPostingLine.Side.CREDIT,
+                                new BigDecimal("640.00")));
         assertThat(item.references()).containsEntry("paymentReference", "PAY-77");
     }
 
@@ -706,7 +711,8 @@ class WorkItemServiceTest {
     // ---- cash -------------------------------------------------------------------------------------------------
 
     @Test
-    @DisplayName("CASH_TO_DEPOSIT groups the balanced sessions by location with the oldest date, bags and the deposit preview")
+    @DisplayName(
+            "CASH_TO_DEPOSIT groups the balanced sessions by location with the oldest date, bags and the deposit preview")
     void cashToDeposit() {
         UUID main = UUID.randomUUID();
         UUID annex = UUID.randomUUID();
@@ -727,9 +733,12 @@ class WorkItemServiceTest {
         location.setName("Main Street");
         when(locations.findAllById(any())).thenReturn(List.of(location));
         UndepositedSessionsResponse.PreviewLine bankLine = new UndepositedSessionsResponse.PreviewLine(
-                UUID.randomUUID(), "1000", "Operating Account", UndepositedSessionsResponse.Side.DEBIT, new BigDecimal("1297.00"));
-        when(depositService.undeposited(
-                        eq(List.of(first.getSessionId(), second.getSessionId())), isNull()))
+                UUID.randomUUID(),
+                "1000",
+                "Operating Account",
+                UndepositedSessionsResponse.Side.DEBIT,
+                new BigDecimal("1297.00"));
+        when(depositService.undeposited(eq(List.of(first.getSessionId(), second.getSessionId())), isNull()))
                 .thenReturn(new UndepositedSessionsResponse(
                         TODAY,
                         "USD",
@@ -794,7 +803,8 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("a card-only session is written settled, never undeposited, so the source is only asked for UNDEPOSITED")
+    @DisplayName(
+            "a card-only session is written settled, never undeposited, so the source is only asked for UNDEPOSITED")
     void cardOnlySessionsNeverAppear() {
         com.positivity.accounting.internal.repository.UndepositedSessionRepository repository = mock();
         UndepositedSession cardOnly = session(UUID.randomUUID(), "T1", "0.00", "0.00", "0.00");
@@ -841,10 +851,12 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("BANK_LINE_UNMATCHED: CARD_DEPOSIT_CANDIDATE for a credit with a ledger candidate, NOT_IN_BOOKS otherwise")
+    @DisplayName(
+            "BANK_LINE_UNMATCHED: CARD_DEPOSIT_CANDIDATE for a credit with a ledger candidate, NOT_IN_BOOKS otherwise")
     void unmatchedLines() {
         BankReconciliation reconciliation = reconciliation(ReconciliationStatus.IN_PROGRESS, null);
-        BankTransaction withCandidate = line(reconciliation.getStatementId(), "1197.00", LocalDate.of(2026, 9, 12), "VISA SETTLE");
+        BankTransaction withCandidate =
+                line(reconciliation.getStatementId(), "1197.00", LocalDate.of(2026, 9, 12), "VISA SETTLE");
         BankTransaction credit = line(reconciliation.getStatementId(), "20.00", LocalDate.of(2026, 9, 14), "INTEREST");
         BankTransaction debit = line(reconciliation.getStatementId(), "-35.00", LocalDate.of(2026, 9, 15), "BANK FEE");
         when(transactions.findByStatementIdInAndStatusOrderByTransactionDateAscBankTransactionIdAsc(
@@ -879,7 +891,8 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("AC10: the preparer sees APPROVE allowed:false with RECONCILIATION_SELF_APPROVAL; another approver may approve")
+    @DisplayName(
+            "AC10: the preparer sees APPROVE allowed:false with RECONCILIATION_SELF_APPROVAL; another approver may approve")
     void preparerCannotApprove() {
         BankReconciliation reconciliation = reconciliation(ReconciliationStatus.SUBMITTED, "prep");
 
@@ -948,7 +961,8 @@ class WorkItemServiceTest {
     };
 
     @Test
-    @DisplayName("countsByArea counts every area the caller may see, before the area filter, and the filter narrows the list")
+    @DisplayName(
+            "countsByArea counts every area the caller may see, before the area filter, and the filter narrows the list")
     void countsByArea() {
         aMixedList();
 
@@ -962,7 +976,9 @@ class WorkItemServiceTest {
                 .containsEntry(WorkItemArea.BANK, 1)
                 .containsEntry(WorkItemArea.CASH, 1);
         assertThat(all.items()).hasSize(6);
-        assertThat(bills.items()).hasSize(3).allSatisfy(item -> assertThat(item.area()).isEqualTo(WorkItemArea.BILLS));
+        assertThat(bills.items())
+                .hasSize(3)
+                .allSatisfy(item -> assertThat(item.area()).isEqualTo(WorkItemArea.BILLS));
         assertThat(bills.countsByArea()).isEqualTo(all.countsByArea());
         assertThat(all.asOf()).isEqualTo(NOW);
     }
@@ -1069,7 +1085,8 @@ class WorkItemServiceTest {
         signIn("pat", PAYER);
         WorkItemsResponse first = service.list(null, null, 2);
         String lastServed = first.items().getLast().itemId();
-        approvedBills.removeIf(open -> lastServed.endsWith(open.bill().getVendorBillId().toString()));
+        approvedBills.removeIf(
+                open -> lastServed.endsWith(open.bill().getVendorBillId().toString()));
 
         WorkItemsResponse second = service.list(null, first.nextCursor(), 2);
 
@@ -1116,7 +1133,8 @@ class WorkItemServiceTest {
         assertThat(service.list(null, null, 1).items()).isEmpty();
         assertThatThrownBy(() -> service.list(null, null, 201))
                 .isInstanceOfSatisfying(
-                        InvalidRequestParameterException.class, e -> assertThat(e.getField()).isEqualTo("limit"));
+                        InvalidRequestParameterException.class,
+                        e -> assertThat(e.getField()).isEqualTo("limit"));
         assertThatThrownBy(() -> service.list(null, null, 0)).isInstanceOf(InvalidRequestParameterException.class);
         assertThatThrownBy(() -> service.list(null, null, -5)).isInstanceOf(InvalidRequestParameterException.class);
     }

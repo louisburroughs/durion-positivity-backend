@@ -48,7 +48,6 @@ public interface VendorBillMatchCandidateRepository extends JpaRepository<Vendor
     @Query("SELECT c FROM VendorBillMatchCandidate c WHERE c.invoiceEventId = :invoiceEventId ORDER BY c.candidateId")
     List<VendorBillMatchCandidate> lockByInvoiceEventId(@Param("invoiceEventId") UUID invoiceEventId);
 
-
     /** The unresolved candidates of any of the given bills (#2515, S19: one read for the bills' work items). */
     List<VendorBillMatchCandidate> findByVendorBill_VendorBillIdInAndResolvedFalse(
             java.util.Collection<UUID> vendorBillIds);

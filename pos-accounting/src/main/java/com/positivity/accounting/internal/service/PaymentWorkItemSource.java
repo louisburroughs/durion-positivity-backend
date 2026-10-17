@@ -125,7 +125,10 @@ public class PaymentWorkItemSource {
                     WorkItems.references(
                             "invoiceNumber", invoice.getInvoiceNumber(),
                             "location", invoice.getLocationCode(),
-                            "saleDate", invoice.getSaleDate() == null ? null : invoice.getSaleDate().toString()),
+                            "saleDate",
+                                    invoice.getSaleDate() == null
+                                            ? null
+                                            : invoice.getSaleDate().toString()),
                     REASON_BUSINESS_DAY_ENDED,
                     invoice.getBalanceDue(),
                     "OPEN",
@@ -138,7 +141,8 @@ public class PaymentWorkItemSource {
     }
 
     private List<WorkItem> paymentsNotPosted() {
-        List<APPayment> failed = apPayments.findByStatusOrderByPaymentDateAscPaymentIdAsc(APPaymentStatus.GL_POST_FAILED);
+        List<APPayment> failed =
+                apPayments.findByStatusOrderByPaymentDateAscPaymentIdAsc(APPaymentStatus.GL_POST_FAILED);
         if (failed.isEmpty()) {
             return List.of();
         }
@@ -157,7 +161,10 @@ public class PaymentWorkItemSource {
                     WorkItems.references(
                             "vendor", payment.getVendorName(),
                             "paymentReference", payment.getPaymentRef(),
-                            "paymentMethod", payment.getPaymentMethod() == null ? null : payment.getPaymentMethod().name(),
+                            "paymentMethod",
+                                    payment.getPaymentMethod() == null
+                                            ? null
+                                            : payment.getPaymentMethod().name(),
                             "paymentDate", date.toString()),
                     payment.getGlPostError() == null || payment.getGlPostError().isBlank()
                             ? REASON_POST_FAILED
@@ -184,7 +191,8 @@ public class PaymentWorkItemSource {
         BigDecimal fee = payment.getFeeAmount() == null ? BigDecimal.ZERO : payment.getFeeAmount();
         Optional<GLAccount> payable = account(APPaymentPreGatewayChecks.ACCOUNTS_PAYABLE_KEY, date);
         Optional<GLAccount> bank = glAccounts.findById(payment.getBankAccountId());
-        Optional<GLAccount> fees = fee.signum() > 0 ? account(APPaymentPreGatewayChecks.PAYMENT_FEES_KEY, date) : Optional.empty();
+        Optional<GLAccount> fees =
+                fee.signum() > 0 ? account(APPaymentPreGatewayChecks.PAYMENT_FEES_KEY, date) : Optional.empty();
         if (payable.isEmpty() || bank.isEmpty() || (fee.signum() > 0 && fees.isEmpty())) {
             return List.of();
         }

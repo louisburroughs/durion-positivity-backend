@@ -19,7 +19,8 @@ public record WorkItemAction(
                 description = "The code of the rule that blocks the caller; null when allowed",
                 example = "AP_BILL_SELF_APPROVAL",
                 nullable = true,
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED) @Nullable
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Nullable
         String blockedReason) {
 
     /** An action the caller may take. */

@@ -51,7 +51,8 @@ public class WorkItemPaging {
     }
 
     /** The position after which a page resumes. */
-    public record Key(@NonNull LocalDate occurredOn, @NonNull String itemId) {}
+    public record Key(
+            @NonNull LocalDate occurredOn, @NonNull String itemId) {}
 
     /** A page: its items and the cursor of the next, null on the last. */
     public record Slice<T>(@NonNull List<T> items, @Nullable String nextCursor) {}

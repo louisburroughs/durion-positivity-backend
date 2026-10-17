@@ -121,7 +121,10 @@ class WorkItemControllerTest extends BaseIntegrationTest {
         when(service.list(eq(WorkItemArea.BANK), eq("abc.def"), eq(10))).thenReturn(page());
 
         mockMvc.perform(withAuth(
-                        get(LIST).param("area", "BANK").param("cursor", "abc.def").param("limit", "10"),
+                        get(LIST)
+                                .param("area", "BANK")
+                                .param("cursor", "abc.def")
+                                .param("limit", "10"),
                         "accounting:reconciliation:approve"))
                 .andExpect(status().isOk());
 
@@ -194,7 +197,10 @@ class WorkItemControllerTest extends BaseIntegrationTest {
         when(automaticService.list(eq("2026-10-15"), eq("c.m"), eq(5))).thenReturn(automaticPage());
 
         mockMvc.perform(withAuth(
-                        get(AUTOMATIC).param("since", "2026-10-15").param("cursor", "c.m").param("limit", "5"),
+                        get(AUTOMATIC)
+                                .param("since", "2026-10-15")
+                                .param("cursor", "c.m")
+                                .param("limit", "5"),
                         "accounting:payment:apply"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].kind").value("SETTLEMENT_LINE_MATCHED"))
@@ -231,7 +237,8 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("operation ids and the ACCOUNTING_WORK_ITEMS_* events")
     void annotations() throws Exception {
-        Method list = WorkItemController.class.getMethod("listWorkItems", WorkItemArea.class, String.class, Integer.class);
+        Method list =
+                WorkItemController.class.getMethod("listWorkItems", WorkItemArea.class, String.class, Integer.class);
         Method automatic =
                 WorkItemController.class.getMethod("listAutomaticWorkItems", String.class, String.class, Integer.class);
 

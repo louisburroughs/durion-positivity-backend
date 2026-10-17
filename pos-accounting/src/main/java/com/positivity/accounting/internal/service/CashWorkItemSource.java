@@ -102,10 +102,11 @@ public class CashWorkItemSource {
             List<AgedSession> group,
             @Nullable ExtLocationReplica location,
             Map<UUID, List<UndepositedSessionDrop>> dropsBySession) {
-        BigDecimal amount =
-                group.stream().map(AgedSession::depositAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        LocalDate oldest =
-                group.stream().map(AgedSession::businessDate).min(Comparator.naturalOrder()).orElseThrow();
+        BigDecimal amount = group.stream().map(AgedSession::depositAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        LocalDate oldest = group.stream()
+                .map(AgedSession::businessDate)
+                .min(Comparator.naturalOrder())
+                .orElseThrow();
         List<UUID> sessionIds =
                 group.stream().map(aged -> aged.session().getSessionId()).toList();
         Map<String, String> references = new LinkedHashMap<>(locationReferences(location));

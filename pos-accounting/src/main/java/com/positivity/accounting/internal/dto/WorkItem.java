@@ -23,7 +23,8 @@ public record WorkItem(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         String itemId,
 
-        @Schema(description = "The kind of item", requiredMode = Schema.RequiredMode.REQUIRED) WorkItemType type,
+        @Schema(description = "The kind of item", requiredMode = Schema.RequiredMode.REQUIRED)
+        WorkItemType type,
 
         @Schema(description = "The area the item is listed under", requiredMode = Schema.RequiredMode.REQUIRED)
         WorkItemArea area,
@@ -45,7 +46,8 @@ public record WorkItem(
                 description = "The amount the item concerns, in the functional currency; null when it has none",
                 example = "1197.00",
                 nullable = true,
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED) @Nullable
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Nullable
         BigDecimal amount,
 
         @Schema(
@@ -60,7 +62,9 @@ public record WorkItem(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         LocalDate occurredOn,
 
-        @Schema(description = "What the caller may do, each allowed or blocked with its reason", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "What the caller may do, each allowed or blocked with its reason",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         List<WorkItemAction> actions,
 
         @Schema(

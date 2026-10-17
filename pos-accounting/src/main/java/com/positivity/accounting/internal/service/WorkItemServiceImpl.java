@@ -76,7 +76,8 @@ public class WorkItemServiceImpl implements WorkItemService {
     }
 
     @Override
-    public @NonNull WorkItemsResponse list(@Nullable WorkItemArea area, @Nullable String cursor, @Nullable Integer limit) {
+    public @NonNull WorkItemsResponse list(
+            @Nullable WorkItemArea area, @Nullable String cursor, @Nullable Integer limit) {
         int size = paging.limit(limit);
         String scope = area == null ? "ALL" : area.name();
         WorkItemPaging.Key after = paging.decode(cursor, scope);
@@ -99,8 +100,9 @@ public class WorkItemServiceImpl implements WorkItemService {
         }
         gaugeValues.forEach((type, value) -> value.set(perType.getOrDefault(type, 0L)));
 
-        List<WorkItem> listed =
-                area == null ? visible : visible.stream().filter(item -> item.area() == area).toList();
+        List<WorkItem> listed = area == null
+                ? visible
+                : visible.stream().filter(item -> item.area() == area).toList();
         WorkItemPaging.Slice<WorkItem> page =
                 paging.slice(listed, WorkItem::occurredOn, WorkItem::itemId, scope, after, size);
         return new WorkItemsResponse(page.items(), page.nextCursor(), counts, Instant.now(clock));

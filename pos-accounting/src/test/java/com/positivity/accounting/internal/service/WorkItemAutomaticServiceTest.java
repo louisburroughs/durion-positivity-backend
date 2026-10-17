@@ -212,7 +212,8 @@ class WorkItemAutomaticServiceTest {
         signIn(AccountingPermissions.PAYMENT_REVERSE);
         List<AutomaticWorkItem> items = service.list(null, null, null).items();
 
-        assertThat(items).extracting(AutomaticWorkItem::kind)
+        assertThat(items)
+                .extracting(AutomaticWorkItem::kind)
                 .containsExactlyInAnyOrder(
                         AutomaticWorkItemKind.SETTLEMENT_LINE_MATCHED, AutomaticWorkItemKind.BILL_APPROVED_BY_SYSTEM);
         assertThat(items).allSatisfy(item -> assertThat(item.actions()).isEmpty());
@@ -312,7 +313,8 @@ class WorkItemAutomaticServiceTest {
         AutomaticWorkItemsResponse first = service.list("2026-10-14", null, 2);
         AutomaticWorkItemsResponse second = service.list("2026-10-14", first.nextCursor(), 2);
 
-        assertThat(first.items()).extracting(AutomaticWorkItem::occurredOn)
+        assertThat(first.items())
+                .extracting(AutomaticWorkItem::occurredOn)
                 .containsExactly(LocalDate.of(2026, 10, 15), LocalDate.of(2026, 10, 16));
         assertThat(second.items()).extracting(AutomaticWorkItem::occurredOn).containsExactly(TODAY);
         assertThat(second.nextCursor()).isNull();
@@ -324,6 +326,7 @@ class WorkItemAutomaticServiceTest {
                 .isInstanceOf(WorkItemsCursorInvalidException.class);
         assertThatThrownBy(() -> service.list("2026-10-14", null, 201))
                 .isInstanceOfSatisfying(
-                        InvalidRequestParameterException.class, e -> assertThat(e.getField()).isEqualTo("limit"));
+                        InvalidRequestParameterException.class,
+                        e -> assertThat(e.getField()).isEqualTo("limit"));
     }
 }

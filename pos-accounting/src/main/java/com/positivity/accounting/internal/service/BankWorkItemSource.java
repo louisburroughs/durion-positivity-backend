@@ -79,11 +79,14 @@ public class BankWorkItemSource {
         if (byStatement.isEmpty()) {
             return List.of();
         }
-        List<BankTransaction> unmatched = transactions.findByStatementIdInAndStatusOrderByTransactionDateAscBankTransactionIdAsc(
-                byStatement.keySet(), BankTransactionStatus.UNMATCHED);
+        List<BankTransaction> unmatched =
+                transactions.findByStatementIdInAndStatusOrderByTransactionDateAscBankTransactionIdAsc(
+                        byStatement.keySet(), BankTransactionStatus.UNMATCHED);
         Map<UUID, List<BankTransaction>> rowsByStatement = new HashMap<>();
         for (BankTransaction row : unmatched) {
-            rowsByStatement.computeIfAbsent(row.getStatementId(), k -> new ArrayList<>()).add(row);
+            rowsByStatement
+                    .computeIfAbsent(row.getStatementId(), k -> new ArrayList<>())
+                    .add(row);
         }
         List<WorkItem> items = new ArrayList<>();
         Set<UUID> listed = new HashSet<>();
@@ -98,9 +101,11 @@ public class BankWorkItemSource {
                 if (!listed.add(row.getBankTransactionId())) {
                     continue;
                 }
-                boolean credit = row.getSignedAmount() != null && row.getSignedAmount().signum() > 0;
-                boolean hasCandidate =
-                        !candidates.getOrDefault(row.getBankTransactionId(), List.of()).isEmpty();
+                boolean credit =
+                        row.getSignedAmount() != null && row.getSignedAmount().signum() > 0;
+                boolean hasCandidate = !candidates
+                        .getOrDefault(row.getBankTransactionId(), List.of())
+                        .isEmpty();
                 items.add(WorkItems.item(
                         WorkItemType.BANK_LINE_UNMATCHED,
                         row.getBankTransactionId().toString(),

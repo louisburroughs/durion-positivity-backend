@@ -16,7 +16,8 @@ public record WorkItemsResponse(
         @Schema(
                 description = "Opaque cursor of the next page; null on the last page. Valid only with the same area",
                 nullable = true,
-                requiredMode = Schema.RequiredMode.NOT_REQUIRED) @Nullable
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Nullable
         String nextCursor,
 
         @Schema(
@@ -24,5 +25,8 @@ public record WorkItemsResponse(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         Map<WorkItemArea, Integer> countsByArea,
 
-        @Schema(description = "When the list was computed", example = "2026-10-17T15:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "When the list was computed",
+                example = "2026-10-17T15:00:00Z",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         Instant asOf) {}

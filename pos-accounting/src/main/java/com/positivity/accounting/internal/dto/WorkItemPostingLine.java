@@ -9,13 +9,19 @@ public record WorkItemPostingLine(
         @Schema(description = "The account's number", example = "2000", requiredMode = Schema.RequiredMode.REQUIRED)
         String accountCode,
 
-        @Schema(description = "The account's name", example = "Accounts Payable", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "The account's name",
+                example = "Accounts Payable",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         String accountName,
 
         @Schema(description = "DEBIT or CREDIT", example = "DEBIT", requiredMode = Schema.RequiredMode.REQUIRED)
         Side side,
 
-        @Schema(description = "The amount, positive, in the functional currency", example = "1197.00", requiredMode = Schema.RequiredMode.REQUIRED)
+        @Schema(
+                description = "The amount, positive, in the functional currency",
+                example = "1197.00",
+                requiredMode = Schema.RequiredMode.REQUIRED)
         BigDecimal amount) {
 
     /** The side of a line. */

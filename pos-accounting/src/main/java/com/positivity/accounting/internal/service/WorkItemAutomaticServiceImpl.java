@@ -100,7 +100,8 @@ public class WorkItemAutomaticServiceImpl implements WorkItemAutomaticService {
                         "customer", row.getCustomerDisplayName(),
                         "paymentReference", row.getCustomerReference(),
                         "invoiceNumber", row.getInvoiceNumber(),
-                        "source", row.getSource() == null ? null : row.getSource().name()),
+                        "source",
+                                row.getSource() == null ? null : row.getSource().name()),
                 row.getAppliedAmount(),
                 row.isReversed() ? STATUS_REVERSED : STATUS_APPLIED,
                 actions,
@@ -112,8 +113,8 @@ public class WorkItemAutomaticServiceImpl implements WorkItemAutomaticService {
 
     private List<AutomaticWorkItem> settlementMatches(Instant since) {
         List<AutomaticWorkItem> items = new ArrayList<>();
-        for (ProcessorSettlementLine line :
-                settlementLines.findByMatchStatusAndUpdatedAtGreaterThanEqual(SettlementLineMatchStatus.MATCHED, since)) {
+        for (ProcessorSettlementLine line : settlementLines.findByMatchStatusAndUpdatedAtGreaterThanEqual(
+                SettlementLineMatchStatus.MATCHED, since)) {
             items.add(new AutomaticWorkItem(
                     AutomaticWorkItemKind.SETTLEMENT_LINE_MATCHED.name() + ":" + line.getLineId(),
                     AutomaticWorkItemKind.SETTLEMENT_LINE_MATCHED,
@@ -121,7 +122,10 @@ public class WorkItemAutomaticServiceImpl implements WorkItemAutomaticService {
                     WorkItems.references(
                             "settlement", line.getSettlementId(),
                             "paymentReference", line.getPaymentReference(),
-                            "lineType", line.getLineType() == null ? null : line.getLineType().name()),
+                            "lineType",
+                                    line.getLineType() == null
+                                            ? null
+                                            : line.getLineType().name()),
                     line.getNetAmount(),
                     STATUS_MATCHED,
                     List.of(),
@@ -163,7 +167,8 @@ public class WorkItemAutomaticServiceImpl implements WorkItemAutomaticService {
         if (parsed.isAfter(Instant.now(clock))) {
             throw InvalidRequestParameterException.forField("since", "must not be in the future");
         }
-        if (parsed.isBefore(today.minusDays(MAX_LOOK_BACK_DAYS).atStartOfDay(zone).toInstant())) {
+        if (parsed.isBefore(
+                today.minusDays(MAX_LOOK_BACK_DAYS).atStartOfDay(zone).toInstant())) {
             throw InvalidRequestParameterException.forField(
                     "since", "must not be more than " + MAX_LOOK_BACK_DAYS + " days back");
         }
