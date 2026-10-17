@@ -8,6 +8,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,14 +29,16 @@ public class SessionPolicyExceptionHandler {
     @ExceptionHandler(SessionPolicyValidationException.class)
     public ResponseEntity<ApiError> handleValidation(SessionPolicyValidationException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
+        // One fieldErrors entry naming the refused field's JSON path, so the page marks the field (ADR-0017, #2674).
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(ApiError.of(
+                .body(ApiError.withFieldErrors(
                         "VALIDATION_ERROR",
                         ex.getMessage(),
                         HttpStatus.BAD_REQUEST.value(),
                         Instant.now(clock).toString(),
-                        correlationId));
+                        correlationId,
+                        List.of(new ApiError.FieldError(ex.getField(), ex.getMessage()))));
     }
 
     /** ADR-0067 R-1: a policy stated in a currency other than the functional currency. */

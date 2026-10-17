@@ -1752,6 +1752,19 @@ it as absent. Clients treat a missing field as null.
   or `MATCH_EXCEPTION` and states tax, else empty (a tenant without recovery included); null when the recovery flag
   or the profile cannot be read (unknown, ADR-0017). A guide for the client only: approve and `ACCEPT` validate
   `taxByType[]` as before (`AP_BILL_TAX_SPLIT_MISMATCH`). No class names a country, regime or tax type.
+- **Petty-expense category history as values (#2675, S21 ruling Q4; ADR-0030).** Each history row carries, beside
+  the stored audit text `oldValue` / `newValue`, the change as nullable fields the page renders and translates:
+  `oldLabel` / `newLabel` and `oldExamples` / `newExamples` (RELABEL both, CREATE the new), `oldAccountNumber` /
+  `oldAccountName` (REMAP, the account replaced; null when none was in effect), `newAccountNumber` /
+  `newAccountName` (CREATE, REMAP) and `effectiveFrom` (CREATE the business date, REMAP the requested date).
+  Written on the row (V27) when the change is made, the account name as it was then; DEACTIVATE rows keep the
+  status codes in `oldValue` / `newValue`; rows written before V27 have the fields null and the page shows the text.
+  A replayed `requestId` serves the same values (the kept `response_json`). The category commands' 400
+  `VALIDATION_ERROR` now names the refused field in `fieldErrors` (`code`, `label`, `examples`, `glAccountId`,
+  `effectiveFrom`, `justification`, `requestId`; tax recovery: `taxRecoverable`, `recoverablePercent`, `version`).
+  `CashRequests.requireJustification` names its field for every caller, so the register-float go-live, change and
+  relocation commands and the bank opening balance also answer `fieldErrors[0].field = justification` on a short or
+  over-long justification (additive; code, status and message unchanged).
 - **The people-contact copy** (V25, ADR-0044 §6; the pos-location / pos-customer precedent). pos-accounting never
   joins another database and never calls pos-people-contact or pos-security-service for a name.
   `PeopleContactEventsListener` consumes `people-contact.events.v1`

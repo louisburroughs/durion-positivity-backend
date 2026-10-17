@@ -56,17 +56,18 @@ public record PettyExpenseCategoryUpdateRequest(
         requireLabel(label, examples);
         CashRequests.requireJustification(justification, "justification");
         if (requestId == null) {
-            throw new InvalidRequestParameterException("requestId is required");
+            throw InvalidRequestParameterException.forField("requestId", "requestId is required");
         }
     }
 
     static void requireLabel(@Nullable String label, @Nullable String examples) {
         if (label == null || label.isBlank() || label.trim().length() > MAX_LABEL) {
-            throw new InvalidRequestParameterException(
-                    "label is required and must not exceed " + MAX_LABEL + " characters");
+            throw InvalidRequestParameterException.forField(
+                    "label", "label is required and must not exceed " + MAX_LABEL + " characters");
         }
         if (examples != null && examples.trim().length() > MAX_EXAMPLES) {
-            throw new InvalidRequestParameterException("examples must not exceed " + MAX_EXAMPLES + " characters");
+            throw InvalidRequestParameterException.forField(
+                    "examples", "examples must not exceed " + MAX_EXAMPLES + " characters");
         }
     }
 }

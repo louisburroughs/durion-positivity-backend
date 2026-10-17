@@ -56,7 +56,11 @@ public record PettyExpenseCategoryResponse(
             @Schema(description = "First day the account applies")
             LocalDate effectiveFrom) {}
 
-    /** One change: when, who, what changed from what to what, and why. */
+    /**
+     * One change: when, who, what changed from what to what, and why. {@code oldValue} / {@code newValue} are the
+     * stored audit text; the page renders the structured fields (#2675, ADR-0030) and falls back to the text only on
+     * a row written before they existed.
+     */
     @Schema(name = "PettyExpenseCategoryHistoryItem", description = "One change of a petty-expense category")
     public record HistoryItem(
             @Schema(description = "When the change was made")
@@ -83,18 +87,94 @@ public record PettyExpenseCategoryResponse(
             String oldValue,
 
             @Schema(description = "The value after") String newValue,
-            @Schema(description = "Why") String justification) {
+            @Schema(description = "Why") String justification,
+
+            @Schema(
+                    description = "RELABEL: the label before. Null on other rows and on rows written before #2675",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String oldLabel,
+
+            @Schema(
+                    description = "CREATE and RELABEL: the label after",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String newLabel,
+
+            @Schema(description = "RELABEL: the examples before", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String oldExamples,
+
+            @Schema(
+                    description = "CREATE and RELABEL: the examples after",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String newExamples,
+
+            @Schema(
+                    description = "REMAP: the number of the account replaced; null when none was in effect",
+                    example = "6340",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String oldAccountNumber,
+
+            @Schema(
+                    description = "REMAP: the name of the account replaced, as it was at that moment",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String oldAccountName,
+
+            @Schema(
+                    description =
+                            "CREATE and REMAP: the number of the account the category posts to from" + " effectiveFrom",
+                    example = "6350",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String newAccountNumber,
+
+            @Schema(
+                    description = "CREATE and REMAP: that account's name at that moment",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            String newAccountName,
+
+            @Schema(
+                    description = "CREATE: the business date the category posts from; REMAP: the requested"
+                            + " effectiveFrom",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @Nullable
+            LocalDate effectiveFrom) {
 
         /** This row with {@code actorName} as given (null clears it). */
         public HistoryItem withActorName(@Nullable String name) {
-            return new HistoryItem(changedAt, actor, name, changeType, oldValue, newValue, justification);
+            return new HistoryItem(
+                    changedAt,
+                    actor,
+                    name,
+                    changeType,
+                    oldValue,
+                    newValue,
+                    justification,
+                    oldLabel,
+                    newLabel,
+                    oldExamples,
+                    newExamples,
+                    oldAccountNumber,
+                    oldAccountName,
+                    newAccountNumber,
+                    newAccountName,
+                    effectiveFrom);
         }
 
         @Override
         public String toString() {
             // actorName is a person's name, CONFIDENTIAL (ADR-0072): never printed.
             return "HistoryItem[changedAt=" + changedAt + ", actor=" + actor + ", changeType=" + changeType
-                    + ", oldValue=" + oldValue + ", newValue=" + newValue + ", justification=" + justification + "]";
+                    + ", oldValue=" + oldValue + ", newValue=" + newValue + ", justification=" + justification
+                    + ", oldLabel=" + oldLabel + ", newLabel=" + newLabel + ", oldExamples=" + oldExamples
+                    + ", newExamples=" + newExamples + ", oldAccountNumber=" + oldAccountNumber + ", oldAccountName="
+                    + oldAccountName + ", newAccountNumber=" + newAccountNumber + ", newAccountName=" + newAccountName
+                    + ", effectiveFrom=" + effectiveFrom + "]";
         }
     }
 

@@ -189,35 +189,42 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
                 command.justification() == null ? "" : command.justification().trim();
         if (justification.length() < MIN_JUSTIFICATION_LENGTH) {
             throw new SessionPolicyValidationException(
-                    "justification must be at least " + MIN_JUSTIFICATION_LENGTH + " characters");
+                    "justification", "justification must be at least " + MIN_JUSTIFICATION_LENGTH + " characters");
         }
         if (justification.length() > MAX_JUSTIFICATION_LENGTH) {
             throw new SessionPolicyValidationException(
-                    "justification must be at most " + MAX_JUSTIFICATION_LENGTH + " characters");
+                    "justification", "justification must be at most " + MAX_JUSTIFICATION_LENGTH + " characters");
         }
-        if (command.pettyExpenseAllowed() == null || command.vendorCodAllowed() == null) {
-            throw new SessionPolicyValidationException("pettyExpense.allowed and vendorCod.allowed are required");
+        if (command.pettyExpenseAllowed() == null) {
+            throw new SessionPolicyValidationException("pettyExpense.allowed", "pettyExpense.allowed is required");
+        }
+        if (command.vendorCodAllowed() == null) {
+            throw new SessionPolicyValidationException("vendorCod.allowed", "vendorCod.allowed is required");
         }
         if (command.overShortTolerance() == null) {
-            throw new SessionPolicyValidationException("overShortTolerance is required");
+            throw new SessionPolicyValidationException("overShortTolerance", "overShortTolerance is required");
         }
         if (!FunctionalCurrency.isIsoCode(command.currencyCode())) {
-            throw new SessionPolicyValidationException("currencyCode is required and must be an ISO 4217 code");
+            throw new SessionPolicyValidationException(
+                    "currencyCode", "currencyCode is required and must be an ISO 4217 code");
         }
         requireNotNegative("pettyExpense.cashierLimit", command.pettyExpenseLimit());
         requireNotNegative("vendorCod.cashierLimit", command.vendorCodLimit());
         requireNotNegative("overShortTolerance", command.overShortTolerance());
         if (command.pettyExpenseAllowed() && command.pettyExpenseLimit() == null) {
             throw new SessionPolicyValidationException(
+                    "pettyExpense.cashierLimit",
                     "pettyExpense.cashierLimit is required while petty expenses are allowed");
         }
         if (command.vendorCodAllowed()) {
             if (command.vendorCodLimit() == null) {
                 throw new SessionPolicyValidationException(
+                        "vendorCod.cashierLimit",
                         "vendorCod.cashierLimit is required to switch vendor cash on delivery on");
             }
             if (!VENDOR_COD_AVAILABLE) {
                 throw new SessionPolicyValidationException(
+                        "vendorCod.allowed",
                         "vendor cash on delivery cannot be switched on until pos-order holds the vendor list");
             }
         }
@@ -226,7 +233,7 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
 
     private static void requireNotNegative(String field, @Nullable BigDecimal value) {
         if (value != null && value.signum() < 0) {
-            throw new SessionPolicyValidationException(field + " must not be negative");
+            throw new SessionPolicyValidationException(field, field + " must not be negative");
         }
     }
 

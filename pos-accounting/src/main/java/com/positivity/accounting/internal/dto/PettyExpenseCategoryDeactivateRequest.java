@@ -33,7 +33,7 @@ public record PettyExpenseCategoryDeactivateRequest(
     public void requireValid() {
         CashRequests.requireJustification(justification, "justification");
         if (requestId == null) {
-            throw new InvalidRequestParameterException("requestId is required");
+            throw InvalidRequestParameterException.forField("requestId", "requestId is required");
         }
     }
 }
