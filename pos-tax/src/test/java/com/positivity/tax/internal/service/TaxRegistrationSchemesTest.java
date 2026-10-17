@@ -30,9 +30,9 @@ import org.springframework.core.io.ClassPathResource;
 class TaxRegistrationSchemesTest {
 
     private static final String ZZ = "pos.tax.registration-schemes.ZZ";
-    private static final String ZY = "pos.tax.registration-schemes.ZY";
+    private static final String QZ = "pos.tax.registration-schemes.QZ";
 
-    /** ZZ: a business scheme, a person scheme and a regional one (two regions); ZY: one business scheme. */
+    /** ZZ: a business scheme, a person scheme and a regional one (two regions); QZ: one business scheme. */
     private static Map<String, String> fixture() {
         Map<String, String> p = new LinkedHashMap<>();
         p.put(ZZ + "[0].scheme", "ZZ_BUSINESS_ID");
@@ -49,10 +49,10 @@ class TaxRegistrationSchemesTest {
         p.put(ZZ + "[2].regional", "true");
         p.put(ZZ + "[2].regions[0]", "QC");
         p.put(ZZ + "[2].regions[1]", "ON");
-        p.put(ZY + "[0].scheme", "ZY_BUSINESS_ID");
-        p.put(ZY + "[0].label", "Business id");
-        p.put(ZY + "[0].holder-type", "BUSINESS");
-        p.put(ZY + "[0].regional", "false");
+        p.put(QZ + "[0].scheme", "QZ_BUSINESS_ID");
+        p.put(QZ + "[0].label", "Business id");
+        p.put(QZ + "[0].holder-type", "BUSINESS");
+        p.put(QZ + "[0].regional", "false");
         return p;
     }
 
@@ -73,7 +73,8 @@ class TaxRegistrationSchemesTest {
         TaxRegistrationSchemesResponse zz = stub.read("ZZ");
         assertThat(zz.source()).isEqualTo("STUB");
         assertThat(zz.schemes())
-                .extracting(SchemeEntry::scheme, SchemeEntry::countryCode, SchemeEntry::holderType, SchemeEntry::regional)
+                .extracting(
+                        SchemeEntry::scheme, SchemeEntry::countryCode, SchemeEntry::holderType, SchemeEntry::regional)
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("ZZ_BUSINESS_ID", "ZZ", "BUSINESS", false),
                         org.assertj.core.groups.Tuple.tuple("ZZ_PERSON_ID", "ZZ", "PERSON", false),
@@ -86,7 +87,7 @@ class TaxRegistrationSchemesTest {
         assertThat(all.schemes())
                 .extracting(SchemeEntry::countryCode, SchemeEntry::scheme)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple("ZY", "ZY_BUSINESS_ID"),
+                        org.assertj.core.groups.Tuple.tuple("QZ", "QZ_BUSINESS_ID"),
                         org.assertj.core.groups.Tuple.tuple("ZZ", "ZZ_BUSINESS_ID"),
                         org.assertj.core.groups.Tuple.tuple("ZZ", "ZZ_PERSON_ID"),
                         org.assertj.core.groups.Tuple.tuple("ZZ", "ZZ_REGIONAL"));
@@ -105,7 +106,7 @@ class TaxRegistrationSchemesTest {
             + " a regional scheme without regions, regions on a non-regional scheme, a bad holder type, label or key")
     void startupRefusals() {
         // AC 2: the same code under two countries.
-        assertRefused(with(ZY + "[0].scheme", "ZZ_BUSINESS_ID"), ZY + "[0].scheme");
+        assertRefused(with(QZ + "[0].scheme", "ZZ_BUSINESS_ID"), QZ + "[0].scheme");
         // AC 2: a digit never enters a code or a region.
         assertRefused(with(ZZ + "[0].scheme", "GST2"), ZZ + "[0].scheme");
         assertRefused(with(ZZ + "[2].regions[0]", "75C"), ZZ + "[2].regions[0]");
@@ -177,7 +178,8 @@ class TaxRegistrationSchemesTest {
             Set<String> listed = stub.read(country).schemes().stream()
                     .map(SchemeEntry::scheme)
                     .collect(Collectors.toSet());
-            for (InformationReturnFormsResponse.FormEntry form : forms.read(country).forms()) {
+            for (InformationReturnFormsResponse.FormEntry form :
+                    forms.read(country).forms()) {
                 assertThat(listed)
                         .as("%s payee-id schemes of %s", country, form.form())
                         .containsAll(form.payeeIdSchemes());

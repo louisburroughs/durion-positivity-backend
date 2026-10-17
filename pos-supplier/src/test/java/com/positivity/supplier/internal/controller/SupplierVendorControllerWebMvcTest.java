@@ -151,7 +151,11 @@ class SupplierVendorControllerWebMvcTest {
         String change = vendor + "/remit-to-changes/" + CHANGE_ID;
         return Stream.of(
                 Arguments.of("GET", BASE, null, SupplierPermissions.VENDOR_READ),
-                Arguments.of("GET", BASE + "/tax-registration-schemes?countryCode=CA", null, SupplierPermissions.VENDOR_READ),
+                Arguments.of(
+                        "GET",
+                        BASE + "/tax-registration-schemes?countryCode=CA",
+                        null,
+                        SupplierPermissions.VENDOR_READ),
                 Arguments.of("GET", vendor, null, SupplierPermissions.VENDOR_READ),
                 Arguments.of("GET", vendor + "/remit-to-changes", null, SupplierPermissions.VENDOR_READ),
                 Arguments.of("POST", BASE, CREATE, SupplierPermissions.VENDOR_WRITE),
@@ -174,8 +178,9 @@ class SupplierVendorControllerWebMvcTest {
     @org.junit.jupiter.api.Test
     void taxRegistrationSchemesAreRelayedUnchanged() throws Exception {
         when(schemeClient.fetch("CA"))
-                .thenReturn(com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig
-                        .placeholderVocabulary());
+                .thenReturn(
+                        com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig
+                                .placeholderVocabulary());
         mockMvc.perform(authed(
                         get(BASE + "/tax-registration-schemes").param("countryCode", "CA"),
                         SupplierPermissions.VENDOR_READ))

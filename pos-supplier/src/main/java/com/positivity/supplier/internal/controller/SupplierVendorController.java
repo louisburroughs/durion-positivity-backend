@@ -2,10 +2,10 @@ package com.positivity.supplier.internal.controller;
 
 import com.positivity.events.EmitEvent;
 import com.positivity.shared.error.ApiError;
-import com.positivity.supplier.internal.exception.TaxIdRevealReasonRejectedException;
-import com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException;
 import com.positivity.supplier.internal.client.TaxRegistrationSchemeClient;
 import com.positivity.supplier.internal.client.TaxRegistrationSchemes;
+import com.positivity.supplier.internal.exception.TaxIdRevealReasonRejectedException;
+import com.positivity.supplier.internal.exception.VendorTaxIdUnreadableException;
 import com.positivity.supplier.internal.security.SupplierPermissions;
 import com.positivity.supplier.internal.service.model.PagedResponse;
 import com.positivity.supplier.internal.vendor.service.SupplierVendorService;

@@ -69,8 +69,9 @@ public class TaxRegistrationSchemes {
             for (int i = 0; i < source.size(); i++) {
                 SchemeEntry entry = validate(prefix + "[" + i + "]", country, source.get(i));
                 if (!codes.add(entry.scheme())) {
-                    throw invalid(prefix + "[" + i + "].scheme", "repeats scheme " + entry.scheme()
-                            + "; a code is unique across every country");
+                    throw invalid(
+                            prefix + "[" + i + "].scheme",
+                            "repeats scheme " + entry.scheme() + "; a code is unique across every country");
                 }
                 built.add(entry);
             }
@@ -92,7 +93,9 @@ public class TaxRegistrationSchemes {
         }
         return new TaxRegistrationSchemesResponse(
                 SOURCE,
-                schemes.stream().filter(s -> s.countryCode().equals(countryCode)).toList());
+                schemes.stream()
+                        .filter(s -> s.countryCode().equals(countryCode))
+                        .toList());
     }
 
     // ---------------------------------------------------------------------------------------

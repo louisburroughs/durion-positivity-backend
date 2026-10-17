@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
-import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.shared.error.ApiError;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
@@ -939,8 +939,9 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         void vocabulary() {
             org.mockito.Mockito.reset(schemeClient);
             org.mockito.Mockito.when(schemeClient.fetch(org.mockito.ArgumentMatchers.any()))
-                    .thenReturn(com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig
-                            .placeholderVocabulary());
+                    .thenReturn(
+                            com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig
+                                    .placeholderVocabulary());
         }
 
         private VendorView createWith(TaxRegistrationDto... registrations) {
@@ -957,7 +958,9 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         }
 
         private static List<String> fields(SupplierValidationException refused) {
-            return refused.getFieldErrors().stream().map(ApiError.FieldError::field).toList();
+            return refused.getFieldErrors().stream()
+                    .map(ApiError.FieldError::field)
+                    .toList();
         }
 
         private JsonNode stored(UUID vendorId) {
@@ -983,7 +986,8 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             assertThat(stored.get(0).path("scheme").stringValue()).isEqualTo("GST_HST");
             assertThat(stored.get(0).path("region").isNull()).isTrue();
             assertThat(stored.get(1).path("region").stringValue()).isEqualTo("QC");
-            org.mockito.Mockito.verify(schemeClient, org.mockito.Mockito.times(1)).fetch(null);
+            org.mockito.Mockito.verify(schemeClient, org.mockito.Mockito.times(1))
+                    .fetch(null);
         }
 
         @Test
@@ -996,8 +1000,8 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             JsonNode stored = stored(vendor.vendorId());
             java.util.Set<String> ssnFields = new java.util.TreeSet<>();
             java.util.Set<String> einFields = new java.util.TreeSet<>();
-            stored.get(0).propertyNames().forEachRemaining(ssnFields::add);
-            stored.get(1).propertyNames().forEachRemaining(einFields::add);
+            stored.get(0).properties().forEach(property -> ssnFields.add(property.getKey()));
+            stored.get(1).properties().forEach(property -> einFields.add(property.getKey()));
             assertThat(ssnFields).isEqualTo(einFields).contains("registrationId", "scheme", "region", "last4");
             assertThat(vendor.taxRegistrations().get(0).last4()).isEqualTo("1234");
             JsonNode fact = envelope(vendorFacts(vendor.vendorId()).getFirst())
@@ -1028,7 +1032,9 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                     new TaxRegistrationDto(null, "TAXID", GST, null),
                     new TaxRegistrationDto(null, "QST", QST_NUMBER, "ON")));
             assertThat(fields(both)).containsExactly("taxRegistrations[0].scheme", "taxRegistrations[1].region");
-            assertThat(both.getMessage() + both.getFieldErrors()).doesNotContain(GST).doesNotContain(QST_NUMBER);
+            assertThat(both.getMessage() + both.getFieldErrors())
+                    .doesNotContain(GST)
+                    .doesNotContain(QST_NUMBER);
 
             entityManager.flush();
             assertThat(vendorRepository.count()).isEqualTo(vendorsBefore);
@@ -1116,8 +1122,8 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                 refusal(() -> createWith(new TaxRegistrationDto(null, "QST", QST_NUMBER, "ON")));
                 org.mockito.Mockito.reset(schemeClient);
                 org.mockito.Mockito.when(schemeClient.fetch(org.mockito.ArgumentMatchers.any()))
-                        .thenThrow(new com.positivity.supplier.internal.exception
-                                .SupplierServiceUnavailableException("pos-tax could not be reached"));
+                        .thenThrow(new com.positivity.supplier.internal.exception.SupplierServiceUnavailableException(
+                                "pos-tax could not be reached"));
                 assertThatThrownBy(() -> createWith(new TaxRegistrationDto(null, "GST_HST", GST, null)))
                         .isInstanceOf(
                                 com.positivity.supplier.internal.exception.SupplierServiceUnavailableException.class);

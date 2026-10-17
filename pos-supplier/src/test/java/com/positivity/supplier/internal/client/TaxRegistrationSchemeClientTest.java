@@ -88,10 +88,9 @@ class TaxRegistrationSchemeClientTest {
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST));
         server.expect(requestTo("http://pos-tax/v1/tax/registration-schemes"))
                 .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
-        server.expect(requestTo("http://pos-tax/v1/tax/registration-schemes"))
-                .andRespond(request -> {
-                    throw new SocketTimeoutException("read timed out");
-                });
+        server.expect(requestTo("http://pos-tax/v1/tax/registration-schemes")).andRespond(request -> {
+            throw new SocketTimeoutException("read timed out");
+        });
 
         for (int i = 0; i < 4; i++) {
             assertThatThrownBy(() -> client.fetch(null))

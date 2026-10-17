@@ -78,7 +78,8 @@ public class TaxRegistrationSchemeClient {
                     "pos-tax answered " + e.getStatusCode().value() + " to the registration-scheme read", e);
         } catch (RestClientException e) {
             log.warn("pos-tax registration schemes unavailable | path={} | status=unreachable", path);
-            throw new SupplierServiceUnavailableException("pos-tax could not be reached for the registration schemes", e);
+            throw new SupplierServiceUnavailableException(
+                    "pos-tax could not be reached for the registration schemes", e);
         }
     }
 }

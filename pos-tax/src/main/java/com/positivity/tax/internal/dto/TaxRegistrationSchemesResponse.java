@@ -23,6 +23,7 @@ public record TaxRegistrationSchemesResponse(
                 example = "STUB",
                 requiredMode = Schema.RequiredMode.REQUIRED)
         String source,
+
         @Schema(
                 description = "The schemes, ordered by countryCode then scheme; empty for a country without any",
                 requiredMode = Schema.RequiredMode.REQUIRED)
@@ -39,17 +40,24 @@ public record TaxRegistrationSchemesResponse(
      */
     @Schema(name = "TaxRegistrationScheme", description = "One configured tax-registration scheme")
     public record SchemeEntry(
-            @Schema(description = "Scheme code, unique across countries", example = "QST") String scheme,
-            @Schema(description = "ISO 3166-1 alpha-2 country code", example = "CA") String countryCode,
+            @Schema(description = "Scheme code, unique across countries", example = "QST")
+            String scheme,
+
+            @Schema(description = "ISO 3166-1 alpha-2 country code", example = "CA")
+            String countryCode,
+
             @Schema(description = "Label shown beside the code", example = "Quebec sales tax (placeholder)")
-                    String label,
+            String label,
+
             @Schema(description = "Who holds a registration under the scheme", example = "BUSINESS")
-                    String holderType,
+            String holderType,
+
             @Schema(description = "Whether a registration belongs to one region", example = "true")
-                    boolean regional,
+            boolean regional,
+
             @Schema(
-                            description = "Allowed ISO 3166-2 subdivision codes without the country prefix;"
-                                    + " empty unless regional",
-                            example = "[\"QC\"]")
-                    List<String> regions) {}
+                    description = "Allowed ISO 3166-2 subdivision codes without the country prefix;"
+                            + " empty unless regional",
+                    example = "[\"QC\"]")
+            List<String> regions) {}
 }

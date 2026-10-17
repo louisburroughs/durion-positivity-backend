@@ -19,8 +19,10 @@ import org.jspecify.annotations.NonNull;
         description = "The tax-registration schemes a vendor may be filed under, per country, as pos-tax answers them")
 public record TaxRegistrationSchemes(
         @Schema(description = "Origin of the list; STUB while the vocabulary is a placeholder", example = "STUB")
-                String source,
-        @Schema(description = "The schemes, ordered by countryCode then scheme") List<Scheme> schemes) {
+        String source,
+
+        @Schema(description = "The schemes, ordered by countryCode then scheme")
+        List<Scheme> schemes) {
 
     /**
      * One scheme.
@@ -36,7 +38,10 @@ public record TaxRegistrationSchemes(
     public record Scheme(
             @Schema(example = "QST") String scheme,
             @Schema(example = "CA") String countryCode,
-            @Schema(example = "Quebec sales tax registration (placeholder)") String label,
+
+            @Schema(example = "Quebec sales tax registration (placeholder)")
+            String label,
+
             @Schema(example = "BUSINESS") String holderType,
             @Schema(example = "true") boolean regional,
             @Schema(example = "[\"QC\"]") List<String> regions) {}
