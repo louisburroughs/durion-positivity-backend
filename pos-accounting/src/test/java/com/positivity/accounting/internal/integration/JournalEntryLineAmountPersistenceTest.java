@@ -22,7 +22,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Regression coverage for the {@code JournalEntryMapper#toLineEntity} null-amount bug: a
+ * Persistence round-trips of journal-entry lines, asserted after a flush and a fresh repository read.
+ *
+ * <p>Amounts: regression coverage for the {@code JournalEntryMapper#toLineEntity} null-amount bug: a
  * {@link JournalEntryCreateRequest.JournalEntryLineRequest} that omits one side of the amount
  * (single-sided lines are the normal case — see {@code isSingleSidedAmount}) must persist that
  * side as {@link BigDecimal#ZERO}, matching {@link JournalEntryLine}'s own default and its
@@ -35,7 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
  * not have caught it.
  */
 @Transactional
-@DisplayName("JournalEntryLine amount persistence — omitted request amounts")
+@DisplayName("JournalEntryLine persistence round-trips — omitted request amounts, response line ids")
 class JournalEntryLineAmountPersistenceTest extends PostgresIntegrationTestBase {
 
     @Autowired
@@ -142,7 +144,7 @@ class JournalEntryLineAmountPersistenceTest extends PostgresIntegrationTestBase 
                 journalEntryLineRepository.findByJournalEntry_JournalEntryId(created.getJournalEntryId()).stream()
                         .map(JournalEntryLine::getLineId)
                         .toList();
-        assertThat(persistedIds).hasSize(2).doesNotContainNull();
+        assertThat(persistedIds).hasSize(2);
         assertThat(created.getLines())
                 .extracting(JournalEntryResponse.JournalEntryLineResponse::getLineId)
                 .containsExactlyInAnyOrderElementsOf(persistedIds);

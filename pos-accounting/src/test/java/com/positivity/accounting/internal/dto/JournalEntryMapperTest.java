@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Unit tests for {@link JournalEntryMapper#toResponse}: journal entry lines answer with their GL
- * account's code and name (issue #2238).
+ * account's code and name (issue #2238) and with their own id (issue #2581).
  */
 @DisplayName("JournalEntryMapper Tests")
 class JournalEntryMapperTest {
