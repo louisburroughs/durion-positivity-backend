@@ -81,6 +81,8 @@ class CashQueriesTest extends BaseIntegrationTest {
         account.setAccountType(type);
         account.setAccountSubtype(subtype);
         account.setActivationDate(LocalDateTime.of(2020, 1, 1, 0, 0));
+        account.setCreatedBy("cash-query-test");
+        account.setModifiedBy("cash-query-test");
         return glAccounts.saveAndFlush(account);
     }
 
