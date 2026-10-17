@@ -172,7 +172,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                 request.justification(),
                 actor,
                 request.requestId(),
-                hash);
+                hash,
+                new Values(null, category.getLabel(), null, category.getExamples(), null, account, today));
         return remember(change, view(category, today));
     }
 
@@ -201,6 +202,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         }
         String actor = RegisterFloatServiceImpl.currentActor();
         String before = describeLabel(category.getLabel(), category.getExamples());
+        String oldLabel = category.getLabel();
+        String oldExamples = category.getExamples();
         category.setLabel(request.label().trim());
         category.setExamples(trimToNull(request.examples()));
         category.setModifiedBy(actor);
@@ -219,7 +222,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                 request.justification(),
                 actor,
                 request.requestId(),
-                hash);
+                hash,
+                new Values(oldLabel, saved.getLabel(), oldExamples, saved.getExamples(), null, null, null));
         return remember(change, view(saved, zoneResolver.today()));
     }
 
@@ -256,7 +260,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                 request.justification(),
                 actor,
                 request.requestId(),
-                hash);
+                hash,
+                Values.NONE);
         return remember(change, view(saved, zoneResolver.today()));
     }
 
@@ -318,7 +323,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                 request.justification(),
                 actor,
                 request.requestId(),
-                hash);
+                hash,
+                new Values(null, null, null, null, current == null ? null : current.getGlAccount(), account, from));
         return remember(change, view(saved, zoneResolver.today()));
     }
 
@@ -337,6 +343,35 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
         glMappings.save(mapping);
     }
 
+    /**
+     * The change as values (#2675), written on the row beside the audit text so the page can render and translate
+     * it (ADR-0030). Account names are taken at this moment: the history is the audit trail.
+     */
+    record Values(
+            @Nullable String oldLabel,
+            @Nullable String newLabel,
+            @Nullable String oldExamples,
+            @Nullable String newExamples,
+            @Nullable GLAccount oldAccount,
+            @Nullable GLAccount newAccount,
+            @Nullable LocalDate effectiveFrom) {
+
+        /** DEACTIVATE: the status codes in oldValue / newValue say it all. */
+        static final Values NONE = new Values(null, null, null, null, null, null, null);
+
+        void writeTo(PettyExpenseCategoryChange change) {
+            change.setOldLabel(oldLabel);
+            change.setNewLabel(newLabel);
+            change.setOldExamples(oldExamples);
+            change.setNewExamples(newExamples);
+            change.setOldAccountNumber(oldAccount == null ? null : oldAccount.getAccountCode());
+            change.setOldAccountName(oldAccount == null ? null : oldAccount.getAccountName());
+            change.setNewAccountNumber(newAccount == null ? null : newAccount.getAccountCode());
+            change.setNewAccountName(newAccount == null ? null : newAccount.getAccountName());
+            change.setEffectiveFrom(effectiveFrom);
+        }
+    }
+
     private PettyExpenseCategoryChange record(
             PettyExpenseCategory category,
             PettyExpenseCategoryChangeType type,
@@ -345,13 +380,15 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
             String justification,
             String actor,
             UUID requestId,
-            String hash) {
+            String hash,
+            Values values) {
         PettyExpenseCategoryChange change = new PettyExpenseCategoryChange();
         change.setPettyExpenseCategoryId(category.getPettyExpenseCategoryId());
         change.setCode(category.getCode());
         change.setChangeType(type);
         change.setOldValue(oldValue);
         change.setNewValue(newValue);
+        values.writeTo(change);
         change.setActor(actor);
         change.setJustification(justification.trim());
         change.setRequestId(requestId);
@@ -492,7 +529,16 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
                                 change.getChangeType(),
                                 change.getOldValue(),
                                 change.getNewValue(),
-                                change.getJustification()))
+                                change.getJustification(),
+                                change.getOldLabel(),
+                                change.getNewLabel(),
+                                change.getOldExamples(),
+                                change.getNewExamples(),
+                                change.getOldAccountNumber(),
+                                change.getOldAccountName(),
+                                change.getNewAccountNumber(),
+                                change.getNewAccountName(),
+                                change.getEffectiveFrom()))
                         .toList(),
                 false);
     }

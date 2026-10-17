@@ -18,15 +18,16 @@ public final class CashRequests {
     /**
      * A justification of {@value #MIN_JUSTIFICATION} to {@value #MAX_JUSTIFICATION} characters.
      *
-     * @throws InvalidRequestParameterException (400 {@code VALIDATION_ERROR}) otherwise
+     * @throws InvalidRequestParameterException (400 {@code VALIDATION_ERROR} naming {@code field}, #2675) otherwise
      */
     public static void requireJustification(@Nullable String value, String field) {
         if (value == null || value.trim().length() < MIN_JUSTIFICATION) {
-            throw new InvalidRequestParameterException(
-                    field + " is required and must be at least " + MIN_JUSTIFICATION + " characters");
+            throw InvalidRequestParameterException.forField(
+                    field, field + " is required and must be at least " + MIN_JUSTIFICATION + " characters");
         }
         if (value.length() > MAX_JUSTIFICATION) {
-            throw new InvalidRequestParameterException(field + " must not exceed " + MAX_JUSTIFICATION + " characters");
+            throw InvalidRequestParameterException.forField(
+                    field, field + " must not exceed " + MAX_JUSTIFICATION + " characters");
         }
     }
 

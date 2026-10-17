@@ -102,7 +102,7 @@ class CashSetupControllerSecurityTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a create with a code outside [A-Z0-9_]{1,40} is 400 VALIDATION_ERROR")
+    @DisplayName("a create with a code outside [A-Z0-9_]{1,40} is 400 VALIDATION_ERROR naming code (#2675 AC2)")
     void categoryCodeIsValidated() throws Exception {
         mockMvc.perform(post(CATEGORIES)
                         .header("X-User", TEST_USER)
@@ -110,6 +110,36 @@ class CashSetupControllerSecurityTest extends BaseIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CREATE_BODY.replace("TIRE_DISPOSAL", "tire disposal")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("code"));
+    }
+
+    @Test
+    @DisplayName("a create with a 9-character justification is 400 VALIDATION_ERROR naming justification (#2675 AC1)")
+    void categoryJustificationIsNamed() throws Exception {
+        mockMvc.perform(post(CATEGORIES)
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", "accounting:mapping-key:create,accounting:gl-mapping:create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CREATE_BODY.replace("Cashiers pay the scrap hauler", "123456789")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors.length()").value(1))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("justification"));
+    }
+
+    @Test
+    @DisplayName("a remap with no effectiveFrom is 400 VALIDATION_ERROR naming effectiveFrom (#2675 AC3)")
+    void remapEffectiveFromIsNamed() throws Exception {
+        mockMvc.perform(post(CATEGORIES + "/STAFF_MEALS/account")
+                        .header("X-User", TEST_USER)
+                        .header("X-Authorities", "accounting:mapping-key:edit,accounting:gl-mapping:create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"glAccountId\":\"019a0000-0000-7000-8000-00000000c000\","
+                                + "\"justification\":\"Own account from November\","
+                                + "\"requestId\":\"019a0000-0000-7000-8000-000000000107\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("effectiveFrom"));
     }
 }

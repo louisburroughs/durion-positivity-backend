@@ -1740,6 +1740,16 @@ it as absent. Clients treat a missing field as null.
   responses, a replayed `requestId` included. Same resolver and rules; one lookup per response across every
   category's rows. The name is resolved when the response is built: the kept replay copy (`response_json`) never
   holds one, so a replay serves the person's current name.
+- **Petty-expense category history as values (#2675, S21 ruling Q4; ADR-0030).** Each history row carries, beside
+  the stored audit text `oldValue` / `newValue`, the change as nullable fields the page renders and translates:
+  `oldLabel` / `newLabel` and `oldExamples` / `newExamples` (RELABEL both, CREATE the new), `oldAccountNumber` /
+  `oldAccountName` (REMAP, the account replaced; null when none was in effect), `newAccountNumber` /
+  `newAccountName` (CREATE, REMAP) and `effectiveFrom` (CREATE the business date, REMAP the requested date).
+  Written on the row (V27) when the change is made, the account name as it was then; DEACTIVATE rows keep the
+  status codes in `oldValue` / `newValue`; rows written before V27 have the fields null and the page shows the text.
+  A replayed `requestId` serves the same values (the kept `response_json`). The category commands' 400
+  `VALIDATION_ERROR` now names the refused field in `fieldErrors` (`code`, `label`, `examples`, `glAccountId`,
+  `effectiveFrom`, `justification`, `requestId`; tax recovery: `taxRecoverable`, `recoverablePercent`, `version`).
 - **The people-contact copy** (V25, ADR-0044 §6; the pos-location / pos-customer precedent). pos-accounting never
   joins another database and never calls pos-people-contact or pos-security-service for a name.
   `PeopleContactEventsListener` consumes `people-contact.events.v1`
