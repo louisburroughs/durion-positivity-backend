@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
+import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
@@ -143,7 +145,7 @@ public interface APPaymentService {
     @NonNull
     APPaymentResponse retryGLPosting(
             @NonNull UUID paymentId,
-            @NonNull com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest request,
+            @NonNull APPaymentGLPostingRetryRequest request,
             @NonNull String currentUser);
 
     /**
@@ -155,7 +157,7 @@ public interface APPaymentService {
     @NonNull
     APPaymentResponse reconcileGateway(
             @NonNull UUID paymentId,
-            @NonNull com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest request,
+            @NonNull ReconcileAPPaymentGatewayRequest request,
             @NonNull String currentUser);
 
     /**

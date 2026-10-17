@@ -128,16 +128,16 @@ public class APPaymentResponse {
             description = "DEFERRED_PAST_HARD_LOCK when the entry was dated the retry's business date because the"
                     + " payment's own date is hard-locked (#2729); null otherwise",
             example = "DEFERRED_PAST_HARD_LOCK",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String postingDateRule;
 
-    @Schema(description = "Why a VOIDED payment was voided (#2729)", requiredMode = NOT_REQUIRED)
+    @Schema(description = "Why a VOIDED payment was voided (#2729)", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String voidReason;
 
-    @Schema(description = "When the payment was voided", requiredMode = NOT_REQUIRED)
+    @Schema(description = "When the payment was voided", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant voidedAt;
 
-    @Schema(description = "Who voided the payment", requiredMode = NOT_REQUIRED)
+    @Schema(description = "Who voided the payment", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String voidedBy;
 
     @Nullable
