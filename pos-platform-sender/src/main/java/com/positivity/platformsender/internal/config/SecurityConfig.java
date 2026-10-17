@@ -1,8 +1,10 @@
 package com.positivity.platformsender.internal.config;
 
 import com.positivity.platformsender.internal.security.SenderSecretFilter;
+import com.positivity.security.common.GatewayAuthoritiesFilter;
 import com.positivity.security.common.GatewaySecurityConfig;
 import java.time.Clock;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -44,5 +46,21 @@ public class SecurityConfig {
                         new SenderSecretFilter(properties.apiSecret(), clock, objectMapper),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
+    }
+
+    /**
+     * Keeps {@link GatewayAuthoritiesFilter} inside the gateway chain only (#2656, as pos-tax does since S32c). As a
+     * {@code @Bean} it is also registered as a plain servlet filter, running after the security chains; on a
+     * secret-authenticated request, which carries no gateway headers, it would clear the authentication the sender-secret chain set,
+     * and the controller would answer 401 or 403 for a call the secret had already authenticated. The gateway chain
+     * adds the filter itself, so nothing else changes.
+     */
+    @Bean
+    public FilterRegistrationBean<GatewayAuthoritiesFilter> gatewayAuthoritiesFilterServletRegistration(
+            GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
+        FilterRegistrationBean<GatewayAuthoritiesFilter> registration =
+                new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 }

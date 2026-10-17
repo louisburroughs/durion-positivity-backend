@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.security.common.GatewayAuthoritiesFilter;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenant.internal.config.SecurityConfig;
@@ -27,7 +26,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -53,15 +51,6 @@ class InternalTenantRegistryControllerWebMvcTest {
         @Bean
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-09-10T12:00:00Z"), ZoneOffset.UTC);
-        }
-
-        /** Keep GatewayAuthoritiesFilter inside its chain, as PlatformControllersWebMvcTest does. */
-        @Bean
-        FilterRegistrationBean<GatewayAuthoritiesFilter> gatewayAuthoritiesFilterRegistration(
-                GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration = new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
         }
     }
 
