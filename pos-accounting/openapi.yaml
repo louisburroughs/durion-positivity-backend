@@ -566,7 +566,7 @@ paths:
 
         Required inputs: vendorId (UUID), grossAmount (min 0.01), currency (ISO 4217), paymentRef (max 100 chars, the idempotency key) and paymentMethod; bankAccountId may be omitted only when exactly one eligible account exists, and feeAmount, overrideJustification (10-1000 chars, honoured with accounting:period:override), paymentSource, memo and explicit allocations are optional.
 
-        Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with the same payload (the bank account compared as resolved) as a 200 instead of paying twice, and a gateway failure or timeout leaves no payment behind, so the same paymentRef is simply sent again.
+        Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with the same payload (the bank account compared as resolved) as a 200 instead of paying twice. A gateway decline leaves the payment GATEWAY_FAILED (the paymentRef is spent at the gateway too); no gateway answer (a timeout) leaves it GATEWAY_PENDING with nothing allocated or posted, and the same paymentRef sent again resumes it (the gateway replays under the same idempotency key), or an operator who knows the outcome reconciles it with reconcileApPaymentGateway (#2729).
 
         Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT, LOCK_TIMEOUT or VENDOR_PAYMENT_DETAILS_CHANGED (naming each bill and the vendor number), 422 AP_PAYMENT_METHOD_NOT_SUPPORTED, CURRENCY_NOT_SUPPORTED, VENDOR_INACTIVE, VENDOR_ON_AP_HOLD (the message names the vendor number, the reason is on the vendor read), ACCOUNTING_TIME_ZONE_UNSET, PERIOD_HARD_LOCKED, PERIOD_CLOSED or GL_MAPPING_NOT_CONFIGURED, and 500 PAYMENT_GATEWAY_FAILURE when the gateway fails or times out, and 503 VENDOR_REPLICATION_PENDING (Retry-After) when the vendor is not in the copy yet.
 
@@ -704,6 +704,35 @@ paths:
       - AP Payments
       x-required-permissions:
       - accounting:ap:view
+  /v1/accounting/ap/payments/in-flight:
+    get:
+      description: 'Lists the AP payments whose charge the gateway accepted as PENDING or AUTHORIZED (an ACH in flight), or that an operator reconciled as CHARGED, and that the settlement job has not yet seen settled or returned (#2642): settlementStatus IN_FLIGHT, oldest payment date first. Each row carries its age in days on today''s business date, aged = true once older than the in-flight warning (seven days by default; ACH settles in three to five banking days), and settlementCheckedAt, the job''s last re-read. Use this tool to see what money is still on its way to vendors and which charges have taken too long; from here the operator waits or checks with the bank or the processor. Do not use it to re-send a payment (the charge exists); use recordApPaymentReturn instead when the bank reports a return. Preconditions: none; a tenant with no in-flight charge gets an empty list. Required inputs: none; the read is tenant-scoped and takes no parameters. Emits ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST and returns 200 with the list.
+
+        '
+      operationId: listApPaymentsInFlight
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/APPaymentInFlightResponse'
+                type: array
+          description: The payments in flight, oldest first
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN without accounting:ap:view
+      security:
+      - bearerAuth:
+        - accounting:ap:view
+      summary: AP payments the gateway has not settled yet
+      tags:
+      - AP Payments
+      x-required-permissions:
+      - accounting:ap:view
   /v1/accounting/ap/payments/{paymentId}:
     get:
       description: 'Returns one AP payment with its bill allocations and GL posting status.
@@ -750,19 +779,100 @@ paths:
       - AP Payments
       x-required-permissions:
       - accounting:ap:view
+  /v1/accounting/ap/payments/{paymentId}/allocations:
+    post:
+      description: 'Applies the unapplied amount of a cash-on-delivery AP payment (method CASH, created at session close, CAP:550 S17) to one or more of that vendor''s APPROVED bills.
+
+        Use this tool when a vendor was paid cash on delivery from a register drawer and the vendor''s bill has since been approved; do not use executeApPayment for it, which would pay the vendor twice, and do not use the journal-entry endpoints instead, which would change the ledger.
+
+        Preconditions: the payment exists, its method is CASH and something of it is unapplied; every bill is APPROVED, belongs to the payment''s vendor and has at least the applied amount open; the caller did not approve any of the bills (approver is not payer, AW6.2); the lines total at most the unapplied amount.
+
+        Required inputs: paymentId (UUID) as a path parameter; requestId (UUID, caller-minted) and allocations[] {vendorBillId, appliedAmount} in the body.
+
+        Emits an ACCOUNTING_AP_PAYMENT_ALLOCATE event. Posts nothing: AP was debited at session close and credited at bill approval, so the allocation only matches the subledger (AW41).
+
+        Returns 200 with the payment (unappliedAmount reduced); a replay of the same requestId and lines returns the same payment. 400 VALIDATION_ERROR for a bill of another vendor, an unapproved bill, an amount above the bill''s open amount or a total above the unapplied amount; 403 AP_PAYMENT_SELF_APPROVED_BILL when the caller approved one of the bills; 404 when the payment does not exist; 409 IDEMPOTENCY_CONFLICT when the requestId was used with another body; 422 AP_PAYMENT_NOT_ALLOCATABLE when nothing of the payment is unapplied (only a drawer cash-on-delivery payment or a gateway orphan reconciled CHARGED carries an unapplied amount).
+
+        '
+      operationId: allocateApPayment
+      parameters:
+      - description: AP payment id
+        in: path
+        name: paymentId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Allocate to one bill:
+                description: Allocate to one bill
+                value:
+                  allocations:
+                  - appliedAmount: 750.0
+                    vendorBillId: 01936e5c-7890-7a3d-8b6e-2b3456789def
+                  requestId: 01936e5c-7890-7a3d-8b6e-2b3456789abc
+            schema:
+              $ref: '#/components/schemas/AllocateAPPaymentRequest'
+        description: The caller-minted requestId and the approved bills to apply the unapplied amount to.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APPaymentResponse'
+          description: Allocated; the payment with its unapplied amount reduced
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: a bill of another vendor, not approved, over its open amount, or a total above the unapplied amount'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_PAYMENT_SELF_APPROVED_BILL: the caller approved one of the bills'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The payment does not exist
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'IDEMPOTENCY_CONFLICT: the requestId was used with another body'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_PAYMENT_NOT_ALLOCATABLE: nothing unapplied on this payment'
+      summary: Allocate an AP payment's unapplied amount to the vendor's approved bills
+      tags:
+      - AP Payments
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/ap/payments/{paymentId}/gl-posting-retry:
     post:
       description: 'Posts again the ledger entry of an executed AP payment whose posting was refused, on the payment''s own stored date: Dr 2000 the gross, Dr 6030 the fee, Cr the bank account it was paid from.
 
         Use this tool once the reason in glPostError is fixed (a GL mapping set up, a period reopened, or with an override); do not use executeApPayment again, which would pay the vendor twice, and do not use the journal-entry endpoints instead, which would post the payment outside its own record.
 
-        Preconditions: the payment exists and is GL_POST_FAILED; the payment row is locked for the retry, and the entry is never re-dated, so a payment whose date is now hard-locked stays GL_POST_FAILED.
+        Preconditions: the payment exists and is GL_POST_FAILED, or GL_POST_PENDING with its outbox row FAILED (#2729); the payment row is locked for the retry. The entry keeps the payment''s own date unless deferPastHardLock is true and that date is hard-locked: it is then dated today''s business date (AW42: never back into the original period), its description names the original date, and the payment records postingDateRule DEFERRED_PAST_HARD_LOCK.
 
-        Required inputs: paymentId (UUID) as a path parameter and an optional body with overrideJustification (10-1000 chars, honoured with the caller''s accounting:period:override and audited under the caller); a retry never reuses the override the payer gave on the pay command.
+        Required inputs: paymentId (UUID) as a path parameter and an optional body with overrideJustification (10-1000 chars, honoured with the caller''s accounting:period:override and audited under the caller), deferPastHardLock (with justification, audited); a retry never reuses the override the payer gave on the pay command.
 
         Emits ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY; on success the payment is GL_POSTED with its journal entry id, and a refused retry leaves it GL_POST_FAILED with the new reason in glPostError.
 
-        Returns 404 NOT_FOUND when no such payment exists, 409 AP_PAYMENT_NOT_RETRYABLE when it is not GL_POST_FAILED (already posted, pending, or a gateway state), 409 LOCK_TIMEOUT when another request holds it, and 422 GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED, PERIOD_HARD_LOCKED or ACCOUNTING_TIME_ZONE_UNSET when the posting is still refused.
+        Returns 404 NOT_FOUND when no such payment exists, 409 AP_PAYMENT_NOT_RETRYABLE when it is neither GL_POST_FAILED nor GL_POST_PENDING with a FAILED outbox row (already posted, a live delivery, or a gateway state: a GATEWAY_PENDING orphan is reconcileApPaymentGateway), 409 LOCK_TIMEOUT when another request holds it, 422 AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED for deferPastHardLock without a justification, and 422 GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED, PERIOD_HARD_LOCKED (without deferPastHardLock) or ACCOUNTING_TIME_ZONE_UNSET when the posting is still refused.
 
         '
       operationId: retryApPaymentGlPosting
@@ -831,6 +941,170 @@ paths:
       - AP Payments
       x-required-permissions:
       - accounting:je:post
+  /v1/accounting/ap/payments/{paymentId}/reconcile-gateway:
+    post:
+      description: 'Settles an AP payment stuck GATEWAY_PENDING (a crash or timeout between the gateway call and its answer, so whether money moved is unknown) with what the gateway actually did (#2729). NOT_CHARGED voids the payment: nothing was posted and no allocation exists yet, so there is nothing to reverse or reopen; the payment is VOIDED with the justification and may be re-issued. CHARGED records the gateway''s transaction id and posts the payment as an unapplied payment (Dr 2000 / Cr bank through the outbox); the vendor''s approved bills are allocated to it later with allocateApPayment.
+
+        Use this tool for a payment that reads GATEWAY_PENDING with no gateway timestamp; do not use it for a GL_POST_FAILED payment (retryApPaymentGlPosting) or for a charge that must be undone (#2642).
+
+        Preconditions: the payment is GATEWAY_PENDING; the outcome is what the operator verified at the gateway (until #2642 lets this service verify it); with CHARGED the gateway''s transaction id is given.
+
+        Required inputs: paymentId; gatewayOutcome (NOT_CHARGED or CHARGED), justification (10-1000 characters), gatewayTransactionId with CHARGED.
+
+        Emits ACCOUNTING_AP_PAYMENT_RECONCILE_GATEWAY and writes an audit row (old and new status, the asserted outcome, the actor, the justification).
+
+        Returns 200 with the payment (VOIDED, or GL_POST_PENDING with unappliedAmount = grossAmount), 400 VALIDATION_ERROR for a missing field, 404 NOT_FOUND, 409 AP_PAYMENT_NOT_VOIDABLE when the payment is in any other status (nextAction names the remedy: the retry, its deferPastHardLock, or #2642), 409 LOCK_TIMEOUT, and 422 AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED for CHARGED without a transaction id.
+
+        '
+      operationId: reconcileApPaymentGateway
+      parameters:
+      - description: Payment UUID
+        example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+        in: path
+        name: paymentId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Gateway charged:
+                description: Gateway charged
+                value:
+                  gatewayOutcome: CHARGED
+                  gatewayTransactionId: ch_3Q2abcDEF
+                  justification: Confirmed charged in the gateway dashboard
+              Gateway did not charge:
+                description: Gateway did not charge
+                value:
+                  gatewayOutcome: NOT_CHARGED
+                  justification: No charge under this reference in the gateway dashboard
+            schema:
+              $ref: '#/components/schemas/ReconcileAPPaymentGatewayRequest'
+        description: What the gateway actually did, with the operator's justification.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APPaymentResponse'
+          description: 'Reconciled: VOIDED, or GL_POST_PENDING as an unapplied payment'
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: gatewayOutcome or justification missing or malformed'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN without accounting:ap:pay
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'NOT_FOUND: no such AP payment'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_PAYMENT_NOT_VOIDABLE: the payment is not a GATEWAY_PENDING orphan (nextAction names the remedy); LOCK_TIMEOUT: another request holds the payment'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED: CHARGED without the gateway''s transaction id'
+      security:
+      - bearerAuth:
+        - accounting:ap:pay
+      summary: Reconcile a GATEWAY_PENDING AP payment with the gateway's outcome
+      tags:
+      - AP Payments
+      x-required-permissions:
+      - accounting:ap:pay
+  /v1/accounting/ap/payments/{paymentId}/record-return:
+    post:
+      description: 'Records a charge the bank or the processor sent back after it had moved money (#2642, AW42 applied to a payment): a statement return, or a processor notice the settlement job could not read from the gateway. In one transaction the payment''s allocations are reopened (kept as history; each bill''s open amount is restored and the bills are payable again), unappliedAmount becomes zero, and the mirror entry, the reversal of the payment''s own entry (Dr the bank gross + fee / Cr 2000 / Cr the fee account), is posted on the return date when that period is open, else on today''s business date (returnDateRule RETURN_DATE or DETECTION_DATE). The payment ends RETURNED, or RETURN_PENDING while its original posting is still pending or failed (the mirror follows the original, posted by the outbox or retryApPaymentGlPosting); a CLOSED period on today''s business date is 422 PERIOD_CLOSED unless the caller holds accounting:period:override and gives overrideJustification. Use this tool for a late return of a settled charge or for a gateway this service cannot re-read; do not use it for a GATEWAY_PENDING orphan (reconcileApPaymentGateway) or to cancel a payment that never moved money, and never re-send the payment (pay the bills again with a new paymentRef). Preconditions: the payment is GL_POST_PENDING, GL_POSTED or GL_POST_FAILED and not CASH; the return is what the bank or the processor reported (the gateway''s current answer is recorded with the attestation but never refuses the command). Required inputs: paymentId; requestId (the caller''s idempotency key) and justification (10-1000 characters); optional returnDate (not after today; today when omitted), failureCode (a code such as R01, never free text) and overrideJustification for a CLOSED detection date. Emits ACCOUNTING_AP_PAYMENT_RECORD_RETURN and writes audit rows AP_PAYMENT_RETURN (the reopened bills and amounts, the gateway''s answer) and AP_PAYMENT_RETURN_GL_POSTING (the mirror). Returns 200 with the payment (RETURNED or RETURN_PENDING), 400 VALIDATION_ERROR (a missing field, a return date after today), 404 NOT_FOUND, 409 AP_PAYMENT_NOT_RETURNABLE when the charge never moved money or the payment is CASH (nextAction names the remedy), 409 AP_PAYMENT_ALREADY_RETURNED, 409 IDEMPOTENCY_CONFLICT (the requestId was used with another body), 409 LOCK_TIMEOUT, 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED.
+
+        '
+      operationId: recordApPaymentReturn
+      parameters:
+      - description: Payment UUID
+        example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+        in: path
+        name: paymentId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              ACH return from the statement:
+                description: ACH return from the statement
+                value:
+                  failureCode: R01
+                  justification: 'Bank statement 2026-10-15: ACH return R01 (insufficient funds) for PAY-2026-0412'
+                  requestId: 0199c2d4-8f1a-7b3c-9d4e-5f6a7b8c9d0e
+                  returnDate: '2026-10-15'
+            schema:
+              $ref: '#/components/schemas/RecordAPPaymentReturnRequest'
+        description: 'The return as the bank or the processor reported it: the caller''s requestId, the reported date, the return code and the justification'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/APPaymentResponse'
+          description: 'Returned: RETURNED, or RETURN_PENDING while the mirror is owed'
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: requestId or justification missing, failureCode not a code, returnDate after today'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: FORBIDDEN without accounting:ap:pay
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'NOT_FOUND: no such AP payment'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'AP_PAYMENT_NOT_RETURNABLE: the charge never moved money, or a CASH payment (nextAction names the remedy); AP_PAYMENT_ALREADY_RETURNED; IDEMPOTENCY_CONFLICT: the requestId was used with another body; LOCK_TIMEOUT: another request holds the payment'
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PERIOD_CLOSED: the detection date''s period is CLOSED and the caller gave no override; PERIOD_HARD_LOCKED'
+      security:
+      - bearerAuth:
+        - accounting:ap:pay
+      summary: 'Record a returned AP payment charge: reverse its entry, reopen its allocations'
+      tags:
+      - AP Payments
+      x-required-permissions:
+      - accounting:ap:pay
   /v1/accounting/audit/actor/{actorId}:
     get:
       description: 'Returns audit trail entries recorded by one actor (user) within a date range, across all exception types.
@@ -4720,13 +4994,13 @@ paths:
 
         Use this tool once the underlying mapping gap is fixed; do not use retryAccountingEvent, which is the unaudited retry for transient failures (FAILED events only, no mapping-version pin).
 
-        Preconditions: the event must exist and be SUSPENDED or FAILED; an event already PROCESSED is rejected to preserve idempotency, and any other status (RECEIVED, PROCESSING, SKIPPED) is rejected as not reprocessable. A fact held for its currency (failureReasonCode CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still not the ledger''s it stays SUSPENDED with that reason and nothing is posted. A closed register session (order.session.closed) held GL_MAPPING_NOT_CONFIGURED, failed VALIDATION_ERROR or held for its currency re-runs its own posting (drawer movements, over/short) from the stored fact, never the posting engine: it posts once, or ends PROCESSED / DUPLICATE_IGNORED when it already posted.
+        Preconditions: the event must exist and be SUSPENDED or FAILED; an event already PROCESSED is rejected to preserve idempotency, and any other status (RECEIVED, PROCESSING, SKIPPED) is rejected as not reprocessable. A Kafka fact (goodsreceipt.recorded, order.session.closed, invoice.updated, payment.payment.settled) re-runs its own posting from the stored fact through its dedicated route, never the posting engine; a held Kafka fact no route can release, such as a settled payment or an invoice held for its currency (failureReasonCode CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9, released by Stage B1 only), is refused with 409 ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE and a nextAction, the row untouched. A closed register session (order.session.closed) held GL_MAPPING_NOT_CONFIGURED, failed VALIDATION_ERROR or held for its currency re-runs its own posting (drawer movements, over/short) from the stored fact, never the posting engine: it posts once, or ends PROCESSED / DUPLICATE_IGNORED when it already posted.
 
         Required inputs: eventId (UUID) as a path parameter; the body is optional and may carry mappingVersionToUse (a UUID) and reprocessingNotes, and any user field in it is ignored.
 
         Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 with status PROCESSED while 202 means processing continues.
 
-        Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already PROCESSED or is neither SUSPENDED nor FAILED, and 400 when the request is invalid.
+        Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already PROCESSED or is neither SUSPENDED nor FAILED, 409 ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE when it is a held Kafka fact no route can release, and 400 when the request is invalid.
 
         '
       operationId: reprocessSuspendedEvent
@@ -4774,7 +5048,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Event already PROCESSED (idempotency violation), or neither SUSPENDED nor FAILED
+          description: 'Event already PROCESSED (idempotency violation), or neither SUSPENDED nor FAILED; or ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE: a held Kafka fact no route can release (nextAction names what releases it), the row untouched'
       security:
       - bearerAuth:
         - accounting:events:reprocess
@@ -4836,7 +5110,7 @@ paths:
 
         Emits an ACCOUNTING_EVENT_RETRY event and returns 202 with the event in its new status.
 
-        Returns 404 EVENT_NOT_FOUND when the event does not exist, and 409 EVENT_NOT_RETRYABLE when the event is not FAILED.
+        Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 EVENT_NOT_RETRYABLE when the event is not FAILED, and 409 ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE when it is a Kafka fact no route can release (the row is left unchanged).
 
         '
       operationId: retryAccountingEvent
@@ -4875,7 +5149,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'EVENT_NOT_RETRYABLE: the event is not FAILED and was left unchanged'
+          description: 'EVENT_NOT_RETRYABLE: the event is not FAILED and was left unchanged; or ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE: a Kafka fact no route can release, left unchanged'
       security:
       - bearerAuth:
         - accounting:events:retry
@@ -5466,7 +5740,7 @@ paths:
 
         Emits an ACCOUNTING_GL_ACCOUNT_DEACTIVATE event; historical journal entries remain intact.
 
-        Returns 404 when no GL account exists for the supplied id, and 409 ACCOUNT_NOT_ZERO_BALANCE when the account balance is not zero.
+        Returns 404 when no GL account exists for the supplied id, 409 ACCOUNT_NOT_ZERO_BALANCE when the account balance is not zero, and 409 ACCOUNT_HAS_UNPOSTED_PAYMENTS when an AP payment naming the (bank) account has not posted yet: wait for the posting or resolve the GL_POST_FAILED payments first (#2645).
 
         '
       operationId: deactivateGLAccount
@@ -5505,7 +5779,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE)
+          description: Account balance is not zero (ACCOUNT_NOT_ZERO_BALANCE), or an AP payment naming the account has not posted yet (ACCOUNT_HAS_UNPOSTED_PAYMENTS)
       security:
       - bearerAuth:
         - accounting:coa:deactivate
@@ -6192,7 +6466,7 @@ paths:
 
         Emits an ACCOUNTING_JOURNAL_ENTRY_REVERSE event and returns the posted reversal entry.
 
-        Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), nor is the reversal entry of a bank deposit (409 DEPOSIT_REVERSAL_NOT_REVERSIBLE: record the deposit again), and a register float go-live or change entry of a register that has moved may not be reversed before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION, or 422 GL_MAPPING_NOT_CONFIGURED when its follow-up reclass finds no mapping).
+        Returns 400 when the reason is blank, 404 JOURNAL_ENTRY_NOT_FOUND when the entry does not exist, 409 JE_ALREADY_REVERSED when the entry was already reversed (including a lost concurrent-reversal race), 409 JE_NOT_POSTED when it is DRAFT or PENDING, and 422 PERIOD_CLOSED or PERIOD_HARD_LOCKED for period-gate failures. A register float relocation entry is never reversed (409 FLOAT_RELOCATION_NOT_REVERSIBLE: move the register again), nor is the reversal of a float go-live or change entry (409 FLOAT_REVERSAL_NOT_REVERSIBLE: set the float again), nor is the reversal entry of a bank deposit (409 DEPOSIT_REVERSAL_NOT_REVERSIBLE: record the deposit again), and a register float go-live or change entry of a register that has moved may not be reversed before its latest move (422 FLOAT_REVERSAL_BEFORE_RELOCATION, or 422 GL_MAPPING_NOT_CONFIGURED when its follow-up reclass finds no mapping).
 
         '
       operationId: reverseJournalEntry
@@ -6247,7 +6521,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), a register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE) or a bank deposit's reversal entry (DEPOSIT_REVERSAL_NOT_REVERSIBLE)
+          description: Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), a register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE), the reversal of a register float go-live or change entry (FLOAT_REVERSAL_NOT_REVERSIBLE) or a bank deposit's reversal entry (DEPOSIT_REVERSAL_NOT_REVERSIBLE)
         '422':
           content:
             application/json:
@@ -10811,7 +11085,7 @@ paths:
 
         Use this tool once per register, when the shop starts using the system with cash already in the drawer; do not use changeRegisterFloat, which moves the difference to or from a bank account, and do not use createJournalEntry, which records no float.
 
-        Preconditions: caller holds accounting:float:manage; the go-live date falls in an OPEN period, with no override path (422 PERIOD_CLOSED or PERIOD_HARD_LOCKED otherwise); the register has no standing go-live and no standing float change (409 FLOAT_ALREADY_ESTABLISHED; correct a mistake by reversing the entry and running go-live again). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
+        Preconditions: caller holds accounting:float:manage; the go-live date falls in an OPEN period, with no override path (422 PERIOD_CLOSED or PERIOD_HARD_LOCKED otherwise); the register has no standing go-live and no standing float change (409 FLOAT_ALREADY_ESTABLISHED; correct a mistake by reversing the entry and running go-live again; the reversal itself is final (409 FLOAT_REVERSAL_NOT_REVERSIBLE): never reverse it, run the go-live or change-float command again). Idempotent on requestId: a replay returns the first result with 200, another body with the same requestId is 409 IDEMPOTENCY_CONFLICT.
 
         Required inputs: registerId (path, pos-order''s terminalId), locationId, amount (more than zero), currencyCode (ISO 4217, the functional currency: 422 CURRENCY_NOT_SUPPORTED otherwise), goLiveDate, justification (at least 10 characters), requestId.
 
@@ -14345,11 +14619,81 @@ components:
     APPaymentGLPostingRetryRequest:
       description: Optional request payload for posting a refused AP payment again
       properties:
+        deferPastHardLock:
+          description: 'When the payment''s own date is now hard-locked (glPostError PERIOD_HARD_LOCKED), post the entry on today''s business date instead (#2729, AW42: never back into the original period); the entry''s description carries the original payment date and the payment records postingDateRule DEFERRED_PAST_HARD_LOCK. Needs justification. Default false'
+          example: true
+          type: boolean
+        justification:
+          description: Why the posting is deferred past the hard lock; required with deferPastHardLock, audited under the caller
+          example: May is hard-locked after the audit; the June business date carries the May check
+          maxLength: 1000
+          minLength: 10
+          type: string
         overrideJustification:
           description: Justification for posting into the CLOSED period of the payment's own date; honoured only with the caller's accounting:period:override, and audited under the caller. A retry never reuses the override the payer gave on the pay command. Never bypasses the hard lock.
           example: Period reopened for audit adjustments; posting the June vendor payment
           maxLength: 1000
           minLength: 10
+          type: string
+      type: object
+    APPaymentInFlightResponse:
+      description: 'An AP payment in flight: accepted by the gateway, not yet settled'
+      properties:
+        ageDays:
+          description: Days since the payment date on today's business date
+          example: 9
+          format: int64
+          type: integer
+        aged:
+          description: 'True once the payment has been in flight longer than accounting.ap.settlement.in-flight-warning (default P7D): the operator checks with the bank or the processor'
+          example: true
+          type: boolean
+        currency:
+          description: Currency
+          example: USD
+          type: string
+        grossAmount:
+          description: Gross amount
+          example: 412.0
+          type: number
+        paymentDate:
+          description: The payment's business date (the instruction's acceptance)
+          example: '2026-10-08'
+          format: date
+          type: string
+        paymentId:
+          description: Payment UUID
+          format: uuid
+          type: string
+        paymentRef:
+          description: Payment reference
+          example: PAY-2026-0412
+          type: string
+        settlementCheckedAt:
+          description: When the settlement job last re-read the gateway
+          format: date-time
+          type: string
+        status:
+          description: Payment status
+          enum:
+          - INITIATED
+          - GATEWAY_PENDING
+          - GATEWAY_FAILED
+          - GATEWAY_SUCCEEDED
+          - GL_POST_PENDING
+          - GL_POSTED
+          - GL_POST_FAILED
+          - VOIDED
+          - RETURN_PENDING
+          - RETURNED
+          example: GL_POSTED
+          type: string
+        vendorId:
+          description: Vendor UUID
+          format: uuid
+          type: string
+        vendorName:
+          description: Vendor display name at payment time
           type: string
       type: object
     APPaymentResponse:
@@ -14363,6 +14707,10 @@ components:
         bankAccountId:
           description: GL account id of the BANK_CASH account the payment was made from (CAP:550 S42)
           example: 01936e5c-1111-7a3d-8b6e-2b3456789012
+          format: uuid
+          type: string
+        cashMovementId:
+          description: 'For a CASH payment: the VENDOR_COD drawer movement it came from (S17)'
           format: uuid
           type: string
         createdAt:
@@ -14423,9 +14771,65 @@ components:
           example: 01936e5c-7890-7a3d-8b6e-2b3456789012
           format: uuid
           type: string
+        paymentMethod:
+          description: How the vendor was paid; CASH is a drawer cash-on-delivery payment (S17)
+          enum:
+          - ACH
+          - CHECK
+          - WIRE
+          - CREDIT_CARD
+          - CASH
+          - OTHER
+          example: ACH
+          type: string
         paymentRef:
           description: Payment reference (idempotency key)
           example: 01936e5c-7890-7a3d-8b6e-2b3456789012
+          type: string
+        postingDateRule:
+          description: DEFERRED_PAST_HARD_LOCK when the entry was dated the retry's business date because the payment's own date is hard-locked (#2729); null otherwise
+          example: DEFERRED_PAST_HARD_LOCK
+          type: string
+        registerSessionId:
+          description: 'For a CASH payment: the register session whose close created it (S17)'
+          format: uuid
+          type: string
+        returnDate:
+          description: The date the mirror entry is (or will be) posted on
+          format: date
+          type: string
+        returnDateRule:
+          description: RETURN_DATE (the failure date's period was open) or DETECTION_DATE (it was closed, so the mirror is dated when the return was detected)
+          type: string
+        returnFailureCode:
+          description: The gateway's or bank's return code (never free text)
+          type: string
+        returnJournalEntryId:
+          description: 'The mirror entry: the reversal of the payment''s own journal entry'
+          format: uuid
+          type: string
+        returnReportedDate:
+          description: The return date the bank or the gateway reported, as attested (kept whatever dates the mirror)
+          format: date
+          type: string
+        returnedAt:
+          description: When the return was recorded
+          format: date-time
+          type: string
+        settledAt:
+          description: When the gateway answered SUCCEEDED
+          format: date-time
+          type: string
+        settlementCheckedAt:
+          description: When the settlement job last re-read the gateway
+          format: date-time
+          type: string
+        settlementStatus:
+          description: 'Whether the gateway settled the charge (#2642): IN_FLIGHT (accepted PENDING, re-read by the settlement job), SETTLED, RETURNED; absent on CASH payments and rows older than the field'
+          enum:
+          - IN_FLIGHT
+          - SETTLED
+          - RETURNED
           type: string
         status:
           description: Payment status
@@ -14437,6 +14841,9 @@ components:
           - GL_POST_PENDING
           - GL_POSTED
           - GL_POST_FAILED
+          - VOIDED
+          - RETURN_PENDING
+          - RETURNED
           example: GATEWAY_SUCCEEDED
           type: string
         unappliedAmount:
@@ -14451,6 +14858,16 @@ components:
         vendorName:
           description: Vendor name
           example: Acme Supplies Ltd
+          type: string
+        voidReason:
+          description: Why a VOIDED payment was voided (#2729)
+          type: string
+        voidedAt:
+          description: When the payment was voided
+          format: date-time
+          type: string
+        voidedBy:
+          description: Who voided the payment
           type: string
       type: object
     AccountDrilldownResponse:
@@ -15055,6 +15472,24 @@ components:
       - overdue
       - totalOutstanding
       type: object
+    AllocateAPPaymentRequest:
+      description: Allocate an unapplied cash-on-delivery AP payment to the vendor's approved bills
+      properties:
+        allocations:
+          description: The bills to apply the payment to; the total may not exceed the unapplied amount
+          items:
+            $ref: '#/components/schemas/AllocationLineRequest'
+          minItems: 1
+          type: array
+        requestId:
+          description: 'Caller-minted idempotency key: a replay with the same lines answers the same payment; another body under the same id is 409 IDEMPOTENCY_CONFLICT'
+          example: 01936e5c-1234-7a3d-8b6e-123456789012
+          format: uuid
+          type: string
+      required:
+      - allocations
+      - requestId
+      type: object
     AllocationLineRequest:
       description: Allocation line for a specific vendor bill
       properties:
@@ -15089,6 +15524,10 @@ components:
           description: Amount applied to this bill
           example: 750.0
           type: number
+        reopenedAt:
+          description: 'Set when the payment was returned (#2642): the row is history and no longer counts towards the bill''s allocated amount'
+          format: date-time
+          type: string
         vendorBillId:
           description: Vendor bill UUID
           example: 01936e5d-1234-7a3d-8b6e-3c4567890123
@@ -19549,12 +19988,13 @@ components:
           minLength: 10
           type: string
         paymentMethod:
-          description: Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)
+          description: 'Payment method: ACH, CHECK or WIRE. CREDIT_CARD and OTHER are refused (422 AP_PAYMENT_METHOD_NOT_SUPPORTED), and so is CASH: a cash payment is created by the session-close posting of a drawer cash-on-delivery movement, never by this command (S17)'
           enum:
           - ACH
           - CHECK
           - WIRE
           - CREDIT_CARD
+          - CASH
           - OTHER
           example: ACH
           type: string
@@ -20840,6 +21280,12 @@ components:
           description: 'Whether recovery is on today: a registration in effect and the country''s currency equal to the functional currency. Null means it cannot be determined now (the tax service did not answer), never false: read it as unknown, not off'
           type:
           - boolean
+          - 'null'
+        label:
+          description: The regime's configured display label; null when the profile sets none or the tax service did not answer, never the code (#2679)
+          example: Value added tax
+          type:
+          - string
           - 'null'
         regime:
           description: Regime code, as the country profile names it
@@ -22760,11 +23206,41 @@ components:
           description: When the change was made
           format: date-time
           type: string
+        effectiveFrom:
+          description: 'CREATE: the business date the category posts from; REMAP: the requested effectiveFrom'
+          format: date
+          type: string
         justification:
           description: Why
           type: string
+        newAccountName:
+          description: 'CREATE and REMAP: that account''s name at that moment'
+          type: string
+        newAccountNumber:
+          description: 'CREATE and REMAP: the number of the account the category posts to from effectiveFrom'
+          example: '6350'
+          type: string
+        newExamples:
+          description: 'CREATE and RELABEL: the examples after'
+          type: string
+        newLabel:
+          description: 'CREATE and RELABEL: the label after'
+          type: string
         newValue:
           description: The value after
+          type: string
+        oldAccountName:
+          description: 'REMAP: the name of the account replaced, as it was at that moment'
+          type: string
+        oldAccountNumber:
+          description: 'REMAP: the number of the account replaced; null when none was in effect'
+          example: '6340'
+          type: string
+        oldExamples:
+          description: 'RELABEL: the examples before'
+          type: string
+        oldLabel:
+          description: 'RELABEL: the label before. Null on other rows and on rows written before #2675'
           type: string
         oldValue:
           description: The value before
@@ -23344,7 +23820,7 @@ components:
       description: Every accounting event processing status, and the lifecycles that produce them
       properties:
         kafkaFactLifecycle:
-          description: 'Status sequence for a Kafka-consumed posting fact: exactly one row is written per consumed fact, never RECEIVED or PROCESSING. It is terminal (PROCESSED or SKIPPED), except a hold. A fact held for its currency is SUSPENDED with failureReasonCode CURRENCY_NOT_SUPPORTED, and a malformed goods receipt is SUSPENDED with VALIDATION_ERROR; neither is auto-retried. A settled payment its automatic application could not complete is SUSPENDED or FAILED with its own reason. A manual reprocess re-runs a goods receipt''s or a settled payment''s own path from the stored fact, never the posting rules'
+          description: 'Status sequence for a Kafka-consumed posting fact: exactly one row is written per consumed fact, never RECEIVED or PROCESSING. It is terminal (PROCESSED or SKIPPED), except a hold. A fact held for its currency is SUSPENDED with failureReasonCode CURRENCY_NOT_SUPPORTED, and a malformed goods receipt is SUSPENDED with VALIDATION_ERROR; neither is auto-retried. A settled payment its automatic application could not complete is SUSPENDED or FAILED with its own reason. A manual reprocess re-runs a held goods receipt''s, register session''s, invoice''s or settled payment''s own path from the stored fact, never the posting rules; a held Kafka row with no such path (a settled payment held for its currency) is refused with 409 ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE and keeps its reason: a currency hold is released only when the ledger accepts the currency (ADR-0067 Stage B1), never by reprocess (#2620)'
           example:
           - PROCESSED|SKIPPED|SUSPENDED
           items:
@@ -23437,6 +23913,32 @@ components:
       - productId
       - quantity
       - unitPrice
+      type: object
+    ReconcileAPPaymentGatewayRequest:
+      description: Reconcile a GATEWAY_PENDING AP payment with the gateway's outcome
+      properties:
+        gatewayOutcome:
+          description: NOT_CHARGED voids the payment (nothing moved); CHARGED posts it as an unapplied payment, the vendor's bills allocated later
+          enum:
+          - NOT_CHARGED
+          - CHARGED
+          example: NOT_CHARGED
+          type: string
+        gatewayTransactionId:
+          description: The gateway's transaction id; required with CHARGED
+          example: ch_3Q2abcDEF
+          maxLength: 200
+          minLength: 0
+          type: string
+        justification:
+          description: Why this outcome is asserted (what was checked at the gateway); audited under the caller
+          example: Gateway console shows no charge for PAY-412 on 2026-10-16; the request timed out before an answer
+          maxLength: 1000
+          minLength: 10
+          type: string
+      required:
+      - gatewayOutcome
+      - justification
       type: object
     ReconciliationAdjustmentRequest:
       description: Post a reconciliation adjustment (a real journal entry)
@@ -23955,6 +24457,41 @@ components:
           type: string
       required:
       - reason
+      type: object
+    RecordAPPaymentReturnRequest:
+      description: 'Record a returned AP payment charge: the mirror entry posts and the allocations reopen'
+      properties:
+        failureCode:
+          description: The gateway's or bank's return code (an ACH return code such as R01); never free text
+          example: R01
+          maxLength: 64
+          minLength: 0
+          pattern: ^[A-Za-z0-9_.:-]*$
+          type: string
+        justification:
+          description: 'Why the return is recorded: the statement line or the processor notice it rests on'
+          example: 'Bank statement 2026-10-15: ACH return R01 (insufficient funds) for PAY-2026-0412'
+          maxLength: 1000
+          minLength: 10
+          type: string
+        overrideJustification:
+          description: Closed-period override of the caller (accounting:period:override) when the detection date's period is CLOSED; may be omitted
+          maxLength: 1000
+          minLength: 0
+          type: string
+        requestId:
+          description: 'The caller''s idempotency key (UUID): a replay with the same body answers the payment; a different body is 409 IDEMPOTENCY_CONFLICT'
+          example: 0199c2d4-8f1a-7b3c-9d4e-5f6a7b8c9d0e
+          format: uuid
+          type: string
+        returnDate:
+          description: The date the bank or processor returned the charge; today when omitted. Not after today. The mirror entry is dated here when the period is open, else on the detection date
+          example: '2026-10-15'
+          format: date
+          type: string
+      required:
+      - justification
+      - requestId
       type: object
     RecordTaxRegistrationRequest:
       description: 'A tax registration to record: the country''s regime, the number as printed and its dates'
@@ -25095,6 +25632,12 @@ components:
     TaxRegime:
       description: One configured tax regime, its regions and its tax types
       properties:
+        label:
+          description: The regime's configured display label; null when the profile sets none, never the code (#2679)
+          example: Value added tax
+          type:
+          - string
+          - 'null'
         regime:
           description: The regime code, as a tax registration names it
           example: ZZ_REGIME_1
@@ -25130,6 +25673,12 @@ components:
           - SPECIAL
           example: COUNTRY
           type: string
+        label:
+          description: The tax type's configured display label; null when the profile sets none, never the code (#2679)
+          example: Goods and services tax
+          type:
+          - string
+          - 'null'
         taxType:
           description: The configured tax-type code
           example: ZZ_LEVY
@@ -25201,6 +25750,12 @@ components:
           description: The regime
           example: GST_HST
           type: string
+        regimeLabel:
+          description: The regime's configured display label; null when the profile sets none or the tax service did not answer, never the code (#2679)
+          example: Value added tax
+          type:
+          - string
+          - 'null'
         registrationId:
           description: Registration id (pos-tax's)
           format: uuid
@@ -26234,6 +26789,12 @@ components:
           description: The regime it is recovered under, when known
           example: REGIME_1
           type: string
+        regimeLabel:
+          description: The regime's configured display label; null when unknown, never the code (#2679)
+          example: Value added tax
+          type:
+          - string
+          - 'null'
         statedAmount:
           description: The stated amount, signed like the bill
           example: 50.0
@@ -26242,6 +26803,12 @@ components:
           description: The tax type; null for a tax stated without its type
           example: TAX_TYPE_1
           type: string
+        taxTypeLabel:
+          description: The tax type's configured display label; null when unknown, never the code (#2679)
+          example: Goods and services tax
+          type:
+          - string
+          - 'null'
       required:
       - recoveredAmount
       - statedAmount
@@ -26826,6 +27393,11 @@ components:
           type: array
         taxOnResaleOverride:
           $ref: '#/components/schemas/VendorBillTaxOnResaleOverride'
+        taxTypeChoices:
+          description: 'The tax types the approver may split the stated tax into (CAP:550 #2679, AW51): those of the regimes whose recovery is on as of the date the approval would post on, for the bill''s tax country, with their labels. Filled only while the bill is approvable (AWAITING_APPROVAL or MATCH_EXCEPTION) and states tax; otherwise empty, which includes a tenant without recovery. Null when recovery cannot be read now (the tax service did not answer): unknown, not empty. A guide for the client only; approve and ACCEPT validate taxByType[] as before'
+          items:
+            $ref: '#/components/schemas/VendorBillTaxTypeChoice'
+          type: array
         totalAmount:
           description: Total bill amount
           example: 1200.0
@@ -27081,6 +27653,12 @@ components:
           description: The stated amount, signed like the bill's total
           example: 50.0
           type: number
+        label:
+          description: The tax type's configured display label; null when the profile sets none or the tax service did not answer, never the code (#2679)
+          example: Goods and services tax
+          type:
+          - string
+          - 'null'
         source:
           description: 'Where it came from: DOCUMENT, the bill''s own channel, or APPROVAL, copied from the document by the approver'
           enum:
@@ -27113,6 +27691,22 @@ components:
           type: string
       required:
       - source
+      type: object
+    VendorBillTaxTypeChoice:
+      description: A tax type the approver may split the bill's tax into
+      properties:
+        label:
+          description: Its configured display label; null when the profile sets none, never the code
+          example: Goods and services tax
+          type:
+          - string
+          - 'null'
+        taxType:
+          description: The configured tax-type code
+          example: TAX_TYPE_1
+          type: string
+      required:
+      - taxType
       type: object
     VendorBillVoidRequest:
       description: Void an approved bill while nothing is allocated to it, or a goods-receipt bill no invoice will match

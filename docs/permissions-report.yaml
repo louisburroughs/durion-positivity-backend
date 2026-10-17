@@ -1,9 +1,9 @@
-generatedAt: "2026-10-15T02:03:23.311507+00:00"
+generatedAt: "2026-10-17T12:23:57.379163+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 530
-  uniquePermissionCount: 530
+  permissionCount: 531
+  uniquePermissionCount: 531
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -645,7 +645,7 @@ manifests:
     domain: "order"
     serviceName: "pos-order"
     version: "1.0"
-    permissionCount: 33
+    permissionCount: 34
     permissions:
       - name: "order:order:view"
         description: "View orders"
@@ -713,6 +713,8 @@ manifests:
         description: "Send an approved purchase order to its vendor"
       - name: "order:purchase_order:availability_view"
         description: "Ask a vendor what it can supply against a purchase order"
+      - name: "order:purchase_order:reopen"
+        description: "Reopen a returned quantity of a purchase-order line for the vendor's replacement shipment (CAP:550 #2635)"
   - module: "pos-people"
     path: "pos-people/src/main/resources/permissions.yaml"
     domain: "people"
@@ -3038,6 +3040,12 @@ permissions:
     source: "pos-order/src/main/resources/permissions.yaml"
   - name: "order:purchase_order:create"
     description: "Create or revise a purchase order (DRAFT state)"
+    domain: "order"
+    serviceName: "pos-order"
+    module: "pos-order"
+    source: "pos-order/src/main/resources/permissions.yaml"
+  - name: "order:purchase_order:reopen"
+    description: "Reopen a returned quantity of a purchase-order line for the vendor's replacement shipment (CAP:550 #2635)"
     domain: "order"
     serviceName: "pos-order"
     module: "pos-order"
