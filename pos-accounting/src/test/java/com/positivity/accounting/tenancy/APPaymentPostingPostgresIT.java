@@ -734,17 +734,22 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
             SecurityContextHolder.clearContext();
         }
 
-        // Only the return reverses the entry: by hand, the payment's entry and its mirror are 409.
+        // Only the return reverses the entry: by hand, the original is already REVERSED (JE_ALREADY_REVERSED, the
+        // last guard) and the mirror is 409 AP_PAYMENT_ENTRY_NOT_REVERSIBLE (the reaction).
         signIn(CONTROLLER, CONTROLLER_GRANTS);
         try {
-            for (UUID entry : List.of(posted.getGlJournalEntryId(), returned.getReturnJournalEntryId())) {
-                assertThatThrownBy(() -> asTenant(
-                                tenant, () -> journalEntries.reverseJournalEntry(entry, "by hand", null, null)))
-                        .isInstanceOfSatisfying(
-                                VendorBillException.class,
-                                e -> assertThat(e.getCode())
-                                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_ENTRY_NOT_REVERSIBLE));
-            }
+            assertThatThrownBy(() -> asTenant(
+                            tenant,
+                            () -> journalEntries.reverseJournalEntry(posted.getGlJournalEntryId(), "by hand", null, null)))
+                    .isInstanceOf(com.positivity.accounting.internal.exception.JournalEntryNotReversibleException.class);
+            assertThatThrownBy(() -> asTenant(
+                            tenant,
+                            () -> journalEntries.reverseJournalEntry(
+                                    returned.getReturnJournalEntryId(), "by hand", null, null)))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            e -> assertThat(e.getCode())
+                                    .isEqualTo(VendorBillException.Code.AP_PAYMENT_ENTRY_NOT_REVERSIBLE));
         } finally {
             SecurityContextHolder.clearContext();
         }
