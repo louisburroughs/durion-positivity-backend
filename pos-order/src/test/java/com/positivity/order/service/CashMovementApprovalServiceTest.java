@@ -133,6 +133,27 @@ class CashMovementApprovalServiceTest {
         SecurityContextHolder.getContext().setAuthentication(token);
     }
 
+    @Test
+    @DisplayName("#2651 (ADR-0067 PC-6): an amount finer than the drawer currency's minor unit is refused, not rounded")
+    void amountFinerThanTheMinorUnitIsRefused() {
+        session.setCurrencyCode("CAD");
+        assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
+                        SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", new BigDecimal("30.005"), "CAD", null, null)))
+                .isInstanceOfSatisfying(
+                        com.positivity.order.internal.exception.CashMovementTaxRefusedException.class, e -> {
+                            assertThat(e.code())
+                                    .isEqualTo(com.positivity.order.internal.exception.CashMovementTaxRefusedException
+                                            .Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                            assertThat(e.fieldErrors()).extracting(f -> f.field()).containsExactly("amount");
+                        });
+
+        session.setCurrencyCode("JPY");
+        assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
+                        SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", new BigDecimal("30.5"), "JPY", null, null)))
+                .isInstanceOf(com.positivity.order.internal.exception.CashMovementTaxRefusedException.class);
+        verify(stepUp, never()).verify(any(), any(), any(), any());
+    }
+
     private static CashMovementApprovalCommand command(String username, String amount) {
         return new CashMovementApprovalCommand(
                 SESSION_ID, username, "s3cret", "PETTY_EXPENSE", new BigDecimal(amount), "USD", "SHOP_SUPPLIES", null);

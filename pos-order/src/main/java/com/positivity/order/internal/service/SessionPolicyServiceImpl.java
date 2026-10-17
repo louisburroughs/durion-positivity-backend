@@ -3,6 +3,7 @@ package com.positivity.order.internal.service;
 import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.SessionPolicy;
 import com.positivity.order.internal.entity.SessionPolicyChange;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.SessionPolicyConflictException;
 import com.positivity.order.internal.exception.SessionPolicyValidationException;
@@ -12,6 +13,7 @@ import com.positivity.order.internal.service.model.SessionPolicyChangeView;
 import com.positivity.order.internal.service.model.SessionPolicyView;
 import com.positivity.order.internal.service.model.UpdateSessionPolicyCommand;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -142,10 +144,10 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
 
         List<String[]> diffs = new ArrayList<>();
         diff(diffs, PETTY_EXPENSE_ALLOWED, before.pettyExpenseAllowed(), pettyAllowed);
-        diff(diffs, PETTY_EXPENSE_LIMIT, before.pettyExpenseLimit(), pettyLimit);
+        diff(diffs, PETTY_EXPENSE_LIMIT, before.pettyExpenseLimit(), pettyLimit, before.currencyCode());
         diff(diffs, VENDOR_COD_ALLOWED, before.vendorCodAllowed(), codAllowed);
-        diff(diffs, VENDOR_COD_LIMIT, before.vendorCodLimit(), codLimit);
-        diff(diffs, OVER_SHORT_TOLERANCE, before.overShortTolerance(), tolerance);
+        diff(diffs, VENDOR_COD_LIMIT, before.vendorCodLimit(), codLimit, before.currencyCode());
+        diff(diffs, OVER_SHORT_TOLERANCE, before.overShortTolerance(), tolerance, before.currencyCode());
         if (diffs.isEmpty()) {
             // A PUT that changes nothing writes nothing and emits nothing (§4.6, review l6).
             return before;
@@ -211,6 +213,7 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         requireNotNegative("pettyExpense.cashierLimit", command.pettyExpenseLimit());
         requireNotNegative("vendorCod.cashierLimit", command.vendorCodLimit());
         requireNotNegative("overShortTolerance", command.overShortTolerance());
+        requireRepresentable(command);
         if (command.pettyExpenseAllowed() && command.pettyExpenseLimit() == null) {
             throw new SessionPolicyValidationException(
                     "pettyExpense.cashierLimit",
@@ -231,6 +234,31 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         return justification;
     }
 
+    /**
+     * ADR-0067 PC-6 (#2651): a limit or tolerance finer than the currency's minor unit is refused with one 422 {@code
+     * AMOUNT_PRECISION_EXCEEDS_CURRENCY} naming every offending field; nothing is rounded.
+     */
+    private static void requireRepresentable(UpdateSessionPolicyCommand command) {
+        String currency = command.currencyCode().trim();
+        List<ApiError.FieldError> errors = new ArrayList<>();
+        representable(errors, "pettyExpense.cashierLimit", command.pettyExpenseLimit(), currency);
+        representable(errors, "vendorCod.cashierLimit", command.vendorCodLimit(), currency);
+        representable(errors, "overShortTolerance", command.overShortTolerance(), currency);
+        if (!errors.isEmpty()) {
+            throw new CashMovementTaxRefusedException(
+                    CashMovementTaxRefusedException.Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                    "An amount has more decimals than " + currency + " allows; nothing is rounded",
+                    errors);
+        }
+    }
+
+    private static void representable(
+            List<ApiError.FieldError> errors, String field, @Nullable BigDecimal value, String currency) {
+        if (value != null && !DrawerAmounts.representable(value, currency)) {
+            errors.add(new ApiError.FieldError(field, "has more decimals than " + currency + " allows"));
+        }
+    }
+
     private static void requireNotNegative(String field, @Nullable BigDecimal value) {
         if (value != null && value.signum() < 0) {
             throw new SessionPolicyValidationException(field, field + " must not be negative");
@@ -244,15 +272,20 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
     }
 
     private static void diff(
-            List<String[]> changes, String setting, @Nullable BigDecimal before, @Nullable BigDecimal after) {
+            List<String[]> changes,
+            String setting,
+            @Nullable BigDecimal before,
+            @Nullable BigDecimal after,
+            String currency) {
         boolean same = before == null ? after == null : after != null && before.compareTo(after) == 0;
         if (!same) {
-            changes.add(new String[] {setting, display(before), display(after)});
+            changes.add(new String[] {setting, display(before, currency), display(after, currency)});
         }
     }
 
-    private static @Nullable String display(@Nullable BigDecimal value) {
-        return value == null ? null : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    /** The audit string at the currency's exponent (#2651): {@code 500} JPY, {@code 5.000} KWD, never rounded. */
+    private static @Nullable String display(@Nullable BigDecimal value, String currency) {
+        return value == null ? null : DrawerAmounts.atExponent(value, currency).toPlainString();
     }
 
     private static SessionPolicyView toView(SessionPolicy policy) {

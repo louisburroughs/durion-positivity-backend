@@ -248,13 +248,19 @@ public class RegisterSessionExceptionHandler {
                         correlationId));
     }
 
-    /** The step-up check could not be made (CAP:550 S16, #2512): 503, not a refusal. */
+    /**
+     * The step-up check could not be made (CAP:550 S16, #2512): 503, not a refusal, with {@code Retry-After} (ADR-0017
+     * §1, #2651): the security client's own timeouts ({@code pos.security-service.connect-timeout} PT2S, {@code
+     * read-timeout} PT5S) bound the wait already spent, so the default five seconds is a fresh attempt, not a retry
+     * into the same outage.
+     */
     @ExceptionHandler(StepUpUnavailableException.class)
     public ResponseEntity<ApiError> handleStepUpUnavailable(StepUpUnavailableException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         log.warn("Cash movement approval check unavailable: correlationId={}", correlationId, ex);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .header(X_CORRELATION_ID, correlationId)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(DEFAULT_RETRY_AFTER_SECONDS))
                 .body(ApiError.of(
                         "CASH_MOVEMENT_APPROVAL_UNAVAILABLE",
                         ex.getMessage(),

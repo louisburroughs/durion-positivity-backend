@@ -229,6 +229,21 @@ class SessionPolicyServiceImplTest {
     }
 
     @Test
+    @DisplayName("#2651 (ADR-0067 PC-6): a limit or tolerance finer than the currency's minor unit is refused, not rounded")
+    void subMinorUnitAmountsAreRefused() {
+        assertThatThrownBy(() -> service.update(put(null, true, "50.005", false, null, "5.00", JUSTIFICATION)))
+                .isInstanceOfSatisfying(
+                        com.positivity.order.internal.exception.CashMovementTaxRefusedException.class,
+                        e -> assertThat(e.fieldErrors())
+                                .extracting(f -> f.field())
+                                .containsExactly("pettyExpense.cashierLimit"));
+        assertThatThrownBy(() -> service.update(put(null, true, "50.00", false, null, "5.005", JUSTIFICATION)))
+                .isInstanceOfSatisfying(
+                        com.positivity.order.internal.exception.CashMovementTaxRefusedException.class,
+                        e -> assertThat(e.fieldErrors()).extracting(f -> f.field()).containsExactly("overShortTolerance"));
+    }
+
+    @Test
     @DisplayName("a negative limit or tolerance, an allowed type without a limit, or COD on is a 400")
     void fieldRules() {
         java.util.Map<UpdateSessionPolicyCommand, String> badByField = new java.util.LinkedHashMap<>();

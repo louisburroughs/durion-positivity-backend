@@ -493,6 +493,21 @@ class RegisterSessionServiceImplTest {
     }
 
     @Test
+    @DisplayName("#2651 (ADR-0067 PC-6): a countedCash finer than the drawer currency's minor unit is refused, not rounded")
+    void beginClose_refusesSubMinorUnitCount() {
+        UUID id = UUID.randomUUID();
+        RegisterSession session = openSession(id);
+        when(registerSessionRepository.findById(id)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> service.beginClose(id, new BigDecimal("100.005")))
+                .isInstanceOfSatisfying(
+                        com.positivity.order.internal.exception.CashMovementTaxRefusedException.class,
+                        e -> assertThat(e.fieldErrors()).extracting(f -> f.field()).containsExactly("countedCash"));
+        assertThat(session.getCountedCash()).isNull();
+        assertThat(session.getStatus()).isEqualTo(RegisterSessionStatus.OPEN);
+    }
+
+    @Test
     @DisplayName("RSS-005: begin-close is blocked while a session order is PENDING_PAYMENT")
     void beginClose_blockedByPendingPayment() {
         UUID id = UUID.randomUUID();

@@ -311,7 +311,10 @@ token unspent, so the register may resend the same `requestId` with a corrected 
 - **Precision (ADR-0067 PC-6).** The movement's `amount` and each stated amount must fit the drawer currency's minor
   unit (`DrawerAmounts`: trailing zeros do not count); otherwise one 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY` names
   `amount` and each `statedTaxes[i].amount`. Nothing is rounded: S16's silent `setScale(4, HALF_UP)` on the movement's
-  amount is gone, and `40.000` CAD is recorded as `40.00`. pos-order's other rounding sites are #2651.
+  amount is gone, and `40.000` CAD is recorded as `40.00`. The same rule, through the same helper, covers the
+  approval request's `amount`, `countedCash` at begin-close and the session policy's limits and tolerance (#2651):
+  each is refused with 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY` and `fieldErrors` naming it, never rounded, and the
+  policy's audit strings are written at the currency's exponent (`500` JPY, `5.000` KWD).
 - **Offered regimes (amendment A1).** From local replicas only (`DrawerStatedTax`): the session has a location; the
   category is `taxRecoverable` in the category copy; the regime's registration is in effect on the movement's date in
   `ext_tax_registration`; its `jurisdictionCode` is the session location's country or region (`ext_location`); and the
@@ -500,7 +503,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_PRICE_OVERRIDE_INVALID` | 422 | Price override failed business validation |
 | `ORDER_INVALID_CUSTOMER` | 422 | The customer referenced by the order is not valid for it |
 | `REGISTER_FLOAT_LOCATION_MISMATCH` | 422 | `POST /v1/orders/sessions` at a location other than the one the register's configured float is held at (#2573: no register moves during an open session); `fieldErrors` name `terminalId`, `requestedLocationId` and, only when the caller's scope covers it, `floatLocationId`. No session is opened |
-| `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | 422 | A cash movement's `amount` or a stated tax amount has more decimals than the drawer's currency allows; `fieldErrors` name each, nothing is rounded (CAP:550 S32d, ADR-0067 PC-6) |
+| `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | 422 | A cash movement's `amount` or a stated tax amount, an approval request's `amount`, `countedCash` at begin-close, or a session-policy limit or tolerance has more decimals than the currency allows; `fieldErrors` name each, nothing is rounded (CAP:550 S32d, #2651, ADR-0067 PC-6) |
 | `TAX_REGIME_NOT_OFFERED` | 422 | A stated tax regime the session does not offer for the category, location, currency and date; `fieldErrors[statedTaxes[i].regime]` (CAP:550 S32d) |
 | `TAX_AMOUNT_IMPLAUSIBLE` | 422 | A stated tax amount, or their sum, at or above the movement's amount, or above pos-tax's plausible maximum (relayed with pos-tax's `fieldErrors`) (CAP:550 S32d) |
 | `SUPPLIER_REGISTRATION_NOT_ACCEPTED` | 422 | A supplier's registration number for a country that names no supplier regime; never recorded unchecked (CAP:550 S32d) |
@@ -532,7 +535,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
 | `TAX_CHECK_UNAVAILABLE` | 503 | A petty expense carried the supplier's number and pos-tax could not check it (unreachable, timed out, failed, or disagreed with pos-order's replicas); `Retry-After` is set (`pos.order.tax-check.retry-after-seconds`); nothing recorded (CAP:550 S32d) |
-| `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`) |
+| `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`); `Retry-After` (5 s) says when to try again (ADR-0017 §1, #2651) |
 
 ## Configuration
 

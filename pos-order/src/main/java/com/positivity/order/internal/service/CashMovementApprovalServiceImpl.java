@@ -11,6 +11,7 @@ import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
@@ -25,8 +26,9 @@ import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.SecurityContextHelper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import com.positivity.shared.error.ApiError;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.util.List;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -161,6 +163,14 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
             throw new CurrencyNotSupportedException("This drawer's cash is counted in " + drawerCurrency + "; "
                     + command.currencyCode().trim() + " is not supported");
         }
+        // ADR-0067 PC-6 (#2651): an amount finer than the drawer currency's minor unit is refused, never rounded.
+        if (!DrawerAmounts.representable(amount, drawerCurrency)) {
+            throw new CashMovementTaxRefusedException(
+                    CashMovementTaxRefusedException.Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                    "The amount has more decimals than the drawer's currency allows; nothing is rounded",
+                    List.of(new ApiError.FieldError("amount", "has more decimals than " + drawerCurrency + " allows")));
+        }
+        BigDecimal stated = DrawerAmounts.atExponent(amount, drawerCurrency);
         if (session.getStatus() != RegisterSessionStatus.OPEN) {
             throw new RegisterSessionConflictException("Cash movement approvals require an OPEN session; session "
                     + session.getSessionId() + " is " + session.getStatus());
@@ -216,7 +226,7 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
         CashMovementApproval approval = approvalRepository.save(CashMovementApproval.builder()
                 .sessionId(session.getSessionId())
                 .reasonCode(reason)
-                .amount(scale(amount))
+                .amount(stated)
                 .currencyCode(drawerCurrency)
                 .categoryCode(blankToNull(command.categoryCode()))
                 .vendorId(command.vendorId())
@@ -234,7 +244,7 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
                 reason,
                 cashier,
                 verified.userId());
-        return new CashMovementApprovalResult(token, expiresAt, scale(amount), drawerCurrency);
+        return new CashMovementApprovalResult(token, expiresAt, stated, drawerCurrency);
     }
 
     @Override
@@ -377,7 +387,4 @@ public class CashMovementApprovalServiceImpl implements CashMovementApprovalServ
         return value == null || value.isBlank() ? null : value.trim();
     }
 
-    private static BigDecimal scale(BigDecimal value) {
-        return value.setScale(4, RoundingMode.HALF_UP);
-    }
 }
