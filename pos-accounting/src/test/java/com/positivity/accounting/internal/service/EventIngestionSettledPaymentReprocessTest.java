@@ -186,7 +186,7 @@ class EventIngestionSettledPaymentReprocessTest {
 
         org.assertj.core.api.Assertions.assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
         org.assertj.core.api.Assertions.assertThat(event.getFailureReasonCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
-        org.assertj.core.api.Assertions.assertThat(event.getAttemptCount()).isZero();
+        org.assertj.core.api.Assertions.assertThat(event.getAttemptCount()).as("unchanged").isEqualTo(1);
         verify(postingEngineOrchestrator, never()).processEvent(any(), any(), any(), anyBoolean());
         verify(reprocessingAttemptHistoryRepository, never()).save(any());
         verify(accountingEventRepository, never()).save(any());
