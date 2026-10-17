@@ -28,7 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
  * A float entry reversed through {@code POST /v1/accounting/journal-entries/{id}/reverse} (#2511 PROPOSED 7;
  * ADR-0047 corrections by reversal): the register's amount is re-derived from its float entries still
  * standing, a {@code REVERSAL} history row is written and {@code accounting.float.changed} is queued. A
- * reversed go-live no longer counts, so a new go-live is accepted ("correction = reverse and re-run").
+ * reversed go-live no longer counts, so a new go-live is accepted ("correction = reverse and re-run"). That
+ * {@code REVERSAL} row's entry is itself never reversed (#2607): 409 {@code FLOAT_REVERSAL_NOT_REVERSIBLE}, the
+ * float is set again instead, so the ledger and the float row cannot drift apart.
  *
  * <p>A register that has moved (#2571, AW32) adds three rules. A relocation entry is never reversed: 409
  * {@code FLOAT_RELOCATION_NOT_REVERSIBLE}, a wrong move is corrected by moving again. A go-live or change
@@ -53,7 +55,10 @@ public class RegisterFloatReversalReaction {
     private static final List<RegisterFloatChangeKind> POSTING_KINDS =
             List.of(RegisterFloatChangeKind.GO_LIVE, RegisterFloatChangeKind.CHANGE);
     private static final List<RegisterFloatChangeKind> ENTRY_KINDS = List.of(
-            RegisterFloatChangeKind.GO_LIVE, RegisterFloatChangeKind.CHANGE, RegisterFloatChangeKind.RELOCATION);
+            RegisterFloatChangeKind.GO_LIVE,
+            RegisterFloatChangeKind.CHANGE,
+            RegisterFloatChangeKind.RELOCATION,
+            RegisterFloatChangeKind.REVERSAL);
 
     private final RegisterFloatRepository floats;
     private final RegisterFloatChangeRepository changes;
@@ -76,6 +81,23 @@ public class RegisterFloatReversalReaction {
                                 CashSetupException.Code.FLOAT_RELOCATION_NOT_REVERSIBLE,
                                 "A register float relocation entry is never reversed; correct a wrong move by moving"
                                         + " the register again");
+                    }
+                    if (change.getKind() == RegisterFloatChangeKind.REVERSAL) {
+                        // The mirror written when a go-live or Change entry was reversed (#2607). Reversing it
+                        // would re-apply the 1080 movement while the float row, which hangs off the original
+                        // entry, stayed put: ledger and float would then disagree. The correction is to run
+                        // the float command again.
+                        log.warn(
+                                "Refused the reversal of register {} float reversal entry {}",
+                                change.getRegisterId(),
+                                reversed.originalJournalEntryId());
+                        throw new CashSetupException(
+                                CashSetupException.Code.FLOAT_REVERSAL_NOT_REVERSIBLE,
+                                "Journal entry " + reversed.originalJournalEntryId() + " reverses a float entry of"
+                                        + " register " + change.getRegisterId()
+                                        + " and is never reversed itself; set the float again instead",
+                                change.getRegisterId(),
+                                "Run the go-live or change-float command again");
                     }
                     if (change.getReversalJournalEntryId() == null) {
                         rederive(change, reversed);
