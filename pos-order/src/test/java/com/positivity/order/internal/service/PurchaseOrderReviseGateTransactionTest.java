@@ -101,7 +101,9 @@ class PurchaseOrderReviseGateTransactionTest {
         listener.onInventoryEvent(receipt(orderId, lineId, "4"));
         assertThat(onlyLine(orderId).open()).isEqualByComparingTo("6");
 
-        assertThatThrownBy(() -> purchaseOrderService.revisePurchaseOrder(orderId, revision(), "buyer"))
+        // Built on the version the receipt left (a receipt increments it), so the gate, not the version check, answers.
+        assertThatThrownBy(() -> purchaseOrderService.revisePurchaseOrder(
+                        orderId, revision(snapshot(orderId).version()), "buyer"))
                 .isInstanceOf(PurchaseOrderStateConflictException.class);
 
         Snapshot refused = snapshot(orderId);
@@ -121,7 +123,7 @@ class PurchaseOrderReviseGateTransactionTest {
     void approvedWithNothingReceived_isRevised() {
         UUID orderId = approvedOrder();
 
-        PurchaseOrderResponse revised = purchaseOrderService.revisePurchaseOrder(orderId, revision(), "buyer");
+        PurchaseOrderResponse revised = purchaseOrderService.revisePurchaseOrder(orderId, revision(1), "buyer");
 
         assertThat(revised.getStatus()).isEqualTo(PurchaseOrderStatus.APPROVED);
         assertThat(revised.getVersionNumber()).isEqualTo(2);
@@ -159,7 +161,7 @@ class PurchaseOrderReviseGateTransactionTest {
         return transaction.execute(_ -> purchaseOrderRepository.save(order).getPurchaseOrderId());
     }
 
-    private static RevisePurchaseOrderRequest revision() {
+    private static RevisePurchaseOrderRequest revision(int builtOnVersion) {
         PurchaseOrderLineRequest line = new PurchaseOrderLineRequest();
         line.setLineNumber(1);
         line.setSkuId(SKU_ID);
@@ -167,7 +169,7 @@ class PurchaseOrderReviseGateTransactionTest {
         line.setQuantity(new BigDecimal("4"));
         line.setUnitCostMinor(1_200L);
         RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
-        request.setExpectedVersionNumber(1);
+        request.setExpectedVersionNumber(builtOnVersion);
         request.setRevisionReason("vendor changed the price");
         request.setPoDate(LocalDate.of(2026, 10, 11));
         request.setLines(List.of(line));

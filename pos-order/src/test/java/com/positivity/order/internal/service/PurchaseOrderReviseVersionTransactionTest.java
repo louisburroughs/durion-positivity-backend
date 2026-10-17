@@ -145,7 +145,9 @@ class PurchaseOrderReviseVersionTransactionTest {
 
         ApprovePurchaseOrderRequest current = new ApprovePurchaseOrderRequest();
         current.setExpectedVersionNumber(2);
-        assertThat(purchaseOrderService.approvePurchaseOrder(orderId, current, "approver").getStatus())
+        assertThat(purchaseOrderService
+                        .approvePurchaseOrder(orderId, current, "approver")
+                        .getStatus())
                 .isEqualTo(PurchaseOrderStatus.APPROVED);
     }
 

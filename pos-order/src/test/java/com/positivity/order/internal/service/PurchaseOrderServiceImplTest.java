@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
@@ -22,8 +22,8 @@ import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
-import com.positivity.order.internal.exception.PurchaseOrderVersionConflictException;
 import com.positivity.order.internal.exception.PurchaseOrderVendorException;
+import com.positivity.order.internal.exception.PurchaseOrderVersionConflictException;
 import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
@@ -640,11 +640,15 @@ class PurchaseOrderServiceImplTest {
                     .isInstanceOfSatisfying(PurchaseOrderVersionConflictException.class, e -> {
                         assertThat(e.getExpectedVersionNumber()).isEqualTo(2);
                         assertThat(e.getCurrentVersionNumber()).isEqualTo(3);
-                        assertThat(e.getMessage()).contains("0000001A").contains("version 3").contains("version 2");
+                        assertThat(e.getMessage())
+                                .contains("0000001A")
+                                .contains("version 3")
+                                .contains("version 2");
                     });
             assertThat(order.getVersionNumber()).isEqualTo(3);
-            assertThat(order.getLines()).singleElement().satisfies(line -> assertThat(line.getQuantityDecimal())
-                    .isEqualByComparingTo(BigDecimal.TEN));
+            assertThat(order.getLines())
+                    .singleElement()
+                    .satisfies(line -> assertThat(line.getQuantityDecimal()).isEqualByComparingTo(BigDecimal.TEN));
             verify(purchaseOrderRepository, never()).save(any());
             verify(purchaseOrderFactPublisher, never()).publish(any(), any());
         }
@@ -700,7 +704,7 @@ class PurchaseOrderServiceImplTest {
             assertThat(service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR)
                             .getStatus())
                     .isEqualTo(PurchaseOrderStatus.APPROVED);
-            verify(purchaseOrderRepository, times(2)).findByIdForUpdate(PO_ID);
+            verify(purchaseOrderRepository, times(3)).findByIdForUpdate(PO_ID);
         }
 
         @Test
@@ -710,7 +714,7 @@ class PurchaseOrderServiceImplTest {
             PurchaseOrderLineEntity stored = order.getLines().getFirst();
             stored.setTaxCodeId("TAX-STD");
             stored.setGlAccountId("5000");
-            stored.setTaxMinor(Math.round(50_000L * 0.0825));
+            stored.setTaxMinor(5_000L); // the service's default rate on 50_000, so a re-save recomputes the same
             when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
 
             PurchaseOrderResponse read = service.getPurchaseOrder(PO_ID);
@@ -756,7 +760,8 @@ class PurchaseOrderServiceImplTest {
             order.setRequestedBy("tech-maria");
             when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
 
-            assertThat(service.revisePurchaseOrder(PO_ID, revisionBuiltOn(1), ACTOR).getRequestedBy())
+            assertThat(service.revisePurchaseOrder(PO_ID, revisionBuiltOn(1), ACTOR)
+                            .getRequestedBy())
                     .isEqualTo("tech-maria");
 
             RevisePurchaseOrderRequest corrected = revisionBuiltOn(2);

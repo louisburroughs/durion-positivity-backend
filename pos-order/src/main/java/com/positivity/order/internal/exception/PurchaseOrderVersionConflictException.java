@@ -21,7 +21,10 @@ public class PurchaseOrderVersionConflictException extends RuntimeException {
     private final int currentVersionNumber;
 
     public PurchaseOrderVersionConflictException(
-            @NonNull UUID purchaseOrderId, @NonNull String poNumber, int expectedVersionNumber, int currentVersionNumber) {
+            @NonNull UUID purchaseOrderId,
+            @NonNull String poNumber,
+            int expectedVersionNumber,
+            int currentVersionNumber) {
         super("Purchase order " + poNumber + " is at version " + currentVersionNumber + "; this change was built on"
                 + " version " + expectedVersionNumber + ". Re-read the order and apply the change to the current"
                 + " version.");
