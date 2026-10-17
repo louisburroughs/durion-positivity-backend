@@ -137,13 +137,16 @@ class ReadingTierServiceImplTest {
         when(tiers.lockByCode("PRO")).thenReturn(Optional.of(pro));
         when(tenants.existsByReadingTierCodeAndStatusNot("PRO", TenantStatus.DECOMMISSIONED))
                 .thenReturn(true);
-        assertThatThrownBy(() -> service.update("PRO", ReadingTierUpdateRequest.builder().active(false).build()))
+        assertThatThrownBy(() -> service.update(
+                        "PRO", ReadingTierUpdateRequest.builder().active(false).build()))
                 .isInstanceOf(ReadingTierInUseException.class);
         assertThat(pro.isActive()).isTrue();
 
         when(tenants.existsByReadingTierCodeAndStatusNot("PRO", TenantStatus.DECOMMISSIONED))
                 .thenReturn(false);
-        assertThat(service.update("PRO", ReadingTierUpdateRequest.builder().active(false).build())
+        assertThat(service.update(
+                                "PRO",
+                                ReadingTierUpdateRequest.builder().active(false).build())
                         .isActive())
                 .isFalse();
 
@@ -151,7 +154,8 @@ class ReadingTierServiceImplTest {
         when(tenants.existsByReadingTierCodeAndStatusNot("STANDARD", TenantStatus.DECOMMISSIONED))
                 .thenReturn(false);
         assertThatThrownBy(() -> service.update(
-                        "STANDARD", ReadingTierUpdateRequest.builder().active(false).build()))
+                        "STANDARD",
+                        ReadingTierUpdateRequest.builder().active(false).build()))
                 .isInstanceOf(ReadingTierInUseException.class);
         assertThat(standard.isActive()).isTrue();
 
