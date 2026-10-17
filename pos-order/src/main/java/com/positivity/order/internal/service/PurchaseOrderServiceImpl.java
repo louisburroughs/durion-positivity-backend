@@ -588,12 +588,15 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         PurchaseOrderLineFigures.moveBalance(po, -value);
     }
 
-    /** Re-derives the figures, bumps the version, saves and publishes: every per-line action ends here. */
-    private PurchaseOrderResponse finishLineAction(PurchaseOrderEntity po, String actorId) {
-        PurchaseOrderStatus closed = po.getStatus() == PurchaseOrderStatus.CLOSED ? PurchaseOrderStatus.CLOSED : null;
+    /**
+     * Re-derives the figures (and the status, unless {@code forcedStatus} names the terminal one the action sets),
+     * bumps the version, saves and publishes: every per-line action ends here.
+     */
+    private PurchaseOrderResponse finishLineAction(
+            PurchaseOrderEntity po, String actorId, @Nullable PurchaseOrderStatus forcedStatus) {
         PurchaseOrderLineFigures.refresh(po);
-        if (closed != null) {
-            po.setStatus(closed);
+        if (forcedStatus != null) {
+            po.setStatus(forcedStatus);
         }
         po.setVersionNumber(po.getVersionNumber() == null ? 1 : po.getVersionNumber() + 1);
         po.setUpdatedBy(actorId);
