@@ -85,6 +85,13 @@ public class APPaymentAllocation extends TenantScopedEntity {
     @Column(name = "allocation_sequence")
     private Integer allocationSequence;
 
+    /**
+     * Set by the payment's return (#2642): the row stays as history and no longer counts towards the bill's allocated
+     * amount, which restores the bill's open amount.
+     */
+    @Column(name = "reopened_at")
+    private Instant reopenedAt;
+
     // Audit field
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

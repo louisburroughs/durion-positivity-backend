@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.positivity.accounting.internal.enums.APPaymentSettlementStatus;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
@@ -140,6 +141,50 @@ public class APPaymentResponse {
     @Schema(description = "Who voided the payment", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String voidedBy;
 
+    @Schema(
+            description = "Whether the gateway settled the charge (#2642): IN_FLIGHT (accepted PENDING, re-read by the"
+                    + " settlement job), SETTLED, RETURNED; absent on CASH payments and rows older than the field",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private APPaymentSettlementStatus settlementStatus;
+
+    @Schema(
+            description = "When the settlement job last re-read the gateway",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Instant settlementCheckedAt;
+
+    @Schema(description = "When the gateway answered SUCCEEDED", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Instant settledAt;
+
+    @Schema(description = "When the return was recorded", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private Instant returnedAt;
+
+    @Schema(
+            description = "The return date the bank or the gateway reported, as attested (kept whatever dates the"
+                    + " mirror)",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private LocalDate returnReportedDate;
+
+    @Schema(
+            description = "The date the mirror entry is (or will be) posted on",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private LocalDate returnDate;
+
+    @Schema(
+            description = "RETURN_DATE (the failure date's period was open) or DETECTION_DATE (it was closed, so the"
+                    + " mirror is dated when the return was detected)",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private String returnDateRule;
+
+    @Schema(
+            description = "The gateway's or bank's return code (never free text)",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private String returnFailureCode;
+
+    @Schema(
+            description = "The mirror entry: the reversal of the payment's own journal entry",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private UUID returnJournalEntryId;
+
     @Nullable
     @Schema(description = "Payment memo/notes", example = "Monthly supplier payment")
     @JsonProperty("memo")
@@ -178,6 +223,12 @@ public class APPaymentResponse {
         @Schema(description = "Amount applied to this bill", example = "750.00")
         @JsonProperty("appliedAmount")
         private BigDecimal appliedAmount;
+
+        @Schema(
+                description = "Set when the payment was returned (#2642): the row is history and no longer counts"
+                        + " towards the bill's allocated amount",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        private Instant reopenedAt;
 
         @Schema(description = "Allocation sequence number", example = "1")
         @JsonProperty("allocationSequence")

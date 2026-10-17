@@ -65,7 +65,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
                                 vb.totalAmount - COALESCE(
                                                 (SELECT SUM(a.appliedAmount)
                                                  FROM APPaymentAllocation a
-                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
+                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId AND a.reopenedAt IS NULL),
                                                 0
                                 )
                 ) > :openAmountThreshold
@@ -81,7 +81,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
                                     vb.totalAmount - COALESCE(
                                                     (SELECT SUM(a.appliedAmount)
                                                      FROM APPaymentAllocation a
-                                                     WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
+                                                     WHERE a.vendorBill.vendorBillId = vb.vendorBillId AND a.reopenedAt IS NULL),
                                                     0
                                     )
                     ) > :openAmountThreshold
@@ -114,7 +114,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
                                 vb.totalAmount - COALESCE(
                                                 (SELECT SUM(a.appliedAmount)
                                                  FROM APPaymentAllocation a
-                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
+                                                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId AND a.reopenedAt IS NULL),
                                                 0
                                 )
                 ) > :openAmountThreshold
@@ -131,7 +131,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
                                     vb.totalAmount - COALESCE(
                                                     (SELECT SUM(a.appliedAmount)
                                                      FROM APPaymentAllocation a
-                                                     WHERE a.vendorBill.vendorBillId = vb.vendorBillId),
+                                                     WHERE a.vendorBill.vendorBillId = vb.vendorBillId AND a.reopenedAt IS NULL),
                                                     0
                                     )
                     ) > :openAmountThreshold
@@ -305,7 +305,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         WHERE vb.status = com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED
           AND vb.totalAmount - COALESCE(
                 (SELECT SUM(a.appliedAmount) FROM APPaymentAllocation a
-                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId), 0) > 0
+                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId AND a.reopenedAt IS NULL), 0) > 0
         """)
     long countApprovedWithOpenAmount();
 
@@ -319,11 +319,11 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         WHERE vb.status = com.positivity.accounting.internal.enums.VendorBillStatus.APPROVED
           AND vb.totalAmount - COALESCE(
                 (SELECT SUM(a.appliedAmount) FROM APPaymentAllocation a
-                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId), 0) <= 0
+                 WHERE a.vendorBill.vendorBillId = vb.vendorBillId AND a.reopenedAt IS NULL), 0) <= 0
           AND (SELECT MAX(p.payment.paymentDate) FROM APPaymentAllocation p
-               WHERE p.vendorBill.vendorBillId = vb.vendorBillId) >= :from
+               WHERE p.vendorBill.vendorBillId = vb.vendorBillId AND p.reopenedAt IS NULL) >= :from
           AND (SELECT MAX(p.payment.paymentDate) FROM APPaymentAllocation p
-               WHERE p.vendorBill.vendorBillId = vb.vendorBillId) < :to
+               WHERE p.vendorBill.vendorBillId = vb.vendorBillId AND p.reopenedAt IS NULL) < :to
         """)
     List<VendorBill> findApprovedPaidInFullWithLastPaymentBetween(
             @Param("from") LocalDate from, @Param("to") LocalDate to);
@@ -344,7 +344,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
             + " where v.vendorId = b.vendorId and b.vendorId in :vendorIds and b.status = :status"
             + " and (b.approvedRemitToVersion is null or b.approvedRemitToVersion <> v.remitToVersion)"
             + " and b.totalAmount - coalesce((select sum(a.appliedAmount) from APPaymentAllocation a"
-            + " where a.vendorBill.vendorBillId = b.vendorBillId), 0) > 0")
+            + " where a.vendorBill.vendorBillId = b.vendorBillId and a.reopenedAt is null), 0) > 0")
     @NonNull
     List<UUID> findVendorIdsWithBillsApprovedAtAnotherRemitTo(
             @Param("vendorIds") @NonNull Collection<UUID> vendorIds, @Param("status") @NonNull VendorBillStatus status);

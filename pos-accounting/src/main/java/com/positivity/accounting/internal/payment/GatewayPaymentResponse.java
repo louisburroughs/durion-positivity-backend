@@ -30,4 +30,21 @@ public class GatewayPaymentResponse {
     private String failureReason;
 
     private String rawResponse;
+
+    /**
+     * The gateway's own code for a failed, declined or returned charge (Stripe {@code charge.failure_code}, an ACH
+     * return code such as {@code R01}); the free-text message stays in {@code failureReason} / {@code rawResponse}.
+     */
+    @Size(max = 64, message = "failureCode must be at most 64 characters")
+    private String failureCode;
+
+    /** A response without a failure code (the shape before {@code failureCode} existed). */
+    public GatewayPaymentResponse(
+            String transactionId,
+            PaymentGatewayProvider.GatewayPaymentStatus status,
+            String authorizationCode,
+            String failureReason,
+            String rawResponse) {
+        this(transactionId, status, authorizationCode, failureReason, rawResponse, null);
+    }
 }

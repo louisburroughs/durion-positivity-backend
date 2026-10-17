@@ -191,6 +191,10 @@ payment:
     # the same paymentRef, whose idempotency key replays the outcome.
     connect-timeout: ${PAYMENT_GATEWAY_CONNECT_TIMEOUT:5s}
     read-timeout: ${PAYMENT_GATEWAY_READ_TIMEOUT:20s}
+    # Local provider only (payment.gateway.provider=local, #2642): how long after a charge a "-PENDING" payment
+    # reference stays PENDING and a "-RETURN" one is still SUCCEEDED, before a re-read answers SUCCEEDED / FAILED.
+    local:
+      settle-after: ${PAYMENT_GATEWAY_LOCAL_SETTLE_AFTER:PT1M}
 
 stripe:
   api-key: ${STRIPE_API_KEY}
@@ -258,3 +262,16 @@ accounting:
     # SET LOCAL lock_timeout on the AP pay command and the vendor-bill decisions (CAP:550 S42, #2627): a
     # wait for a bill or period row lock beyond it answers 409 LOCK_TIMEOUT and persists nothing.
     lock-timeout: ${ACCOUNTING_AP_LOCK_TIMEOUT:5s}
+    # The settlement re-read of AP payment charges (#2642): GATEWAY_PENDING orphans older than orphan-grace are
+    # looked up by reference; in-flight charges (a PENDING acceptance) by transaction id, until they settle or
+    # return. in-flight-warning flags a charge that has taken too long (ACH settles in 3-5 banking days).
+    settlement:
+      enabled: ${ACCOUNTING_AP_SETTLEMENT_ENABLED:true}
+      initial-delay: ${ACCOUNTING_AP_SETTLEMENT_INITIAL_DELAY:PT2M}
+      poll-interval: ${ACCOUNTING_AP_SETTLEMENT_POLL_INTERVAL:PT15M}
+      orphan-grace: ${ACCOUNTING_AP_SETTLEMENT_ORPHAN_GRACE:PT15M}
+      in-flight-warning: ${ACCOUNTING_AP_SETTLEMENT_IN_FLIGHT_WARNING:P7D}
+      # VOIDED automatically when the gateway holds no charge under the reference after the idempotency window.
+      # Off by default: the reference lookup only finds charges stamped payment_ref (this release on).
+      auto-void-after-window: ${ACCOUNTING_AP_SETTLEMENT_AUTO_VOID_AFTER_WINDOW:false}
+      batch-size: ${ACCOUNTING_AP_SETTLEMENT_BATCH_SIZE:200}

@@ -39,5 +39,13 @@ public enum APPaymentStatus {
      * A GATEWAY_PENDING orphan the operator reconciled as never charged (#2729): nothing moved, nothing posted,
      * nothing to reopen. Terminal; its bank account may be deactivated.
      */
-    VOIDED
+    VOIDED,
+    /**
+     * The charge moved money and came back (#2642, AW42): the allocations are reopened and the mirror entry (the
+     * reversal of the payment's entry) is still owed, because the original posting is pending or failed, or the
+     * return's date fell in a closed period. {@code glPostError} names the period remedy when there is one.
+     */
+    RETURN_PENDING,
+    /** The returned charge is fully recorded: mirror posted, allocations reopened. Terminal. */
+    RETURNED
 }

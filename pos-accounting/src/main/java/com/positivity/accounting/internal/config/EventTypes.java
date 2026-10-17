@@ -431,6 +431,19 @@ public final class EventTypes {
                                 "Reconcile a GATEWAY_PENDING AP payment: void it (not charged) or post it (charged)")
                         .build(),
 
+                // Record a returned AP payment charge - 1 event (#2642, AW42): the mirror entry and the reopened
+                // allocations rest on an operator's attestation (a statement line, a processor notice), approval-grade.
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_AP_PAYMENT_RECORD_RETURN",
+                                "Record a returned AP payment charge: reverse its entry, reopen its allocations")
+                        .build(),
+
+                // AP payments in flight at the gateway - 1 event (#2642 ruling 4): a read.
+                EventTypeRegistration.search(
+                                "ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST",
+                                "List the AP payments whose charge the gateway has not settled yet")
+                        .build(),
+
                 // Allocate a cash-on-delivery AP payment - 1 event (CAP:550 S17, Issue #2513; AW41)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_AP_PAYMENT_ALLOCATE",

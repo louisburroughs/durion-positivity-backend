@@ -1,11 +1,14 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
+import com.positivity.accounting.internal.dto.APPaymentInFlightResponse;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
+import com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.NonNull;
@@ -139,6 +142,24 @@ public interface APPaymentService {
     @NonNull
     APPaymentResponse retryGLPosting(
             @NonNull UUID paymentId, @NonNull APPaymentGLPostingRetryRequest request, @NonNull String currentUser);
+
+    /** The payments in flight at the gateway (#2642 ruling 4), oldest first, flagged once older than the warning. */
+    @NonNull
+    List<APPaymentInFlightResponse> listInFlight();
+
+    /**
+     * Records a returned charge (#2642, AW42): the bank or the processor sent back a payment that had moved money. The
+     * payment's entry is reversed on the return date (or the detection date when that period is closed), its
+     * allocations reopen (each bill's open amount restored), {@code unappliedAmount} becomes zero and the payment ends
+     * {@code RETURNED} ({@code RETURN_PENDING} while the original posting or a period remedy is owed). Idempotent on
+     * {@code requestId}. 409 {@code AP_PAYMENT_NOT_RETURNABLE} when the charge never moved money ({@code INITIATED},
+     * {@code GATEWAY_PENDING}, {@code GATEWAY_FAILED}, {@code VOIDED}) or the payment is {@code CASH}; 409 {@code
+     * AP_PAYMENT_ALREADY_RETURNED}; 422 {@code PERIOD_CLOSED} / {@code PERIOD_HARD_LOCKED} as the mirror's period gate
+     * answers; 400 {@code VALIDATION_ERROR} for a return date after today.
+     */
+    @NonNull
+    APPaymentResponse recordReturn(
+            @NonNull UUID paymentId, @NonNull RecordAPPaymentReturnRequest request, @NonNull String currentUser);
 
     /**
      * Reconciles a {@code GATEWAY_PENDING} orphan with the gateway's outcome (#2729): {@code NOT_CHARGED} voids it

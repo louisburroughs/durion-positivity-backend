@@ -114,6 +114,15 @@ class APPaymentServiceTest {
     @Mock
     private com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogs;
 
+    @Mock
+    private APPaymentReturnService returns;
+
+    @Mock
+    private AccountingCalendarZoneResolver zoneResolver;
+
+    @Mock
+    private APPaymentSettlementSettings settlementSettings;
+
     @InjectMocks
     private APPaymentServiceImpl service;
 
@@ -1477,5 +1486,48 @@ class APPaymentServiceTest {
                                 "May is hard-locked after the audit; posting in June".equals(leave.justification())
                                         && "controller.c".equals(leave.user())));
         verify(auditLogs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2642: recordReturn hands the command to the return service and answers the returned payment")
+    void recordReturnDelegates() {
+        UUID paymentId = UUID.randomUUID();
+        APPayment returned = orphan(paymentId);
+        returned.setStatus(APPaymentStatus.RETURNED);
+        returned.setReturnFailureCode("R01");
+        com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest request =
+                com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest.builder()
+                        .requestId(UUID.randomUUID())
+                        .justification("Bank statement 2026-10-15: ACH return R01")
+                        .build();
+        when(returns.recordReturn(paymentId, request, "ana")).thenReturn(returned);
+
+        APPaymentResponse response = service.recordReturn(paymentId, request, "ana");
+
+        assertThat(response.getStatus()).isEqualTo(APPaymentStatus.RETURNED);
+        assertThat(response.getReturnFailureCode()).isEqualTo("R01");
+    }
+
+    @Test
+    @DisplayName("#2642: the in-flight read ages each payment on today's business date and flags the old ones")
+    void listInFlight() {
+        when(zoneResolver.today()).thenReturn(java.time.LocalDate.of(2026, 10, 17));
+        when(settlementSettings.inFlightWarning()).thenReturn(java.time.Duration.ofDays(7));
+        APPayment fresh = orphan(UUID.randomUUID());
+        fresh.setStatus(APPaymentStatus.GL_POSTED);
+        fresh.setPaymentDate(java.time.LocalDate.of(2026, 10, 15));
+        APPayment old = orphan(UUID.randomUUID());
+        old.setStatus(APPaymentStatus.GL_POSTED);
+        old.setPaymentDate(java.time.LocalDate.of(2026, 10, 1));
+        when(paymentRepository.findInFlight()).thenReturn(List.of(old, fresh));
+
+        List<com.positivity.accounting.internal.dto.APPaymentInFlightResponse> inFlight = service.listInFlight();
+
+        assertThat(inFlight)
+                .extracting(com.positivity.accounting.internal.dto.APPaymentInFlightResponse::getAgeDays)
+                .containsExactly(16L, 2L);
+        assertThat(inFlight)
+                .extracting(com.positivity.accounting.internal.dto.APPaymentInFlightResponse::isAged)
+                .containsExactly(true, false);
     }
 }
