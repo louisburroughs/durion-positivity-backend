@@ -562,8 +562,9 @@ public class APPaymentController {
                 Use this tool to see what money is still on its way to vendors and which charges have taken too long; \
                 from here the operator waits or checks with the bank or the processor. Do not use it to re-send a \
                 payment (the charge exists); use recordApPaymentReturn instead when the bank reports a return. \
-                Emits ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST and returns 200 with the list (empty when nothing is in \
-                flight).
+                Preconditions: none; a tenant with no in-flight charge gets an empty list. Required inputs: none; \
+                the read is tenant-scoped and takes no parameters. Emits ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST and \
+                returns 200 with the list.
                 """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "The payments in flight, oldest first")
