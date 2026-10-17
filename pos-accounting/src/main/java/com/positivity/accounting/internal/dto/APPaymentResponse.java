@@ -147,7 +147,9 @@ public class APPaymentResponse {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private APPaymentSettlementStatus settlementStatus;
 
-    @Schema(description = "When the settlement job last re-read the gateway", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "When the settlement job last re-read the gateway",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private Instant settlementCheckedAt;
 
     @Schema(description = "When the gateway answered SUCCEEDED", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
@@ -167,7 +169,9 @@ public class APPaymentResponse {
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String returnDateRule;
 
-    @Schema(description = "The gateway's or bank's return code (never free text)", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(
+            description = "The gateway's or bank's return code (never free text)",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String returnFailureCode;
 
     @Schema(

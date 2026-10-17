@@ -123,14 +123,12 @@ class APPaymentReturnServiceTest {
                         .status(PaymentGatewayProvider.GatewayPaymentStatus.FAILED)
                         .failureCode("R01")
                         .build()));
-        lenient()
-                .when(posting.postReturn(eq(payment), any(), any(), any()))
-                .thenAnswer(inv -> {
-                    payment.setReturnJournalEntryId(MIRROR_ID);
-                    payment.setStatus(APPaymentStatus.RETURNED);
-                    payment.setReturnDate(inv.getArgument(1) == null ? TODAY : inv.getArgument(1));
-                    return MIRROR_ID;
-                });
+        lenient().when(posting.postReturn(eq(payment), any(), any(), any())).thenAnswer(inv -> {
+            payment.setReturnJournalEntryId(MIRROR_ID);
+            payment.setStatus(APPaymentStatus.RETURNED);
+            payment.setReturnDate(inv.getArgument(1) == null ? TODAY : inv.getArgument(1));
+            return MIRROR_ID;
+        });
     }
 
     private static APPaymentAllocation allocation(UUID billId, String amount) {
@@ -168,8 +166,8 @@ class APPaymentReturnServiceTest {
         verify(allocations).saveAll(live);
         verify(posting).postReturn(eq(payment), eq(LocalDate.of(2026, 10, 15)), isNull(), eq("ana"));
         verify(returnRequests)
-                .save(argThat((APPaymentReturnRequest row) ->
-                        row.getRequestId().equals(REQUEST_ID) && row.getPaymentId().equals(PAYMENT_ID)));
+                .save(argThat((APPaymentReturnRequest row) -> row.getRequestId().equals(REQUEST_ID)
+                        && row.getPaymentId().equals(PAYMENT_ID)));
         AccountingAuditLog row = auditRow("AP_PAYMENT_RETURN");
         assertThat(row.getUserId()).isEqualTo("ana");
         assertThat(row.getOldValue()).isEqualTo("GL_POSTED");
@@ -270,23 +268,28 @@ class APPaymentReturnServiceTest {
         payment.setStatus(APPaymentStatus.GL_POSTED);
         payment.setPaymentMethod(PaymentMethod.CASH);
         assertThatThrownBy(() -> service.recordReturn(PAYMENT_ID, request(null, null), "ana"))
-                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_RETURNABLE));
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_RETURNABLE));
         payment.setPaymentMethod(PaymentMethod.ACH);
 
         for (APPaymentStatus status : List.of(APPaymentStatus.RETURNED, APPaymentStatus.RETURN_PENDING)) {
             payment.setStatus(status);
             assertThatThrownBy(() -> service.recordReturn(PAYMENT_ID, request(null, null), "ana"))
                     .as(status.name())
-                    .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                            .isEqualTo(VendorBillException.Code.AP_PAYMENT_ALREADY_RETURNED));
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            e -> assertThat(e.getCode())
+                                    .isEqualTo(VendorBillException.Code.AP_PAYMENT_ALREADY_RETURNED));
         }
 
         payment.setStatus(APPaymentStatus.GL_POSTED);
         assertThatThrownBy(() -> service.recordReturn(PAYMENT_ID, request(TODAY.plusDays(1), null), "ana"))
                 .isInstanceOfSatisfying(VendorBillException.class, e -> {
                     assertThat(e.getCode()).isEqualTo(VendorBillException.Code.VALIDATION_ERROR);
-                    assertThat(e.getFieldErrors()).extracting(VendorBillException.FieldError::field).containsExactly("returnDate");
+                    assertThat(e.getFieldErrors())
+                            .extracting(VendorBillException.FieldError::field)
+                            .containsExactly("returnDate");
                 });
         verify(posting, never()).postReturn(any(), any(), any(), any());
         verify(allocations, never()).saveAll(any());

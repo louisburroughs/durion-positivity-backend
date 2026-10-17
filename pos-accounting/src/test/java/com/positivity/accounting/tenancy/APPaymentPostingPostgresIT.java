@@ -652,9 +652,10 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
     // ---- helpers ------------------------------------------------------------------------------------------------
 
     @Test
-    @DisplayName("#2642 (AW42): a returned charge reverses the payment's entry on the return date, reopens the allocation"
-            + " (the bill's open amount restored, 2000 = open bills again), ends RETURNED and is never reversed by hand;"
-            + " a second return is 409 AP_PAYMENT_ALREADY_RETURNED")
+    @DisplayName(
+            "#2642 (AW42): a returned charge reverses the payment's entry on the return date, reopens the allocation"
+                    + " (the bill's open amount restored, 2000 = open bills again), ends RETURNED and is never reversed by hand;"
+                    + " a second return is 409 AP_PAYMENT_ALREADY_RETURNED")
     void returnedChargeReversesAndReopens() throws Exception {
         UUID tenant = tenant();
         VendorBillResponse paid = approvedBill(tenant, "400.00");
@@ -663,7 +664,12 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
         APPaymentResponse posted = read(tenant, payment.getPaymentId());
         assertThat(posted.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
         assertThat(balance(tenant, "2000")).isEqualByComparingTo("-12.00");
-        assertThat(asTenant(tenant, () -> vendorBills.getBillById(paid.getVendorBillId()).orElseThrow()).getOpenAmount())
+        assertThat(asTenant(
+                                tenant,
+                                () -> vendorBills
+                                        .getBillById(paid.getVendorBillId())
+                                        .orElseThrow())
+                        .getOpenAmount())
                 .isEqualByComparingTo("0.00");
 
         signIn(CONTROLLER, "accounting:ap:pay");
@@ -687,14 +693,22 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
         assertThat(returned.getReturnDate()).isEqualTo(today());
         assertThat(returned.getUnappliedAmount()).isEqualByComparingTo("0");
         assertThat(returned.getReturnJournalEntryId()).isNotNull();
-        assertThat(returned.getAllocations()).hasSize(1).allSatisfy(a -> assertThat(a.getReopenedAt()).isNotNull());
+        assertThat(returned.getAllocations())
+                .hasSize(1)
+                .allSatisfy(a -> assertThat(a.getReopenedAt()).isNotNull());
         assertThat(lines(tenant, returned.getReturnJournalEntryId()))
                 .containsExactlyInAnyOrder("2000 C412.00", "6030 C1.50", "1000 D413.50");
         // The allocation no longer counts: the bill is open for 400.00 again and 2000 = open bills − unapplied.
-        assertThat(asTenant(tenant, () -> vendorBills.getBillById(paid.getVendorBillId()).orElseThrow()).getOpenAmount())
+        assertThat(asTenant(
+                                tenant,
+                                () -> vendorBills
+                                        .getBillById(paid.getVendorBillId())
+                                        .orElseThrow())
+                        .getOpenAmount())
                 .isEqualByComparingTo("400.00");
         assertThat(balance(tenant, "2000")).isEqualByComparingTo("400.00");
-        assertThat(count(tenant, "accounting_audit_log", "operation = 'AP_PAYMENT_RETURN'")).isEqualTo(1);
+        assertThat(count(tenant, "accounting_audit_log", "operation = 'AP_PAYMENT_RETURN'"))
+                .isEqualTo(1);
         assertThat(count(tenant, "accounting_audit_log", "operation = 'AP_PAYMENT_RETURN_GL_POSTING'"))
                 .isEqualTo(1);
 
@@ -709,10 +723,12 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
                             .requestId(UUIDv7Generator.generate())
                             .justification("Bank statement: the same return, sent twice by mistake")
                             .build();
-            assertThatThrownBy(() -> asTenant(
-                            tenant, () -> payments.recordReturn(payment.getPaymentId(), again, CONTROLLER)))
-                    .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                            .isEqualTo(VendorBillException.Code.AP_PAYMENT_ALREADY_RETURNED));
+            assertThatThrownBy(() ->
+                            asTenant(tenant, () -> payments.recordReturn(payment.getPaymentId(), again, CONTROLLER)))
+                    .isInstanceOfSatisfying(
+                            VendorBillException.class,
+                            e -> assertThat(e.getCode())
+                                    .isEqualTo(VendorBillException.Code.AP_PAYMENT_ALREADY_RETURNED));
         } finally {
             SecurityContextHolder.clearContext();
         }
@@ -723,13 +739,16 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
             for (UUID entry : List.of(posted.getGlJournalEntryId(), returned.getReturnJournalEntryId())) {
                 assertThatThrownBy(() -> asTenant(
                                 tenant, () -> journalEntries.reverseJournalEntry(entry, "by hand", null, null)))
-                        .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                                .isEqualTo(VendorBillException.Code.AP_PAYMENT_ENTRY_NOT_REVERSIBLE));
+                        .isInstanceOfSatisfying(
+                                VendorBillException.class,
+                                e -> assertThat(e.getCode())
+                                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_ENTRY_NOT_REVERSIBLE));
             }
         } finally {
             SecurityContextHolder.clearContext();
         }
-        assertThat(count(tenant, "journal_entry", "source_event_type = 'AP_PAYMENT'")).isEqualTo(2);
+        assertThat(count(tenant, "journal_entry", "source_event_type = 'AP_PAYMENT'"))
+                .isEqualTo(2);
     }
 
     private UUID tenant() {

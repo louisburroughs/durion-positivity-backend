@@ -57,11 +57,19 @@ class APPaymentReversalReactionTest {
 
     private static LedgerReversalApplied reversalOf(UUID entryId) {
         return new LedgerReversalApplied(
-                entryId, UUID.randomUUID(), LocalDate.of(2026, 10, 15), List.of(), Set.of(), "controller.cfo", null, "x");
+                entryId,
+                UUID.randomUUID(),
+                LocalDate.of(2026, 10, 15),
+                List.of(),
+                Set.of(),
+                "controller.cfo",
+                null,
+                "x");
     }
 
     @Test
-    @DisplayName("a manual reversal of the payment's entry is 409 AP_PAYMENT_ENTRY_NOT_REVERSIBLE, pointing at record-return")
+    @DisplayName(
+            "a manual reversal of the payment's entry is 409 AP_PAYMENT_ENTRY_NOT_REVERSIBLE, pointing at record-return")
     void paymentEntryOutsideItsReturn() {
         assertThatThrownBy(() -> reaction.onReversed(reversalOf(ENTRY_ID)))
                 .isInstanceOfSatisfying(VendorBillException.class, e -> {

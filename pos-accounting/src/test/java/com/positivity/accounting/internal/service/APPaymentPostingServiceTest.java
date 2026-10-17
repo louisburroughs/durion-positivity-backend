@@ -451,12 +451,14 @@ class APPaymentPostingServiceTest {
         payment.setReturnDate(returnDate);
         payment.setReturnFailureCode("R01");
         when(journalEntries.reverseJournalEntry(eq(ENTRY), anyString(), any(), any()))
-                .thenReturn(JournalEntryResponse.builder().journalEntryId(MIRROR).build());
+                .thenReturn(
+                        JournalEntryResponse.builder().journalEntryId(MIRROR).build());
     }
 
     @Test
-    @DisplayName("#2642: the mirror of a posted payment is the reversal of its entry on the return date when that period"
-            + " is open (RETURN_DATE); the payment ends RETURNED and the posting is audited")
+    @DisplayName(
+            "#2642: the mirror of a posted payment is the reversal of its entry on the return date when that period"
+                    + " is open (RETURN_DATE); the payment ends RETURNED and the posting is audited")
     void postReturnOnTheReturnDate() {
         payment.setStatus(APPaymentStatus.GL_POSTED);
         payment.setGlJournalEntry(new JournalEntry(ENTRY));
@@ -478,10 +480,10 @@ class APPaymentPostingServiceTest {
         assertThat(payment.getReturnDateRule()).isEqualTo(APPaymentPostingService.RETURN_DATE);
         assertThat(payment.getReturnedAt()).isEqualTo(CLOCK.instant());
         verify(auditLogs)
-                .save(org.mockito.ArgumentMatchers.argThat(row -> "AP_PAYMENT_RETURN_GL_POSTING".equals(
-                                row.getOperation())
-                        && "ana".equals(row.getUserId())
-                        && row.getNewValue().contains("returnJournalEntryId=" + MIRROR)));
+                .save(org.mockito.ArgumentMatchers.argThat(
+                        row -> "AP_PAYMENT_RETURN_GL_POSTING".equals(row.getOperation())
+                                && "ana".equals(row.getUserId())
+                                && row.getNewValue().contains("returnJournalEntryId=" + MIRROR)));
         // Idempotent: a second call posts nothing more.
         assertThat(service.postReturn(payment, null, null, "ana")).isEqualTo(MIRROR);
         verify(journalEntries, org.mockito.Mockito.times(1)).reverseJournalEntry(any(), any(), any(), any());

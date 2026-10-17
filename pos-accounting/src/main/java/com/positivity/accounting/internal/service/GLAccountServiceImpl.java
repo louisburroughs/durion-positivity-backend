@@ -99,8 +99,8 @@ public class GLAccountServiceImpl implements GLAccountService {
      * until someone decides otherwise. In flight at the gateway, executed and waiting for the posting outbox, or
      * {@code GL_POST_FAILED} awaiting {@code gl-posting-retry}.
      */
-    static final Set<APPaymentStatus> UNPOSTED_PAYMENT_STATES = Collections.unmodifiableSet(EnumSet.complementOf(
-            EnumSet.of(
+    static final Set<APPaymentStatus> UNPOSTED_PAYMENT_STATES =
+            Collections.unmodifiableSet(EnumSet.complementOf(EnumSet.of(
                     APPaymentStatus.GATEWAY_FAILED,
                     APPaymentStatus.GL_POSTED,
                     APPaymentStatus.VOIDED,

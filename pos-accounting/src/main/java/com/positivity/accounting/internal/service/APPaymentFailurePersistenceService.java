@@ -25,8 +25,8 @@ public class APPaymentFailurePersistenceService {
     private static final Logger log = LoggerFactory.getLogger(APPaymentFailurePersistenceService.class);
 
     /** The statuses a refused posting may move to {@code GL_POST_FAILED}: never a payment already posted. */
-    private static final Set<APPaymentStatus> REFUSABLE = EnumSet.of(
-            APPaymentStatus.GL_POST_PENDING, APPaymentStatus.GL_POST_FAILED, APPaymentStatus.RETURN_PENDING);
+    private static final Set<APPaymentStatus> REFUSABLE =
+            EnumSet.of(APPaymentStatus.GL_POST_PENDING, APPaymentStatus.GL_POST_FAILED, APPaymentStatus.RETURN_PENDING);
 
     private final APPaymentRepository paymentRepository;
 

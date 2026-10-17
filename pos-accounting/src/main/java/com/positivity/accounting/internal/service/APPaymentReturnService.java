@@ -215,8 +215,7 @@ public class APPaymentReturnService {
         }
         try {
             Optional<GatewayPaymentResponse> answer = provider.getPaymentStatus(payment.getGatewayTransactionId());
-            return answer.map(a -> a.getStatus().name()
-                            + (a.getFailureCode() == null ? "" : "/" + a.getFailureCode()))
+            return answer.map(a -> a.getStatus().name() + (a.getFailureCode() == null ? "" : "/" + a.getFailureCode()))
                     .orElse("NOT_FOUND");
         } catch (PaymentGatewayException e) {
             log.warn(
@@ -229,7 +228,8 @@ public class APPaymentReturnService {
 
     private static String reopenedList(List<APPaymentAllocation> live) {
         return live.stream()
-                .map(a -> a.getVendorBillId() + ":" + a.getAppliedAmount().stripTrailingZeros().toPlainString())
+                .map(a -> a.getVendorBillId() + ":"
+                        + a.getAppliedAmount().stripTrailingZeros().toPlainString())
                 .collect(Collectors.joining(","));
     }
 

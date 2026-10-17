@@ -29,8 +29,7 @@ class APPaymentReturnControllerTest extends BaseIntegrationTest {
 
     private static final String RETURN = "/v1/accounting/ap/payments/{paymentId}/record-return";
     private static final UUID PAYMENT_ID = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f7001");
-    private static final String BODY =
-            """
+    private static final String BODY = """
             {"requestId":"0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f9001","returnDate":"2026-10-15","failureCode":"R01",\
             "justification":"Bank statement 2026-10-15: ACH return R01 (insufficient funds) for PAY-412"}""";
 
@@ -71,12 +70,15 @@ class APPaymentReturnControllerTest extends BaseIntegrationTest {
 
         ArgumentCaptor<RecordAPPaymentReturnRequest> sent = ArgumentCaptor.forClass(RecordAPPaymentReturnRequest.class);
         verify(apPaymentService).recordReturn(eq(PAYMENT_ID), sent.capture(), any());
-        org.assertj.core.api.Assertions.assertThat(sent.getValue().getFailureCode()).isEqualTo("R01");
-        org.assertj.core.api.Assertions.assertThat(sent.getValue().getReturnDate()).isEqualTo(LocalDate.of(2026, 10, 15));
+        org.assertj.core.api.Assertions.assertThat(sent.getValue().getFailureCode())
+                .isEqualTo("R01");
+        org.assertj.core.api.Assertions.assertThat(sent.getValue().getReturnDate())
+                .isEqualTo(LocalDate.of(2026, 10, 15));
     }
 
     @Test
-    @DisplayName("400 VALIDATION_ERROR for a missing requestId, a short justification or a failureCode that is a sentence")
+    @DisplayName(
+            "400 VALIDATION_ERROR for a missing requestId, a short justification or a failureCode that is a sentence")
     void validation() throws Exception {
         String noRequestId = "{\"justification\":\"Bank statement 2026-10-15: ACH return R01 for PAY-412\"}";
         String shortJustification =
@@ -107,7 +109,8 @@ class APPaymentReturnControllerTest extends BaseIntegrationTest {
                         .content(BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("AP_PAYMENT_NOT_RETURNABLE"))
-                .andExpect(jsonPath("$.nextAction").value("Reconcile it with the gateway first (reconcileApPaymentGateway)"));
+                .andExpect(jsonPath("$.nextAction")
+                        .value("Reconcile it with the gateway first (reconcileApPaymentGateway)"));
 
         org.mockito.Mockito.doThrow(new VendorBillException(
                         VendorBillException.Code.AP_PAYMENT_ALREADY_RETURNED, "AP payment PAY-412 is already RETURNED"))
