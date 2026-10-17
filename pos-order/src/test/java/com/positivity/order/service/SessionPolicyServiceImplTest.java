@@ -205,9 +205,11 @@ class SessionPolicyServiceImplTest {
     @DisplayName("ADR-0067: a missing or non-ISO currency is 400, another ISO currency 422")
     void currencyRules() {
         assertThatThrownBy(() -> service.update(put(null, null, true, "50.00", false, null, "3.00", JUSTIFICATION)))
-                .isInstanceOf(SessionPolicyValidationException.class);
+                .isInstanceOfSatisfying(SessionPolicyValidationException.class, e -> assertThat(e.getField())
+                        .isEqualTo("currencyCode"));
         assertThatThrownBy(() -> service.update(put(null, "U$D", true, "50.00", false, null, "3.00", JUSTIFICATION)))
-                .isInstanceOf(SessionPolicyValidationException.class);
+                .isInstanceOfSatisfying(SessionPolicyValidationException.class, e -> assertThat(e.getField())
+                        .isEqualTo("currencyCode"));
         assertThatThrownBy(() -> service.update(put(null, "CAD", true, "50.00", false, null, "3.00", JUSTIFICATION)))
                 .isInstanceOf(CurrencyNotSupportedException.class);
         verify(writer, never()).write(any(), any());
@@ -217,23 +219,36 @@ class SessionPolicyServiceImplTest {
     @DisplayName("AC6: a 9-character justification is a 400")
     void shortJustification() {
         assertThatThrownBy(() -> service.update(put(null, true, "50.00", false, null, "3.00", "123456789")))
-                .isInstanceOf(SessionPolicyValidationException.class)
-                .hasMessageContaining("justification");
+                .isInstanceOfSatisfying(SessionPolicyValidationException.class, e -> {
+                    assertThat(e.getField()).isEqualTo("justification");
+                    assertThat(e.getMessage()).contains("justification");
+                });
         verify(writer, never()).write(any(), any());
     }
 
     @Test
     @DisplayName("a negative limit or tolerance, an allowed type without a limit, or COD on is a 400")
     void fieldRules() {
-        for (UpdateSessionPolicyCommand bad : List.of(
-                put(null, true, "-1.00", false, null, "5.00", JUSTIFICATION),
-                put(null, true, "50.00", false, null, "-0.01", JUSTIFICATION),
-                put(null, true, null, false, null, "5.00", JUSTIFICATION),
-                put(null, true, "50.00", true, null, "5.00", JUSTIFICATION),
-                put(null, true, "50.00", true, "100.00", "5.00", JUSTIFICATION),
-                put(null, true, "50.00", false, null, null, JUSTIFICATION))) {
-            assertThatThrownBy(() -> service.update(bad)).isInstanceOf(SessionPolicyValidationException.class);
-        }
+        java.util.Map<UpdateSessionPolicyCommand, String> badByField = new java.util.LinkedHashMap<>();
+        badByField.put(put(null, true, "-1.00", false, null, "5.00", JUSTIFICATION), "pettyExpense.cashierLimit");
+        badByField.put(put(null, true, "50.00", false, null, "-0.01", JUSTIFICATION), "overShortTolerance");
+        badByField.put(put(null, true, null, false, null, "5.00", JUSTIFICATION), "pettyExpense.cashierLimit");
+        badByField.put(put(null, true, "50.00", true, null, "5.00", JUSTIFICATION), "vendorCod.cashierLimit");
+        badByField.put(put(null, true, "50.00", true, "100.00", "5.00", JUSTIFICATION), "vendorCod.allowed");
+        badByField.put(put(null, true, "50.00", false, null, null, JUSTIFICATION), "overShortTolerance");
+        badByField.forEach((bad, field) -> assertThatThrownBy(() -> service.update(bad))
+                .as(field)
+                .isInstanceOfSatisfying(SessionPolicyValidationException.class, e -> assertThat(e.getField())
+                        .isEqualTo(field)));
+        // #2674: the missing-allowed refusals name the one that is missing.
+        assertThatThrownBy(() -> service.update(new UpdateSessionPolicyCommand(
+                        null, "USD", null, new BigDecimal("50.00"), false, null, new BigDecimal("5.00"), JUSTIFICATION)))
+                .isInstanceOfSatisfying(SessionPolicyValidationException.class, e -> assertThat(e.getField())
+                        .isEqualTo("pettyExpense.allowed"));
+        assertThatThrownBy(() -> service.update(new UpdateSessionPolicyCommand(
+                        null, "USD", true, new BigDecimal("50.00"), null, null, new BigDecimal("5.00"), JUSTIFICATION)))
+                .isInstanceOfSatisfying(SessionPolicyValidationException.class, e -> assertThat(e.getField())
+                        .isEqualTo("vendorCod.allowed"));
         verify(writer, never()).write(any(), any());
     }
 

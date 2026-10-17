@@ -165,7 +165,8 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
     @DisplayName("AC6: a field rule answers 400 VALIDATION_ERROR; a lost race 409 SESSION_POLICY_CONFLICT")
     void validationAndConflict() throws Exception {
         when(sessionPolicyService.update(any()))
-                .thenThrow(new SessionPolicyValidationException("justification must be at least 10 characters"))
+                .thenThrow(new SessionPolicyValidationException(
+                        "justification", "justification must be at least 10 characters"))
                 .thenThrow(new SessionPolicyConflictException("changed by someone else", null));
 
         mockMvc.perform(withGatewayAuth(
@@ -174,7 +175,9 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
                                 .content(BODY),
                         MANAGE))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("justification"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("justification must be at least 10 characters"));
         mockMvc.perform(withGatewayAuth(
                         put("/v1/orders/session-policy")
                                 .contentType(MediaType.APPLICATION_JSON)
@@ -206,5 +209,33 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
         verify(sessionPolicyService, never()).update(any());
+    }
+
+    /** #2674: each refusal of the policy rules lands on its field; the page maps these JSON paths. */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "justification, justification must be at least 10 characters",
+        "pettyExpense.allowed, pettyExpense.allowed is required",
+        "vendorCod.allowed, vendor cash on delivery cannot be switched on until pos-order holds the vendor list",
+        "overShortTolerance, overShortTolerance must not be negative",
+        "currencyCode, currencyCode is required and must be an ISO 4217 code",
+        "pettyExpense.cashierLimit, pettyExpense.cashierLimit is required while petty expenses are allowed",
+        "vendorCod.cashierLimit, vendorCod.cashierLimit is required to switch vendor cash on delivery on"
+    })
+    @DisplayName("#2674: a field rule answers 400 VALIDATION_ERROR with fieldErrors naming the field")
+    void fieldRuleNamesItsField(String field, String message) throws Exception {
+        when(sessionPolicyService.update(any())).thenThrow(new SessionPolicyValidationException(field, message));
+
+        mockMvc.perform(withGatewayAuth(
+                        put("/v1/orders/session-policy")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(BODY),
+                        MANAGE))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value(message))
+                .andExpect(jsonPath("$.fieldErrors.length()").value(1))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value(field))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value(message));
     }
 }

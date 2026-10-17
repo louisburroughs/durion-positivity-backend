@@ -94,7 +94,10 @@ public class SessionPolicyController {
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: justification under 10 characters, a negative limit or tolerance, an"
-                    + " allowed type without a limit, or vendor cash on delivery switched on.",
+                    + " allowed type without a limit, a missing or non-ISO currencyCode, or vendor cash on delivery"
+                    + " switched on. fieldErrors[0].field is the refused field's JSON path (justification,"
+                    + " pettyExpense.allowed, pettyExpense.cashierLimit, vendorCod.allowed, vendorCod.cashierLimit,"
+                    + " overShortTolerance, currencyCode).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
