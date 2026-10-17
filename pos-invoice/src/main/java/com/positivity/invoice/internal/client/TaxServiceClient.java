@@ -2,8 +2,8 @@ package com.positivity.invoice.internal.client;
 
 import com.positivity.invoice.internal.config.InvoiceCurrencySource;
 import com.positivity.invoice.internal.exception.InvoiceTaxRefusedException;
-import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
+import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxReferenceType;
