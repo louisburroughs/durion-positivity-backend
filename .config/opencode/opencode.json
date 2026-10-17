@@ -11,8 +11,8 @@
         }
       },
       "models": {
-        "qwen2.5-coder:32b": {
-          "name": "qwen2.5-coder:32b",
+        "qwen3-coder:480b-cloud": {
+          "name": "zerocopia/qwen3-coder:480b-cloud",
           "contextWindow": 65536
         }
       }
