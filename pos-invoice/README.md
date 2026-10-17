@@ -44,7 +44,8 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
   `invoice:payment:flow_select` to choose `AUTH_ONLY`, #2393)
 - `POST /v1/invoices/{invoiceId}/payments/cash` — record a register cash tender as a CAPTURED intent
   with the ADR-0067 A8 rounding triple (`settledAmount`, `cashRoundingAmount`, `cashIncrement`); no
-  gateway call, idempotent (`invoice:payment:process`, #2662)
+  gateway call, idempotent on `idempotencyKey`, which is also the intent's `gatewayReference` so the
+  settled fact names the register's key (`invoice:payment:process`, #2662)
 - `POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture` — capture an authorized payment
   (`invoice:payment:capture`, #2393)
 - `GET /v1/invoices/{invoiceId}/payments` — list every payment intent raised against an invoice,

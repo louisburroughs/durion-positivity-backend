@@ -168,10 +168,10 @@ public class PaymentServiceImpl implements PaymentService {
         intent.setSettledAmount(request.getSettledAmount());
         intent.setCashRoundingAmount(request.getCashRoundingAmount());
         intent.setCashIncrement(request.getCashIncrement());
-        // A cash tender has no processor: the register session stands in as the reference (ADR-0072: no secrets).
+        // A cash tender has no processor: the register's idempotency key is the reference, so the settled fact's
+        // gatewayReference lets pos-order replay the tender by key once the fact has landed (ADR-0072: no secret).
         intent.setGatewayProvider("register");
-        intent.setGatewayReference(
-                request.getSessionId() == null ? null : request.getSessionId().toString());
+        intent.setGatewayReference(request.getIdempotencyKey());
         PaymentIntent saved;
         try {
             saved = paymentIntentRepository.saveAndFlush(intent);
