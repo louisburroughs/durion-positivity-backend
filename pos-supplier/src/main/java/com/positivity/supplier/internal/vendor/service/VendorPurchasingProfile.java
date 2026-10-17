@@ -9,7 +9,6 @@ import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.spi.VendorProfilesChanged;
 import com.positivity.supplier.internal.spi.VendorProfilesChanging;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.LockModeType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HashMap;
@@ -123,7 +122,7 @@ public class VendorPurchasingProfile {
     }
 
     /**
-     * The vendor's current fact again, under a higher {@code aggregateVersion}: the version is forced up although no
+     * The vendor's current fact again, under a higher {@code aggregateVersion}: the version is raised although no
      * column of the vendor changed, so consumers' stale-fact guards apply it in order (ADR-0044 §3).
      */
     private void republish(@NonNull UUID vendorId, @Nullable String purchaseOrderSupplierRef) {
@@ -132,8 +131,10 @@ public class VendorPurchasingProfile {
             // A YAML profile may name a vendor this tenant does not hold yet; there is nothing to republish.
             return;
         }
-        entityManager.lock(vendor.get(), LockModeType.PESSIMISTIC_FORCE_INCREMENT);
-        entityManager.flush();
+        // An explicit bump, then a refresh, so the version the fact carries is the one the row now holds, whatever
+        // the provider does with a forced-increment lock mode on an unchanged entity.
+        vendors.bumpVersion(vendorId);
+        entityManager.refresh(vendor.get());
         // The YAML bootstrap runs under its audit actor, not a principal; an administrator's write under theirs.
         String actor = AuditActorContext.currentActor()
                 .orElseGet(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"));

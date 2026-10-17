@@ -102,6 +102,9 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
     @Autowired
     private com.positivity.supplier.internal.repository.SupplierOutboxEventRepository outboxRepository;
 
+    @Autowired
+    private tools.jackson.databind.ObjectMapper objectMapper;
+
     private SupplierYamlBootstrap bootstrap;
 
     private SimpleMeterRegistry meterRegistry;
@@ -813,15 +816,22 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
     @Test
     void reconcileRepublishesTheVendorWhoseChannelMoves() {
         long facts = vendorFacts();
-        var version = vendorRepository.findById(michelinVendorId).orElseThrow().getVersion();
+        long version = vendorRepository.findById(michelinVendorId).orElseThrow().getVersion();
 
         // The YAML profile goes live (not sandbox): MICHELIN's one purchasing channel appears.
         ProfileSpec live = withSandbox(michelinSpec(), new Sandbox(false, null));
         bootstrap.reconcile(properties(live));
         assertThat(vendorFacts()).as("the vendor fact is republished").isEqualTo(facts + 1);
-        assertThat(vendorRepository.findById(michelinVendorId).orElseThrow().getVersion())
-                .as("under a higher aggregateVersion")
-                .isGreaterThan(version);
+        long republished = vendorRepository.findById(michelinVendorId).orElseThrow().getVersion();
+        assertThat(republished).as("under a higher aggregateVersion").isGreaterThan(version);
+        assertThat(lastVendorFact())
+                .as("the fact carries the raised version, the channel and the bootstrap actor")
+                .satisfies(envelope -> {
+                    assertThat(envelope.path("aggregateVersion").asLong()).isEqualTo(republished);
+                    assertThat(envelope.path("payload").path("purchaseOrderSupplierRef").asText())
+                            .isEqualTo("michelin-eu");
+                    assertThat(envelope.path("actor").asText()).isEqualTo(SupplierYamlBootstrap.BOOTSTRAP_ACTOR);
+                });
 
         // Unchanged YAML: no designation moved, nothing republished.
         bootstrap.reconcile(properties(live));
@@ -830,6 +840,15 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
         // Back to sandbox: the channel goes away, republished once more.
         bootstrap.reconcile(properties(michelinSpec()));
         assertThat(vendorFacts()).isEqualTo(facts + 2);
+    }
+
+    private tools.jackson.databind.JsonNode lastVendorFact() {
+        return outboxRepository.findAll().stream()
+                .filter(row -> com.positivity.domainevents.supplier.SupplierVendorUpdatedV1.EVENT_TYPE.equals(
+                        row.getEventType()))
+                .reduce((first, second) -> second)
+                .map(row -> objectMapper.readTree(row.getPayload()))
+                .orElseThrow();
     }
 
     /** Only the vendor facts: a reconcile queues no other outbox rows today, but the filter keeps it honest. */
