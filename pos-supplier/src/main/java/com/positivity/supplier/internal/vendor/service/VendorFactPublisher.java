@@ -4,17 +4,17 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.entity.VendorRemitTo;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import java.time.Instant;
-import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -69,11 +69,13 @@ public class VendorFactPublisher {
         if (vendors.isEmpty()) {
             return;
         }
-        Map<UUID, List<SupplierProfileEntity>> profilesByVendor = profiles
-                .findByVendorIdIn(
-                        vendors.stream().map(SupplierVendorEntity::getVendorId).toList())
-                .stream()
-                .collect(Collectors.groupingBy(SupplierProfileEntity::getVendorId));
+        Map<UUID, List<SupplierProfileEntity>> profilesByVendor =
+                profiles
+                        .findByVendorIdIn(vendors.stream()
+                                .map(SupplierVendorEntity::getVendorId)
+                                .toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(SupplierProfileEntity::getVendorId));
         for (SupplierVendorEntity vendor : vendors) {
             publish(
                     vendor,
