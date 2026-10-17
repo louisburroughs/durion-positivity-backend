@@ -998,7 +998,7 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   replay with the same lines answers the same payment, another body 409 `IDEMPOTENCY_CONFLICT`); 400
   `VALIDATION_ERROR` for a bill of another vendor, not `APPROVED`, over its open amount or a total above the unapplied
   amount; 403 `AP_PAYMENT_SELF_APPROVED_BILL` when the caller approved a bill (approver ≠ payer on every allocation,
-  AW6.2); 404; 422 `AP_PAYMENT_NOT_ALLOCATABLE` when the payment is not `CASH` or nothing is unapplied; a bill named
+  AW6.2); 404; 422 `AP_PAYMENT_NOT_ALLOCATABLE` when nothing is unapplied (a gateway orphan reconciled `CHARGED`, #2729, is allocated here too); a bill named
   twice is 400. The pay command refuses `CASH` (422 `AP_PAYMENT_METHOD_NOT_SUPPORTED`): the close posting is the only
   way a cash payment is made. Before this half, a `VENDOR_COD` movement was skipped and counted on
   `accounting.cash_movement.unposted{reason=VENDOR_COD}`; pos-order refused the reason until then (#2576), so no
@@ -1430,11 +1430,40 @@ payer. Only the outbox delivery applies it (an ArchUnit rule limits the callers)
 **Retry.** `POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry` `{overrideJustification?}`
 (`accounting:je:post`; `accounting:period:override` for the override) locks the payment and posts a `GL_POST_FAILED`
 one on its stored date: 200 with the payment `GL_POSTED`; 404 `NOT_FOUND`; 409 `AP_PAYMENT_NOT_RETRYABLE` for any
-other status; 409 `LOCK_TIMEOUT`; 422 `GL_MAPPING_NOT_CONFIGURED`, `GL_ACCOUNT_NOT_ACTIVE`, `PERIOD_CLOSED`,
+other status (bar `GL_POST_PENDING` with a FAILED outbox row, #2729); 409 `LOCK_TIMEOUT`; 422 `GL_MAPPING_NOT_CONFIGURED`, `GL_ACCOUNT_NOT_ACTIVE`, `PERIOD_CLOSED`,
 `PERIOD_HARD_LOCKED` or `ACCOUNTING_TIME_ZONE_UNSET` with the payment left `GL_POST_FAILED` and the new code in
 `glPostError`. A retry is a new act (Accounting ruling 1 of 2026-10-08 on #2603): into a closed period it needs the
 caller's own `overrideJustification` and `accounting:period:override`, applied and audited for the caller; the override
 the payer gave on the pay command never applies to it, and the stored override fields are never changed.
+
+**Stuck before posting (#2729, Accounting ruling of 2026-10-17).** A payment stuck in a pre-posting state gets a
+remedy where no money moved, and a dated posting where it did:
+- `GATEWAY_PENDING` with no gateway answer (a crash or timeout between the call and its reply; whether money moved is
+  unknown, and no allocation exists yet). The pay command commits that row before it calls the gateway, in a
+  transaction of its own, so the orphan is visible; a resend of the same `paymentRef` resumes it (the gateway replays
+  under the same idempotency key, S42 AC12) and is the first remedy. When no resend is possible and the operator knows
+  the outcome: `POST /v1/accounting/ap/payments/{paymentId}/reconcile-gateway`
+  `{gatewayOutcome: NOT_CHARGED|CHARGED, gatewayTransactionId?, justification}` (`accounting:ap:pay`, event
+  `ACCOUNTING_AP_PAYMENT_RECONCILE_GATEWAY`, `reconcileApPaymentGateway`). `NOT_CHARGED` → `VOIDED` (posts nothing,
+  nothing to reopen; `voidReason`, `voidedAt`, `voidedBy`). `CHARGED` → the transaction id is recorded, the payment
+  posts through the outbox as an unapplied payment (`unappliedAmount = grossAmount`; the pay command's in-memory plan
+  is lost) and the vendor's bills are allocated later with `allocateApPayment`. The outcome is operator-attested until
+  #2642 gives the gateway port a lookup by `paymentRef`. Audit row `AP_PAYMENT_RECONCILE_GATEWAY`. Any other status is
+  409 `AP_PAYMENT_NOT_VOIDABLE` with `nextAction` (the retry, its `deferPastHardLock`, or #2642 for a charge that
+  moved money); 422 `AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED` for `CHARGED` without a transaction id.
+- `GL_POST_FAILED` whose `payment_date` is hard-locked: not a void (the cash left the bank). `gl-posting-retry`
+  `{deferPastHardLock: true, justification}` dates the entry on the retry's business date (AW42: never back into the
+  original period), the entry's description carries the original payment date, the payment records
+  `postingDateRule = DEFERRED_PAST_HARD_LOCK`, audit row `AP_PAYMENT_GL_POSTING_DEFERRED`; the locked period keeps the
+  payment as a reconciling item (S38/S39). Without the flag the retry stays 422 `PERIOD_HARD_LOCKED`; the flag
+  without a justification is 422 `AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED`.
+- `GL_POST_PENDING` whose outbox row is `FAILED` (retries exhausted while the refusal could not be recorded):
+  `gl-posting-retry` accepts it; a live delivery stays 409 `AP_PAYMENT_NOT_RETRYABLE`.
+- A charge that moved money and must be undone is a returned payment (mirror entry, reopened allocations, a return
+  status): #2642, not here. There is no write-off concept for AP payments.
+- `ACCOUNT_HAS_UNPOSTED_PAYMENTS` (#2645) no longer counts `VOIDED` payments and its message names the remedy per
+  state. The automatic `GATEWAY_PENDING` reconciler belongs to #2642; the "stuck past N hours" line of Needs attention
+  is S19's (#2515).
 
 **Bounded waits (#2627).** Every gateway call carries `payment.gateway.connect-timeout` (default 5 s) and
 `payment.gateway.read-timeout` (default 20 s) on its Stripe `RequestOptions`. The pay command, the retry and the
@@ -1443,9 +1472,11 @@ lock_timeout` from `accounting.ap.lock-timeout` (default 5 s) first; a wait beyo
 ("Another request is working on these bills; retry" on the AP paths, a neutral message elsewhere), and the transaction
 rolls back. Work a REQUIRES_NEW transaction committed (a provisioned period row, a refusal's audit row) is not undone,
 and such a transaction does not inherit the limit. A gateway timeout means the
-outcome is unknown: the transaction rolls back (no `ap_payment` row, no allocation, no posting) and the caller sends
-the same `paymentRef` again within the gateway idempotency window (`STRIPE_IDEMPOTENCY_WINDOW_HOURS`), whose key
-replays the original outcome. If `idle_in_transaction_session_timeout` is ever set for pos-accounting, it must exceed
+outcome is unknown: the transaction rolls back (no allocation, no posting) but the `GATEWAY_PENDING` row, committed in
+a transaction of its own before the gateway call (#2729), stays as the orphan; the caller sends the same `paymentRef`
+again within the gateway idempotency window (`STRIPE_IDEMPOTENCY_WINDOW_HOURS`), which resumes that row under its lock
+and whose key replays the original outcome, or an operator reconciles it (`reconcileApPaymentGateway`). A decline
+leaves the row `GATEWAY_FAILED` (the paymentRef is spent at the gateway too). If `idle_in_transaction_session_timeout` is ever set for pos-accounting, it must exceed
 connect + read. The automatic plan still locks every `APPROVED` bill of the vendor.
 
 **Data.** V19 makes `ap_payment.payment_date` a `DATE`, adds the foreign key `(tenant_id, bank_account_id)` →
@@ -1873,8 +1904,11 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_BILL_SELF_APPROVAL` | 403 | The caller created the bill, or created its vendor and no bill of that vendor was ever approved (`VENDOR_CREATOR_FIRST_BILL` in the message, S24), and the policy does not allow a creator to approve it (approve, `ACCEPT`) (#2510) |
 | `AP_PAYMENT_SELF_APPROVED_BILL` | 403 | The payer approved a bill the payment would pay; `fieldErrors[selfApprovedBillNumbers]` name them; nothing is paid (#2510) |
 | `AP_PAYMENT_METHOD_NOT_SUPPORTED` | 422 | An AP payment by `CREDIT_CARD` or `OTHER`: no funding account is modelled for them (OI-17); refused first, before the gateway (#2603) |
-| `AP_PAYMENT_NOT_RETRYABLE` | 409 | `gl-posting-retry` of an AP payment that is not `GL_POST_FAILED` (already posted, pending, or a gateway state) (#2603) |
-| `AP_PAYMENT_NOT_ALLOCATABLE` | 422 | `POST /ap/payments/{id}/allocations` of a payment that is not a drawer cash-on-delivery (`CASH`) payment, or has nothing unapplied (S17, #2513) |
+| `AP_PAYMENT_NOT_RETRYABLE` | 409 | `gl-posting-retry` of an AP payment that is neither `GL_POST_FAILED` nor `GL_POST_PENDING` with a FAILED outbox row (already posted, a live delivery, or a gateway state; the message names the remedy) (#2603, #2729) |
+| `AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED` | 422 | `gl-posting-retry` with `deferPastHardLock` and no justification (#2729) |
+| `AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED` | 422 | `reconcile-gateway` with `CHARGED` and no gateway transaction id (#2729) |
+| `AP_PAYMENT_NOT_VOIDABLE` | 409 | `reconcile-gateway` on a payment that is not a `GATEWAY_PENDING` orphan; `nextAction` names the remedy (#2729) |
+| `AP_PAYMENT_NOT_ALLOCATABLE` | 422 | `POST /ap/payments/{id}/allocations` of a payment with nothing unapplied; only a drawer cash-on-delivery (`CASH`) payment or a gateway orphan reconciled `CHARGED` carries an unapplied amount (S17, #2513; #2729) |
 | `IDEMPOTENCY_CONFLICT` | 409 | A `requestId` of `POST /ap/payments/{id}/allocations` was used before with another body (S17, #2513); the cash-setup commands answer the same code for theirs |
 | `LOCK_TIMEOUT` | 409 | A row lock waited beyond `accounting.ap.lock-timeout` on the AP pay command, its retry or a vendor-bill decision: another request is working on these bills (a neutral message on other paths); the transaction rolled back, retry (#2627) |
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |

@@ -62,13 +62,29 @@ class APPaymentPostingServiceTest {
     private final JournalEntryService journalEntries = mock(JournalEntryService.class);
     private final JournalEntryRepository journalEntryRows = mock(JournalEntryRepository.class);
     private final ApLockTimeout lockTimeout = mock(ApLockTimeout.class);
+    private final com.positivity.accounting.internal.repository.EventOutboxRepository outbox =
+            mock(com.positivity.accounting.internal.repository.EventOutboxRepository.class);
+    private final AccountingPeriodGate periodGate = mock(AccountingPeriodGate.class);
+    private final AccountingCalendarZoneResolver zoneResolver = mock(AccountingCalendarZoneResolver.class);
+    private final com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogs =
+            mock(com.positivity.accounting.internal.repository.AccountingAuditLogRepository.class);
 
     private APPaymentPostingService service;
     private APPayment payment;
 
     @BeforeEach
     void wire() {
-        service = new APPaymentPostingService(CLOCK, payments, mappings, journalEntries, journalEntryRows, lockTimeout);
+        service = new APPaymentPostingService(
+                CLOCK,
+                payments,
+                mappings,
+                journalEntries,
+                journalEntryRows,
+                lockTimeout,
+                outbox,
+                periodGate,
+                zoneResolver,
+                auditLogs);
         payment = new APPayment(PAYMENT_ID);
         payment.setPaymentRef("PAY-412");
         payment.setVendorName("Acme Brakes");
@@ -286,6 +302,76 @@ class APPaymentPostingServiceTest {
         assertThat(created().getTransactionDate()).isEqualTo(PAID_ON.atStartOfDay());
         assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
         assertThat(payment.getGlPostError()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2729: a GL_POST_PENDING payment whose outbox row is FAILED (and none pending) is retryable")
+    void retryPendingWithFailedOutbox() {
+        payment.setStatus(APPaymentStatus.GL_POST_PENDING);
+        when(payments.lockById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(outbox.countByAggregateIdAndStatus(
+                        PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.FAILED))
+                .thenReturn(1L);
+        when(outbox.countByAggregateIdAndStatus(
+                        PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.PENDING))
+                .thenReturn(0L);
+
+        assertThat(service.retry(PAYMENT_ID, null, null)).isEqualTo(ENTRY);
+        assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
+    }
+
+    @Test
+    @DisplayName("#2729: a GL_POST_PENDING payment with a live outbox row is not retryable, and says to wait")
+    void retryPendingWithLiveOutboxIsRefused() {
+        payment.setStatus(APPaymentStatus.GL_POST_PENDING);
+        when(payments.lockById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(outbox.countByAggregateIdAndStatus(
+                        PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.FAILED))
+                .thenReturn(0L);
+
+        assertThatThrownBy(() -> service.retry(PAYMENT_ID, null, null))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE))
+                .hasMessageContaining("wait for it");
+    }
+
+    @Test
+    @DisplayName("#2729 (AW42): deferPastHardLock dates the entry on today's business date when payment_date is"
+            + " hard-locked, names the original date, and records DEFERRED_PAST_HARD_LOCK; without the lock it is a"
+            + " plain retry on the payment's own date")
+    void deferPastHardLock() {
+        payment.setStatus(APPaymentStatus.GL_POST_FAILED);
+        when(payments.lockById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        when(periodGate.isHardLocked(PAID_ON)).thenReturn(true);
+        java.time.LocalDate today = PAID_ON.plusMonths(2);
+        when(zoneResolver.today()).thenReturn(today);
+
+        APPaymentPostingService.Deferral leave =
+                new APPaymentPostingService.Deferral("October is final after the audit; posting in December", "ana");
+        assertThat(service.retry(PAYMENT_ID, null, leave)).isEqualTo(ENTRY);
+        JournalEntryCreateRequest entry = created();
+        assertThat(entry.getTransactionDate()).isEqualTo(today.atStartOfDay());
+        assertThat(entry.getDescription()).contains("paid " + PAID_ON).contains("after the hard lock");
+        assertThat(payment.getPostingDateRule()).isEqualTo(APPaymentPostingService.DEFERRED_PAST_HARD_LOCK);
+        assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
+        // The audit row is written with the entry, in the posting transaction (#2729 review).
+        verify(auditLogs)
+                .save(org.mockito.ArgumentMatchers.argThat(
+                        row -> "AP_PAYMENT_GL_POSTING_DEFERRED".equals(row.getOperation())
+                                && PAYMENT_ID.equals(row.getEntityId())
+                                && "ana".equals(row.getUserId())
+                                && leave.justification().equals(row.getJustification())
+                                && row.getOldValue().contains(PAID_ON.toString())
+                                && row.getNewValue().contains(today.toString())));
+
+        // Not hard-locked: the leave changes nothing and nothing more is audited.
+        payment.setStatus(APPaymentStatus.GL_POST_FAILED);
+        payment.setPostingDateRule(null);
+        when(periodGate.isHardLocked(PAID_ON)).thenReturn(false);
+        service.retry(PAYMENT_ID, null, leave);
+        assertThat(payment.getPostingDateRule()).isNull();
+        verify(auditLogs, org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

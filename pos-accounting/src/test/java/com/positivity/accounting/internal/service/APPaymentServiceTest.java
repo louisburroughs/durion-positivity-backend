@@ -111,16 +111,35 @@ class APPaymentServiceTest {
     @Mock
     private com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository allocationRequests;
 
+    @Mock
+    private com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogs;
+
     @InjectMocks
     private APPaymentServiceImpl service;
 
     private UUID testVendorId;
     private String testPaymentRef;
 
+    private final java.util.concurrent.atomic.AtomicReference<APPayment> pendingRow =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
     @BeforeEach
     void setUp() {
         testVendorId = UUID.fromString("00000000-0000-0000-0000-000000000001");
         testPaymentRef = "PAY-REF-001";
+
+        // #2729: the pay command commits its GATEWAY_PENDING row before the gateway call; the row is remembered so a
+        // test can play the resend against it.
+        pendingRow.set(null);
+        when(paymentFailurePersistenceService.persistGatewayPending(any(APPayment.class)))
+                .thenAnswer(inv -> {
+                    APPayment p = inv.getArgument(0);
+                    if (p.getPaymentId() == null) {
+                        p.setPaymentId(TEST_PAYMENT_ID);
+                    }
+                    pendingRow.set(p);
+                    return p;
+                });
 
         // Default:
         // allocationRepository.findByPayment_PaymentIdOrderByAllocationSequenceAsc
@@ -212,6 +231,32 @@ class APPaymentServiceTest {
 
     @Test
     @DisplayName(
+            "#2729: a gateway orphan reconciled CHARGED (an ACH payment posted unapplied) is allocated the same way")
+    void allocateReconciledChargedPaymentAppliesTheBill() {
+        UUID paymentId = UUID.randomUUID();
+        UUID billId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        APPayment payment = cashPayment(paymentId, "412.00");
+        payment.setPaymentMethod(com.positivity.accounting.internal.enums.PaymentMethod.ACH);
+        payment.setStatus(APPaymentStatus.GL_POSTED);
+        payment.setGatewayTransactionId("ch_recovered");
+        VendorBill bill = approvedBill(billId, "412.00");
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        when(billRepository.findById(billId)).thenReturn(Optional.of(bill));
+        when(allocationRequests.findByRequestId(requestId)).thenReturn(Optional.empty());
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        APPaymentResponse response =
+                service.allocateCashPayment(paymentId, allocate(requestId, billId, "412.00"), "clerk");
+
+        assertThat(response.getUnappliedAmount()).isEqualByComparingTo("0.00");
+        verify(allocationRepository).saveAll(any());
+        org.mockito.Mockito.verifyNoInteractions(outboxService, postingService);
+    }
+
+    @Test
+    @DisplayName(
             "a replay of the same requestId and lines answers the payment; another body is 409 IDEMPOTENCY_CONFLICT")
     void allocateCashPaymentIsIdempotentOnRequestId() {
         UUID paymentId = UUID.randomUUID();
@@ -266,12 +311,13 @@ class APPaymentServiceTest {
     }
 
     @Test
-    @DisplayName(
-            "not a CASH payment, or nothing unapplied: 422 AP_PAYMENT_NOT_ALLOCATABLE; over the unapplied amount: 400")
+    @DisplayName("nothing unapplied (an ACH payment the pay command allocated in full, a spent COD payment): 422"
+            + " AP_PAYMENT_NOT_ALLOCATABLE; over the unapplied amount: 400")
     void allocateCashPaymentRefusals() {
         UUID billId = UUID.randomUUID();
         UUID achId = UUID.randomUUID();
-        APPayment ach = cashPayment(achId, "145.00");
+        APPayment ach = cashPayment(achId, "0.00");
+        ach.setUnappliedAmount(null);
         ach.setPaymentMethod(com.positivity.accounting.internal.enums.PaymentMethod.ACH);
         when(paymentRepository.lockById(achId)).thenReturn(Optional.of(ach));
         when(allocationRequests.findByRequestId(any())).thenReturn(Optional.empty());
@@ -425,11 +471,11 @@ class APPaymentServiceTest {
         when(paymentGateway.executePayment(any())).thenReturn(declinedResponse);
 
         assertThatThrownBy(() -> service.executePayment(request, "test-user"))
-                .isInstanceOf(PaymentGatewayException.class);
+                .isInstanceOf(PaymentGatewayException.class)
+                .hasMessageContaining("declined");
 
-        // persistGatewayFailure should be called due to the exception being re-thrown
-        // via the caught exception
-        verify(paymentFailurePersistenceService).persistGatewayFailure(any(UUID.class), any());
+        // The gateway answered: the committed row is marked GATEWAY_FAILED in its own transaction.
+        verify(paymentFailurePersistenceService).persistGatewayFailure(eq(TEST_PAYMENT_ID), any());
     }
 
     @Test
@@ -449,9 +495,14 @@ class APPaymentServiceTest {
 
         assertThatThrownBy(() -> service.executePayment(request, "test-user"))
                 .isInstanceOf(PaymentGatewayException.class)
-                .hasMessageContaining("Payment gateway communication failure");
+                .hasMessageContaining("Payment gateway communication failure")
+                .hasMessageContaining("outcome is unknown");
 
-        verify(paymentFailurePersistenceService).persistGatewayFailure(any(UUID.class), any());
+        // #2729: no answer is not a decline. The committed GATEWAY_PENDING row stays as the orphan, nothing marks it
+        // GATEWAY_FAILED.
+        verify(paymentFailurePersistenceService).persistGatewayPending(any(APPayment.class));
+        verify(paymentFailurePersistenceService, never()).persistGatewayFailure(any(UUID.class), any());
+        assertThat(pendingRow.get().getStatus()).isEqualTo(APPaymentStatus.GATEWAY_PENDING);
     }
 
     // ========================================
@@ -835,7 +886,7 @@ class APPaymentServiceTest {
                 vendorCopies,
                 billRepository,
                 payGuard,
-                paymentRepository,
+                paymentFailurePersistenceService,
                 paymentGateway);
         order.verify(lockTimeout).apply();
         order.verify(preGatewayChecks).checkRequest(request, Optional.of(BUSINESS_DATE));
@@ -845,7 +896,8 @@ class APPaymentServiceTest {
         order.verify(payGuard).check(List.of(bill), "ana", testPaymentRef);
         order.verify(vendorCopies).requireRemitToUnchanged(eq(List.of(bill)), any(), eq("ana"));
         order.verify(preGatewayChecks).checkPeriodAndMapping(Optional.of(BUSINESS_DATE), new BigDecimal("1.50"), null);
-        order.verify(paymentRepository).save(any(APPayment.class));
+        // The GATEWAY_PENDING row is committed (its own transaction, #2729) after every check and before the gateway.
+        order.verify(paymentFailurePersistenceService).persistGatewayPending(any(APPayment.class));
         order.verify(paymentGateway).executePayment(any());
         assertThat(result.getBankAccountId()).isEqualTo(BANK_ID);
         assertThat(result.getPaymentDate()).isEqualTo(BUSINESS_DATE);
@@ -989,15 +1041,19 @@ class APPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("S42 AC12 (#2627): a gateway timeout leaves no allocation and no posting; the resend of the same"
-            + " paymentRef whose gateway replay succeeds books the payment once")
+    @DisplayName("S42 AC12 (#2627) and #2729: a gateway timeout leaves the GATEWAY_PENDING orphan and nothing else"
+            + " (no allocation, no posting); the resend of the same paymentRef resumes the orphan's row and its"
+            + " gateway replay books the payment once")
     void gatewayTimeoutLeavesNothingAndTheResendBooksOnce() {
         VendorBill bill = approvedBill("INV-T", "400.00", "bob");
         ExecuteAPPaymentRequest request =
                 buildRequest(testPaymentRef, testVendorId, new BigDecimal("400.00"), PaymentMethod.ACH);
         request.setAllocations(List.of(
                 new ExecuteAPPaymentRequest.AllocationLineRequest(bill.getVendorBillId(), new BigDecimal("400.00"))));
-        when(paymentRepository.findByPaymentRef(testPaymentRef)).thenReturn(Optional.empty());
+        // The first send finds no row; the resend finds the orphan the first send committed.
+        when(paymentRepository.findByPaymentRef(testPaymentRef))
+                .thenAnswer(inv -> Optional.ofNullable(pendingRow.get()));
+        when(paymentRepository.lockById(TEST_PAYMENT_ID)).thenAnswer(inv -> Optional.ofNullable(pendingRow.get()));
         when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
         savesAssignId();
         when(paymentGateway.executePayment(any()))
@@ -1012,9 +1068,15 @@ class APPaymentServiceTest {
         assertThatThrownBy(() -> service.executePayment(request, "ana")).isInstanceOf(PaymentGatewayException.class);
         verify(allocationRepository, never()).saveAll(any());
         verify(outboxService, never()).saveToOutbox(any(), any(), any(), any(), any());
+        assertThat(pendingRow.get().getStatus()).isEqualTo(APPaymentStatus.GATEWAY_PENDING);
+        verify(paymentFailurePersistenceService, never()).persistGatewayFailure(any(), any());
 
         APPaymentResponse booked = service.executePayment(request, "ana");
 
+        // One row: the resend resumed the orphan under its lock instead of inserting a second payment.
+        verify(paymentFailurePersistenceService, org.mockito.Mockito.times(1)).persistGatewayPending(any());
+        verify(paymentRepository).lockById(TEST_PAYMENT_ID);
+        assertThat(booked.getPaymentId()).isEqualTo(TEST_PAYMENT_ID);
         assertThat(booked.getGatewayTransactionId()).isEqualTo("ch_replayed");
         org.mockito.ArgumentCaptor<com.positivity.accounting.internal.payment.GatewayPaymentRequest> sent =
                 org.mockito.ArgumentCaptor.forClass(
@@ -1032,9 +1094,10 @@ class APPaymentServiceTest {
     void retryRefusalIsRecordedAndRethrown() {
         com.positivity.accounting.internal.exception.GLMappingNotConfiguredException refusal =
                 new com.positivity.accounting.internal.exception.GLMappingNotConfiguredException("missing");
-        when(postingService.retry(TEST_PAYMENT_ID, null)).thenThrow(refusal);
+        when(postingService.retry(TEST_PAYMENT_ID, null, null)).thenThrow(refusal);
 
-        assertThatThrownBy(() -> service.retryGLPosting(TEST_PAYMENT_ID, null)).isSameAs(refusal);
+        assertThatThrownBy(() -> service.retryGLPosting(TEST_PAYMENT_ID, retryRequest(null), "ana"))
+                .isSameAs(refusal);
         verify(paymentFailurePersistenceService).persistGLPostRefusal(TEST_PAYMENT_ID, "GL_MAPPING_NOT_CONFIGURED");
     }
 
@@ -1043,9 +1106,10 @@ class APPaymentServiceTest {
     void retryNonRefusalRecordsNothing() {
         VendorBillException notRetryable =
                 new VendorBillException(VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE, "already posted");
-        when(postingService.retry(TEST_PAYMENT_ID, "Reopened for the audit")).thenThrow(notRetryable);
+        when(postingService.retry(TEST_PAYMENT_ID, "Reopened for the audit", null))
+                .thenThrow(notRetryable);
 
-        assertThatThrownBy(() -> service.retryGLPosting(TEST_PAYMENT_ID, "Reopened for the audit"))
+        assertThatThrownBy(() -> service.retryGLPosting(TEST_PAYMENT_ID, retryRequest("Reopened for the audit"), "ana"))
                 .isSameAs(notRetryable);
         verify(paymentFailurePersistenceService, never()).persistGLPostRefusal(any(), any());
     }
@@ -1058,10 +1122,17 @@ class APPaymentServiceTest {
         posted.setStatus(APPaymentStatus.GL_POSTED);
         when(paymentRepository.findById(TEST_PAYMENT_ID)).thenReturn(Optional.of(posted));
 
-        APPaymentResponse result = service.retryGLPosting(TEST_PAYMENT_ID, null);
+        APPaymentResponse result = service.retryGLPosting(TEST_PAYMENT_ID, retryRequest(null), "ana");
 
-        verify(postingService).retry(TEST_PAYMENT_ID, null);
+        verify(postingService).retry(TEST_PAYMENT_ID, null, null);
         assertThat(result.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
+    }
+
+    private static com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest retryRequest(
+            String overrideJustification) {
+        return com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest.builder()
+                .overrideJustification(overrideJustification)
+                .build();
     }
 
     // ========================================
@@ -1252,5 +1323,159 @@ class APPaymentServiceTest {
                 .isEqualTo("Disputed delivery 4471, awaiting credit");
         assertThat(page.getContent().get(1).getVendorApHoldReason()).isNull();
         verify(vendorCopies, org.mockito.Mockito.times(1)).heldVendors(any());
+    }
+
+    // ========================================
+    // reconcile-gateway and the retry remedies (#2729)
+    // ========================================
+
+    private APPayment orphan(UUID paymentId) {
+        APPayment payment = new APPayment(paymentId);
+        payment.setPaymentRef("PAY-ORPHAN");
+        payment.setVendorId(testVendorId);
+        payment.setPaymentMethod(com.positivity.accounting.internal.enums.PaymentMethod.ACH);
+        payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
+        payment.setGrossAmount(new BigDecimal("412.00"));
+        payment.setCurrency("USD");
+        payment.setBankAccountId(UUID.randomUUID());
+        return payment;
+    }
+
+    @Test
+    @DisplayName("#2729: NOT_CHARGED voids a GATEWAY_PENDING orphan: nothing posted, nothing queued, an audit row")
+    void reconcileNotChargedVoids() {
+        UUID paymentId = UUID.randomUUID();
+        APPayment payment = orphan(paymentId);
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        APPaymentResponse response = service.reconcileGateway(
+                paymentId,
+                com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
+                        .gatewayOutcome(
+                                com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.GatewayOutcome
+                                        .NOT_CHARGED)
+                        .justification("Gateway console shows no charge; the request timed out")
+                        .build(),
+                "controller.c");
+
+        assertThat(response.getStatus()).isEqualTo(APPaymentStatus.VOIDED);
+        assertThat(response.getVoidedBy()).isEqualTo("controller.c");
+        assertThat(response.getVoidReason()).contains("no charge");
+        org.mockito.Mockito.verifyNoInteractions(outboxService, postingService);
+        verify(auditLogs)
+                .save(org.mockito.ArgumentMatchers.argThat(
+                        row -> "AP_PAYMENT_RECONCILE_GATEWAY".equals(row.getOperation())
+                                && "GATEWAY_PENDING".equals(row.getOldValue())
+                                && row.getNewValue().startsWith("VOIDED")));
+    }
+
+    @Test
+    @DisplayName("#2729: CHARGED records the transaction id and posts the orphan as an unapplied payment")
+    void reconcileChargedPostsUnapplied() {
+        UUID paymentId = UUID.randomUUID();
+        APPayment payment = orphan(paymentId);
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        APPaymentResponse response = service.reconcileGateway(
+                paymentId,
+                com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
+                        .gatewayOutcome(
+                                com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.GatewayOutcome
+                                        .CHARGED)
+                        .gatewayTransactionId("ch_123")
+                        .justification("Gateway console shows the charge settled on the 16th")
+                        .build(),
+                "controller.c");
+
+        assertThat(response.getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
+        assertThat(response.getUnappliedAmount()).isEqualByComparingTo("412.00");
+        assertThat(response.getGatewayTransactionId()).isEqualTo("ch_123");
+        verify(outboxService).saveToOutbox(any(), eq("APPayment"), eq(paymentId), any(), any());
+        verify(auditLogs).save(any());
+    }
+
+    @Test
+    @DisplayName("#2729: CHARGED without a transaction id is 422; a non-orphan is 409 with the remedy as nextAction")
+    void reconcileRefusals() {
+        UUID paymentId = UUID.randomUUID();
+        APPayment payment = orphan(paymentId);
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        assertThatThrownBy(() -> service.reconcileGateway(
+                        paymentId,
+                        com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
+                                .gatewayOutcome(
+                                        com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
+                                                .GatewayOutcome.CHARGED)
+                                .justification("Charged, id to follow (not acceptable)")
+                                .build(),
+                        "c"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(VendorBillException.Code.AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED));
+
+        payment.setStatus(APPaymentStatus.GL_POST_FAILED);
+        payment.setGlPostError("PERIOD_HARD_LOCKED");
+        assertThatThrownBy(() -> service.reconcileGateway(
+                        paymentId,
+                        com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest.builder()
+                                .gatewayOutcome(
+                                        com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest
+                                                .GatewayOutcome.NOT_CHARGED)
+                                .justification("Trying to void a posted-but-locked payment")
+                                .build(),
+                        "c"))
+                .isInstanceOfSatisfying(VendorBillException.class, e -> {
+                    assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_VOIDABLE);
+                    assertThat(e.getNextAction()).contains("deferPastHardLock");
+                });
+        verify(paymentRepository, never()).save(any());
+        verify(auditLogs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2729: deferPastHardLock needs a justification; with one, the deferred posting is audited")
+    void retryDeferValidationAndAudit() {
+        UUID paymentId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.retryGLPosting(
+                        paymentId,
+                        com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest.builder()
+                                .deferPastHardLock(true)
+                                .build(),
+                        "controller.c"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode())
+                                .isEqualTo(VendorBillException.Code.AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED));
+        verify(postingService, never()).retry(any(), any(), any(APPaymentPostingService.Deferral.class));
+
+        APPayment posted = orphan(paymentId);
+        posted.setStatus(APPaymentStatus.GL_POSTED);
+        posted.setPaymentDate(java.time.LocalDate.of(2026, 5, 12));
+        posted.setPostingDateRule(APPaymentPostingService.DEFERRED_PAST_HARD_LOCK);
+        when(paymentRepository.findById(paymentId)).thenReturn(Optional.of(posted));
+        when(postingService.retry(eq(paymentId), any(), any(APPaymentPostingService.Deferral.class)))
+                .thenReturn(UUID.randomUUID());
+
+        APPaymentResponse response = service.retryGLPosting(
+                paymentId,
+                com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest.builder()
+                        .deferPastHardLock(true)
+                        .justification("May is hard-locked after the audit; posting in June")
+                        .build(),
+                "controller.c");
+
+        assertThat(response.getPostingDateRule()).isEqualTo("DEFERRED_PAST_HARD_LOCK");
+        // The leave travels into the posting transaction, which writes the audit row with the entry.
+        verify(postingService)
+                .retry(
+                        eq(paymentId),
+                        org.mockito.ArgumentMatchers.isNull(),
+                        org.mockito.ArgumentMatchers.argThat(leave ->
+                                "May is hard-locked after the audit; posting in June".equals(leave.justification())
+                                        && "controller.c".equals(leave.user())));
+        verify(auditLogs, never()).save(any());
     }
 }

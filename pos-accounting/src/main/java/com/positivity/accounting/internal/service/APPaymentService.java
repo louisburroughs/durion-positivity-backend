@@ -1,8 +1,10 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
+import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import java.util.Optional;
 import java.util.UUID;
@@ -118,30 +120,43 @@ public interface APPaymentService {
     void recordGLPostFailure(@NonNull UUID paymentId, @NonNull String errorMessage);
 
     /**
-     * Posts again a payment whose posting was refused (CAP:550 S42, #2603): only a {@code GL_POST_FAILED} payment, on
-     * its stored {@code payment_date}, with the payment row locked.
+     * {@code POST /v1/accounting/ap/payments/{paymentId}/gl-posting-retry}: posts a {@code GL_POST_FAILED} payment on
+     * its stored {@code payment_date}, with the caller's own closed-period override when the request carries one
+     * (honoured with the caller's {@code accounting:period:override}; the override stored by the pay command never
+     * applies). With the #2729 remedies: {@code deferPastHardLock} (needs {@code justification}; audited inside the
+     * posting transaction) dates the entry on the retry's business date when the payment's own date is hard-locked;
+     * a {@code GL_POST_PENDING} payment whose outbox row is FAILED is retryable too.
      *
-     * @param paymentId             the payment
-     * @param overrideJustification the caller's closed-period justification (with the caller's {@code
-     *                              accounting:period:override}); the override stored by the pay command never applies
      * @return the payment, {@code GL_POSTED} with its journal entry id
      * @throws jakarta.persistence.EntityNotFoundException when no such payment is visible (404 {@code NOT_FOUND})
      * @throws com.positivity.accounting.internal.exception.VendorBillException {@code AP_PAYMENT_NOT_RETRYABLE} (409)
-     *     when the payment is not {@code GL_POST_FAILED}
+     *     when the payment is neither {@code GL_POST_FAILED} nor {@code GL_POST_PENDING} with a FAILED outbox row;
+     *     {@code AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED} (422) for the flag without a justification
      * @throws RuntimeException a refusal (422 {@code GL_MAPPING_NOT_CONFIGURED}, {@code PERIOD_CLOSED}, {@code
      *     PERIOD_HARD_LOCKED}, {@code ACCOUNTING_TIME_ZONE_UNSET}); the payment stays {@code GL_POST_FAILED} with the
      *     new reason in {@code glPostError}
      */
     @NonNull
-    APPaymentResponse retryGLPosting(@NonNull UUID paymentId, @Nullable String overrideJustification);
+    APPaymentResponse retryGLPosting(
+            @NonNull UUID paymentId, @NonNull APPaymentGLPostingRetryRequest request, @NonNull String currentUser);
 
     /**
-     * Allocate an unapplied {@code CASH} payment (a drawer cash-on-delivery payout, S17 #2513) to the vendor's
+     * Reconciles a {@code GATEWAY_PENDING} orphan with the gateway's outcome (#2729): {@code NOT_CHARGED} voids it
+     * (posts nothing, nothing to reopen); {@code CHARGED} posts it as an unapplied payment (the vendor's bills are
+     * allocated later). 409 {@code AP_PAYMENT_NOT_VOIDABLE} in any other status (with the remedy as {@code
+     * nextAction}); 422 {@code AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED} for {@code CHARGED} without a transaction id.
+     */
+    @NonNull
+    APPaymentResponse reconcileGateway(
+            @NonNull UUID paymentId, @NonNull ReconcileAPPaymentGatewayRequest request, @NonNull String currentUser);
+
+    /**
+     * Allocate a payment's unapplied amount (a drawer cash-on-delivery payout, S17 #2513; a gateway orphan
+     * reconciled CHARGED, #2729) to the vendor's
      * approved bills. Posts nothing (AW41 ruling 3): AP was debited at session close and credited at bill approval,
      * so the allocation only matches the subledger. Idempotent on {@code requestId}: the same lines answer the same
      * payment, another body is 409 {@code IDEMPOTENCY_CONFLICT}. Approver ≠ payer applies to every bill (403 {@code
-     * AP_PAYMENT_SELF_APPROVED_BILL}). 422 {@code AP_PAYMENT_NOT_ALLOCATABLE} when the payment is not {@code CASH}
-     * or nothing of it is unapplied; 400 {@code VALIDATION_ERROR} for a bill of another vendor, an unapproved bill
+     * AP_PAYMENT_SELF_APPROVED_BILL}). 422 {@code AP_PAYMENT_NOT_ALLOCATABLE} when nothing of it is unapplied; 400 {@code VALIDATION_ERROR} for a bill of another vendor, an unapproved bill
      * or a total above the unapplied amount.
      */
     APPaymentResponse allocateCashPayment(

@@ -34,5 +34,10 @@ public enum APPaymentStatus {
     GATEWAY_SUCCEEDED,
     GL_POST_PENDING,
     GL_POSTED,
-    GL_POST_FAILED
+    GL_POST_FAILED,
+    /**
+     * A GATEWAY_PENDING orphan the operator reconciled as never charged (#2729): nothing moved, nothing posted,
+     * nothing to reopen. Terminal; its bank account may be deactivated.
+     */
+    VOIDED
 }

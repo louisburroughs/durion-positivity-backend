@@ -424,6 +424,13 @@ public final class EventTypes {
                                 "Post again an AP payment whose posting was refused (Dr 2000 / Dr 6030 / Cr bank)")
                         .build(),
 
+                // Reconcile a GATEWAY_PENDING AP payment with the gateway's outcome - 1 event (#2729): a void or a
+                // posting decided on an operator's attestation, approval-grade.
+                EventTypeRegistration.approval(
+                                "ACCOUNTING_AP_PAYMENT_RECONCILE_GATEWAY",
+                                "Reconcile a GATEWAY_PENDING AP payment: void it (not charged) or post it (charged)")
+                        .build(),
+
                 // Allocate a cash-on-delivery AP payment - 1 event (CAP:550 S17, Issue #2513; AW41)
                 EventTypeRegistration.write(
                                 "ACCOUNTING_AP_PAYMENT_ALLOCATE",

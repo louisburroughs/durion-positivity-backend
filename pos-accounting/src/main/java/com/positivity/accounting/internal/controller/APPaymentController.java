@@ -5,6 +5,7 @@ import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ApPayFromAccountListResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
+import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.APPaymentService;
@@ -100,8 +101,11 @@ public class APPaymentController {
                 eligible account exists, and feeAmount, overrideJustification (10-1000 chars, honoured with \
                 accounting:period:override), paymentSource, memo and explicit allocations are optional.
                 Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with \
-                the same payload (the bank account compared as resolved) as a 200 instead of paying twice, and a \
-                gateway failure or timeout leaves no payment behind, so the same paymentRef is simply sent again.
+                the same payload (the bank account compared as resolved) as a 200 instead of paying twice. A gateway \
+                decline leaves the payment GATEWAY_FAILED (the paymentRef is spent at the gateway too); no gateway \
+                answer (a timeout) leaves it GATEWAY_PENDING with nothing allocated or posted, and the same \
+                paymentRef sent again resumes it (the gateway replays under the same idempotency key), or an \
+                operator who knows the outcome reconciles it with reconcileApPaymentGateway (#2729).
                 Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation \
                 or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT, \
                 LOCK_TIMEOUT or VENDOR_PAYMENT_DETAILS_CHANGED (naming each bill and the vendor number), 422 \
@@ -226,17 +230,24 @@ public class APPaymentController {
                 Use this tool once the reason in glPostError is fixed (a GL mapping set up, a period reopened, or \
                 with an override); do not use executeApPayment again, which would pay the vendor twice, and do not \
                 use the journal-entry endpoints instead, which would post the payment outside its own record.
-                Preconditions: the payment exists and is GL_POST_FAILED; the payment row is locked for the retry, \
-                and the entry is never re-dated, so a payment whose date is now hard-locked stays GL_POST_FAILED.
+                Preconditions: the payment exists and is GL_POST_FAILED, or GL_POST_PENDING with its outbox row FAILED \
+                (#2729); the payment row is locked for the retry. The entry keeps the payment's own date unless \
+                deferPastHardLock is true and that date is hard-locked: it is then dated today's business date (AW42: \
+                never back into the original period), its description names the original date, and the payment \
+                records postingDateRule DEFERRED_PAST_HARD_LOCK.
                 Required inputs: paymentId (UUID) as a path parameter and an optional body with \
                 overrideJustification (10-1000 chars, honoured with the caller's accounting:period:override and \
-                audited under the caller); a retry never reuses the override the payer gave on the pay command.
+                audited under the caller), deferPastHardLock (with justification, audited); a retry never reuses \
+                the override the payer gave on the pay command.
                 Emits ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY; on success the payment is GL_POSTED with its journal \
                 entry id, and a refused retry leaves it GL_POST_FAILED with the new reason in glPostError.
-                Returns 404 NOT_FOUND when no such payment exists, 409 AP_PAYMENT_NOT_RETRYABLE when it is not \
-                GL_POST_FAILED (already posted, pending, or a gateway state), 409 LOCK_TIMEOUT when another request \
-                holds it, and 422 GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED, PERIOD_HARD_LOCKED \
-                or ACCOUNTING_TIME_ZONE_UNSET when the posting is still refused.
+                Returns 404 NOT_FOUND when no such payment exists, 409 AP_PAYMENT_NOT_RETRYABLE when it is neither \
+                GL_POST_FAILED nor GL_POST_PENDING with a FAILED outbox row (already posted, a live delivery, or a \
+                gateway state: a GATEWAY_PENDING orphan is reconcileApPaymentGateway), 409 LOCK_TIMEOUT when another \
+                request holds it, 422 AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED for deferPastHardLock without a \
+                justification, and 422 GL_MAPPING_NOT_CONFIGURED, GL_ACCOUNT_NOT_ACTIVE, PERIOD_CLOSED, \
+                PERIOD_HARD_LOCKED (without deferPastHardLock) or ACCOUNTING_TIME_ZONE_UNSET when the posting is \
+                still refused.
                 """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Posted: the payment is GL_POSTED with its journal entry id")
@@ -287,15 +298,78 @@ public class APPaymentController {
                     @RequestBody(required = false)
                     @Nullable
                     APPaymentGLPostingRetryRequest request) {
-        String override = request == null ? null : request.getOverrideJustification();
-        return ResponseEntity.ok(apPaymentService.retryGLPosting(paymentId, override));
+        String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        return ResponseEntity.ok(apPaymentService.retryGLPosting(
+                paymentId, request == null ? new APPaymentGLPostingRetryRequest() : request, currentUser));
+    }
+
+    @PostMapping("/payments/{paymentId}/reconcile-gateway")
+    @EmitEvent(id = "ACCOUNTING_AP_PAYMENT_RECONCILE_GATEWAY", apiVersion = "1")
+    @Operation(
+            operationId = "reconcileApPaymentGateway",
+            summary = "Reconcile a GATEWAY_PENDING AP payment with the gateway's outcome",
+            description = """
+                Settles an AP payment stuck GATEWAY_PENDING (a crash or timeout between the gateway call and its \
+                answer, so whether money moved is unknown) with what the gateway actually did (#2729). NOT_CHARGED \
+                voids the payment: nothing was posted and no allocation exists yet, so there is nothing to reverse \
+                or reopen; the payment is VOIDED with the justification and may be re-issued. CHARGED records the \
+                gateway's transaction id and posts the payment as an unapplied payment (Dr 2000 / Cr bank through \
+                the outbox); the vendor's approved bills are allocated to it later with allocateApPayment.
+                Use this tool for a payment that reads GATEWAY_PENDING with no gateway timestamp; do not use it for \
+                a GL_POST_FAILED payment (retryApPaymentGlPosting) or for a charge that must be undone (#2642).
+                Preconditions: the payment is GATEWAY_PENDING; the outcome is what the operator verified at the \
+                gateway (until #2642 lets this service verify it); with CHARGED the gateway's transaction id is given.
+                Required inputs: paymentId; gatewayOutcome (NOT_CHARGED or CHARGED), justification (10-1000 \
+                characters), gatewayTransactionId with CHARGED.
+                Emits ACCOUNTING_AP_PAYMENT_RECONCILE_GATEWAY and writes an audit row (old and new status, the \
+                asserted outcome, the actor, the justification).
+                Returns 200 with the payment (VOIDED, or GL_POST_PENDING with unappliedAmount = grossAmount), 400 \
+                VALIDATION_ERROR for a missing field, 404 NOT_FOUND, 409 AP_PAYMENT_NOT_VOIDABLE when the payment is \
+                in any other status (nextAction names the remedy: the retry, its deferPastHardLock, or #2642), 409 \
+                LOCK_TIMEOUT, and 422 AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED for CHARGED without a transaction id.
+                """,
+            tags = {"AP Payments"})
+    @ApiResponse(responseCode = "200", description = "Reconciled: VOIDED, or GL_POST_PENDING as an unapplied payment")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: gatewayOutcome or justification missing or malformed",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN without accounting:ap:pay",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "NOT_FOUND: no such AP payment",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "AP_PAYMENT_NOT_VOIDABLE: the payment is not a GATEWAY_PENDING orphan (nextAction names the"
+                    + " remedy); LOCK_TIMEOUT: another request holds the payment",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED: CHARGED without the gateway's transaction id",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:ap:pay"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
+    public @NonNull ResponseEntity<APPaymentResponse> reconcileApPaymentGateway(
+            @PathVariable
+                    @Parameter(description = "Payment UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
+                    @NonNull
+                    UUID paymentId,
+            @Valid @RequestBody @NonNull ReconcileAPPaymentGatewayRequest request) {
+        String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        return ResponseEntity.ok(apPaymentService.reconcileGateway(paymentId, request, currentUser));
     }
 
     @PostMapping("/payments/{paymentId}/allocations")
     @EmitEvent(id = "ACCOUNTING_AP_PAYMENT_ALLOCATE", apiVersion = "1")
     @Operation(
             operationId = "allocateApPayment",
-            summary = "Allocate a cash-on-delivery AP payment to the vendor's approved bills",
+            summary = "Allocate an AP payment's unapplied amount to the vendor's approved bills",
             description = """
                     Use when a vendor paid cash on delivery from a register drawer (an AP payment with method CASH, \
                     created at session close, CAP:550 S17) and the vendor's bill has since been approved: apply the \
@@ -313,7 +387,8 @@ public class APPaymentController {
                     bill, an amount above the bill's open amount or a total above the unapplied amount; 403 \
                     AP_PAYMENT_SELF_APPROVED_BILL when the caller approved one of the bills; 404 when the payment \
                     does not exist; 409 IDEMPOTENCY_CONFLICT when the requestId was used with another body; 422 \
-                    AP_PAYMENT_NOT_ALLOCATABLE when the payment is not CASH or nothing of it is unapplied.
+                    AP_PAYMENT_NOT_ALLOCATABLE when nothing of the payment is unapplied (only a drawer \
+                    cash-on-delivery payment or a gateway orphan reconciled CHARGED carries an unapplied amount).
                     """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Allocated; the payment with its unapplied amount reduced")
@@ -336,7 +411,7 @@ public class APPaymentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "AP_PAYMENT_NOT_ALLOCATABLE: not a CASH payment, or nothing unapplied",
+            description = "AP_PAYMENT_NOT_ALLOCATABLE: nothing unapplied on this payment",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     public ResponseEntity<APPaymentResponse> allocateApPayment(

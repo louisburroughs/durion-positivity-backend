@@ -168,6 +168,20 @@ public class APPayment extends TenantScopedEntity {
     @Column(name = "created_by", length = 50, nullable = false, updatable = false)
     private String createdBy;
 
+    /** {@code DEFERRED_PAST_HARD_LOCK} when the entry was dated the retry's business date (#2729); else null. */
+    @Column(name = "posting_date_rule", length = 40)
+    private String postingDateRule;
+
+    /** Why a {@code VOIDED} payment was voided (#2729). */
+    @Column(name = "void_reason", length = 1000)
+    private String voidReason;
+
+    @Column(name = "voided_at")
+    private Instant voidedAt;
+
+    @Column(name = "voided_by", length = 50)
+    private String voidedBy;
+
     public APPayment(UUID paymentId) {
         this.paymentId = paymentId;
     }

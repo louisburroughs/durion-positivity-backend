@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import java.util.EnumSet;
@@ -28,6 +29,17 @@ public class APPaymentFailurePersistenceService {
             EnumSet.of(APPaymentStatus.GL_POST_PENDING, APPaymentStatus.GL_POST_FAILED);
 
     private final APPaymentRepository paymentRepository;
+
+    /**
+     * Commits the pay command's {@code GATEWAY_PENDING} row before the gateway is called (#2729). A crash or timeout
+     * between the call and its answer then leaves a visible orphan (resumed by a resend of the same paymentRef, or
+     * reconciled by an operator with reconcileApPaymentGateway) instead of a rolled-back nothing. The pay command's own
+     * transaction, and the bill locks it holds, continue around this one.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public @NonNull APPayment persistGatewayPending(@NonNull APPayment payment) {
+        return paymentRepository.save(payment);
+    }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @SuppressWarnings({"java:S1181", "java:S2221"}) // Best-effort persistence must not break caller flow

@@ -3,7 +3,6 @@ package com.positivity.accounting.internal.controller;
 import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -201,18 +200,26 @@ class APPaymentPostingControllerTest extends BaseIntegrationTest {
                     List.of("accounting:ap:pay", "accounting:period:override", "accounting:ap:view")) {
                 mockMvc.perform(withAuth(post(RETRY, PAYMENT_ID), authorities)).andExpect(status().isForbidden());
             }
-            verify(apPaymentService, never()).retryGLPosting(any(), any());
+            verify(apPaymentService, never()).retryGLPosting(any(), any(), any());
         }
 
         @Test
         @DisplayName("200 with no body: the payment GL_POSTED")
         void postsWithoutABody() throws Throwable {
-            when(apPaymentService.retryGLPosting(PAYMENT_ID, null)).thenReturn(payment(APPaymentStatus.GL_POSTED));
+            when(apPaymentService.retryGLPosting(
+                            eq(PAYMENT_ID),
+                            any(com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest.class),
+                            any()))
+                    .thenReturn(payment(APPaymentStatus.GL_POSTED));
 
             mockMvc.perform(withAuth(post(RETRY, PAYMENT_ID), "accounting:je:post"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("GL_POSTED"));
-            verify(apPaymentService).retryGLPosting(eq(PAYMENT_ID), isNull());
+            verify(apPaymentService)
+                    .retryGLPosting(
+                            eq(PAYMENT_ID),
+                            org.mockito.ArgumentMatchers.argThat(r -> r.getOverrideJustification() == null),
+                            any());
             // AC6: the retry writes its audit event through the platform's emission service.
             verify(eventEmission)
                     .executeWithEventEmission(eq("ACCOUNTING_AP_PAYMENT_GL_POSTING_RETRY"), eq("1"), any());
@@ -221,7 +228,11 @@ class APPaymentPostingControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("the caller's overrideJustification reaches the service; under 10 characters is 400")
         void overrideJustification() throws Exception {
-            when(apPaymentService.retryGLPosting(PAYMENT_ID, "Reopened June for the audit"))
+            when(apPaymentService.retryGLPosting(
+                            eq(PAYMENT_ID),
+                            org.mockito.ArgumentMatchers.argThat(
+                                    r -> "Reopened June for the audit".equals(r.getOverrideJustification())),
+                            any()))
                     .thenReturn(payment(APPaymentStatus.GL_POSTED));
 
             mockMvc.perform(withAuth(post(RETRY, PAYMENT_ID), "accounting:je:post,accounting:period:override")
@@ -232,7 +243,12 @@ class APPaymentPostingControllerTest extends BaseIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{\"overrideJustification\":\"short\"}"))
                     .andExpect(status().isBadRequest());
-            verify(apPaymentService).retryGLPosting(PAYMENT_ID, "Reopened June for the audit");
+            verify(apPaymentService)
+                    .retryGLPosting(
+                            eq(PAYMENT_ID),
+                            org.mockito.ArgumentMatchers.argThat(
+                                    r -> "Reopened June for the audit".equals(r.getOverrideJustification())),
+                            any());
         }
 
         @Test
@@ -249,7 +265,7 @@ class APPaymentPostingControllerTest extends BaseIntegrationTest {
         }
 
         private void retried(RuntimeException failure, int status, String code) throws Exception {
-            org.mockito.Mockito.doThrow(failure).when(apPaymentService).retryGLPosting(any(), any());
+            org.mockito.Mockito.doThrow(failure).when(apPaymentService).retryGLPosting(any(), any(), any());
             mockMvc.perform(withAuth(post(RETRY, PAYMENT_ID), "accounting:je:post"))
                     .andExpect(status().is(status))
                     .andExpect(jsonPath("$.code").value(code));
