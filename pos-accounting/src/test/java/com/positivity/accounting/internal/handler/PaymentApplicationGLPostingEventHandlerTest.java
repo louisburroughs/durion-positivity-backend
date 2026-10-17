@@ -153,8 +153,6 @@ class PaymentApplicationGLPostingEventHandlerTest {
                         any(BigDecimal.class),
                         any(UUID.class),
                         any(BigDecimal.class),
-                        isNull(),
-                        isNull(),
                         any(LocalDateTime.class),
                         any(String.class)))
                 .thenReturn(postedEntry);

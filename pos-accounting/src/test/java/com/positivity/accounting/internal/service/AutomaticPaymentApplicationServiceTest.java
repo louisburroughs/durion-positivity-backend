@@ -441,7 +441,7 @@ class AutomaticPaymentApplicationServiceTest {
         assertThat(result.outcome()).isEqualTo(Outcome.APPLIED);
         verify(paymentApplicationService)
                 .applyAutomatically(
-                        eq(INTENT), eq(INVOICE), any(), eq("PAYMENT_SETTLED:" + INTENT), eq(SETTLED_AT), any(), any());
+                        eq(INTENT), eq(INVOICE), any(), eq("PAYMENT_SETTLED:" + INTENT), eq(SETTLED_AT), any());
         verify(paymentApplicationService, never())
                 .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
         verifyNoInteractions(recorder);
