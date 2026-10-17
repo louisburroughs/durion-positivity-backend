@@ -182,6 +182,11 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             vendorUnresolved(spec, profile);
             return;
         }
+        // #2712: snapshot the designation of the vendor the profile had and the one it gets, before any mutation
+        // (the snapshot's query would auto-flush a dirty entity).
+        java.util.Set<UUID> touched = new java.util.HashSet<>(vendorIdsOf(profile));
+        touched.add(vendor.get().getVendorId());
+        eventPublisher.publishEvent(new VendorProfilesChanging(touched));
         profile.setVendorId(vendor.get().getVendorId());
         profile.setSupplierRef(spec.key());
         profile.setDisplayName(spec.displayName());
@@ -205,8 +210,6 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             profile.setRetryBackoff(null);
         }
         // #2712: a YAML profile that appears, re-points, enables or disables may move the vendor's purchasing channel.
-        java.util.Set<UUID> touched = vendorIdsOf(profile);
-        eventPublisher.publishEvent(new VendorProfilesChanging(touched));
         profile = profileRepository.save(profile);
         eventPublisher.publishEvent(new VendorProfilesChanged(touched));
         UUID vendorProfileId = profile.getVendorProfileId();
@@ -339,8 +342,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                 .counter(VENDOR_UNRESOLVED_METRIC, "profile", spec.key(), "tenant", tenant)
                 .increment();
         if (profile.getVendorProfileId() != null && profile.isEnabled()) {
-            profile.setEnabled(false);
             eventPublisher.publishEvent(new VendorProfilesChanging(vendorIdsOf(profile)));
+            profile.setEnabled(false);
             profileRepository.save(profile);
             eventPublisher.publishEvent(new VendorProfilesChanged(vendorIdsOf(profile)));
         }
@@ -353,8 +356,8 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private void disableRemovedYamlProfiles(@NonNull Set<String> yamlKeys) {
         for (SupplierProfileEntity profile : profileRepository.findBySourceOfTruth(ProfileSourceOfTruth.YAML)) {
             if (!yamlKeys.contains(profile.getSupplierRef()) && profile.isEnabled()) {
-                profile.setEnabled(false);
                 eventPublisher.publishEvent(new VendorProfilesChanging(vendorIdsOf(profile)));
+                profile.setEnabled(false);
                 profileRepository.save(profile);
                 eventPublisher.publishEvent(new VendorProfilesChanged(vendorIdsOf(profile)));
             }

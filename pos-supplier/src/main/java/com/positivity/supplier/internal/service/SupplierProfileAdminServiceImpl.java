@@ -125,9 +125,10 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         java.util.Set<UUID> touchedVendors = new java.util.HashSet<>();
         touchedVendors.add(profile.getVendorId());
         touchedVendors.add(request.vendorId());
-        applyProfile(profile, request);
-        // #2712: enabling, disabling or re-pointing may move the channel of the old vendor, the new one or both.
+        // #2712: enabling, disabling or re-pointing may move the channel of the old vendor, the new one or both. The
+        // snapshot is taken BEFORE the entity is touched: the snapshot's query would auto-flush a dirty entity.
         eventPublisher.publishEvent(new VendorProfilesChanging(touchedVendors));
+        applyProfile(profile, request);
         VendorProfileView view = toProfileView(profileRepository.save(profile), vendor);
         eventPublisher.publishEvent(new VendorProfilesChanged(touchedVendors));
         return view;
