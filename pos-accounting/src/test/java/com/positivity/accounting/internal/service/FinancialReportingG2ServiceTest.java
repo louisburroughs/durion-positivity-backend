@@ -902,10 +902,11 @@ class FinancialReportingG2ServiceTest {
     // ================= A/R and A/P share one documented aging rule (issue #1604) =================
 
     @Test
-    @DisplayName("Aging parity: identically dated A/R and A/P items bucket identically (issue #1604)")
+    @DisplayName("Aging parity: identically dated A/R and A/P items with a due date bucket identically (issue #1604);"
+            + " A/P with no due date ages from its estimate, A/R from the invoice date (#2515)")
     void agingRuleIsIdenticalForReceivablesAndPayables() {
-        // Same three shapes on both sides — not yet due, 45 days past due, and no due date at all
-        // (falling back to the document date) — must produce the same bucket totals.
+        // Not yet due and 45 days past due must bucket identically on both sides. With no due date the sides differ
+        // on purpose: A/R falls back to the document date, A/P to the estimated due date (bill date + NET30).
         LocalDate documentDate = AS_OF.minusDays(75);
 
         ExtInvoice arNotYetDue = arInvoice(new BigDecimal("100.00"), documentDate, AS_OF.plusDays(20));
@@ -926,8 +927,7 @@ class FinancialReportingG2ServiceTest {
         AgedReceivablesReport ar = service.generateAgedReceivables(AS_OF);
         AgedPayablesReport ap = service.generateAgedPayables(AS_OF);
 
-        // not-yet-due -> notYetDue; 45 days past due -> 31-60; no due date -> aged from the
-        // document date (75 days) -> 61-90.
+        // A/R: not-yet-due -> notYetDue; 45 days past due -> 31-60; no due date -> document date (75 days) -> 61-90.
         assertThat(ar.getTotals().getNotYetDue()).isEqualByComparingTo("100.00");
         assertThat(ar.getTotals().getDays31To60()).isEqualByComparingTo("200.00");
         assertThat(ar.getTotals().getDays61To90()).isEqualByComparingTo("300.00");
@@ -936,14 +936,14 @@ class FinancialReportingG2ServiceTest {
                 .isEqualByComparingTo(ar.getTotals().getNotYetDue());
         assertThat(ap.getTotals().getDays1To30())
                 .isEqualByComparingTo(ar.getTotals().getDays1To30());
-        assertThat(ap.getTotals().getDays31To60())
-                .isEqualByComparingTo(ar.getTotals().getDays31To60());
-        assertThat(ap.getTotals().getDays61To90())
-                .isEqualByComparingTo(ar.getTotals().getDays61To90());
+        // A/P: the undated bill is due documentDate + 30 = 45 days past due -> 31-60 beside the dated one.
+        assertThat(ap.getTotals().getDays31To60()).isEqualByComparingTo("500.00");
+        assertThat(ap.getTotals().getDays61To90()).isEqualByComparingTo("0");
         assertThat(ap.getTotals().getDays90Plus())
                 .isEqualByComparingTo(ar.getTotals().getDays90Plus());
         assertThat(ap.getTotals().getTotalOutstanding())
                 .isEqualByComparingTo(ar.getTotals().getTotalOutstanding());
+        assertThat(ap.getEstimatedDueDateAmount()).isEqualByComparingTo("300.00");
     }
 
     // ================= Fixtures =================
