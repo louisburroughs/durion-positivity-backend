@@ -175,5 +175,15 @@ public final class EventTypes {
                             "ORDER_PURCHASE_ORDER_TRANSMISSION_EVENTS",
                             "Read a purchase order's vendor transmission timeline")
                     .apiVersion("1")
+                    .build(),
+
+            // PurchaseOrderVendorController — the vendor copy read by purchase-order screens (CAP:550 #2680)
+            EventTypeRegistration.search(
+                            "ORDER_PURCHASE_ORDER_VENDOR_LIST", "List the vendors a purchase order may name")
+                    .apiVersion("1")
+                    .build(),
+            EventTypeRegistration.fastRead(
+                            "ORDER_PURCHASE_ORDER_VENDOR_GET", "Get one vendor of the purchase-order vendor copy")
+                    .apiVersion("1")
                     .build());
 }

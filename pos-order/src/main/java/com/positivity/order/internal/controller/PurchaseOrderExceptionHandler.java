@@ -34,8 +34,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * transmit" message, because each names a different thing for somebody to go and fix — a missing
  * supplier profile, an article without a code, a send already in flight — and a caller that cannot
  * tell them apart cannot act on any of them.
+ *
+ * <p>Also covers {@link PurchaseOrderVendorController} (CAP:550, #2680), so the vendor reads answer the same 403
+ * {@code PURCHASE_ORDER_FORBIDDEN} and 400 {@code PURCHASE_ORDER_BAD_REQUEST} as the orders they serve.
  */
-@RestControllerAdvice(assignableTypes = PurchaseOrderController.class)
+@RestControllerAdvice(assignableTypes = {PurchaseOrderController.class, PurchaseOrderVendorController.class})
 @RequiredArgsConstructor
 @Slf4j
 public class PurchaseOrderExceptionHandler {
@@ -103,7 +106,9 @@ public class PurchaseOrderExceptionHandler {
     @ExceptionHandler(PurchaseOrderRequestValidationException.class)
     public ResponseEntity<ApiError> handleInvalidRequest(
             PurchaseOrderRequestValidationException ex, HttpServletRequest request) {
-        log.warn("Invalid purchase-order request", ex);
+        // A client error, and since #2680 one that can carry a caller-chosen sort token: DEBUG, no stack trace,
+        // like the platform's own type-mismatch and unreadable-body handlers.
+        log.debug("Invalid purchase-order request: {}", ex.getMessage());
         return respond(HttpStatus.BAD_REQUEST, "PURCHASE_ORDER_BAD_REQUEST", ex.getMessage(), request);
     }
 
