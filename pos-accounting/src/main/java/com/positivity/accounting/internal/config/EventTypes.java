@@ -821,6 +821,16 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW",
                                 "Read the CASH walk-in balance and the day-end needs-attention item")
+                        .build(),
+
+                // CashPositionController, CashOutlookController — 2 events (CAP:550 S19, #2515)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_CASH_POSITION_GET",
+                                "Read the cash position: in the bank, waiting to be deposited, kept in drawers")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_CASH_OUTLOOK_GET",
+                                "Read the cash outlook: the projected daily balance from approved bills and invoices")
                         .build());
     }
 }
