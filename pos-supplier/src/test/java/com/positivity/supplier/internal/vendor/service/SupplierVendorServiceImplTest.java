@@ -842,12 +842,14 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             JsonNode element = stored(stored.vendorId()).get(0);
             assertThat(element.path("scheme").stringValue()).isEqualTo("QST");
             assertThat(element.path("region").stringValue()).isEqualTo("QC");
-            // A shape-conformant scheme outside pos-tax's vocabulary is refused since #2623 (unknown scheme), not stored.
+            // A shape-conformant scheme outside pos-tax's vocabulary is refused since #2623 (unknown scheme), not
+            // stored.
             assertThatThrownBy(() -> createWith(new TaxRegistrationDto(null, "VAT/IVA", "FAKE00001234", "ca-qc")))
-                    .isInstanceOfSatisfying(SupplierValidationException.class, failure -> assertThat(
-                                    failure.getFieldErrors())
-                            .extracting(ApiErrorField::of)
-                            .containsExactly("taxRegistrations[0].scheme"));
+                    .isInstanceOfSatisfying(
+                            SupplierValidationException.class,
+                            failure -> assertThat(failure.getFieldErrors())
+                                    .extracting(ApiErrorField::of)
+                                    .containsExactly("taxRegistrations[0].scheme"));
         }
     }
 
