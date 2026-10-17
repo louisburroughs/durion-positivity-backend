@@ -740,8 +740,10 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
         try {
             assertThatThrownBy(() -> asTenant(
                             tenant,
-                            () -> journalEntries.reverseJournalEntry(posted.getGlJournalEntryId(), "by hand", null, null)))
-                    .isInstanceOf(com.positivity.accounting.internal.exception.JournalEntryNotReversibleException.class);
+                            () -> journalEntries.reverseJournalEntry(
+                                    posted.getGlJournalEntryId(), "by hand", null, null)))
+                    .isInstanceOf(
+                            com.positivity.accounting.internal.exception.JournalEntryNotReversibleException.class);
             assertThatThrownBy(() -> asTenant(
                             tenant,
                             () -> journalEntries.reverseJournalEntry(

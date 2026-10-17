@@ -59,7 +59,7 @@ import org.springframework.transaction.support.TransactionTemplate;
         matchIfMissing = true)
 public class APPaymentSettlementJob {
 
-    static final String SYSTEM = "system";
+    static final String SYSTEM = APPaymentReturnService.SYSTEM;
     static final String SETTLE_OPERATION = "AP_PAYMENT_SETTLE";
     private static final List<APPaymentStatus> POSTING_STATES =
             List.of(APPaymentStatus.GL_POST_PENDING, APPaymentStatus.GL_POSTED, APPaymentStatus.GL_POST_FAILED);
@@ -68,6 +68,7 @@ public class APPaymentSettlementJob {
     private final APPaymentService paymentService;
     private final APPaymentReturnService returns;
     private final APPaymentFailurePersistenceService failures;
+    private final APPaymentPostingService posting;
     private final AccountingAuditLogRepository auditLogs;
     private final ObjectProvider<PaymentGatewayProvider> gateway;
     private final TenantIterator tenantIterator;
@@ -76,6 +77,7 @@ public class APPaymentSettlementJob {
     private final Clock clock;
     private final Duration orphanGrace;
     private final Duration idempotencyWindow;
+    private final boolean autoVoidAfterWindow;
     private final int batchSize;
 
     public APPaymentSettlementJob(
@@ -83,6 +85,7 @@ public class APPaymentSettlementJob {
             APPaymentService paymentService,
             APPaymentReturnService returns,
             APPaymentFailurePersistenceService failures,
+            APPaymentPostingService posting,
             AccountingAuditLogRepository auditLogs,
             ObjectProvider<PaymentGatewayProvider> gateway,
             TenantIterator tenantIterator,
@@ -91,11 +94,13 @@ public class APPaymentSettlementJob {
             Clock clock,
             @Value("${accounting.ap.settlement.orphan-grace:PT15M}") Duration orphanGrace,
             @Value("${stripe.idempotency-window-hours:24}") long idempotencyWindowHours,
+            @Value("${accounting.ap.settlement.auto-void-after-window:false}") boolean autoVoidAfterWindow,
             @Value("${accounting.ap.settlement.batch-size:200}") int batchSize) {
         this.payments = payments;
         this.paymentService = paymentService;
         this.returns = returns;
         this.failures = failures;
+        this.posting = posting;
         this.auditLogs = auditLogs;
         this.gateway = gateway;
         this.tenantIterator = tenantIterator;
@@ -104,6 +109,7 @@ public class APPaymentSettlementJob {
         this.clock = clock;
         this.orphanGrace = orphanGrace;
         this.idempotencyWindow = Duration.ofHours(idempotencyWindowHours);
+        this.autoVoidAfterWindow = autoVoidAfterWindow;
         this.batchSize = batchSize;
     }
 
@@ -142,6 +148,10 @@ public class APPaymentSettlementJob {
         for (UUID paymentId : inFlight == null ? List.<UUID>of() : inFlight) {
             changed += guarded(paymentId, () -> checkInFlight(provider, paymentId, now)) ? 1 : 0;
         }
+        List<UUID> held = transaction.execute(status -> payments.findHeldReturnIds(PageRequest.of(0, batchSize)));
+        for (UUID paymentId : held == null ? List.<UUID>of() : held) {
+            changed += guarded(paymentId, () -> retryHeldReturn(paymentId)) ? 1 : 0;
+        }
         return changed;
     }
 
@@ -167,6 +177,16 @@ public class APPaymentSettlementJob {
         if (answer.isEmpty()) {
             if (payment.getCreatedAt() != null
                     && payment.getCreatedAt().plus(idempotencyWindow).isBefore(now)) {
+                if (!autoVoidAfterWindow) {
+                    // The reference lookup only finds charges stamped with payment_ref (this release on): an orphan
+                    // charged before that, or a search index that answers empty, must not be voided unseen. Off by
+                    // default; the operator reconciles it (reconcileApPaymentGateway).
+                    log.warn(
+                            "AP payment {} has no charge under its reference after the idempotency window; reconcile it"
+                                    + " by hand (accounting.ap.settlement.auto-void-after-window is off)",
+                            payment.getPaymentRef());
+                    return false;
+                }
                 // Nothing at the gateway and the window in which a resend could replay it has passed: never charged.
                 paymentService.reconcileGateway(
                         paymentId,
@@ -203,14 +223,38 @@ public class APPaymentSettlementJob {
                 return true;
             }
             case FAILED, DECLINED -> {
-                failures.persistGatewayFailure(
-                        paymentId,
-                        "GATEWAY_LOOKUP: " + charge.getStatus()
-                                + (charge.getFailureCode() == null ? "" : " " + charge.getFailureCode()));
-                return true;
+                // Under the row lock and only while still an orphan: a resend or an operator may have completed it.
+                Boolean failed = transaction.execute(status -> payments.lockById(paymentId)
+                        .filter(locked -> locked.getStatus() == APPaymentStatus.GATEWAY_PENDING)
+                        .map(locked -> {
+                            locked.setStatus(APPaymentStatus.GATEWAY_FAILED);
+                            locked.setGatewayTransactionId(charge.getTransactionId());
+                            locked.setGatewayTimestamp(now);
+                            locked.setGatewayResponse("GATEWAY_LOOKUP: " + charge.getStatus()
+                                    + (charge.getFailureCode() == null ? "" : " " + charge.getFailureCode()));
+                            payments.save(locked);
+                            return true;
+                        })
+                        .orElse(false));
+                return Boolean.TRUE.equals(failed);
             }
         }
         return false;
+    }
+
+    /** A return held for a period remedy: post the mirror if the period allows it now, else keep the refusal. */
+    private boolean retryHeldReturn(UUID paymentId) {
+        try {
+            posting.retry(paymentId, null, null);
+            return true;
+        } catch (RuntimeException e) {
+            Optional<String> refusal = APPaymentPostingService.refusalCode(e);
+            if (refusal.isEmpty()) {
+                throw e;
+            }
+            failures.persistGLPostRefusal(paymentId, refusal.get());
+            return false;
+        }
     }
 
     /** A charge in flight: settled, returned, or still pending? */
@@ -269,7 +313,7 @@ public class APPaymentSettlementJob {
     /**
      * The return (ruling 2). The return service posts the mirror in its own transaction; a period refusal rolls that
      * back whole, and the payment is then held {@code RETURN_PENDING} with the refusal as {@code glPostError} (nothing
-     * reopened while 2000 stays debited), for {@code gl-posting-retry} or the next sweep.
+     * reopened while 2000 stays debited); the next sweep retries the mirror until a period allows it.
      */
     private void returnInFlight(UUID paymentId, @Nullable String failureCode) {
         LocalDate today = zoneResolver.today();

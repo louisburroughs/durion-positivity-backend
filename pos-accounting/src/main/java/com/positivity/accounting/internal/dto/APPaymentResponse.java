@@ -159,6 +159,12 @@ public class APPaymentResponse {
     private Instant returnedAt;
 
     @Schema(
+            description = "The return date the bank or the gateway reported, as attested (kept whatever dates the"
+                    + " mirror)",
+            requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    private LocalDate returnReportedDate;
+
+    @Schema(
             description = "The date the mirror entry is (or will be) posted on",
             requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private LocalDate returnDate;

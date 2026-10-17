@@ -271,4 +271,7 @@ accounting:
       poll-interval: ${ACCOUNTING_AP_SETTLEMENT_POLL_INTERVAL:PT15M}
       orphan-grace: ${ACCOUNTING_AP_SETTLEMENT_ORPHAN_GRACE:PT15M}
       in-flight-warning: ${ACCOUNTING_AP_SETTLEMENT_IN_FLIGHT_WARNING:P7D}
+      # VOIDED automatically when the gateway holds no charge under the reference after the idempotency window.
+      # Off by default: the reference lookup only finds charges stamped payment_ref (this release on).
+      auto-void-after-window: ${ACCOUNTING_AP_SETTLEMENT_AUTO_VOID_AFTER_WINDOW:false}
       batch-size: ${ACCOUNTING_AP_SETTLEMENT_BATCH_SIZE:200}

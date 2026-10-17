@@ -896,6 +896,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                 .settlementCheckedAt(payment.getSettlementCheckedAt())
                 .settledAt(payment.getSettledAt())
                 .returnedAt(payment.getReturnedAt())
+                .returnReportedDate(payment.getReturnReportedDate())
                 .returnDate(payment.getReturnDate())
                 .returnDateRule(payment.getReturnDateRule())
                 .returnFailureCode(payment.getReturnFailureCode())

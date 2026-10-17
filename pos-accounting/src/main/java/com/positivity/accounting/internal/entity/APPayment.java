@@ -199,6 +199,10 @@ public class APPayment extends TenantScopedEntity {
     @Column(name = "returned_at")
     private Instant returnedAt;
 
+    /** The date the bank or the gateway reported the return on, as attested; kept whatever dates the mirror. */
+    @Column(name = "return_reported_date")
+    private LocalDate returnReportedDate;
+
     /** The date the mirror entry is posted on (the failure date, else the detection date; #2642 ruling 2). */
     @Column(name = "return_date")
     private LocalDate returnDate;

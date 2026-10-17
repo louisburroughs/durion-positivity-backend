@@ -382,8 +382,9 @@ public class APPaymentController {
                 bank gross + fee / Cr 2000 / Cr the fee account), is posted on the return date when that period is \
                 open, else on today's business date (returnDateRule RETURN_DATE or DETECTION_DATE). The payment \
                 ends RETURNED; it ends RETURN_PENDING when its original posting is still pending or failed (the \
-                mirror follows the original) or when today's period is CLOSED without an override (glPostError \
-                PERIOD_CLOSED; retryApPaymentGlPosting once the period is reopened).
+                mirror follows the original, posted by the outbox or retryApPaymentGlPosting). A CLOSED period on \
+                today's business date is 422 PERIOD_CLOSED unless the caller holds accounting:period:override and \
+                gives overrideJustification; nothing is held.
                 Use this tool for a late return of a settled charge, or for a gateway this service cannot re-read; \
                 do not use it for a GATEWAY_PENDING orphan (reconcileApPaymentGateway) or to cancel a payment that \
                 never moved money. The payment is never re-sent: pay the bills again with a new paymentRef.

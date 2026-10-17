@@ -3,7 +3,8 @@
 --   SETTLED after a SUCCEEDED answer, RETURNED after the charge failed); null for CASH and pre-S42 rows.
 -- * RETURN_PENDING / RETURNED: a charge that moved money and came back (AW42 applied to a payment). The mirror entry
 --   is the journal-entry reversal of AP_PAYMENT:<paymentId> (return_journal_entry_id), dated by return_date_rule
---   (RETURN_DATE when the failure date's period is open, else DETECTION_DATE); RETURN_PENDING while the mirror waits
+--   (RETURN_DATE when the failure date's period is open, else DETECTION_DATE; return_reported_date keeps the date the
+--   bank or the gateway reported either way); RETURN_PENDING while the mirror waits
 --   for the original posting or for a period remedy.
 -- * ap_payment_allocation.reopened_at: the return keeps the allocations as history and marks them reopened; every
 --   allocation sum excludes reopened rows, which restores each bill's open amount.
@@ -30,6 +31,7 @@ ALTER TABLE public.ap_payment
 ALTER TABLE public.ap_payment ADD COLUMN settlement_checked_at timestamp(6) with time zone;
 ALTER TABLE public.ap_payment ADD COLUMN settled_at timestamp(6) with time zone;
 ALTER TABLE public.ap_payment ADD COLUMN returned_at timestamp(6) with time zone;
+ALTER TABLE public.ap_payment ADD COLUMN return_reported_date date;
 ALTER TABLE public.ap_payment ADD COLUMN return_date date;
 ALTER TABLE public.ap_payment ADD COLUMN return_date_rule character varying(40);
 ALTER TABLE public.ap_payment ADD COLUMN return_failure_code character varying(64);

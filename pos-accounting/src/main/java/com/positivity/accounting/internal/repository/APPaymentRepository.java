@@ -69,6 +69,16 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
     List<UUID> findInFlightIds(
             @Param("statuses") @NonNull Collection<APPaymentStatus> statuses, @NonNull Pageable pageable);
 
+    /**
+     * Returns held for a period remedy (#2642): RETURN_PENDING with the original posted and the mirror still owed; the
+     * settlement sweep retries them each pass.
+     */
+    @Query("SELECT p.paymentId FROM APPayment p WHERE p.status = com.positivity.accounting.internal.enums"
+            + ".APPaymentStatus.RETURN_PENDING AND p.glJournalEntry IS NOT NULL AND p.returnJournalEntryId IS NULL"
+            + " ORDER BY p.returnedAt ASC")
+    @NonNull
+    List<UUID> findHeldReturnIds(@NonNull Pageable pageable);
+
     /** The in-flight read (#2642 ruling 4): oldest payment date first. */
     @Query("SELECT p FROM APPayment p WHERE p.settlementStatus = com.positivity.accounting.internal.enums"
             + ".APPaymentSettlementStatus.IN_FLIGHT ORDER BY p.paymentDate ASC, p.createdAt ASC")

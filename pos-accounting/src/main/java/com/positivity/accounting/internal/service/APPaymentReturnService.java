@@ -18,7 +18,6 @@ import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.APPaymentReturnRequestRepository;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import jakarta.persistence.EntityNotFoundException;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -70,6 +69,8 @@ public class APPaymentReturnService {
     @Transactional
     public @NonNull APPayment recordReturn(
             @NonNull UUID paymentId, @NonNull RecordAPPaymentReturnRequest request, @NonNull String currentUser) {
+        // The gateway's answer first, unlocked: a slow gateway must not hold the payment's row lock.
+        String gatewayNote = payments.findById(paymentId).map(this::gatewayNote).orElse(null);
         lockTimeout.apply();
         APPayment payment = payments.lockById(paymentId)
                 .orElseThrow(() -> new EntityNotFoundException("AP payment not found: " + paymentId));
@@ -93,7 +94,6 @@ public class APPaymentReturnService {
                     null);
         }
         requireReturnable(payment);
-        String gatewayNote = gatewayNote(payment);
         applyReturn(
                 payment,
                 request.getReturnDate(),
@@ -121,7 +121,8 @@ public class APPaymentReturnService {
     /**
      * The settlement job's hold (ruling 2): the return is known but the mirror was refused by a period, and the
      * original is posted, so 2000 stays debited and nothing reopens yet. The payment is {@code RETURN_PENDING} with the
-     * refusal as {@code glPostError}; {@code gl-posting-retry} (or the next sweep) posts the mirror and reopens then.
+     * refusal as {@code glPostError}; the next sweep ({@code findHeldReturnIds}) or {@code gl-posting-retry} posts the
+     * mirror and reopens then.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void holdReturn(
@@ -135,6 +136,7 @@ public class APPaymentReturnService {
         }
         String before = payment.getStatus().name();
         payment.setReturnedAt(Instant.now(clock));
+        payment.setReturnReportedDate(failureDate);
         payment.setReturnDate(failureDate);
         payment.setReturnFailureCode(failureCode);
         payment.setSettlementStatus(APPaymentSettlementStatus.RETURNED);
@@ -205,13 +207,9 @@ public class APPaymentReturnService {
             @Nullable String gatewayNote) {
         String before = payment.getStatus().name();
         Instant now = Instant.now(clock);
-        List<APPaymentAllocation> live = allocations.findLiveByPaymentId(payment.getPaymentId());
-        for (APPaymentAllocation allocation : live) {
-            allocation.setReopenedAt(now);
-        }
-        allocations.saveAll(live);
-        payment.setUnappliedAmount(BigDecimal.ZERO);
+        List<APPaymentAllocation> live = APPaymentPostingService.reopenAllocations(allocations, payment, now);
         payment.setReturnedAt(now);
+        payment.setReturnReportedDate(returnDate);
         payment.setReturnDate(returnDate);
         payment.setReturnFailureCode(failureCode);
         payment.setSettlementStatus(APPaymentSettlementStatus.RETURNED);
@@ -230,7 +228,9 @@ public class APPaymentReturnService {
         row.setJustification(justification);
         row.setOldValue(before);
         row.setNewValue(payment.getStatus().name()
+                + ";reportedReturnDate=" + returnDate
                 + ";returnDate=" + payment.getReturnDate()
+                + ";rule=" + payment.getReturnDateRule()
                 + ";failureCode=" + failureCode
                 + ";returnJournalEntryId=" + payment.getReturnJournalEntryId()
                 + ";reopened=" + reopenedList(live)

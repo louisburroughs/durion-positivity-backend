@@ -104,7 +104,6 @@ public class APPaymentPostingService {
     /** {@code returnDateRule}: the return date's period was closed, so the mirror is dated on the detection date. */
     public static final String DETECTION_DATE = "DETECTION_DATE";
 
-    private static final String SYSTEM = "system";
 
     /**
      * The retry caller's leave to date the entry past a hard lock (#2729, AW42): who gave it and why. Recorded on the
@@ -188,7 +187,7 @@ public class APPaymentPostingService {
         }
         if (returnOwed && payment.getGlJournalEntryId() != null) {
             // The original is posted; only the mirror is owed (its first attempt fell in a closed period).
-            return postReturn(payment, null, overrideJustification, deferral == null ? SYSTEM : deferral.user());
+            return postReturn(payment, null, overrideJustification, deferral == null ? APPaymentReturnService.SYSTEM : deferral.user());
         }
         return post(payment, overrideJustification, false, deferral);
     }
@@ -231,13 +230,7 @@ public class APPaymentPostingService {
         JournalEntryResponse mirror = APPaymentReversalReaction.underReturn(
                 paymentId, () -> journalEntryService.reverseJournalEntry(original, reason, date, callerOverride));
         // A return held for a period remedy (holdReturn) reopened nothing while 2000 stayed debited: now it does.
-        List<APPaymentAllocation> live = allocations.findLiveByPaymentId(paymentId);
-        if (!live.isEmpty()) {
-            Instant now = Instant.now(clock);
-            live.forEach(row -> row.setReopenedAt(now));
-            allocations.saveAll(live);
-        }
-        payment.setUnappliedAmount(BigDecimal.ZERO);
+        reopenAllocations(allocations, payment, Instant.now(clock));
         payment.setReturnJournalEntryId(mirror.getJournalEntryId());
         payment.setReturnDate(date);
         payment.setReturnDateRule(onReturnDate ? RETURN_DATE : DETECTION_DATE);
@@ -264,6 +257,23 @@ public class APPaymentPostingService {
                 payment.getReturnDateRule(),
                 mirror.getJournalEntryId());
         return mirror.getJournalEntryId();
+    }
+
+    /**
+     * The one definition of "reopened" (#2642): the payment's live allocations are kept as history with {@code
+     * reopenedAt} set, so every allocated sum stops counting them, and nothing of the payment stays unapplied.
+     *
+     * @return the rows reopened now (none when the return had already reopened them)
+     */
+    static @NonNull List<APPaymentAllocation> reopenAllocations(
+            @NonNull APPaymentAllocationRepository allocations, @NonNull APPayment payment, @NonNull Instant now) {
+        List<APPaymentAllocation> live = allocations.findLiveByPaymentId(payment.getPaymentId());
+        live.forEach(row -> row.setReopenedAt(now));
+        if (!live.isEmpty()) {
+            allocations.saveAll(live);
+        }
+        payment.setUnappliedAmount(BigDecimal.ZERO);
+        return live;
     }
 
     /** Whether a recorded return still owes its mirror entry (#2642). */
@@ -314,7 +324,7 @@ public class APPaymentPostingService {
             @Nullable Deferral deferral) {
         UUID entryId = postOriginal(payment, callerOverride, applyRecordedOverride, deferral);
         if (returnOwed(payment)) {
-            postReturn(payment, null, callerOverride, deferral == null ? SYSTEM : deferral.user());
+            postReturn(payment, null, callerOverride, deferral == null ? APPaymentReturnService.SYSTEM : deferral.user());
         }
         return entryId;
     }

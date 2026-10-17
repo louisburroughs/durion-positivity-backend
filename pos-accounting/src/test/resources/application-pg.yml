@@ -71,3 +71,6 @@ stripe:
 # initializer at a loopback port that refuses instantly. Same arrangement as pos-mcp-server's test profile.
 pos.security.permission-registration.enabled: false
 pos.events.base-url: http://127.0.0.1:1
+
+# #2642: no settlement re-read in test contexts (the sweep would run against fixtures after its initial delay).
+accounting.ap.settlement.enabled: false

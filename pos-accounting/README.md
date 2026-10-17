@@ -1477,7 +1477,10 @@ answers by `paymentRef` suffix (`-PENDING`, `-RETURN`, `-DECLINE`).
   up by reference: a charge the gateway holds (SUCCEEDED, PENDING, AUTHORIZED) drives the `reconcile-gateway` CHARGED
   path with the found transaction id (SUCCEEDED also marks it `SETTLED`); FAILED / DECLINED marks the payment
   `GATEWAY_FAILED`; no charge at all, once `stripe.idempotency-window-hours` has passed, drives the NOT_CHARGED path
-  (`VOIDED`); inside the window a not-found is left alone (a resend may still replay it). In-flight charges
+  (`VOIDED`) only when `accounting.ap.settlement.auto-void-after-window` is on (off by default: the reference lookup
+  finds only charges stamped with `payment_ref`, so an orphan charged before that, or an empty search answer, is
+  logged for the operator instead); inside the window a not-found is left alone (a resend may still replay it). Held
+  returns (`RETURN_PENDING` with the mirror owed) are retried each sweep. In-flight charges
   (`settlementStatus = IN_FLIGHT` on a `GL_POST_PENDING`, `GL_POSTED` or `GL_POST_FAILED` payment) are looked up by
   transaction id: SUCCEEDED → `SETTLED` (`settledAt`, audit `AP_PAYMENT_SETTLE`, no entry); FAILED / DECLINED → the
   return below, recorded as `system` on today's business date with the gateway's `failureCode`; PENDING / AUTHORIZED →
@@ -1505,10 +1508,12 @@ answers by `paymentRef` suffix (`-PENDING`, `-RETURN`, `-DECLINE`).
   without `overrideJustification` (`accounting:period:override`) is 422 `PERIOD_CLOSED`.
 - **`RETURN_PENDING`.** A return recorded while the original posting is `GL_POST_PENDING` or `GL_POST_FAILED` reopens
   the allocations at once (2000 is not debited yet) and the posting service posts the mirror right after the original,
-  in the same transaction (both bank lines exist for the statement's debit and return credit). A mirror refused by a
-  period leaves the payment `RETURN_PENDING` with `glPostError`; `gl-posting-retry` (with `deferPastHardLock` where the
-  original's date is hard-locked) posts what is owed. `RETURN_PENDING` counts as unposted for
-  `ACCOUNT_HAS_UNPOSTED_PAYMENTS`.
+  in the same transaction (both bank lines exist for the statement's debit and return credit). On the settlement job's
+  path a mirror refused by a period holds the payment `RETURN_PENDING` with `glPostError` and nothing reopened (2000
+  stays debited); the next sweep and `gl-posting-retry` (with `deferPastHardLock` where the original's date is
+  hard-locked) post what is owed and reopen then. The operator's command never holds: a CLOSED detection date is 422
+  `PERIOD_CLOSED` without an override. `returnReportedDate` keeps the date the bank or the gateway reported, whatever
+  dates the mirror. `RETURN_PENDING` counts as unposted for `ACCOUNT_HAS_UNPOSTED_PAYMENTS`.
 - **Refusals.** 409 `AP_PAYMENT_NOT_RETURNABLE` with `nextAction` for `INITIATED`, `GATEWAY_FAILED`, `VOIDED` (nothing
   moved), `GATEWAY_PENDING` (reconcile first) and `CASH` (a drawer payout is corrected by a drawer movement); 409
   `AP_PAYMENT_ALREADY_RETURNED` for `RETURNED` / `RETURN_PENDING`; 400 `VALIDATION_ERROR` for a `returnDate` after
