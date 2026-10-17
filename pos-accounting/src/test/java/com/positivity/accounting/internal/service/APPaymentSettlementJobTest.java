@@ -65,6 +65,9 @@ class APPaymentSettlementJobTest {
     private APPaymentFailurePersistenceService failures;
 
     @Mock
+    private APPaymentPostingService posting;
+
+    @Mock
     private AccountingAuditLogRepository auditLogs;
 
     @Mock
@@ -86,18 +89,13 @@ class APPaymentSettlementJobTest {
     private APPayment orphan;
     private APPayment inFlight;
 
-    @BeforeEach
-    void setUp() {
-        TransactionStatus status = new SimpleTransactionStatus();
-        lenient().when(transactionManager.getTransaction(any())).thenReturn(status);
-        lenient().when(gatewayProvider.getIfAvailable()).thenReturn(gateway);
-        lenient().when(gatewayProvider.getObject()).thenReturn(gateway);
-        lenient().when(zoneResolver.today()).thenReturn(TODAY);
-        job = new APPaymentSettlementJob(
+    private APPaymentSettlementJob job(boolean autoVoidAfterWindow) {
+        return new APPaymentSettlementJob(
                 payments,
                 paymentService,
                 returns,
                 failures,
+                posting,
                 auditLogs,
                 gatewayProvider,
                 tenantIterator,
@@ -106,7 +104,19 @@ class APPaymentSettlementJobTest {
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 Duration.ofMinutes(15),
                 24,
+                autoVoidAfterWindow,
                 200);
+    }
+
+    @BeforeEach
+    void setUp() {
+        TransactionStatus status = new SimpleTransactionStatus();
+        lenient().when(transactionManager.getTransaction(any())).thenReturn(status);
+        lenient().when(gatewayProvider.getIfAvailable()).thenReturn(gateway);
+        lenient().when(gatewayProvider.getObject()).thenReturn(gateway);
+        lenient().when(zoneResolver.today()).thenReturn(TODAY);
+        lenient().when(payments.findHeldReturnIds(any())).thenReturn(List.of());
+        job = job(false);
         orphan = new APPayment(ORPHAN_ID);
         orphan.setPaymentRef("PAY-ORPHAN");
         orphan.setStatus(APPaymentStatus.GATEWAY_PENDING);
@@ -176,22 +186,55 @@ class APPaymentSettlementJobTest {
         when(gateway.findByReference("PAY-ORPHAN"))
                 .thenReturn(Optional.of(answer(PaymentGatewayProvider.GatewayPaymentStatus.DECLINED, "card_declined")));
         job.reReadBoundTenant();
-        verify(failures).persistGatewayFailure(eq(ORPHAN_ID), argThat(msg -> msg.contains("card_declined")));
+        assertThat(orphan.getStatus()).isEqualTo(APPaymentStatus.GATEWAY_FAILED);
+        assertThat(orphan.getGatewayTransactionId()).isEqualTo("ch_found");
+        assertThat(orphan.getGatewayResponse()).contains("card_declined");
         verify(paymentService, never()).reconcileGateway(any(), any(), any());
+        verify(failures, never()).persistGatewayFailure(any(), any());
+
+        // A row that is no longer an orphan under the lock (a resend completed it) is left alone.
+        orphan.setStatus(APPaymentStatus.GATEWAY_PENDING);
+        when(payments.lockById(ORPHAN_ID)).thenAnswer(inv -> {
+            orphan.setStatus(APPaymentStatus.GL_POST_PENDING);
+            return Optional.of(orphan);
+        });
+        assertThat(job.reReadBoundTenant()).isZero();
+        assertThat(orphan.getStatus()).isEqualTo(APPaymentStatus.GL_POST_PENDING);
     }
 
     @Test
-    @DisplayName(
-            "no charge under the reference: left alone inside the idempotency window, VOIDED (NOT_CHARGED) after it")
+    @DisplayName("no charge under the reference: left alone inside the idempotency window and, by default, logged for"
+            + " the operator after it; VOIDED (NOT_CHARGED) after it only with auto-void-after-window on")
     void orphanNotFound() {
         when(payments.findInFlightIds(any(), any())).thenReturn(List.of());
         assertThat(job.reReadBoundTenant()).isZero();
         verify(paymentService, never()).reconcileGateway(any(), any(), any());
 
         orphan.setCreatedAt(NOW.minus(Duration.ofHours(25)));
-        assertThat(job.reReadBoundTenant()).isEqualTo(1);
+        assertThat(job.reReadBoundTenant()).isZero();
+        verify(paymentService, never()).reconcileGateway(any(), any(), any());
+
+        assertThat(job(true).reReadBoundTenant()).isEqualTo(1);
         assertThat(reconciled().getGatewayOutcome())
                 .isEqualTo(ReconcileAPPaymentGatewayRequest.GatewayOutcome.NOT_CHARGED);
+    }
+
+    @Test
+    @DisplayName("a return held for a period remedy is retried each sweep: posted when the period allows, the refusal"
+            + " kept otherwise")
+    void heldReturnRetried() {
+        when(payments.findOrphanIds(any(), any())).thenReturn(List.of());
+        when(payments.findInFlightIds(any(), any())).thenReturn(List.of());
+        UUID heldId = UUID.randomUUID();
+        when(payments.findHeldReturnIds(any())).thenReturn(List.of(heldId));
+        when(posting.retry(heldId, null, null)).thenThrow(new AccountingPeriodClosedException("2026-10", "closed"));
+
+        assertThat(job.reReadBoundTenant()).isZero();
+        verify(failures).persistGLPostRefusal(heldId, "PERIOD_CLOSED");
+
+        org.mockito.Mockito.reset(posting);
+        when(posting.retry(heldId, null, null)).thenReturn(UUID.randomUUID());
+        assertThat(job.reReadBoundTenant()).isEqualTo(1);
     }
 
     @Test

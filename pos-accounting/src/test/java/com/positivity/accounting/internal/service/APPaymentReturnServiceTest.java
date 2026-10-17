@@ -112,6 +112,7 @@ class APPaymentReturnServiceTest {
         payment.setSettlementStatus(APPaymentSettlementStatus.IN_FLIGHT);
         live = List.of(allocation(BILL_A, "300.00"), allocation(BILL_B, "112.00"));
         lenient().when(payments.lockById(PAYMENT_ID)).thenReturn(Optional.of(payment));
+        lenient().when(payments.findById(PAYMENT_ID)).thenReturn(Optional.of(payment));
         lenient().when(allocations.findLiveByPaymentId(PAYMENT_ID)).thenReturn(live);
         lenient().when(returnRequests.findByRequestId(any())).thenReturn(Optional.empty());
         lenient().when(zoneResolver.today()).thenReturn(TODAY);
@@ -161,6 +162,7 @@ class APPaymentReturnServiceTest {
         assertThat(returned.getUnappliedAmount()).isEqualByComparingTo("0");
         assertThat(returned.getReturnedAt()).isEqualTo(NOW);
         assertThat(returned.getReturnFailureCode()).isEqualTo("R01");
+        assertThat(returned.getReturnReportedDate()).isEqualTo(LocalDate.of(2026, 10, 15));
         assertThat(returned.getSettlementStatus()).isEqualTo(APPaymentSettlementStatus.RETURNED);
         assertThat(live).allSatisfy(row -> assertThat(row.getReopenedAt()).isEqualTo(NOW));
         verify(allocations).saveAll(live);
@@ -174,6 +176,7 @@ class APPaymentReturnServiceTest {
         assertThat(row.getJustification()).contains("Bank statement");
         assertThat(row.getNewValue())
                 .contains("RETURNED")
+                .contains("reportedReturnDate=2026-10-15")
                 .contains("failureCode=R01")
                 .contains("returnJournalEntryId=" + MIRROR_ID)
                 .contains("reopened=" + BILL_A + ":300," + BILL_B + ":112")
@@ -293,6 +296,26 @@ class APPaymentReturnServiceTest {
                 });
         verify(posting, never()).postReturn(any(), any(), any(), any());
         verify(allocations, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("holdReturn (the job's period refusal): RETURN_PENDING with glPostError, nothing reopened, audited;"
+            + " a payment no longer in flight is left alone")
+    void holdReturn() {
+        service.holdReturn(PAYMENT_ID, "R01", LocalDate.of(2026, 10, 16), "PERIOD_CLOSED");
+
+        assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.RETURN_PENDING);
+        assertThat(payment.getGlPostError()).isEqualTo("PERIOD_CLOSED");
+        assertThat(payment.getSettlementStatus()).isEqualTo(APPaymentSettlementStatus.RETURNED);
+        assertThat(payment.getReturnReportedDate()).isEqualTo(LocalDate.of(2026, 10, 16));
+        assertThat(payment.getReturnJournalEntryId()).isNull();
+        assertThat(live).allSatisfy(row -> assertThat(row.getReopenedAt()).isNull());
+        verify(allocations, never()).saveAll(any());
+        assertThat(auditRow("AP_PAYMENT_RETURN").getNewValue()).contains("glPostError=PERIOD_CLOSED");
+
+        org.mockito.Mockito.reset(auditLogs);
+        service.holdReturn(PAYMENT_ID, "R01", LocalDate.of(2026, 10, 16), "PERIOD_CLOSED");
+        verify(auditLogs, never()).save(any());
     }
 
     @Test
