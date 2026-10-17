@@ -32,6 +32,7 @@ import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionE
 import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
+import com.positivity.inventory.internal.exception.VendorFeedMappingException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
@@ -331,6 +332,8 @@ class InventoryGlobalExceptionHandlerTest {
                     Named.of("handlePurchaseSuggestionState", (HandlerInvocation)
                             () -> handler.handlePurchaseSuggestionState(new PurchaseSuggestionStateException(
                                     UUID.randomUUID(), PurchaseSuggestionStatus.CONVERTED, "accept"))),
+                    Named.of("handleVendorFeedMapping", (HandlerInvocation) () -> handler.handleVendorFeedMapping(
+                            VendorFeedMappingException.vendorNotFound(UUID.randomUUID()))),
                     Named.of("handleInvalidParamCombination", (HandlerInvocation) () ->
                             handler.handleInvalidParamCombination(new InvalidParamCombinationException("bad combo"))),
                     Named.of("handleShortageResolution", (HandlerInvocation) () -> handler.handleShortageResolution(

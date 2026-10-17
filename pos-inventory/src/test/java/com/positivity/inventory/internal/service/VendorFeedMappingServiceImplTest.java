@@ -445,12 +445,12 @@ class VendorFeedMappingServiceImplTest {
     void unmapped_scan() {
         Instant last = Instant.parse("2026-10-10T00:00:00Z");
         UUID activeVendor = UUID.fromString("018f0000-0000-7000-8000-0000000000b3");
-        when(distributorFeed.summarizeDistributors())
-                .thenReturn(List.of(
-                        summary("D-UNMAPPED", 4, last),
-                        summary("D-MISSING", 2, last),
-                        summary("D-INACTIVE", 1, last),
-                        summary("D-OK", 9, last)));
+        List<FeedVendorSummary> feedVendors = List.of(
+                summary("D-UNMAPPED", 4, last),
+                summary("D-MISSING", 2, last),
+                summary("D-INACTIVE", 1, last),
+                summary("D-OK", 9, last));
+        when(distributorFeed.summarizeDistributors()).thenReturn(feedVendors);
         when(mappings.findAllByFeedType(FeedVendorType.DISTRIBUTOR))
                 .thenReturn(List.of(
                         mapping(FeedVendorType.DISTRIBUTOR, "D-MISSING", OTHER_VENDOR_ID),
@@ -487,7 +487,8 @@ class VendorFeedMappingServiceImplTest {
     @Test
     @DisplayName("without a feedType filter both feeds are scanned; a manufacturer UUID matches its mapping")
     void unmapped_scanBothFeeds() {
-        when(manufacturerFeed.summarizeManufacturers()).thenReturn(List.of(summary(MANUFACTURER, 5, null)));
+        List<FeedVendorSummary> feedVendors = List.of(summary(MANUFACTURER, 5, null));
+        when(manufacturerFeed.summarizeManufacturers()).thenReturn(feedVendors);
         when(distributorFeed.summarizeDistributors()).thenReturn(List.of());
         when(mappings.findAllByFeedType(FeedVendorType.MANUFACTURER))
                 .thenReturn(List.of(mapping(FeedVendorType.MANUFACTURER, MANUFACTURER.toString(), VENDOR_ID)));
