@@ -343,7 +343,7 @@ class EventIngestionServiceTest {
         assertThat(result.getStatus()).isEqualTo(AccountingEventStatus.RECEIVED);
         assertThat(result.getEventReference()).isEqualTo("AE-202401-1");
 
-        verify(idempotencyService).isKeyProcessed(any(String.class));
+        verify(idempotencyService).isKeyActive(any(String.class));
         verify(accountingEventRepository).save(any(AccountingEvent.class));
         verify(idempotencyService).registerKey(any(String.class), any(UUID.class), any(java.time.Duration.class));
     }
