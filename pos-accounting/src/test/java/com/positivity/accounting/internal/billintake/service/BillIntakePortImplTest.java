@@ -235,6 +235,6 @@ class BillIntakePortImplTest {
         verify(bills).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getPurchaseOrderNumber()).isEqualTo("PO-42");
         assertThat(saved.getValue().getDeliveryReference()).isEqualTo("dn-088213");
-        assertThat(saved.getValue().getDeliveryReferenceKey()).isEqualTo("DN88213");
+        assertThat(saved.getValue().getDeliveryReferenceKey()).isEqualTo("DN088213");
     }
 }

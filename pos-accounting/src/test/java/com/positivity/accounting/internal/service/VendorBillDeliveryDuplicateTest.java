@@ -44,7 +44,7 @@ class VendorBillDeliveryDuplicateTest {
     @Test
     @DisplayName("the same vendor, order and delivery (normalised) is refused, matched by DELIVERY_REFERENCE")
     void refusesTheSameDelivery() {
-        when(repository.findLiveGoodsReceiptsByDelivery(VENDOR, "PO-42", "DN88213"))
+        when(repository.findLiveGoodsReceiptsByDelivery(VENDOR, "PO-42", "DN088213"))
                 .thenReturn(List.of(goodsReceiptBill()));
 
         assertThatThrownBy(() -> guard.refuseIfDeliveryDuplicate(
@@ -79,7 +79,7 @@ class VendorBillDeliveryDuplicateTest {
         VendorBill bill = new VendorBill();
         bill.setDeliveryReference(" dn-088213 ");
         assertThat(bill.getDeliveryReference()).isEqualTo("dn-088213");
-        assertThat(bill.getDeliveryReferenceKey()).isEqualTo("DN88213");
+        assertThat(bill.getDeliveryReferenceKey()).isEqualTo("DN088213");
         bill.setDeliveryReference("  ");
         assertThat(bill.getDeliveryReference()).isNull();
         assertThat(bill.getDeliveryReferenceKey()).isNull();
