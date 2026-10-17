@@ -21,7 +21,10 @@ public record CashMovementOptions(
         @Nullable EvidenceRule evidenceRule) {
 
     /** An ACTIVE vendor of pos-order's vendor copy a drawer may pay cash on delivery (#2576, #2512 PROPOSED 5). */
-    public record VendorOption(@NonNull UUID vendorId, @NonNull String vendorNumber, @NonNull String displayName) {}
+    public record VendorOption(
+            @NonNull UUID vendorId,
+            @NonNull String vendorNumber,
+            @NonNull String displayName) {}
 
     /** One reason's options. */
     public record ReasonOption(

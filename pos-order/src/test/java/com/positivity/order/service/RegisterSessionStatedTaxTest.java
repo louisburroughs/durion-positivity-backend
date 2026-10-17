@@ -144,7 +144,7 @@ class RegisterSessionStatedTaxTest {
                         com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository.class)),
                 new com.positivity.order.internal.service.SupplierVendorGuard(vendorCopies),
                 CLOCK,
-meters);
+                meters);
         session = RegisterSession.builder()
                 .sessionId(SESSION_ID)
                 .version(1L)

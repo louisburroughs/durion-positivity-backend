@@ -495,7 +495,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         CashMovementOptions.EvidenceRule evidenceRule =
                 registered.isEmpty() ? null : drawerStatedTax.evidenceRule(session, today);
         List<CashMovementOptions.VendorOption> vendors = vendorGuard.activeVendors().stream()
-                .map(v -> new CashMovementOptions.VendorOption(v.getVendorId(), v.getVendorNumber(), v.getDisplayName()))
+                .map(v ->
+                        new CashMovementOptions.VendorOption(v.getVendorId(), v.getVendorNumber(), v.getDisplayName()))
                 .toList();
         return new CashMovementOptions(
                 sessionId, session.getCurrencyCode(), reasons, categories, vendors, evidenceRule);

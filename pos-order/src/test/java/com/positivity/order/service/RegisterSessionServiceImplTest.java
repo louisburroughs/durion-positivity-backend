@@ -139,7 +139,7 @@ class RegisterSessionServiceImplTest {
                         com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository.class)),
                 new com.positivity.order.internal.service.SupplierVendorGuard(vendorCopies),
                 clock,
-meters);
+                meters);
         org.mockito.Mockito.lenient().when(sessionPolicyService.current()).thenReturn(DEFAULT_POLICY);
         // Default caller: a pre-rollout token (no loc_* claims), which ADR-0061 treats as unscoped
         // so the existing expectations are unchanged (#1872). Tests that need authorities or a

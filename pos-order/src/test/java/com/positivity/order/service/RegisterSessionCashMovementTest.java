@@ -135,7 +135,7 @@ class RegisterSessionCashMovementTest {
                 new ActorDisplayNames(links),
                 new com.positivity.order.internal.service.SupplierVendorGuard(vendorCopies),
                 CLOCK,
-meters);
+                meters);
         session = RegisterSession.builder()
                 .sessionId(SESSION_ID)
                 .version(3L)
@@ -408,12 +408,19 @@ meters);
         }
 
         @Test
-        @DisplayName("#2576: with the policy allowing it, a cash-on-delivery movement naming an active vendor of the copy"
-                + " is recorded; an inactive vendor is 422 VENDOR_INACTIVE; one the copy lacks is 503 (replication pending)")
+        @DisplayName(
+                "#2576: with the policy allowing it, a cash-on-delivery movement naming an active vendor of the copy"
+                        + " is recorded; an inactive vendor is 422 VENDOR_INACTIVE; one the copy lacks is 503 (replication pending)")
         void vendorCodChecksTheVendorCopy() {
             when(policyService.current())
                     .thenReturn(new com.positivity.order.internal.service.model.SessionPolicyView(
-                            1L, true, new BigDecimal("50.00"), true, new BigDecimal("500.00"), new BigDecimal("5.00"), "USD"));
+                            1L,
+                            true,
+                            new BigDecimal("50.00"),
+                            true,
+                            new BigDecimal("500.00"),
+                            new BigDecimal("5.00"),
+                            "USD"));
             UUID active = UUIDv7Generator.generate();
             UUID inactive = UUIDv7Generator.generate();
             UUID unknown = UUIDv7Generator.generate();
@@ -430,7 +437,8 @@ meters);
                     .isInstanceOf(com.positivity.web.common.ReplicationPendingException.class);
         }
 
-        private static com.positivity.order.internal.entity.ExtSupplierVendor vendorCopy(UUID vendorId, boolean active) {
+        private static com.positivity.order.internal.entity.ExtSupplierVendor vendorCopy(
+                UUID vendorId, boolean active) {
             com.positivity.order.internal.entity.ExtSupplierVendor vendor =
                     new com.positivity.order.internal.entity.ExtSupplierVendor();
             vendor.setVendorId(vendorId);
