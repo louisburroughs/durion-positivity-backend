@@ -8,13 +8,15 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The canonical hash of a vendor-create payload (#2678): every field the create acts on, in a fixed order, so the
- * same request hashes the same and any difference (a registration number, a remit-to line) is told apart. The hash,
- * not the payload, is what is kept: a registration number never lands in the key table.
+ * The canonical hash of a vendor-create payload (#2678): every input the create inspects, in a fixed order, each
+ * value length-prefixed ({@code len:value}, {@code ~} for null) so no two payloads canonicalise alike (a separator
+ * inside a value, or null against empty, cannot re-tokenise) and any difference is told apart. The hash, not the
+ * payload, is what is kept: a registration number never lands in the key table.
  */
 final class VendorCreateRequestHash {
 
@@ -26,15 +28,16 @@ final class VendorCreateRequestHash {
         field(canonical, request.legalName());
         field(canonical, request.displayName());
         List<TaxRegistrationDto> registrations = request.taxRegistrations();
-        canonical.append('|').append(registrations.size());
+        canonical.append("|n:").append(registrations.size());
         for (TaxRegistrationDto registration : registrations) {
+            field(canonical, registration.registrationId());
             field(canonical, registration.scheme());
             field(canonical, registration.region());
             field(canonical, registration.number());
         }
         RemitToDto remitTo = request.remitTo();
         if (remitTo == null) {
-            canonical.append("|-");
+            canonical.append("|~");
         } else {
             field(canonical, remitTo.payeeName());
             field(canonical, remitTo.addressLine1());
@@ -50,8 +53,16 @@ final class VendorCreateRequestHash {
         return sha256(canonical.toString());
     }
 
+    private static void field(StringBuilder canonical, @Nullable UUID value) {
+        field(canonical, value == null ? null : value.toString());
+    }
+
     private static void field(StringBuilder canonical, @Nullable String value) {
-        canonical.append('|').append(value == null ? "" : value.replace("|", "||"));
+        if (value == null) {
+            canonical.append("|~");
+        } else {
+            canonical.append('|').append(value.length()).append(':').append(value);
+        }
     }
 
     private static String sha256(String value) {

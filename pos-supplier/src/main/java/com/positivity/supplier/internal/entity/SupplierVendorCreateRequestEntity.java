@@ -22,8 +22,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 /**
  * The idempotency key of one vendor create (#2678): the client's {@code requestId}, the hash of the payload it was
  * used with, the vendor it created and the 201 body it answered. Written in the create's transaction; a retry with the
- * same key and payload replays the body, another payload is refused. The id is the client's UUID, assigned, which the
- * UUIDv7 generator keeps (ADR-0013: the client mints a v7).
+ * same key and payload replays the body, another payload is refused. The row has its own generated key (ADR-0013); the
+ * client's {@code requestId} is unique per tenant, so a save is always an insert and one key racing itself collides.
  */
 @Getter
 @Setter
@@ -38,6 +38,10 @@ public class SupplierVendorCreateRequestEntity extends TenantScopedEntity {
     @Id
     @GeneratedValue
     @UUIDv7Id
+    @Column(name = "key_id", updatable = false, nullable = false)
+    private UUID keyId;
+
+    /** The client's idempotency key, unique in the tenant ({@code uq_svcreate_request}). */
     @Column(name = "request_id", updatable = false, nullable = false)
     private UUID requestId;
 

@@ -159,12 +159,10 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
     public VendorView createVendor(@NonNull VendorCreateRequest request) {
         Objects.requireNonNull(request, "request must not be null");
         // #2678: a retry after an unknown outcome replays the original body; another payload under the key is refused.
-        String requestHash = request.requestId() == null ? null : VendorCreateRequestHash.of(request);
-        if (request.requestId() != null) {
-            Optional<VendorView> replay = replay(request.requestId(), requestHash);
-            if (replay.isPresent()) {
-                return replay.get();
-            }
+        Optional<IdempotencyKey> key = IdempotencyKey.of(request);
+        Optional<VendorView> replay = key.flatMap(this::replay);
+        if (replay.isPresent()) {
+            return replay.get();
         }
         String actor = currentActor();
         Instant now = Instant.now(clock);
@@ -211,10 +209,18 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         factPublisher.publish(vendor, now, actor);
         log.info("Created vendor {} ({})", vendor.getVendorNumber(), vendor.getVendorId());
         VendorView view = toView(vendor);
-        if (request.requestId() != null) {
-            remember(request.requestId(), requestHash, vendor.getVendorId(), view);
-        }
+        UUID createdVendorId = vendor.getVendorId();
+        key.ifPresent(k -> remember(k, createdVendorId, view));
         return view;
+    }
+
+    /** A client's idempotency key with the hash of the payload it came with (#2678). */
+    record IdempotencyKey(UUID requestId, String requestHash) {
+        static Optional<IdempotencyKey> of(VendorCreateRequest request) {
+            return request.requestId() == null
+                    ? Optional.empty()
+                    : Optional.of(new IdempotencyKey(request.requestId(), VendorCreateRequestHash.of(request)));
+        }
     }
 
     /**
@@ -222,19 +228,20 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
      *
      * @throws SupplierConflictException {@code IDEMPOTENCY_CONFLICT} when the key was used with another payload
      */
-    private Optional<VendorView> replay(UUID requestId, String requestHash) {
-        return createRequests.findById(requestId).map(original -> {
-            if (!original.getRequestHash().equals(requestHash)) {
+    private Optional<VendorView> replay(IdempotencyKey key) {
+        return createRequests.findByRequestId(key.requestId()).map(original -> {
+            if (!original.getRequestHash().equals(key.requestHash())) {
                 throw new SupplierConflictException(
                         SupplierConflictException.IDEMPOTENCY_CONFLICT,
-                        "requestId " + requestId + " was already used to create a vendor with a different payload;"
-                                + " mint a new requestId for a new vendor");
+                        "requestId " + key.requestId() + " was already used to create a vendor with a different"
+                                + " payload; mint a new requestId for a new vendor");
             }
             try {
                 return objectMapper.readValue(original.getResponseJson(), VendorView.class);
             } catch (RuntimeException unreadable) {
                 throw new IllegalStateException(
-                        "The kept vendor-create response for requestId " + requestId + " is unreadable", unreadable);
+                        "The kept vendor-create response for requestId " + key.requestId() + " is unreadable",
+                        unreadable);
             }
         });
     }
@@ -243,19 +250,24 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
      * Keeps the key with its hash and the 201 body, in the create's transaction. The primary key is the backstop
      * for one requestId racing itself: the loser's insert collides and it answers the conflict, not a second vendor.
      */
-    private void remember(UUID requestId, String requestHash, UUID vendorId, VendorView view) {
+    private void remember(IdempotencyKey key, UUID vendorId, VendorView view) {
         try {
             createRequests.saveAndFlush(SupplierVendorCreateRequestEntity.builder()
-                    .requestId(requestId)
-                    .requestHash(requestHash)
+                    .requestId(key.requestId())
+                    .requestHash(key.requestHash())
                     .vendorId(vendorId)
                     .responseJson(objectMapper.writeValueAsString(view))
                     .build());
-        } catch (DataIntegrityViolationException raced) {
-            throw new SupplierConflictException(
-                    SupplierConflictException.IDEMPOTENCY_CONFLICT,
-                    "requestId " + requestId + " is being used by a concurrent vendor create; retry the same request"
-                            + " once it has answered");
+        } catch (DataIntegrityViolationException failure) {
+            if (isConstraint(failure, REQUEST_KEY)) {
+                // One requestId racing itself: the winner's row is in; this create rolls back with the vendor.
+                throw new SupplierConflictException(
+                        SupplierConflictException.IDEMPOTENCY_CONFLICT,
+                        "requestId " + key.requestId() + " is being used by a concurrent vendor create; retry the"
+                                + " same request once it has answered");
+            }
+            // Any other integrity failure on the key row is a defect, not a reused key: surface it as one.
+            throw failure;
         }
     }
 
@@ -454,12 +466,19 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
 
     /** The unique key on {@code (tenant_id, vendor_number)} in {@code V3__vendor_master.sql}. */
     static final String VENDOR_NUMBER_KEY = "supplier_vendor_number_key";
+    /** The per-tenant unique on the idempotency key (#2678, V8). */
+    static final String REQUEST_KEY = "uq_svcreate_request";
 
     /** Whether an integrity violation is the vendor-number key — and only that — being hit. */
     static boolean isVendorNumberTaken(@NonNull DataIntegrityViolationException failure) {
+        return isConstraint(failure, VENDOR_NUMBER_KEY);
+    }
+
+    /** Whether the integrity failure is the named constraint and no other (#2678). */
+    static boolean isConstraint(@NonNull DataIntegrityViolationException failure, @NonNull String constraint) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof org.hibernate.exception.ConstraintViolationException violation) {
-                return VENDOR_NUMBER_KEY.equalsIgnoreCase(violation.getConstraintName());
+                return constraint.equalsIgnoreCase(violation.getConstraintName());
             }
         }
         return false;

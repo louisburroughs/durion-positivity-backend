@@ -884,7 +884,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             assertThat(again).isEqualTo(first);
             assertThat(vendorRepository.count()).isEqualTo(vendorsBefore + 1);
             assertThat(outboxRepository.count()).isEqualTo(factsBefore + 1);
-            assertThat(createRequests.findById(key)).isPresent();
+            assertThat(createRequests.findByRequestId(key)).isPresent();
         }
 
         @Test
@@ -916,7 +916,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         void keyRowHoldsNoNumber() {
             UUID key = UUIDv7Generator.generate();
             as("clerk.a", () -> service.createVendor(keyed(key, "Michelin")));
-            SupplierVendorCreateRequestEntity row = createRequests.findById(key).orElseThrow();
+            SupplierVendorCreateRequestEntity row = createRequests.findByRequestId(key).orElseThrow();
             assertThat(row.getRequestHash()).hasSize(64);
             assertThat(row.getResponseJson()).contains("Michelin").doesNotContain("000-00-1234");
         }
