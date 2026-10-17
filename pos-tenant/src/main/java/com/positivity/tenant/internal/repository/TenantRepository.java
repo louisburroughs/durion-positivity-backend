@@ -24,4 +24,11 @@ public interface TenantRepository extends JpaRepository<TenantEntity, UUID> {
 
     @NonNull
     List<TenantEntity> findAllByOrderByCreatedAtAsc();
+
+    /** The tenants on a reading tier that still count (#2619): every status but {@code DECOMMISSIONED}. */
+    @NonNull
+    List<TenantEntity> findByReadingTierCodeAndStatusNotOrderByCreatedAtAsc(
+            @NonNull String readingTierCode, @NonNull TenantStatus status);
+
+    boolean existsByReadingTierCodeAndStatusNot(@NonNull String readingTierCode, @NonNull TenantStatus status);
 }

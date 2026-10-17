@@ -28,3 +28,8 @@ permissions:
     description: "Read accounts, their contacts and billing profile"
   - name: "platform:account:update"
     description: "Update an account, its contacts and billing profile"
+  # CAP:550 S45 (#2619): the reading-tier catalog (monthly document-reading allowances). Platform operators only.
+  - name: "platform:reading_tier:read"
+    description: "List reading tiers"
+  - name: "platform:reading_tier:manage"
+    description: "Create and change reading tiers (allowance, active flag)"

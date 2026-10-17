@@ -49,4 +49,13 @@ public class TenantUpdateRequest {
     @Size(max = 35)
     @SupportedLocale
     private String locale;
+
+    @Schema(
+            description = "Move the tenant to another reading tier (CAP:550 S45); omitted or null leaves it. Must"
+                    + " name an active tier, else 422 READING_TIER_NOT_ASSIGNABLE; publishes"
+                    + " tenant.reading-allowance.changed",
+            example = "PRO",
+            requiredMode = NOT_REQUIRED)
+    @Pattern(regexp = "^[A-Z][A-Z0-9_]{1,31}$")
+    private String readingTierCode;
 }

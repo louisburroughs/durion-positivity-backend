@@ -1671,13 +1671,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 107")
+    @DisplayName("CATALOG_VERSION is 108")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(107);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(108);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 564")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 566")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -2052,7 +2052,11 @@ class SecurityGatewayConfigTest {
         // catalog v107 (#2635): reopen a returned purchase-order quantity for a replacement (bit 564)
         assertThat(GatewayPermissionCatalog.authorityForBit(564)).isEqualTo("PERM_order:purchase_order:reopen");
         // beyond array must return null
-        assertThat(GatewayPermissionCatalog.authorityForBit(565)).isNull();
+        // catalog v108 (#2619): the reading-tier catalog, PLATFORM_ADMIN only
+        assertThat(GatewayPermissionCatalog.authorityForBit(565)).isEqualTo("PERM_platform:reading_tier:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(566)).isEqualTo("PERM_platform:reading_tier:read");
+        assertThat(GatewayPermissionCatalog.authorityForBit(567)).isNull();
+
     }
 
     @Test
