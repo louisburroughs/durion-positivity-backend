@@ -14,6 +14,8 @@ tags:
   name: Platform Account API
 - description: Register, inspect and move tenants through their lifecycle
   name: Platform Tenant API
+- description: Monthly document-reading allowances sold as tiers
+  name: Platform Reading Tier API
 paths:
   /v1/platform/accounts:
     get:
@@ -438,6 +440,168 @@ paths:
       - Platform Account API
       x-required-permissions:
       - platform:account:update
+  /v1/platform/reading-tiers:
+    get:
+      description: 'Lists every reading tier, active or not, by code: the display name, the monthly document-reading allowance (amount with its ISO 4217 currency) and the active flag.
+
+        Use this tool to pick a readingTierCode for createTenant or updateTenant, or before changing a tier; do not use it to read a tenant''s own allowance, use getTenant instead, whose readingTierCode names the tier the tenant is on.
+
+        Preconditions: the caller is bound to the platform tenant (403 PLATFORM_TENANT_REQUIRED otherwise).
+
+        Required inputs: none.
+
+        Emits a READING_TIER_LIST event.
+
+        Returns 200 with the list; STANDARD (20.00 USD) exists from the start.
+
+        '
+      operationId: listReadingTiers
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ReadingTierResponse'
+                type: array
+          description: The tiers
+      security:
+      - bearerAuth:
+        - platform:reading_tier:read
+      summary: List Reading Tiers
+      tags:
+      - Platform Reading Tier API
+      x-required-permissions:
+      - platform:reading_tier:read
+    post:
+      description: 'Creates an active reading tier: a code that never changes, a display name and a monthly document-reading allowance (an amount with its currency, ADR-0067 PC-3).
+
+        Use this tool to sell a bigger (or smaller) allowance as a new tier, before assigning it to tenants with updateTenant; do not use it to change an existing tier''s allowance, use updateReadingTier instead.
+
+        Preconditions: the code is not taken; the caller is bound to the platform tenant.
+
+        Required inputs: code (upper case, 2 to 32 characters), displayName and monthlyAllowance {amount, currencyCode}; amount is at least zero with four decimals at most, currencyCode an ISO 4217 code (USD for now).
+
+        Emits a READING_TIER_CREATE event; no tenant fact follows, since no tenant is on a new tier yet.
+
+        Returns 201 with the tier, 400 VALIDATION_ERROR for a malformed field and 409 READING_TIER_EXISTS when the code is taken.
+
+        '
+      operationId: createReadingTier
+      requestBody:
+        content:
+          application/json:
+            examples:
+              A PRO tier at 60.00 USD:
+                description: A PRO tier at 60.00 USD
+                value:
+                  code: PRO
+                  displayName: Pro
+                  monthlyAllowance:
+                    amount: 60.0
+                    currencyCode: USD
+            schema:
+              $ref: '#/components/schemas/ReadingTierCreateRequest'
+        description: 'The tier to create: code, display name and monthly allowance'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingTierResponse'
+          description: Tier created
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: a malformed field'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'READING_TIER_EXISTS: the code is taken'
+      security:
+      - bearerAuth:
+        - platform:reading_tier:manage
+      summary: Create a Reading Tier
+      tags:
+      - Platform Reading Tier API
+      x-required-permissions:
+      - platform:reading_tier:manage
+  /v1/platform/reading-tiers/{code}:
+    patch:
+      description: 'Changes a tier''s display name, its monthly allowance or its active flag; omitted fields are left as they are. A changed allowance publishes one tenant.reading-allowance.changed fact per tenant on the tier, in the same transaction, so each tenant''s allowance moves at once while its month-to-date usage is unchanged.
+
+        Use this tool to reprice a tier or to retire one; do not use it to move one tenant to another tier, use updateTenant with readingTierCode instead.
+
+        Preconditions: the tier exists; deactivating needs no tenant other than decommissioned ones on it; the caller is bound to the platform tenant.
+
+        Required inputs: code (path); any of displayName, monthlyAllowance {amount, currencyCode} and active.
+
+        Emits a READING_TIER_UPDATE event.
+
+        Returns 200 with the tier, 400 VALIDATION_ERROR for a malformed field, 404 when the code is unknown and 409 READING_TIER_IN_USE when a tenant still on the tier blocks its deactivation, or when the tier is STANDARD (the default every new tenant starts on; it is repriced, never deactivated).
+
+        '
+      operationId: updateReadingTier
+      parameters:
+      - description: Tier code
+        example: STANDARD
+        in: path
+        name: code
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Reprice STANDARD to 25.00 USD:
+                description: Reprice STANDARD to 25.00 USD
+                value:
+                  monthlyAllowance:
+                    amount: 25.0
+                    currencyCode: USD
+            schema:
+              $ref: '#/components/schemas/ReadingTierUpdateRequest'
+        description: 'The changes: display name, monthly allowance, active flag'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingTierResponse'
+          description: Tier changed
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: a malformed field'
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'NOT_FOUND: no such tier'
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'READING_TIER_IN_USE: a non-decommissioned tenant is on the tier, or the tier is STANDARD'
+      security:
+      - bearerAuth:
+        - platform:reading_tier:manage
+      summary: Change a Reading Tier
+      tags:
+      - Platform Reading Tier API
+      x-required-permissions:
+      - platform:reading_tier:manage
   /v1/platform/tenants:
     get:
       description: 'Lists every tenant in the registry, oldest first, optionally filtered by lifecycle status.
@@ -490,11 +654,11 @@ paths:
 
         Preconditions: the account exists, and neither the slug nor the display name is taken.
 
-        Required inputs: slug, accountId and initialAdminEmail; cell and displayName are optional. Omitting displayName seeds it from the account''s legal name, suffixed " #2", " #3" and so on only where that would collide — a fallback, so prefer naming the tenant explicitly.
+        Required inputs: slug, accountId, initialAdminEmail and locale (a BCP 47 tag with a region from pos.tenant.supported-locales, #2618; a bare language or an unlisted tag is 400 VALIDATION_ERROR with fieldErrors[locale]); cell, displayName and readingTierCode (STANDARD when omitted; an inactive or unknown tier is 422 READING_TIER_NOT_ASSIGNABLE, #2619) are optional. Omitting displayName seeds it from the account''s legal name, suffixed " #2", " #3" and so on only where that would collide — a fallback, so prefer naming the tenant explicitly.
 
         Emits a TENANT_CREATE event.
 
-        Returns 201 with the tenant, 404 when the account is unknown and 409 when the slug or the display name is taken.
+        Returns 201 with the tenant, 404 when the account is unknown, 409 when the slug or the display name is taken and 422 READING_TIER_NOT_ASSIGNABLE for an unknown or inactive tier.
 
         '
       operationId: createTenant
@@ -509,6 +673,8 @@ paths:
                   cell: us-east-1
                   displayName: Acme Tire & Auto — Tucson
                   initialAdminEmail: owner@acme.example
+                  locale: en-US
+                  readingTierCode: STANDARD
                   slug: acme-tire
             schema:
               $ref: '#/components/schemas/TenantCreateRequest'
@@ -533,6 +699,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Slug or display name already taken
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'READING_TIER_NOT_ASSIGNABLE: the reading tier does not exist or is inactive (#2619)'
       security:
       - bearerAuth:
         - platform:tenant:create
@@ -586,17 +758,17 @@ paths:
       x-required-permissions:
       - platform:tenant:read
     patch:
-      description: 'Changes a tenant''s display name or cell and publishes tenant.updated; slug, account and status are never changed here.
+      description: 'Changes a tenant''s display name, cell, locale or reading tier and publishes tenant.updated (a tier change also publishes tenant.reading-allowance.changed, #2619); slug, account and status are never changed here.
 
         Use this tool for descriptive edits; do not use it to change status, use suspendTenant, reactivateTenant or decommissionTenant instead.
 
         Preconditions: the tenant exists, is not DECOMMISSIONED, and the new display name is not already held by another tenant.
 
-        Required inputs: id (UUID) as a path parameter and a body with displayName and/or cell; a null field leaves the value unchanged.
+        Required inputs: id (UUID) as a path parameter and a body with any of displayName, cell, locale (a listed BCP 47 tag with a region, #2618) and readingTierCode (an active tier, else 422 READING_TIER_NOT_ASSIGNABLE); a null field leaves the value unchanged.
 
         Emits a TENANT_UPDATE event.
 
-        Returns 200 with the tenant, 404 when it does not exist and 409 when it is decommissioned or the display name is taken.
+        Returns 200 with the tenant, 404 when it does not exist, 409 when it is decommissioned or the display name is taken and 422 READING_TIER_NOT_ASSIGNABLE for an unknown or inactive tier.
 
         '
       operationId: updateTenant
@@ -616,6 +788,7 @@ paths:
                 value:
                   cell: us-east-2
                   displayName: Acme Tire & Auto Group
+                  locale: fr-CA
             schema:
               $ref: '#/components/schemas/TenantUpdateRequest'
         description: Fields to change; a null field leaves the value unchanged.
@@ -639,6 +812,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: Tenant is decommissioned, or the display name is taken
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'READING_TIER_NOT_ASSIGNABLE: the reading tier does not exist or is inactive (#2619)'
       security:
       - bearerAuth:
         - platform:tenant:update
@@ -1233,6 +1412,105 @@ components:
       - field
       - message
       type: object
+    MonthlyAllowanceDto:
+      description: 'A monthly allowance: amount and ISO 4217 currency'
+      properties:
+        amount:
+          description: Amount per calendar month, at least zero, four decimals at most
+          example: 20.0
+          minimum: 0.0
+          type: number
+        currencyCode:
+          description: ISO 4217 code; USD for now (the platform's reading bill is in USD)
+          example: USD
+          minLength: 1
+          pattern: ^[A-Z]{3}$
+          type: string
+      required:
+      - amount
+      - currencyCode
+      type: object
+    ReadingTierCreateRequest:
+      description: 'A new reading tier: its code, display name and monthly allowance'
+      properties:
+        code:
+          description: Tier code, upper case, 2 to 32 characters, unique; never changes
+          example: PRO
+          minLength: 1
+          pattern: ^[A-Z][A-Z0-9_]{1,31}$
+          type: string
+        displayName:
+          description: Display name
+          example: Pro
+          maxLength: 200
+          minLength: 0
+          type: string
+        monthlyAllowance:
+          $ref: '#/components/schemas/MonthlyAllowanceDto'
+      required:
+      - code
+      - displayName
+      - monthlyAllowance
+      type: object
+    ReadingTierResponse:
+      description: A reading tier
+      properties:
+        active:
+          description: Whether the tier can be assigned
+          type: boolean
+        code:
+          description: Tier code
+          example: STANDARD
+          type: string
+        createdAt:
+          description: Created at
+          format: date-time
+          type: string
+        displayName:
+          description: Display name
+          example: Standard
+          type: string
+        id:
+          description: Tier id
+          format: uuid
+          type: string
+        monthlyAllowance:
+          $ref: '#/components/schemas/MonthlyAllowanceDto'
+        updatedAt:
+          description: Last changed at
+          format: date-time
+          type: string
+        version:
+          description: Optimistic-lock version
+          format: int64
+          type: integer
+      required:
+      - active
+      - code
+      - createdAt
+      - displayName
+      - id
+      - monthlyAllowance
+      - updatedAt
+      - version
+      type: object
+    ReadingTierUpdateRequest:
+      description: Changes to a reading tier; omitted fields are left unchanged
+      properties:
+        active:
+          description: Activate or deactivate; deactivating a tier a non-decommissioned tenant is on is 409 READING_TIER_IN_USE
+          example: false
+          type: boolean
+        displayName:
+          description: New display name
+          example: Professional
+          maxLength: 200
+          minLength: 0
+          pattern: \s*\S[\s\S]*
+          type: string
+        monthlyAllowance:
+          $ref: '#/components/schemas/MonthlyAllowanceDto'
+      type: object
     SuggestedAlternative:
       description: A suggested alternative accompanying a 409 conflict
       properties:
@@ -1278,6 +1556,17 @@ components:
           maxLength: 320
           minLength: 0
           type: string
+        locale:
+          description: The shop's locale as a BCP 47 tag with a region (en-US, es-US, es-MX, fr-CA, fr-FR by default; pos.tenant.supported-locales); case is normalised (fr-ca becomes fr-CA). A bare language or an unlisted tag is 400 VALIDATION_ERROR with fieldErrors[locale]
+          example: en-US
+          maxLength: 35
+          minLength: 0
+          type: string
+        readingTierCode:
+          description: The reading tier the tenant starts on (CAP:550 S45); STANDARD when omitted. Must name an active tier, else 422 READING_TIER_NOT_ASSIGNABLE
+          example: STANDARD
+          pattern: ^[A-Z][A-Z0-9_]{1,31}$
+          type: string
         slug:
           description: URL-safe unique name; lowercase letters, digits and hyphens, 3 to 63 characters
           example: acme-tire
@@ -1287,6 +1576,7 @@ components:
       required:
       - accountId
       - initialAdminEmail
+      - locale
       - slug
       type: object
     TenantResponse:
@@ -1322,6 +1612,14 @@ components:
         initialAdminEmail:
           description: Email of the initial administrator
           type: string
+        locale:
+          description: The shop's locale (BCP 47)
+          example: en-US
+          type: string
+        readingTierCode:
+          description: The reading tier the tenant is on (CAP:550 S45)
+          example: STANDARD
+          type: string
         slug:
           description: URL-safe unique name
           example: acme-tire
@@ -1348,6 +1646,8 @@ components:
       - displayName
       - id
       - initialAdminEmail
+      - locale
+      - readingTierCode
       - slug
       - status
       - updatedAt
@@ -1365,6 +1665,17 @@ components:
           maxLength: 200
           minLength: 0
           pattern: \s*\S[\s\S]*
+          type: string
+        locale:
+          description: New locale, a BCP 47 tag with a region from pos.tenant.supported-locales; omitted or null leaves it unchanged
+          example: fr-CA
+          maxLength: 35
+          minLength: 0
+          type: string
+        readingTierCode:
+          description: Move the tenant to another reading tier (CAP:550 S45); omitted or null leaves it. Must name an active tier, else 422 READING_TIER_NOT_ASSIGNABLE; publishes tenant.reading-allowance.changed
+          example: PRO
+          pattern: ^[A-Z][A-Z0-9_]{1,31}$
           type: string
       type: object
   securitySchemes:

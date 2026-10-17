@@ -3833,7 +3833,7 @@ paths:
       - security:user_account_state:manage
   /v1/tenants/me:
     get:
-      description: 'Returns the tenant the caller''s token belongs to (its tid claim) as the security service knows it from the tenant registry''s published projection: id, slug, display name and lifecycle status.
+      description: 'Returns the tenant the caller''s token belongs to (its tid claim) as the security service knows it from the tenant registry''s published projection: id, slug, display name, lifecycle status and locale.
 
         Use this tool to show the tenant name in the header or to check the tenant is ACTIVE; do not use it to look up another tenant, which only platform staff can do through the pos-tenant registry.
 
@@ -7096,6 +7096,10 @@ components:
         id:
           description: Tenant id, the token's tid claim
           format: uuid
+          type: string
+        locale:
+          description: The tenant's locale (BCP 47, ADR-0030 §2); null while the replica has not learned it
+          example: en-US
           type: string
         slug:
           description: URL-safe unique name

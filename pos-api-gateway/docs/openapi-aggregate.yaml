@@ -1003,6 +1003,8 @@ paths:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1finalize
   /v1/invoices/{invoiceId}/payments:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1payments
+  /v1/invoices/{invoiceId}/payments/cash:
+    $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1payments~1cash
   /v1/invoices/{invoiceId}/payments/{paymentId}:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1invoices~1{invoiceId}~1payments~1{paymentId}
   /v1/invoices/{invoiceId}/payments/{paymentId}/capture:
@@ -1239,6 +1241,8 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1sessions~1{sessionId}~1z-report
   /v1/orders/{orderId}/checkout:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1{orderId}~1checkout
+  /v1/orders/{orderId}/payments/cash:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1{orderId}~1payments~1cash
   /v1/orders/{orderId}/void:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1{orderId}~1void
   /v1/returns:
@@ -1697,6 +1701,10 @@ paths:
     $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1accounts~1{id}~1contacts
   /v1/platform/accounts/{id}/contacts/{contactId}:
     $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1accounts~1{id}~1contacts~1{contactId}
+  /v1/platform/reading-tiers:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1reading-tiers
+  /v1/platform/reading-tiers/{code}:
+    $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1reading-tiers~1{code}
   /v1/platform/tenants:
     $ref: ../../pos-tenant/openapi.yaml#/paths/~1v1~1platform~1tenants
   /v1/platform/tenants/{id}:
