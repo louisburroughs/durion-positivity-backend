@@ -115,6 +115,14 @@ public final class EventTypes {
             .apiVersion("1")
             .build();
 
+    /** ADR-0067 A8 (#2662): a register cash tender recorded CAPTURED, no gateway. */
+    public static final EventTypeRegistration INVOICE_PAYMENT_CASH_RECORD = EventTypeRegistration.write(
+                    "INVOICE_PAYMENT_CASH_RECORD",
+                    "Record a cash tender taken at the register: the amount applied, the rounded cash and the"
+                            + " signed cash rounding")
+            .apiVersion("1")
+            .build();
+
     public static final EventTypeRegistration INVOICE_PAYMENT_CAPTURE = EventTypeRegistration.write(
                     "INVOICE_PAYMENT_CAPTURE", "Explicit manual capture of an authorized payment hold")
             .apiVersion("1")
@@ -237,6 +245,7 @@ public final class EventTypes {
                 INVOICE_POSTING_FAILED,
                 INVOICE_DRAFT_REVERT,
                 INVOICE_PAYMENT_INITIATE,
+                INVOICE_PAYMENT_CASH_RECORD,
                 INVOICE_PAYMENT_CAPTURE,
                 INVOICE_PAYMENT_LIST,
                 INVOICE_PAYMENT_VIEW,

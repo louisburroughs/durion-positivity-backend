@@ -1,5 +1,6 @@
 package com.positivity.invoice.internal.controller;
 
+import com.positivity.invoice.internal.exception.CashRoundingInvalidException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
@@ -61,6 +62,21 @@ public class PaymentExceptionHandler {
                         "NOT_FOUND",
                         ex.getMessage(),
                         HttpStatus.NOT_FOUND.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
+    /** ADR-0067 A8 (#2662): a cash tender whose rounding triple does not fit the increment. */
+    @ExceptionHandler(CashRoundingInvalidException.class)
+    public ResponseEntity<ApiError> handleCashRoundingInvalid(
+            CashRoundingInvalidException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(422)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        CashRoundingInvalidException.CODE,
+                        ex.getMessage(),
+                        422,
                         Instant.now(clock).toString(),
                         correlationId));
     }

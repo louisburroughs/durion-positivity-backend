@@ -44,6 +44,13 @@ import org.jspecify.annotations.Nullable;
  * @param gatewayProvider processing gateway, when gateway-settled
  * @param gatewayReference processor reference, when gateway-settled
  * @param settledAt when the capture committed
+ * @param settledAmount ADR-0067 A8 (#2662): on a CASH settlement, the cash actually taken after rounding to the
+ *     currency's cash increment; null on non-cash settlements and on facts published before A8 (read as amount)
+ * @param cashRoundingAmount signed, settledAmount minus amount (due 10.02 → settled 10.00 → −0.02; due 10.03 →
+ *     settled 10.05 → +0.02); null reads as 0.00. {@code amount} keeps its meaning: the amount applied to the
+ *     invoice, the due before rounding
+ * @param cashIncrement the increment applied (0.05 for CAD); null when the currency has none (then settledAmount =
+ *     amount and the rounding is 0.00) and on non-cash settlements. Additive, schema version unchanged (ADR-0044 §3)
  */
 public record PaymentSettledV1(
         @NonNull UUID paymentIntentId,
@@ -57,7 +64,46 @@ public record PaymentSettledV1(
         @NonNull String currencyCode,
         @Nullable String gatewayProvider,
         @Nullable String gatewayReference,
-        @NonNull Instant settledAt) {
+        @NonNull Instant settledAt,
+        @Nullable BigDecimal settledAmount,
+        @Nullable BigDecimal cashRoundingAmount,
+        @Nullable BigDecimal cashIncrement) {
+
+    /**
+     * The shape before ADR-0067 A8 (#2662): no cash-rounding fields. Kept for every publisher and test that settles a
+     * card payment; the three fields are null, which every consumer reads as "no rounding, settled = amount".
+     */
+    public PaymentSettledV1(
+            @NonNull UUID paymentIntentId,
+            @NonNull UUID invoiceId,
+            @Nullable String invoiceNumber,
+            @Nullable UUID orderId,
+            @Nullable UUID workorderId,
+            @NonNull String partyId,
+            @NonNull String methodType,
+            @NonNull BigDecimal amount,
+            @NonNull String currencyCode,
+            @Nullable String gatewayProvider,
+            @Nullable String gatewayReference,
+            @NonNull Instant settledAt) {
+        this(
+                paymentIntentId,
+                invoiceId,
+                invoiceNumber,
+                orderId,
+                workorderId,
+                partyId,
+                methodType,
+                amount,
+                currencyCode,
+                gatewayProvider,
+                gatewayReference,
+                settledAt,
+                null,
+                null,
+                null);
+    }
+
 
     public static final String EVENT_TYPE = "payment.payment.settled";
     public static final int SCHEMA_VERSION = 2;

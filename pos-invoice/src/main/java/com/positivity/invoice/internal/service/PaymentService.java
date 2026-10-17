@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.service;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.dto.PaymentIntentResponse;
+import com.positivity.invoice.internal.dto.RecordCashPaymentRequest;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -51,6 +52,15 @@ public interface PaymentService {
      * @param invoiceId the invoice to list payments for
      * @return the invoice's payment intents
      */
+    /**
+     * ADR-0067 A8 (#2662): records a register cash tender CAPTURED (no gateway) as pos-order computed it, checks the
+     * rounding triple against {@code cashIncrement} (422 {@code CASH_ROUNDING_INVALID}) and publishes {@code
+     * payment.payment.settled} with the three additive fields. Idempotent on {@code idempotencyKey}; a replay with
+     * another payload is 409 {@code PAYMENT_IDEMPOTENCY_CONFLICT}.
+     */
+    @NonNull
+    InitiatePaymentResponse recordCashPayment(@NonNull UUID invoiceId, @NonNull RecordCashPaymentRequest request);
+
     @NonNull
     List<PaymentIntentResponse> listInvoicePayments(@NonNull UUID invoiceId);
 

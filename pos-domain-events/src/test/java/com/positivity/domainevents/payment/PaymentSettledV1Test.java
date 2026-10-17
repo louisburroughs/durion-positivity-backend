@@ -89,4 +89,44 @@ class PaymentSettledV1Test {
         assertThat(read.partyId()).isNull();
         assertThat(read.amount()).isEqualByComparingTo("98.51");
     }
+
+    @Test
+    void cashRoundingFieldsAreAdditive() {
+        PaymentSettledV1 card = new PaymentSettledV1(
+                PAYMENT_INTENT_ID,
+                INVOICE_ID,
+                "INV-000001",
+                null,
+                null,
+                PARTY_ID,
+                "CARD",
+                new BigDecimal("98.51"),
+                "USD",
+                "stub",
+                "ref-1",
+                Instant.parse("2026-10-05T12:00:00Z"));
+        org.assertj.core.api.Assertions.assertThat(card.settledAmount()).isNull();
+        org.assertj.core.api.Assertions.assertThat(card.cashRoundingAmount()).isNull();
+        org.assertj.core.api.Assertions.assertThat(card.cashIncrement()).isNull();
+
+        PaymentSettledV1 cash = new PaymentSettledV1(
+                PAYMENT_INTENT_ID,
+                INVOICE_ID,
+                "INV-000002",
+                null,
+                null,
+                PARTY_ID,
+                "CASH",
+                new BigDecimal("10.02"),
+                "CAD",
+                null,
+                null,
+                Instant.parse("2026-10-05T12:00:00Z"),
+                new BigDecimal("10.00"),
+                new BigDecimal("-0.02"),
+                new BigDecimal("0.05"));
+        org.assertj.core.api.Assertions.assertThat(cash.settledAmount().subtract(cash.amount()))
+                .isEqualByComparingTo(cash.cashRoundingAmount());
+        org.assertj.core.api.Assertions.assertThat(PaymentSettledV1.SCHEMA_VERSION).isEqualTo(2);
+    }
 }

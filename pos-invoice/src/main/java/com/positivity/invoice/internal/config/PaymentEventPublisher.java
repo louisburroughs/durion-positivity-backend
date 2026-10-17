@@ -102,12 +102,17 @@ public class PaymentEventPublisher {
                 invoice.getOrderId(),
                 invoice.getWorkorderId(),
                 invoice.getPartyId(),
-                GATEWAY_METHOD_TYPE,
+                paymentIntent.getMethodType() == null ? GATEWAY_METHOD_TYPE : paymentIntent.getMethodType().name(),
                 paymentIntent.getCapturedAmount(),
                 currencySource.currencyCode(),
                 paymentIntent.getGatewayProvider(),
                 paymentIntent.getGatewayReference(),
-                Instant.now(clock));
+                Instant.now(clock),
+                // ADR-0067 A8 (#2662): null on a card capture; on a cash tender the rounded cash, the signed rounding
+                // and the increment, as pos-order computed and pos-invoice checked them.
+                paymentIntent.getSettledAmount(),
+                paymentIntent.getCashRoundingAmount(),
+                paymentIntent.getCashIncrement());
         writer.publish(
                 DomainTopics.events("payment"),
                 DomainEventEnvelope.of(
