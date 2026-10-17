@@ -38,9 +38,11 @@ import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategor
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtLocationRepository;
+import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
+import com.positivity.order.internal.service.SupplierVendorGuard;
 import com.positivity.order.internal.service.model.CashMovementCommand;
 import com.positivity.order.internal.service.model.CashMovementOptions;
 import com.positivity.order.internal.service.model.CashMovementResult;
@@ -117,8 +119,8 @@ class RegisterSessionStatedTaxTest {
 
     private RegisterSession session;
     private ExtAccountingPettyExpenseCategory shopSupplies;
-    private final com.positivity.order.internal.repository.ExtSupplierVendorRepository vendorCopies =
-            org.mockito.Mockito.mock(com.positivity.order.internal.repository.ExtSupplierVendorRepository.class);
+    private final ExtSupplierVendorRepository vendorCopies =
+            org.mockito.Mockito.mock(ExtSupplierVendorRepository.class);
     private RegisterSessionServiceImpl service;
 
     @BeforeEach
@@ -142,7 +144,7 @@ class RegisterSessionStatedTaxTest {
                 drawerStatedTax,
                 new com.positivity.order.internal.service.ActorDisplayNames(org.mockito.Mockito.mock(
                         com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository.class)),
-                new com.positivity.order.internal.service.SupplierVendorGuard(vendorCopies),
+                new SupplierVendorGuard(vendorCopies),
                 CLOCK,
                 meters);
         session = RegisterSession.builder()

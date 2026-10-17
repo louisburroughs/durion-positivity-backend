@@ -77,8 +77,8 @@ public class SessionPolicyController {
                     stand and are carried on the close fact.
                     Use this tool to change the drawer limits after reading them with getSessionPolicy; do not use \
                     it to see what one register session may record now — use getCashMovementOptions instead.
-                    Preconditions: an allowed type needs a cashier limit; vendor cash on delivery stays off until \
-                    pos-order holds the vendor list.
+                    Preconditions: an allowed type needs a cashier limit. Vendor cash on delivery may be switched on \
+                    (#2576): a VENDOR_COD movement then names an ACTIVE vendor of pos-order's vendor copy.
                     Required inputs: the version read (null only while the defaults apply), currencyCode (the \
                     functional currency, ISO 4217), pettyExpense and vendorCod (allowed, cashierLimit), \
                     overShortTolerance and a justification of at least 10 characters; limits and the tolerance \
@@ -94,8 +94,8 @@ public class SessionPolicyController {
     @ApiResponse(
             responseCode = "400",
             description = "VALIDATION_ERROR: justification under 10 characters, a negative limit or tolerance, an"
-                    + " allowed type without a limit, a missing or non-ISO currencyCode, or vendor cash on delivery"
-                    + " switched on. fieldErrors[0].field is the refused field's JSON path (justification,"
+                    + " allowed type without a limit, a missing or non-ISO currencyCode."
+                    + " fieldErrors[0].field is the refused field's JSON path (justification,"
                     + " pettyExpense.allowed, pettyExpense.cashierLimit, vendorCod.allowed, vendorCod.cashierLimit,"
                     + " overShortTolerance, currencyCode).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))

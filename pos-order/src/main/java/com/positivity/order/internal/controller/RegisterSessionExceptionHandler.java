@@ -5,6 +5,7 @@ import com.positivity.order.internal.exception.CashMovementIdempotencyConflictEx
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
+import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionNotFoundException;
@@ -224,9 +225,9 @@ public class RegisterSessionExceptionHandler {
      * VENDOR_INACTIVE}. A vendor the copy does not hold is 503 {@code VENDOR_REPLICATION_PENDING} with {@code
      * Retry-After}, rendered by the platform handler ({@code ReplicationPendingException}).
      */
-    @ExceptionHandler(com.positivity.order.internal.exception.PurchaseOrderVendorException.class)
+    @ExceptionHandler(PurchaseOrderVendorException.class)
     public ResponseEntity<ApiError> handleVendor(
-            com.positivity.order.internal.exception.PurchaseOrderVendorException ex, HttpServletRequest request) {
+            PurchaseOrderVendorException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .header(X_CORRELATION_ID, correlationId)
