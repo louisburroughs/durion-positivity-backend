@@ -108,6 +108,9 @@ class APPaymentServiceTest {
     @Mock
     private SupplierVendorCopies vendorCopies;
 
+    @Mock
+    private com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository allocationRequests;
+
     @InjectMocks
     private APPaymentServiceImpl service;
 
@@ -126,6 +129,9 @@ class APPaymentServiceTest {
                 .thenReturn(List.of());
         // Default: allocationRepository.saveAll returns empty list
         when(allocationRepository.saveAll(any())).thenReturn(List.of());
+        // Default: no bill has been allocated anything yet (S17 allocation tests re-derive the open amount)
+        when(allocationRepository.sumAllocatedAmountByVendorBillId(any(UUID.class)))
+                .thenReturn(BigDecimal.ZERO);
         // Default: the locked APPROVED bills of the vendor are none (#2509 review, A3)
         when(billRepository.lockByVendorIdAndStatus(any(UUID.class), any(VendorBillStatus.class)))
                 .thenReturn(List.of());
@@ -143,6 +149,154 @@ class APPaymentServiceTest {
             vendor.setStatus(ExtSupplierVendor.ACTIVE);
             return vendor;
         });
+    }
+
+    // ========================================
+    // allocateCashPayment (S17 #2513, AW41)
+    // ========================================
+
+    private APPayment cashPayment(UUID paymentId, String unapplied) {
+        APPayment payment = new APPayment(paymentId);
+        payment.setPaymentRef("COD-" + paymentId);
+        payment.setVendorId(testVendorId);
+        payment.setPaymentMethod(com.positivity.accounting.internal.enums.PaymentMethod.CASH);
+        payment.setStatus(APPaymentStatus.GL_POSTED);
+        payment.setGrossAmount(new BigDecimal("145.00"));
+        payment.setUnappliedAmount(new BigDecimal(unapplied));
+        payment.setCurrency("USD");
+        return payment;
+    }
+
+    private VendorBill approvedBill(UUID billId, String amount) {
+        VendorBill bill = new VendorBill();
+        bill.setVendorBillId(billId);
+        bill.setVendorId(testVendorId);
+        bill.setStatus(VendorBillStatus.APPROVED);
+        bill.setTotalAmount(new BigDecimal(amount));
+        return bill;
+    }
+
+    private static com.positivity.accounting.internal.dto.AllocateAPPaymentRequest allocate(
+            UUID requestId, UUID billId, String amount) {
+        return com.positivity.accounting.internal.dto.AllocateAPPaymentRequest.builder()
+                .requestId(requestId)
+                .allocations(List.of(new ExecuteAPPaymentRequest.AllocationLineRequest(billId, new BigDecimal(amount))))
+                .build();
+    }
+
+    @Test
+    @DisplayName(
+            "allocating a CASH payment applies the bill, reduces what is unapplied, records the request, posts nothing")
+    void allocateCashPaymentAppliesTheBill() {
+        UUID paymentId = UUID.randomUUID();
+        UUID billId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        APPayment payment = cashPayment(paymentId, "145.00");
+        VendorBill bill = approvedBill(billId, "100.00");
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        when(billRepository.findById(billId)).thenReturn(Optional.of(bill));
+        when(allocationRequests.findByRequestId(requestId)).thenReturn(Optional.empty());
+        when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        APPaymentResponse response =
+                service.allocateCashPayment(paymentId, allocate(requestId, billId, "100.00"), "clerk");
+
+        assertThat(response.getUnappliedAmount()).isEqualByComparingTo("45.00");
+        verify(payGuard).check(eq(List.of(bill)), eq("clerk"), eq("COD-" + paymentId));
+        verify(allocationRepository).saveAll(any());
+        verify(allocationRequests)
+                .save(any(com.positivity.accounting.internal.entity.APPaymentAllocationRequest.class));
+        org.mockito.Mockito.verifyNoInteractions(outboxService, postingService);
+    }
+
+    @Test
+    @DisplayName(
+            "a replay of the same requestId and lines answers the payment; another body is 409 IDEMPOTENCY_CONFLICT")
+    void allocateCashPaymentIsIdempotentOnRequestId() {
+        UUID paymentId = UUID.randomUUID();
+        UUID billId = UUID.randomUUID();
+        UUID requestId = UUID.randomUUID();
+        APPayment payment = cashPayment(paymentId, "45.00");
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
+        String hash = new RegisterFloatServiceImpl.Hash()
+                .field("ALLOCATE")
+                .field(paymentId)
+                .field(billId)
+                .field(new BigDecimal("100.00"))
+                .digest();
+        when(allocationRequests.findByRequestId(requestId))
+                .thenReturn(Optional.of(new com.positivity.accounting.internal.entity.APPaymentAllocationRequest(
+                        requestId, paymentId, hash)));
+
+        assertThat(service.allocateCashPayment(paymentId, allocate(requestId, billId, "100.00"), "clerk")
+                        .getUnappliedAmount())
+                .isEqualByComparingTo("45.00");
+        verify(allocationRepository, never()).saveAll(any());
+
+        assertThatThrownBy(() -> service.allocateCashPayment(paymentId, allocate(requestId, billId, "99.00"), "clerk"))
+                .isInstanceOf(com.positivity.accounting.internal.exception.IdempotencyConflictException.class);
+        // The replay check sits behind the payment row lock: a racing retry waits and then replays.
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(paymentRepository, allocationRequests);
+        inOrder.verify(paymentRepository).lockById(paymentId);
+        inOrder.verify(allocationRequests).findByRequestId(requestId);
+    }
+
+    @Test
+    @DisplayName(
+            "a bill named twice in one allocation request is 400: each line alone would pass the open-amount check")
+    void allocateCashPaymentRefusesADuplicateBill() {
+        UUID paymentId = UUID.randomUUID();
+        UUID billId = UUID.randomUUID();
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(cashPayment(paymentId, "145.00")));
+        when(allocationRequests.findByRequestId(any())).thenReturn(Optional.empty());
+        com.positivity.accounting.internal.dto.AllocateAPPaymentRequest twice =
+                com.positivity.accounting.internal.dto.AllocateAPPaymentRequest.builder()
+                        .requestId(UUID.randomUUID())
+                        .allocations(List.of(
+                                new ExecuteAPPaymentRequest.AllocationLineRequest(billId, new BigDecimal("60.00")),
+                                new ExecuteAPPaymentRequest.AllocationLineRequest(billId, new BigDecimal("60.00"))))
+                        .build();
+
+        assertThatThrownBy(() -> service.allocateCashPayment(paymentId, twice, "clerk"))
+                .isInstanceOf(com.positivity.accounting.internal.exception.InvalidBillAllocationException.class)
+                .hasMessageContaining("more than once");
+        verify(allocationRepository, never()).saveAll(any());
+        verify(billRepository, never()).lockByVendorBillIdIn(any());
+    }
+
+    @Test
+    @DisplayName(
+            "not a CASH payment, or nothing unapplied: 422 AP_PAYMENT_NOT_ALLOCATABLE; over the unapplied amount: 400")
+    void allocateCashPaymentRefusals() {
+        UUID billId = UUID.randomUUID();
+        UUID achId = UUID.randomUUID();
+        APPayment ach = cashPayment(achId, "145.00");
+        ach.setPaymentMethod(com.positivity.accounting.internal.enums.PaymentMethod.ACH);
+        when(paymentRepository.lockById(achId)).thenReturn(Optional.of(ach));
+        when(allocationRequests.findByRequestId(any())).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.allocateCashPayment(achId, allocate(UUID.randomUUID(), billId, "10.00"), "c"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE));
+
+        UUID spentId = UUID.randomUUID();
+        when(paymentRepository.lockById(spentId)).thenReturn(Optional.of(cashPayment(spentId, "0.00")));
+        assertThatThrownBy(
+                        () -> service.allocateCashPayment(spentId, allocate(UUID.randomUUID(), billId, "10.00"), "c"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE));
+
+        UUID paymentId = UUID.randomUUID();
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(cashPayment(paymentId, "45.00")));
+        VendorBill bill = approvedBill(billId, "100.00");
+        when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
+        when(billRepository.findById(billId)).thenReturn(Optional.of(bill));
+        assertThatThrownBy(() ->
+                        service.allocateCashPayment(paymentId, allocate(UUID.randomUUID(), billId, "100.00"), "c"))
+                .isInstanceOf(InvalidBillAllocationException.class)
+                .hasMessageContaining("exceeds the payment's unapplied amount");
     }
 
     // ========================================

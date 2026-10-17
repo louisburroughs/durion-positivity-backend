@@ -73,8 +73,12 @@ public class APPaymentPreGatewayChecks {
 
     static final String BANK_ACCOUNT_FIELD = "bankAccountId";
 
+    /**
+     * No funding account is modelled for a card or an "other" payment, and {@code CASH} is minted by the session-close
+     * posting alone (S17, #2513): a cash payment the pay command accepted would reach the gateway and then post nothing.
+     */
     private static final Set<PaymentMethod> UNSUPPORTED_METHODS =
-            EnumSet.of(PaymentMethod.CREDIT_CARD, PaymentMethod.OTHER);
+            EnumSet.of(PaymentMethod.CREDIT_CARD, PaymentMethod.OTHER, PaymentMethod.CASH);
 
     private final ApPayFromAccounts payFromAccounts;
     private final LedgerCurrency ledgerCurrency;
@@ -108,7 +112,8 @@ public class APPaymentPreGatewayChecks {
             throw new VendorBillException(
                     VendorBillException.Code.AP_PAYMENT_METHOD_NOT_SUPPORTED,
                     "A vendor payment by " + request.getPaymentMethod()
-                            + " cannot be booked yet; pay by ACH, CHECK or WIRE");
+                            + " cannot be booked here; pay by ACH, CHECK or WIRE (a CASH payment comes from a drawer"
+                            + " cash-on-delivery movement at session close)");
         }
         // 1b. The currency: ISO 4217 (ADR-0067 R-3), then the functional currency (PC-9 (a)).
         String currency = request.getCurrency().trim();

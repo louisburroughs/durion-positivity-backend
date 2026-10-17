@@ -56,6 +56,7 @@ class RegisterCashMovementPostingServiceTest {
     private static final UUID SHOP_SUPPLIES_ACCOUNT = UUID.fromString("00000000-0000-0000-0000-000000006340");
     private static final UUID STAFF_MEALS_ACCOUNT = UUID.fromString("00000000-0000-0000-0000-000000006295");
     private static final UUID CLEARING_ACCOUNT = UUID.fromString("00000000-0000-0000-0000-000000001095");
+    private static final UUID PAYABLES_ACCOUNT = UUID.fromString("00000000-0000-0000-0000-000000002000");
 
     private static final UUID PETTY_1 = UUID.fromString("00000000-0000-0000-0000-0000000000f1");
     private static final UUID PETTY_2 = UUID.fromString("00000000-0000-0000-0000-0000000000f2");
@@ -71,6 +72,9 @@ class RegisterCashMovementPostingServiceTest {
     private final RegisterCashMovementTaxRecoveryRepository taxRecoveries =
             mock(RegisterCashMovementTaxRecoveryRepository.class);
     private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final com.positivity.accounting.internal.repository.APPaymentRepository apPaymentRepository =
+            mock(com.positivity.accounting.internal.repository.APPaymentRepository.class);
+    private final SupplierVendorCopies vendorCopies = mock(SupplierVendorCopies.class);
 
     private RegisterCashMovementPostingService service;
 
@@ -89,8 +93,16 @@ class RegisterCashMovementPostingServiceTest {
                 journalEntryRepository,
                 recoveryDecider,
                 taxRecoveries,
+                apPaymentRepository,
+                vendorCopies,
                 TEST_CLOCK,
                 registry);
+        when(vendorCopies.find(any())).thenReturn(java.util.Optional.empty());
+        when(apPaymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(journalEntryRepository.getReferenceById(any()))
+                .thenAnswer(inv -> new com.positivity.accounting.internal.entity.JournalEntry(inv.getArgument(0)));
+        when(glMappingResolver.resolveGLAccount("REGISTER_CASH_MOVEMENT", "ACCOUNTS_PAYABLE", POSTING_DATE))
+                .thenReturn(PAYABLES_ACCOUNT);
         when(recoveryDecider.decide(any())).thenReturn(List.of());
         when(glMappingResolver.resolveGLAccount("REGISTER_CASH_MOVEMENT", "PETTY_EXPENSE_SHOP_SUPPLIES", POSTING_DATE))
                 .thenReturn(SHOP_SUPPLIES_ACCOUNT);
@@ -104,6 +116,45 @@ class RegisterCashMovementPostingServiceTest {
 
     private static Movement petty(UUID movementId, String category, String amount, String receipt) {
         return movement(movementId, "PETTY_EXPENSE", "OUT", amount, "USD", category, null, null, receipt);
+    }
+
+    /** The clerk id of the COD payment's {@code created_by} is cut to the column (varchar(50)); the memo keeps it. */
+    @Test
+    @DisplayName("#2731 review: a clerk id longer than ap_payment.created_by (50) is cut, not a failed close")
+    void longClerkIdFitsCreatedBy() {
+        UUID vendor = UUID.randomUUID();
+        String longClerk = "clerk-" + "x".repeat(70);
+        Movement cod = new Movement(
+                COD,
+                "VENDOR_COD",
+                "OUT",
+                new BigDecimal("12.00"),
+                "USD",
+                null,
+                vendor,
+                null,
+                null,
+                longClerk,
+                null,
+                null,
+                CLOSED_AT.minusSeconds(3600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
+        postsReturn(UUID.randomUUID());
+        when(vendorCopies.find(vendor)).thenReturn(java.util.Optional.empty());
+
+        service.postMovements(fact(cod), ENVELOPE_EVENT_ID);
+
+        org.mockito.ArgumentCaptor<com.positivity.accounting.internal.entity.APPayment> saved =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.accounting.internal.entity.APPayment.class);
+        verify(apPaymentRepository).save(saved.capture());
+        assertThat(saved.getValue().getCreatedBy())
+                .hasSize(RegisterCashMovementPostingService.CREATED_BY_MAX)
+                .isEqualTo(longClerk.substring(0, 50));
+        assertThat(saved.getValue().getMemo()).contains(longClerk.substring(0, 40));
     }
 
     private static Movement movement(
@@ -330,37 +381,79 @@ class RegisterCashMovementPostingServiceTest {
     }
 
     @Test
-    @DisplayName(
-            "Vendor cash on delivery is skipped, not posted, until its AP payment posting exists (#2513 COD half):"
-                    + " nothing about it is registered and it is counted for the alert; the session's petty expense still posts")
-    void vendorCashOnDeliveryIsSkippedNotPosted() {
+    @DisplayName("AC2 (#2513 COD half, AW41): a VENDOR_COD movement posts Dr 2000 / Cr 1095 and creates a CASH AP"
+            + " payment, GL_POSTED, unapplied for the amount, linked to the entry, with the session and the movement")
+    void vendorCashOnDeliveryPostsAndCreatesTheCashPayment() {
         UUID entry = UUID.randomUUID();
+        UUID vendor = UUID.randomUUID();
         postsReturn(entry);
+        com.positivity.accounting.internal.entity.ExtSupplierVendor copy =
+                new com.positivity.accounting.internal.entity.ExtSupplierVendor();
+        copy.setVendorId(vendor);
+        copy.setDisplayName("Acme Parts");
+        when(vendorCopies.find(vendor)).thenReturn(java.util.Optional.of(copy));
 
         FactPostingOutcome outcome = service.postMovements(
-                fact(
-                        movement(COD, "VENDOR_COD", "OUT", "145.00", "USD", null, UUID.randomUUID(), null, null),
-                        petty(PETTY_1, "SHOP_SUPPLIES", "40.00", null)),
-                ENVELOPE_EVENT_ID);
+                fact(movement(COD, "VENDOR_COD", "OUT", "145.00", "USD", null, vendor, null, null)), ENVELOPE_EVENT_ID);
 
         assertThat(outcome).isEqualTo(FactPostingOutcome.posted(entry));
-        verify(glPostingService, times(1))
-                .postRegisterCashMovement(any(), any(), any(), any(), any(), anyString(), anyString(), any());
-        verify(glMappingResolver, never())
-                .resolveGLAccount(eq("REGISTER_CASH_MOVEMENT"), eq("ACCOUNTS_PAYABLE"), any());
-        verify(idempotencyService, never()).isKeyProcessed("REGISTER_CASH_MOVEMENT_GL_POSTING:" + COD);
-        verify(idempotencyService, never()).registerKey(eq("REGISTER_CASH_MOVEMENT_GL_POSTING:" + COD), any());
-        assertThat(counted("accounting.cash_movement.unposted", "VENDOR_COD")).isEqualTo(1);
+        verify(glPostingService)
+                .postRegisterCashMovement(
+                        eq(RegisterCashMovementPostingService.toSourceEventId(COD)),
+                        eq(PAYABLES_ACCOUNT),
+                        eq(CLEARING_ACCOUNT),
+                        eq(new BigDecimal("145.00")),
+                        eq(POSTING_DATE),
+                        anyString(),
+                        anyString(),
+                        any());
+        verify(idempotencyService).registerKey("REGISTER_CASH_MOVEMENT_GL_POSTING:" + COD, entry);
+        org.mockito.ArgumentCaptor<com.positivity.accounting.internal.entity.APPayment> saved =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.accounting.internal.entity.APPayment.class);
+        verify(apPaymentRepository).save(saved.capture());
+        com.positivity.accounting.internal.entity.APPayment payment = saved.getValue();
+        assertThat(payment.getPaymentMethod()).isEqualTo(com.positivity.accounting.internal.enums.PaymentMethod.CASH);
+        assertThat(payment.getStatus()).isEqualTo(com.positivity.accounting.internal.enums.APPaymentStatus.GL_POSTED);
+        assertThat(payment.getPaymentRef()).isEqualTo("COD-" + COD);
+        assertThat(payment.getVendorId()).isEqualTo(vendor);
+        assertThat(payment.getVendorName()).isEqualTo("Acme Parts");
+        assertThat(payment.getCreatedBy()).isEqualTo("clerk-1");
+        assertThat(payment.getGrossAmount()).isEqualByComparingTo("145.00");
+        assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("145.00");
+        assertThat(payment.getFeeAmount()).isEqualByComparingTo("0");
+        assertThat(payment.getCurrency()).isEqualTo("USD");
+        assertThat(payment.getGlJournalEntryId()).isEqualTo(entry);
+        assertThat(payment.getCashMovementId()).isEqualTo(COD);
+        assertThat(payment.getBankAccountId()).isNull();
+        assertThat(counted("accounting.cash_movement.posted", "VENDOR_COD")).isEqualTo(1);
+        assertThat(counted("accounting.cash_movement.unposted", "VENDOR_COD")).isEqualTo(0);
     }
 
     @Test
-    @DisplayName("A session of vendor cash on delivery only posts nothing here")
-    void codOnlyPostsNothing() {
-        assertThat(service.postMovements(
-                        fact(movement(COD, "VENDOR_COD", "OUT", "145.00", "USD", null, UUID.randomUUID(), null, null)),
+    @DisplayName("A COD movement whose vendor the copy does not hold yet still posts and creates the payment, unnamed")
+    void vendorCashOnDeliveryBeforeTheVendorCopy() {
+        UUID entry = UUID.randomUUID();
+        postsReturn(entry);
+
+        service.postMovements(
+                fact(movement(COD, "VENDOR_COD", "OUT", "145.00", "USD", null, UUID.randomUUID(), null, null)),
+                ENVELOPE_EVENT_ID);
+
+        org.mockito.ArgumentCaptor<com.positivity.accounting.internal.entity.APPayment> saved =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.accounting.internal.entity.APPayment.class);
+        verify(apPaymentRepository).save(saved.capture());
+        assertThat(saved.getValue().getVendorName()).isNull();
+    }
+
+    @Test
+    @DisplayName("A COD movement without a vendor is a contract violation; nothing posts")
+    void vendorCashOnDeliveryWithoutAVendorIsRefused() {
+        assertThatThrownBy(() -> service.postMovements(
+                        fact(movement(COD, "VENDOR_COD", "OUT", "145.00", "USD", null, null, null, null)),
                         ENVELOPE_EVENT_ID))
-                .isInstanceOf(FactPostingOutcome.NothingToPost.class);
-        verifyNoInteractions(glPostingService, idempotencyService, ingestionRecorder);
+                .isInstanceOf(RegisterSessionContractViolationException.class)
+                .hasMessageContaining("no vendorId");
+        verifyNoInteractions(glPostingService, apPaymentRepository);
     }
 
     @Test
@@ -385,7 +478,7 @@ class RegisterCashMovementPostingServiceTest {
         assertThat(RegisterCashMovementPostingService.dispositionOf("PETTY_EXPENSE"))
                 .isEqualTo(RegisterCashMovementPostingService.Disposition.POST_PETTY_EXPENSE);
         assertThat(RegisterCashMovementPostingService.dispositionOf("VENDOR_COD"))
-                .isEqualTo(RegisterCashMovementPostingService.Disposition.SKIP_VENDOR_COD);
+                .isEqualTo(RegisterCashMovementPostingService.Disposition.POST_VENDOR_COD);
         List<RegisterCashMovementPostingService.Disposition> nothing = new ArrayList<>();
         for (String reason : List.of("BANK_DROP", "FLOAT_INCREASE", "FLOAT_DECREASE")) {
             nothing.add(RegisterCashMovementPostingService.dispositionOf(reason));
@@ -401,26 +494,27 @@ class RegisterCashMovementPostingServiceTest {
                     + " at close must change the deposit's clearing net too")
     void clearingEffectFollowsEveryDisposition() {
         // One reason per disposition. A disposition added later fails the exhaustive switch below (it no longer
-        // compiles), and a reason moved to another disposition (the vendor cash on delivery half of #2513 moving
-        // VENDOR_COD off SKIP_VENDOR_COD) fails the expectation: either way the deposit side is revisited.
+        // compiles), and a reason moved to another disposition fails the expectation: either way the deposit side
+        // is revisited.
         Map<String, RegisterCashMovementPostingService.Disposition> reasons = Map.of(
                 "PETTY_EXPENSE", RegisterCashMovementPostingService.Disposition.POST_PETTY_EXPENSE,
-                "VENDOR_COD", RegisterCashMovementPostingService.Disposition.SKIP_VENDOR_COD,
+                "VENDOR_COD", RegisterCashMovementPostingService.Disposition.POST_VENDOR_COD,
                 "BANK_DROP", RegisterCashMovementPostingService.Disposition.NOTHING_AT_CLOSE,
                 "FLOAT_INCREASE", RegisterCashMovementPostingService.Disposition.NOTHING_AT_CLOSE,
                 "FLOAT_DECREASE", RegisterCashMovementPostingService.Disposition.NOTHING_AT_CLOSE,
                 "A_REASON_NOBODY_KNOWS", RegisterCashMovementPostingService.Disposition.UNCLASSIFIED);
-        assertThat(reasons.values()).containsAll(List.of(RegisterCashMovementPostingService.Disposition.values()));
+        assertThat(reasons.values())
+                .containsAll(java.util.Arrays.asList(RegisterCashMovementPostingService.Disposition.values()));
         reasons.forEach((reason, disposition) -> {
             assertThat(RegisterCashMovementPostingService.dispositionOf(reason))
                     .as(reason)
                     .isEqualTo(disposition);
             String expected =
                     switch (disposition) {
-                        // Dr expense / Cr 1095: a credit of the movement's amount.
-                        case POST_PETTY_EXPENSE -> "-12.50";
+                        // Dr expense (or Dr 2000) / Cr 1095: a credit of the movement's amount.
+                        case POST_PETTY_EXPENSE, POST_VENDOR_COD -> "-12.50";
                         // Not posted at close (yet): nothing reached 1095, so the deposit clears nothing for it.
-                        case SKIP_VENDOR_COD, NOTHING_AT_CLOSE, UNCLASSIFIED -> "0";
+                        case NOTHING_AT_CLOSE, UNCLASSIFIED -> "0";
                     };
             Movement movement =
                     movement(UUID.randomUUID(), reason, "OUT", "12.50", "USD", "SHOP_SUPPLIES", null, null, null);

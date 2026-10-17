@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
+import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.exception.AccountingPeriodHardLockedException;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
@@ -158,6 +159,18 @@ public class APPaymentPostingService {
      */
     private UUID post(APPayment payment, @Nullable String callerOverride, boolean applyRecordedOverride) {
         UUID paymentId = payment.getPaymentId();
+        if (payment.getPaymentMethod() == PaymentMethod.CASH) {
+            // A drawer cash-on-delivery payment (S17, #2513; AW41 ruling 2): its session-close entry
+            // (Dr 2000 / Cr 1095) is its only posting, and it is created GL_POSTED and linked to it. The pay command
+            // refuses CASH (APPaymentPreGatewayChecks), so reaching here without that entry is a defect, not a no-op.
+            UUID closeEntry = payment.getGlJournalEntryId();
+            if (closeEntry == null) {
+                throw new IllegalStateException("CASH AP payment " + paymentId
+                        + " has no session-close entry; a cash payment is created GL_POSTED by the close posting only");
+            }
+            log.info("CASH AP payment posts nothing of its own | paymentId={} | closeEntry={}", paymentId, closeEntry);
+            return closeEntry;
+        }
         UUID sourceEventId = toSourceEventId(paymentId);
         Optional<JournalEntry> alreadyPosted = journalEntryRepository.findBySourceEvent(sourceEventId).stream()
                 .filter(entry -> entry.getStatus() == JournalEntryStatus.POSTED)

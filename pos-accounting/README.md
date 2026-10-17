@@ -925,7 +925,7 @@ schema-1 fact has no movements and posts its over/short alone, as before.
 | Reason | At close | Accounts (posting category `REGISTER_CASH_MOVEMENT`) |
 |---|---|---|
 | `PETTY_EXPENSE` | one entry | Dr `PETTY_EXPENSE_<categoryCode>` / Cr `CASH_CLEARING` (1095), the receipt's gross; 2200 is never debited |
-| `VENDOR_COD` | **not posted yet** (below) | — |
+| `VENDOR_COD` | one entry + one `CASH` AP payment | Dr `ACCOUNTS_PAYABLE` (2000) / Cr `CASH_CLEARING` (1095), the amount paid out; the payment is unapplied until the vendor's approved bill is allocated to it (below) |
 | `BANK_DROP`, `FLOAT_INCREASE`, `FLOAT_DECREASE` | nothing | the deposit (S18), Change float (S15) |
 | none (recorded before S16) or unknown | nothing, counted `UNCLASSIFIED` | — |
 
@@ -968,15 +968,26 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   of one session at once answer the loser with the engine's "Concurrent reprocessing detected" 409.
 - **Currency** — a session whose fact or any movement to post is not in the ledger currency posts nothing, over/short
   included, and is held once (Ledger currency below).
-- **Vendor cash on delivery** — its posting (Dr `ACCOUNTS_PAYABLE` / Cr `CASH_CLEARING` plus an AP payment of method
-  `CASH`) is the second half of #2513, waiting on the vendor copy (S24, #2517) and the pay guard (S13, #2510); pos-order
-  refuses the reason until #2576, which is blocked by that half. A `VENDOR_COD` movement that arrives meanwhile is
-  **skipped**: logged at `ERROR`, counted on `accounting.cash_movement.unposted{reason=VENDOR_COD}` — which must alert,
-  since the cash left the drawer and 1095 does not show it — and not posted. **Recovery is a backfill, never a
-  redelivery**: every consumed close fact is stored whole as its `accounting_event` row's `payload`, so the COD half
-  selects the `VENDOR_COD` ids in `payload.movements` that have no registered posting key and posts them. (A redelivery
-  cannot: pos-order's manifest replay (#2579, above) re-sends a close fact under its original envelope id, which
-  `processed_events` drops, and pos-order has no other re-emit of it.)
+- **Vendor cash on delivery** (#2513 second half, Accounting ruling AW41 of 2026-10-07) — a `VENDOR_COD` movement
+  posts Dr `ACCOUNTS_PAYABLE` (2000) / Cr `CASH_CLEARING` (1095), never 1080 (the float moves only through Change
+  float), and in the same transaction creates an AP payment with method `CASH`: `paymentRef` `COD-<movementId>`,
+  gross = unapplied = the amount, fee 0, the ledger currency, dated the session's close, status `GL_POSTED` and linked
+  to that entry, with `registerSessionId` and `cashMovementId` (one movement, one payment:
+  `uq_ap_payment_cash_movement`). The close entry is the payment's only posting: `APPaymentPostingService` skips
+  `CASH`, and no `AP_PAYMENT:<paymentId>` entry ever exists for it. The payment is created even before the vendor copy
+  holds the vendor (fact ordering): pos-order validated the vendor (S16); the name is taken from the copy when present.
+  The vendor's bill, once approved (S12/S13), is allocated to the payment with
+  `POST /v1/accounting/ap/payments/{paymentId}/allocations` (`accounting:ap:pay`; body `{requestId, allocations:
+  [{vendorBillId, appliedAmount}]}`), which **posts nothing** (AP was debited at close and credited at approval; the
+  allocation matches the subledger): 200 with the payment, `unappliedAmount` reduced; idempotent on `requestId` (a
+  replay with the same lines answers the same payment, another body 409 `IDEMPOTENCY_CONFLICT`); 400
+  `VALIDATION_ERROR` for a bill of another vendor, not `APPROVED`, over its open amount or a total above the unapplied
+  amount; 403 `AP_PAYMENT_SELF_APPROVED_BILL` when the caller approved a bill (approver ≠ payer on every allocation,
+  AW6.2); 404; 422 `AP_PAYMENT_NOT_ALLOCATABLE` when the payment is not `CASH` or nothing is unapplied; a bill named
+  twice is 400. The pay command refuses `CASH` (422 `AP_PAYMENT_METHOD_NOT_SUPPORTED`): the close posting is the only
+  way a cash payment is made. Before this half, a `VENDOR_COD` movement was skipped and counted on
+  `accounting.cash_movement.unposted{reason=VENDOR_COD}`; pos-order refused the reason until then (#2576), so no
+  stored close fact carries one and no backfill is needed.
 - **Metrics** — `accounting.cash_movement.posted{reason}` and `accounting.cash_movement.unposted{reason}`, counted
   after commit. Any `unposted` increment must alert (operations configuration).
 
@@ -1848,6 +1859,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_PAYMENT_SELF_APPROVED_BILL` | 403 | The payer approved a bill the payment would pay; `fieldErrors[selfApprovedBillNumbers]` name them; nothing is paid (#2510) |
 | `AP_PAYMENT_METHOD_NOT_SUPPORTED` | 422 | An AP payment by `CREDIT_CARD` or `OTHER`: no funding account is modelled for them (OI-17); refused first, before the gateway (#2603) |
 | `AP_PAYMENT_NOT_RETRYABLE` | 409 | `gl-posting-retry` of an AP payment that is not `GL_POST_FAILED` (already posted, pending, or a gateway state) (#2603) |
+| `AP_PAYMENT_NOT_ALLOCATABLE` | 422 | `POST /ap/payments/{id}/allocations` of a payment that is not a drawer cash-on-delivery (`CASH`) payment, or has nothing unapplied (S17, #2513) |
+| `IDEMPOTENCY_CONFLICT` | 409 | A `requestId` of `POST /ap/payments/{id}/allocations` was used before with another body (S17, #2513); the cash-setup commands answer the same code for theirs |
 | `LOCK_TIMEOUT` | 409 | A row lock waited beyond `accounting.ap.lock-timeout` on the AP pay command, its retry or a vendor-bill decision: another request is working on these bills (a neutral message on other paths); the transaction rolled back, retry (#2627) |
 | `UNAUTHENTICATED` | 401 | No usable authentication on the request |
 | `FORBIDDEN` | 403 | Caller lacks the required permission |

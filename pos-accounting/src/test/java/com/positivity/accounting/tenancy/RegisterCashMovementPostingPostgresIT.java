@@ -333,14 +333,37 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
 
         asTenant(tenant, () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), fact)));
 
+        // #2513 COD half (AW41): the payout credits 1095 too, debits 2000 and leaves a CASH AP payment behind.
         List<Map<String, Object>> lines = lines(tenant);
-        assertThat(net(lines, "1095")).isEqualByComparingTo("-43.00");
+        assertThat(net(lines, "1095")).isEqualByComparingTo("-188.00");
         assertThat(net(lines, "6340")).isEqualByComparingTo("40.00");
         assertThat(net(lines, "6040")).isEqualByComparingTo("3.00");
-        assertThat(lines).noneMatch(line -> "2000".equals(line.get("account_code")));
-        assertThat(entryCount(tenant)).isEqualTo(2);
+        assertThat(net(lines, "2000")).isEqualByComparingTo("145.00");
+        assertThat(entryCount(tenant)).isEqualTo(3);
+        List<Map<String, Object>> payments = new JdbcTemplate(ownerDataSource())
+                .queryForList(
+                        "SELECT payment_method, status, gross_amount, unapplied_amount, fee_amount, currency,"
+                                + " register_session_id, cash_movement_id, gl_journal_entry_id, bank_account_id"
+                                + " FROM ap_payment WHERE tenant_id = ?",
+                        tenant);
+        assertThat(payments).hasSize(1);
+        Map<String, Object> payment = payments.getFirst();
+        assertThat(payment.get("payment_method")).isEqualTo("CASH");
+        assertThat(payment.get("status")).isEqualTo("GL_POSTED");
+        assertThat((BigDecimal) payment.get("gross_amount")).isEqualByComparingTo("145.00");
+        assertThat((BigDecimal) payment.get("unapplied_amount")).isEqualByComparingTo("145.00");
+        assertThat((BigDecimal) payment.get("fee_amount")).isEqualByComparingTo("0");
+        assertThat(payment.get("currency")).isEqualTo("USD");
+        assertThat(payment.get("register_session_id")).isEqualTo(session);
+        assertThat(payment.get("gl_journal_entry_id")).isNotNull();
+        assertThat(payment.get("bank_account_id")).isNull();
+        // Its entry is the close entry: no AP_PAYMENT:<id> posting exists or ever will (APPaymentPostingService skips
+        // CASH).
         assertThat(new JdbcTemplate(ownerDataSource())
-                        .queryForObject("SELECT count(*) FROM ap_payment WHERE tenant_id = ?", Integer.class, tenant))
+                        .queryForObject(
+                                "SELECT count(*) FROM journal_entry WHERE tenant_id = ? AND source_event_type = 'AP_PAYMENT'",
+                                Integer.class,
+                                tenant))
                 .isZero();
     }
 

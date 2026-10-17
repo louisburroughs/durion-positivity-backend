@@ -103,7 +103,9 @@ public class ExecuteAPPaymentRequest {
     @NonNull
     @NotNull(message = "Payment method is required")
     @Schema(
-            description = "Payment method (ACH, CHECK, WIRE, CREDIT_CARD, OTHER)",
+            description = "Payment method: ACH, CHECK or WIRE. CREDIT_CARD and OTHER are refused (422"
+                    + " AP_PAYMENT_METHOD_NOT_SUPPORTED), and so is CASH: a cash payment is created by the session-close"
+                    + " posting of a drawer cash-on-delivery movement, never by this command (S17)",
             example = "ACH",
             requiredMode = Schema.RequiredMode.REQUIRED)
     @JsonProperty("paymentMethod")

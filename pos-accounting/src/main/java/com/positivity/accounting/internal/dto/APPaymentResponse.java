@@ -73,6 +73,15 @@ public class APPaymentResponse {
     @JsonProperty("bankAccountId")
     private UUID bankAccountId;
 
+    @Schema(description = "How the vendor was paid; CASH is a drawer cash-on-delivery payment (S17)", example = "ACH")
+    private com.positivity.accounting.internal.enums.PaymentMethod paymentMethod;
+
+    @Schema(description = "For a CASH payment: the register session whose close created it (S17)")
+    private UUID registerSessionId;
+
+    @Schema(description = "For a CASH payment: the VENDOR_COD drawer movement it came from (S17)")
+    private UUID cashMovementId;
+
     @Nullable
     @Schema(
             description =

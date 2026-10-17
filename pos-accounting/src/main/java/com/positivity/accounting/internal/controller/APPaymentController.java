@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.controller;
 
 import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
+import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ApPayFromAccountListResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
@@ -288,6 +289,61 @@ public class APPaymentController {
                     APPaymentGLPostingRetryRequest request) {
         String override = request == null ? null : request.getOverrideJustification();
         return ResponseEntity.ok(apPaymentService.retryGLPosting(paymentId, override));
+    }
+
+    @PostMapping("/payments/{paymentId}/allocations")
+    @EmitEvent(id = "ACCOUNTING_AP_PAYMENT_ALLOCATE", apiVersion = "1")
+    @Operation(
+            operationId = "allocateApPayment",
+            summary = "Allocate a cash-on-delivery AP payment to the vendor's approved bills",
+            description = """
+                    Use when a vendor paid cash on delivery from a register drawer (an AP payment with method CASH, \
+                    created at session close, CAP:550 S17) and the vendor's bill has since been approved: apply the \
+                    payment's unapplied amount to one or more of that vendor's APPROVED bills.
+                    Preconditions: the payment exists, its method is CASH and something of it is unapplied; every \
+                    bill is APPROVED, belongs to the payment's vendor and has at least the applied amount open; the \
+                    caller did not approve any of the bills (approver is not payer, AW6.2); the lines total at most \
+                    the unapplied amount.
+                    Required inputs: paymentId (UUID) as a path parameter; requestId (UUID, caller-minted) and \
+                    allocations[] {vendorBillId, appliedAmount} in the body.
+                    Emits an ACCOUNTING_AP_PAYMENT_ALLOCATE event. Posts nothing: AP was debited at session close \
+                    and credited at bill approval, so the allocation only matches the subledger (AW41).
+                    Returns 200 with the payment (unappliedAmount reduced); a replay of the same requestId and \
+                    lines returns the same payment. 400 VALIDATION_ERROR for a bill of another vendor, an unapproved \
+                    bill, an amount above the bill's open amount or a total above the unapplied amount; 403 \
+                    AP_PAYMENT_SELF_APPROVED_BILL when the caller approved one of the bills; 404 when the payment \
+                    does not exist; 409 IDEMPOTENCY_CONFLICT when the requestId was used with another body; 422 \
+                    AP_PAYMENT_NOT_ALLOCATABLE when the payment is not CASH or nothing of it is unapplied.
+                    """,
+            tags = {"AP Payments"})
+    @ApiResponse(responseCode = "200", description = "Allocated; the payment with its unapplied amount reduced")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: a bill of another vendor, not approved, over its open amount, or a"
+                    + " total above the unapplied amount",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "AP_PAYMENT_SELF_APPROVED_BILL: the caller approved one of the bills",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "The payment does not exist",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "IDEMPOTENCY_CONFLICT: the requestId was used with another body",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "AP_PAYMENT_NOT_ALLOCATABLE: not a CASH payment, or nothing unapplied",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
+    public ResponseEntity<APPaymentResponse> allocateApPayment(
+            @Parameter(description = "AP payment id", required = true) @PathVariable @NonNull UUID paymentId,
+            @Valid @RequestBody @NonNull AllocateAPPaymentRequest request) {
+        String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        return ResponseEntity.ok(apPaymentService.allocateCashPayment(paymentId, request, currentUser));
     }
 
     @GetMapping("/payments/{paymentId}")

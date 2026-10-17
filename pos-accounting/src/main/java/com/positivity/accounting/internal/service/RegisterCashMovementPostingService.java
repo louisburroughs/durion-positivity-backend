@@ -1,9 +1,14 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.RegisterCashMovementTaxRecovery;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.RegisterSessionContractViolationException;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.RegisterCashMovementTaxRecoveryRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
@@ -50,16 +55,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *       (US)"). When a stated regime's tax is recovered (S32d item 9, {@link PettyExpenseRecoveryDecider}), {@code Dr
  *       INPUT_TAX_<regime>} takes the recovered part and the expense the rest; each stated regime's outcome is kept in
  *       {@code register_cash_movement_tax_recovery} with the supplier's number as the claim's evidence. A category deactivated after the movement was recorded still resolves: its mapping key stays.
- *   <li>{@code VENDOR_COD}: <b>not posted yet</b>. Its posting (Dr {@code ACCOUNTS_PAYABLE} / Cr {@code CASH_CLEARING}
- *       plus an AP payment with method {@code CASH}) is the vendor cash on delivery half of #2513, which waits on the
- *       vendor copy (S24, #2517) and the pay guard (S13, #2510); pos-order refuses the reason until then (#2576). A
- *       COD movement that arrives anyway is <b>skipped</b>: logged at ERROR and counted on {@value
- *       #UNPOSTED_METRIC}{@code {reason=VENDOR_COD}}, which must alert, since the cash left the drawer and 1095 does
- *       not show it. Nothing about it is registered. <b>Recovery is a backfill, never a redelivery:</b> every consumed
- *       close fact is stored whole as its {@code accounting_event} row's {@code payload}, so the COD half selects the
- *       {@code VENDOR_COD} movement ids of {@code payload.movements} that have no registered posting key and posts
- *       them. A redelivered fact cannot do it: pos-order's manifest replay (#2579) re-sends a close fact under its
- *       original envelope id, which {@code processed_events} drops, and pos-order has no other re-emit of it.
+ *   <li>{@code VENDOR_COD} (#2513 COD half, AW41): {@code Dr ACCOUNTS_PAYABLE / Cr CASH_CLEARING} (1095) for the
+ *       movement's amount, and in the same transaction an AP payment with method {@code CASH} (gross = unapplied =
+ *       the amount, {@code GL_POSTED}, linked to the entry), to which the vendor's approved bill is allocated later
+ *       ({@code POST /v1/accounting/ap/payments/{id}/allocations}, which posts nothing). Before this half, the
+ *       movement was skipped and counted unposted (PR #2592); pos-order refused the reason until then (#2576).
  *   <li>{@code BANK_DROP}, {@code FLOAT_INCREASE}, {@code FLOAT_DECREASE}: nothing at close (the deposit, S18,
  *       {@link UndepositedSessionProjection}; Change float, S15).
  *   <li>No reason (recorded before S16) or a reason this module does not know: nothing, logged and counted as {@code
@@ -96,6 +96,10 @@ public class RegisterCashMovementPostingService {
     static final String POSTING_CATEGORY_NAME = "REGISTER_CASH_MOVEMENT";
     static final String PETTY_EXPENSE_KEY_PREFIX = "PETTY_EXPENSE_";
     static final String CASH_CLEARING_KEY = "CASH_CLEARING";
+    static final String ACCOUNTS_PAYABLE_KEY = "ACCOUNTS_PAYABLE";
+    /** The {@code paymentRef} of a cash-on-delivery payment: the movement names it, so a replay cannot mint two. */
+    static final String COD_PAYMENT_REF_PREFIX = "COD-";
+
     static final String IDEMPOTENCY_KEY_PREFIX = "REGISTER_CASH_MOVEMENT_GL_POSTING:";
     static final String SOURCE_EVENT_NAMESPACE = "REGISTER_CASH_MOVEMENT:";
 
@@ -110,7 +114,7 @@ public class RegisterCashMovementPostingService {
     static final String POSTED_METRIC = "accounting.cash_movement.posted";
 
     /**
-     * Movements left unposted that cash did leave the drawer for, by reason: {@code VENDOR_COD}, {@code UNCLASSIFIED}.
+     * Movements left unposted that cash did leave the drawer for, by reason: {@code UNCLASSIFIED}.
      * Any increment must alert: 1095 then misses cash that left the drawer.
      */
     static final String UNPOSTED_METRIC = "accounting.cash_movement.unposted";
@@ -121,8 +125,8 @@ public class RegisterCashMovementPostingService {
     enum Disposition {
         /** Posts at close: Dr {@code PETTY_EXPENSE_<categoryCode>} / Cr {@code CASH_CLEARING}. */
         POST_PETTY_EXPENSE,
-        /** The vendor cash on delivery half of #2513 is not built: skipped at ERROR, backfilled by that half. */
-        SKIP_VENDOR_COD,
+        /** Posts at close: Dr {@code ACCOUNTS_PAYABLE} / Cr {@code CASH_CLEARING}, and creates the {@code CASH} AP payment. */
+        POST_VENDOR_COD,
         /** Posts nothing at close by design: a bank drop or a float change. */
         NOTHING_AT_CLOSE,
         /** No reason (recorded before S16) or one this module does not know: not posted. */
@@ -138,6 +142,8 @@ public class RegisterCashMovementPostingService {
     private final JournalEntryRepository journalEntryRepository;
     private final PettyExpenseRecoveryDecider recoveryDecider;
     private final RegisterCashMovementTaxRecoveryRepository taxRecoveries;
+    private final APPaymentRepository apPaymentRepository;
+    private final SupplierVendorCopies vendorCopies;
     private final Clock clock;
     private final @Nullable MeterRegistry meterRegistry;
 
@@ -151,6 +157,8 @@ public class RegisterCashMovementPostingService {
             JournalEntryRepository journalEntryRepository,
             PettyExpenseRecoveryDecider recoveryDecider,
             RegisterCashMovementTaxRecoveryRepository taxRecoveries,
+            APPaymentRepository apPaymentRepository,
+            SupplierVendorCopies vendorCopies,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.zoneResolver = zoneResolver;
@@ -162,6 +170,8 @@ public class RegisterCashMovementPostingService {
         this.journalEntryRepository = journalEntryRepository;
         this.recoveryDecider = recoveryDecider;
         this.taxRecoveries = taxRecoveries;
+        this.apPaymentRepository = apPaymentRepository;
+        this.vendorCopies = vendorCopies;
         this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
@@ -173,7 +183,7 @@ public class RegisterCashMovementPostingService {
         }
         return switch (reason) {
             case PETTY_EXPENSE -> Disposition.POST_PETTY_EXPENSE;
-            case VENDOR_COD -> Disposition.SKIP_VENDOR_COD;
+            case VENDOR_COD -> Disposition.POST_VENDOR_COD;
             case BANK_DROP, FLOAT_INCREASE, FLOAT_DECREASE -> Disposition.NOTHING_AT_CLOSE;
             default -> Disposition.UNCLASSIFIED;
         };
@@ -181,13 +191,14 @@ public class RegisterCashMovementPostingService {
 
     /**
      * What closing the session posts to {@code CASH_CLEARING} (1095) for {@code movement}, signed debit positive
-     * (CAP:550 S18, #2514): a petty expense credits its amount, every other reason posts nothing to it at close. The
-     * undeposited-sessions read model adds the over/short to the sum of these for a session's clearing net, the part
-     * of 1095 its deposit clears, so a reason that starts posting at close (the vendor cash on delivery half of #2513)
-     * must change this too.
+     * (CAP:550 S18, #2514): a petty expense and a vendor cash-on-delivery payout each credit their amount (#2513, both
+     * halves), every other reason posts nothing to it at close. The undeposited-sessions read model adds the
+     * over/short to the sum of these for a session's clearing net, the part of 1095 its deposit clears.
      */
     static @NonNull BigDecimal clearingEffect(@NonNull Movement movement) {
-        if (dispositionOf(movement.reason()) != Disposition.POST_PETTY_EXPENSE || movement.amount() == null) {
+        Disposition disposition = dispositionOf(movement.reason());
+        boolean credits = disposition == Disposition.POST_PETTY_EXPENSE || disposition == Disposition.POST_VENDOR_COD;
+        if (!credits || movement.amount() == null) {
             return BigDecimal.ZERO;
         }
         return movement.amount().negate();
@@ -213,8 +224,7 @@ public class RegisterCashMovementPostingService {
         List<Movement> toPost = new ArrayList<>();
         for (Movement movement : movements) {
             switch (dispositionOf(movement.reason())) {
-                case POST_PETTY_EXPENSE -> toPost.add(movement);
-                case SKIP_VENDOR_COD -> skipVendorCashOnDelivery(fact, movement);
+                case POST_PETTY_EXPENSE, POST_VENDOR_COD -> toPost.add(movement);
                 case NOTHING_AT_CLOSE ->
                     log.debug(
                             "Drawer movement posts nothing at close | sessionId={} | movementId={} | reason={}",
@@ -260,7 +270,9 @@ public class RegisterCashMovementPostingService {
         requireDistinctIds(fact, pending);
         UUID firstPosted = null;
         for (Movement movement : pending) {
-            UUID posted = postPettyExpense(fact, movement, transactionDate);
+            UUID posted = dispositionOf(movement.reason()) == Disposition.POST_VENDOR_COD
+                    ? postVendorCashOnDelivery(fact, movement, transactionDate)
+                    : postPettyExpense(fact, movement, transactionDate);
             idempotencyService.registerKey(IDEMPOTENCY_KEY_PREFIX + movement.movementId(), posted);
             countAfterCommit(POSTED_METRIC, movement.reason());
             firstPosted = firstPosted == null ? posted : firstPosted;
@@ -410,22 +422,89 @@ public class RegisterCashMovementPostingService {
      * ({@link RegisterSessionContractViolationException}, recorded {@code FAILED / VALIDATION_ERROR}, #2594).
      */
     private static Movement requirePostable(RegisterSessionClosedV1 fact, Movement movement) {
+        boolean cod = dispositionOf(movement.reason()) == Disposition.POST_VENDOR_COD;
         String problem = null;
         if (movement.movementId() == null) {
             // Its posting key and source event would be shared with every other movement without one.
             problem = "no movementId";
         } else if (!Movement.OUT.equals(movement.direction())) {
-            problem = "direction " + movement.direction() + " (a petty expense is OUT)";
-        } else if (movement.categoryCode() == null || movement.categoryCode().isBlank()) {
+            problem = "direction " + movement.direction() + " (" + (cod ? "a vendor payout" : "a petty expense")
+                    + " is OUT)";
+        } else if (!cod
+                && (movement.categoryCode() == null || movement.categoryCode().isBlank())) {
             problem = "no categoryCode";
+        } else if (cod && movement.vendorId() == null) {
+            problem = "no vendorId";
         } else if (movement.amount() == null || movement.amount().signum() <= 0) {
             problem = "amount " + movement.amount() + " (must be positive)";
         }
         if (problem != null) {
-            throw new RegisterSessionContractViolationException("Petty-expense movement " + movement.movementId()
-                    + " of session " + fact.sessionId() + " cannot post: " + problem);
+            throw new RegisterSessionContractViolationException(label(movement) + movement.movementId() + " of session "
+                    + fact.sessionId() + " cannot post: " + problem);
         }
         return movement;
+    }
+
+    /**
+     * The vendor cash-on-delivery half of #2513 (Accounting ruling AW41): Dr {@code ACCOUNTS_PAYABLE} (2000) / Cr
+     * {@code CASH_CLEARING} (1095) for the movement's amount, and in the same transaction an AP payment with method
+     * {@code CASH}, gross = unapplied = the amount, fee 0, the ledger currency, dated the session's close, status
+     * {@code GL_POSTED} and linked to that entry. The close entry is the payment's only posting: {@code
+     * APPaymentPostingService} skips {@code CASH}. The payment is created even when the vendor copy does not hold the
+     * vendor yet (fact ordering): pos-order validated the vendor (S16), and the name is filled from the copy when
+     * present. One movement makes one payment ({@code uq_ap_payment_cash_movement}).
+     */
+    private UUID postVendorCashOnDelivery(
+            RegisterSessionClosedV1 fact, Movement movement, LocalDateTime transactionDate) {
+        UUID payableAccountId = resolve(ACCOUNTS_PAYABLE_KEY, transactionDate);
+        UUID clearingAccountId = resolve(CASH_CLEARING_KEY, transactionDate);
+        String vendorName = vendorCopies
+                .find(movement.vendorId())
+                .map(ExtSupplierVendor::getDisplayName)
+                .orElse(null);
+        String description =
+                "Drawer cash on delivery to vendor " + (vendorName != null ? vendorName : movement.vendorId())
+                        + " " + movement.amount().toPlainString() + " " + movement.currencyCode() + ", register "
+                        + fact.terminalId() + ", session closed " + fact.closedAt();
+        String lineLabel = abbreviate("Drawer cash on delivery, register " + fact.terminalId());
+        UUID posted = glPostingService.postRegisterCashMovement(
+                toSourceEventId(movement.movementId()),
+                payableAccountId,
+                clearingAccountId,
+                movement.amount(),
+                transactionDate,
+                abbreviate(description),
+                lineLabel,
+                dimensions(fact));
+
+        APPayment payment = new APPayment();
+        payment.setPaymentRef(COD_PAYMENT_REF_PREFIX + movement.movementId());
+        payment.setVendorId(movement.vendorId());
+        payment.setVendorName(vendorName);
+        payment.setGrossAmount(movement.amount());
+        payment.setFeeAmount(BigDecimal.ZERO);
+        payment.setUnappliedAmount(movement.amount());
+        payment.setCurrency(ledgerCurrency.code());
+        payment.setPaymentMethod(PaymentMethod.CASH);
+        payment.setPaymentDate(transactionDate.toLocalDate());
+        payment.setStatus(APPaymentStatus.GL_POSTED);
+        payment.setGlJournalEntry(journalEntryRepository.getReferenceById(posted));
+        payment.setGlPostedAt(Instant.now(clock));
+        payment.setRegisterSessionId(fact.sessionId());
+        payment.setCashMovementId(movement.movementId());
+        payment.setMemo(
+                abbreviate("Cash on delivery paid from register " + fact.terminalId() + " by " + movement.clerkId()));
+        // ap_payment.created_by is varchar(50); pos-order's clerk id is unbounded. The memo keeps the whole id.
+        payment.setCreatedBy(fit(movement.clerkId(), CREATED_BY_MAX));
+        payment.setCreatedAt(Instant.now(clock));
+        apPaymentRepository.save(payment);
+        log.info(
+                "Vendor cash on delivery posted | sessionId={} | movementId={} | vendorId={} | journalEntryId={}",
+                fact.sessionId(),
+                movement.movementId(),
+                movement.vendorId(),
+                posted);
+        return posted;
     }
 
     /**
@@ -436,10 +515,17 @@ public class RegisterCashMovementPostingService {
         Set<UUID> seen = new HashSet<>();
         for (Movement movement : pending) {
             if (!seen.add(movement.movementId())) {
-                throw new RegisterSessionContractViolationException("Petty-expense movement " + movement.movementId()
+                throw new RegisterSessionContractViolationException(label(movement) + movement.movementId()
                         + " of session " + fact.sessionId() + " cannot post: the fact names it more than once");
             }
         }
+    }
+
+    /** How a contract violation names the movement: by what it would have posted as. */
+    private static String label(Movement movement) {
+        return dispositionOf(movement.reason()) == Disposition.POST_VENDOR_COD
+                ? "Vendor cash-on-delivery movement "
+                : "Petty-expense movement ";
     }
 
     private boolean inForeignCurrency(RegisterSessionClosedV1 fact, List<Movement> toPost) {
@@ -482,26 +568,6 @@ public class RegisterCashMovementPostingService {
                 ledgerCurrency.code(),
                 toPost.size(),
                 recorded);
-    }
-
-    /**
-     * The COD half of #2513 is not built: the movement is skipped, at ERROR, and counted on {@value #UNPOSTED_METRIC}
-     * {@code {reason=VENDOR_COD}}, which must alert. Cash left the drawer and 1095 does not show it until the COD half
-     * backfills the movement from the stored close fact (see the class doc).
-     */
-    private void skipVendorCashOnDelivery(RegisterSessionClosedV1 fact, Movement movement) {
-        log.error(
-                "Vendor cash on delivery NOT POSTED: its AP payment posting is not built yet (#2513 COD half; pos-order"
-                        + " keeps the reason off until then, #2576). The COD half backfills it from this fact's"
-                        + " accounting_event payload | sessionId={} | terminalId={} | movementId={} | vendorId={}"
-                        + " | amount={} {}",
-                fact.sessionId(),
-                fact.terminalId(),
-                movement.movementId(),
-                movement.vendorId(),
-                movement.amount(),
-                movement.currencyCode());
-        countAfterCommit(UNPOSTED_METRIC, VENDOR_COD);
     }
 
     private void leaveUnclassified(RegisterSessionClosedV1 fact, Movement movement) {
@@ -548,6 +614,13 @@ public class RegisterCashMovementPostingService {
         } else {
             counter.increment();
         }
+    }
+
+    /** The longest {@code ap_payment.created_by} (varchar(50)). */
+    static final int CREATED_BY_MAX = 50;
+
+    private static String fit(String text, int max) {
+        return text.length() <= max ? text : text.substring(0, max);
     }
 
     private static String abbreviate(String text) {
