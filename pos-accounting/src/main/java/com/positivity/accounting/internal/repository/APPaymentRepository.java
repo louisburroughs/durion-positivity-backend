@@ -40,15 +40,16 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
 
     /**
      * Unapplied AP payment totals per vendor: payments in {@code currency} whose status is not in {@code excluded} and
-     * whose unapplied amount is above zero.
+     * whose unapplied amount is above zero and whose payment date is on or before {@code asOfDate}.
      */
     @Query("SELECT p.vendorId AS vendorId, MAX(p.vendorName) AS vendorName, SUM(p.unappliedAmount) AS unapplied"
             + " FROM APPayment p WHERE p.unappliedAmount > 0 AND p.currency = :currency"
-            + " AND p.status NOT IN :excluded GROUP BY p.vendorId")
+            + " AND p.status NOT IN :excluded AND p.paymentDate <= :asOfDate GROUP BY p.vendorId")
     @NonNull
     List<VendorUnappliedSum> sumUnappliedByVendor(
             @Param("currency") @NonNull String currency,
-            @Param("excluded") @NonNull Collection<APPaymentStatus> excluded);
+            @Param("excluded") @NonNull Collection<APPaymentStatus> excluded,
+            @Param("asOfDate") @NonNull LocalDate asOfDate);
 
     /**
      * Find all payments for a vendor.

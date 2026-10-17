@@ -125,8 +125,8 @@ public class AgedPayablesReport {
      * totals.totalOutstanding + unappliedPayments.
      */
     @Schema(
-            description = "totals.totalOutstanding + unappliedPayments: the payables balance the ledger's 2000 "
-                    + "account carries for approved bills, credit notes and unapplied payments",
+            description = "totals.totalOutstanding + unappliedPayments: approved open bills less unapplied AP "
+                    + "payments only; credit notes and unapproved bills are not netted",
             example = "3900.00",
             requiredMode = REQUIRED)
     @NonNull

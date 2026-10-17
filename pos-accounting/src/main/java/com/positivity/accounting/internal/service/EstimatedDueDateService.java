@@ -18,11 +18,8 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,9 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class EstimatedDueDateService {
-
-    private static final Pattern NET = Pattern.compile("(?i)net ?([0-9]{1,3})");
-    private static final Pattern DUE_ON_RECEIPT = Pattern.compile("(?i)due[_ ]on[_ ]receipt");
 
     /** An estimated due date and the terms source behind it. */
     public record EstimatedDueDate(
@@ -100,14 +94,14 @@ public class EstimatedDueDateService {
             Objects.requireNonNull(bill.getBillDate(), "bill date");
             LocalDate billDate = bill.getBillDate().toLocalDate();
             OptionalInt days =
-                    parseDays(bill.getPurchaseOrderId() == null ? null : poTerms.get(bill.getPurchaseOrderId()));
+                    CashAndPayablesSettings.termsDays(bill.getPurchaseOrderId() == null ? null : poTerms.get(bill.getPurchaseOrderId()));
             TermsSource source = TermsSource.PURCHASE_ORDER;
             if (days.isEmpty()) {
-                days = parseDays(vendorTerms.get(bill.getVendorId()));
+                days = CashAndPayablesSettings.termsDays(vendorTerms.get(bill.getVendorId()));
                 source = TermsSource.VENDOR;
             }
             if (days.isEmpty()) {
-                days = parseDays(tenantDefault);
+                days = CashAndPayablesSettings.termsDays(tenantDefault);
                 source = TermsSource.TENANT_DEFAULT;
             }
             // The tenant default is validated on read and never null, so it always parses; the fallback is belt only.
@@ -115,24 +109,5 @@ public class EstimatedDueDateService {
             estimates.put(bill, new EstimatedDueDate(billDate.plusDays(n), source));
         }
         return estimates;
-    }
-
-    /** The days a terms text stands for; empty when it is null, blank or not in the accepted forms. */
-    static @NonNull OptionalInt parseDays(@Nullable String terms) {
-        if (terms == null) {
-            return OptionalInt.empty();
-        }
-        String value = terms.trim();
-        if (DUE_ON_RECEIPT.matcher(value).matches()) {
-            return OptionalInt.of(0);
-        }
-        Matcher net = NET.matcher(value);
-        if (net.matches()) {
-            int days = Integer.parseInt(net.group(1));
-            if (days >= 1 && days <= CashAndPayablesSettings.MAX_NET_DAYS) {
-                return OptionalInt.of(days);
-            }
-        }
-        return OptionalInt.empty();
     }
 }

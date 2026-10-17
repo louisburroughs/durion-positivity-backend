@@ -776,7 +776,7 @@ class FinancialReportingG2ServiceTest {
         when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(bill));
         when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
                 .thenReturn(List.of());
-        when(apPaymentRepository.sumUnappliedByVendor(eq("USD"), any()))
+        when(apPaymentRepository.sumUnappliedByVendor(eq("USD"), any(), eq(AS_OF)))
                 .thenReturn(List.of(
                         unappliedSum(vendorId, "Acme", "150.00"), unappliedSum(prepaidOnly, "Cod Vendor", "75.00")));
 
@@ -804,6 +804,26 @@ class FinancialReportingG2ServiceTest {
         assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("400.00");
         assertThat(report.getUnappliedPayments()).isEqualByComparingTo("-225.00");
         assertThat(report.getNetOwed()).isEqualByComparingTo("175.00");
+    }
+
+    @Test
+    @DisplayName("Aged AP: the unapplied-payment read is bounded by the report date, so a later payment is not netted"
+            + " (#2515)")
+    void agedPayablesNetsOnlyPaymentsUpToTheReportDate() {
+        UUID vendorId = UUID.randomUUID();
+        VendorBill bill = apBill(vendorId, "Acme", new BigDecimal("400.00"), AS_OF.minusDays(60), AS_OF.minusDays(10));
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(bill));
+        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
+                .thenReturn(List.of());
+        // The repository answers per the bound: nothing is dated on or before AS_OF; a later COD payment is excluded.
+        when(apPaymentRepository.sumUnappliedByVendor(eq("USD"), any(), eq(AS_OF)))
+                .thenReturn(List.of());
+
+        AgedPayablesReport report = service.generateAgedPayables(AS_OF);
+
+        assertThat(report.getRows().getFirst().getNetOwed()).isEqualByComparingTo("400.00");
+        assertThat(report.getNetOwed()).isEqualByComparingTo("400.00");
+        verify(apPaymentRepository).sumUnappliedByVendor(eq("USD"), any(), eq(AS_OF));
     }
 
     private static com.positivity.accounting.internal.repository.APPaymentRepository.VendorUnappliedSum unappliedSum(
