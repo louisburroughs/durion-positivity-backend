@@ -366,7 +366,11 @@ class OrderExceptionHandlerTest {
                         Named.of("handleInvalidRequest", (HandlerInvocation) request -> handler.handleInvalidRequest(
                                 new SalesOrderRequestValidationException("bad qty"), request)),
                         Named.of("handleAccessDenied", (HandlerInvocation)
-                                request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)));
+                                request -> handler.handleAccessDenied(new AccessDeniedException("denied"), request)),
+                        Named.of("handleTaxRefused", (HandlerInvocation) request -> handler.handleTaxRefused(
+                                new com.positivity.order.internal.exception.OrderTaxRefusedException(
+                                        "ORDER_TAX_CURRENCY_NOT_SUPPORTED", "CAD is not offered"),
+                                request)));
             }
 
             @ParameterizedTest

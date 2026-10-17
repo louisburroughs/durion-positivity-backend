@@ -45,12 +45,15 @@ public class RestTaxPortAdapter implements TaxPort {
                         if (translated == null) {
                             // Any other 422 keeps the client's previous behaviour: the status exception with its body.
                             throw HttpClientErrorException.create(
-                                    res.getStatusCode(), res.getStatusText(), res.getHeaders(), body, StandardCharsets.UTF_8);
+                                    res.getStatusCode(),
+                                    res.getStatusText(),
+                                    res.getHeaders(),
+                                    body,
+                                    StandardCharsets.UTF_8);
                         }
-                            throw new OrderTaxRefusedException(
-                                    translated,
-                                    "pos-tax refused the calculation for " + request.getCurrencyCode() + ": "
-                                            + translated);
+                        throw new OrderTaxRefusedException(
+                                translated,
+                                "pos-tax refused the calculation for " + request.getCurrencyCode() + ": " + translated);
                     })
                     .body(TaxCalculationResponse.class);
             return Optional.ofNullable(response);
@@ -61,5 +64,4 @@ public class RestTaxPortAdapter implements TaxPort {
             return Optional.empty();
         }
     }
-
 }

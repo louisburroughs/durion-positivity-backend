@@ -130,13 +130,17 @@ public class TaxServiceClient {
                     if (translated == null) {
                         // Any other 422 keeps the client's previous behaviour: the status exception with its body.
                         throw HttpClientErrorException.create(
-                                res.getStatusCode(), res.getStatusText(), res.getHeaders(), body, StandardCharsets.UTF_8);
+                                res.getStatusCode(),
+                                res.getStatusText(),
+                                res.getHeaders(),
+                                body,
+                                StandardCharsets.UTF_8);
                     }
-                        throw new InvoiceTaxRefusedException(
-                                translated,
-                                "pos-tax refused the calculation for " + request.getCurrencyCode() + " at "
-                                        + destination.getCountryCode() + "/" + destination.getPostalCode()
-                                        + ": " + translated);
+                    throw new InvoiceTaxRefusedException(
+                            translated,
+                            "pos-tax refused the calculation for " + request.getCurrencyCode() + " at "
+                                    + destination.getCountryCode() + "/" + destination.getPostalCode()
+                                    + ": " + translated);
                 })
                 .body(TaxCalculationResponse.class);
 
@@ -146,7 +150,6 @@ public class TaxServiceClient {
 
         return response;
     }
-
 
     @NonNull
     private BigDecimal safeMoney(@Nullable BigDecimal value, @NonNull BigDecimal fallback) {

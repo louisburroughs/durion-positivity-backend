@@ -43,11 +43,15 @@ public class TaxClient {
                     if (translated == null) {
                         // Any other 422 keeps the client's previous behaviour: the status exception with its body.
                         throw HttpClientErrorException.create(
-                                res.getStatusCode(), res.getStatusText(), res.getHeaders(), body, StandardCharsets.UTF_8);
+                                res.getStatusCode(),
+                                res.getStatusText(),
+                                res.getHeaders(),
+                                body,
+                                StandardCharsets.UTF_8);
                     }
-                        throw new EstimateTaxRefusedException(
-                                translated,
-                                "pos-tax refused the calculation for " + request.getCurrencyCode() + ": " + translated);
+                    throw new EstimateTaxRefusedException(
+                            translated,
+                            "pos-tax refused the calculation for " + request.getCurrencyCode() + ": " + translated);
                 })
                 .body(TaxCalculationResponse.class);
 
@@ -57,5 +61,4 @@ public class TaxClient {
 
         return response;
     }
-
 }
