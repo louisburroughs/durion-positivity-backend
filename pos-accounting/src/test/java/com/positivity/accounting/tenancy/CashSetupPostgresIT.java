@@ -258,6 +258,9 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                 .extracting(e -> ((CashSetupException) e).getCode())
                 .isEqualTo(CashSetupException.Code.FLOAT_REVERSAL_NOT_REVERSIBLE);
         assertThat(entryCount(tenant)).isEqualTo(beforeReReversal);
+        assertThat(asTenant(tenant, () -> journalEntries.getJournalEntry(goLiveReversal).getStatus()))
+                .as("the refused reversal entry is still POSTED, not flipped to REVERSED")
+                .isEqualTo(com.positivity.accounting.internal.enums.JournalEntryStatus.POSTED);
         assertThat(asTenant(
                         tenant,
                         () -> floatRows.findByRegisterId("T-1").orElseThrow().getAmount()))

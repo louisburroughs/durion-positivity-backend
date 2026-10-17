@@ -65,6 +65,8 @@ public class RegisterFloatController {
                     period, with no override path (422 PERIOD_CLOSED or PERIOD_HARD_LOCKED otherwise); the \
                     register has no standing go-live and no standing float change (409 \
                     FLOAT_ALREADY_ESTABLISHED; correct a mistake by reversing the entry and running go-live \
+                    again; the reversal itself is final (409 FLOAT_REVERSAL_NOT_REVERSIBLE): never reverse it, run \
+                    the go-live or change-float command \
                     again). Idempotent on requestId: a replay returns the first result with 200, another body \
                     with the same requestId is 409 IDEMPOTENCY_CONFLICT.
                     Required inputs: registerId (path, pos-order's terminalId), locationId, amount (more than \

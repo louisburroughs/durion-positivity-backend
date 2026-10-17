@@ -478,7 +478,8 @@ public class JournalEntryController {
     @ApiResponse(
             responseCode = "409",
             description = "Entry is already reversed (JE_ALREADY_REVERSED), not yet posted (JE_NOT_POSTED), a"
-                    + " register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE) or a bank deposit's reversal"
+                    + " register float relocation entry (FLOAT_RELOCATION_NOT_REVERSIBLE), the reversal of a register"
+                    + " float go-live or change entry (FLOAT_REVERSAL_NOT_REVERSIBLE) or a bank deposit's reversal"
                     + " entry (DEPOSIT_REVERSAL_NOT_REVERSIBLE)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(

@@ -347,6 +347,29 @@ class JournalEntryControllerTest extends BaseIntegrationTest {
         }
 
         @Test
+        @DisplayName("#2607: a register float reversal entry answers 409 FLOAT_REVERSAL_NOT_REVERSIBLE, guided")
+        void reverse_floatReversalEntry_returns409NotReversible() throws Exception {
+            when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))
+                    .thenThrow(new com.positivity.accounting.internal.exception.CashSetupException(
+                            com.positivity.accounting.internal.exception.CashSetupException.Code
+                                    .FLOAT_REVERSAL_NOT_REVERSIBLE,
+                            "Journal entry " + ENTRY_ID + " reverses a float entry of register T-1 and is never"
+                                    + " reversed itself; set the float again instead",
+                            "T-1",
+                            "Run the go-live or change-float command again"));
+
+            mockMvc.perform(withAuth(post("/v1/accounting/journal-entries/{id}/reverse", ENTRY_ID))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(reversalBody(null)))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.code").value("FLOAT_REVERSAL_NOT_REVERSIBLE"))
+                    .andExpect(jsonPath("$.status").value(409))
+                    .andExpect(jsonPath("$.referenceId").value("T-1"))
+                    .andExpect(jsonPath("$.nextAction").value("Run the go-live or change-float command again"))
+                    .andExpect(jsonPath("$.correlationId").exists());
+        }
+
+        @Test
         @DisplayName("CAP:550 S18 (#2514): a bank deposit's reversal entry answers 409 DEPOSIT_REVERSAL_NOT_REVERSIBLE")
         void reverse_depositReversalEntry_returns409NotReversible() throws Exception {
             when(journalEntryService.reverseJournalEntry(eq(ENTRY_ID), eq(REASON), isNull(), isNull()))
