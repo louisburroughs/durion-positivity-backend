@@ -266,7 +266,7 @@ class VendorFeedMappingServiceImplTest {
         assertThat(response.getNote()).isEqualTo("moved");
         verify(suggestions)
                 .updateVendorIdForFeedVendor(
-                        eq(SuggestedVendorType.DISTRIBUTOR), eq("D1"), anyCollection(), eq(OTHER_VENDOR_ID), eq(NOW));
+                        eq(SuggestedVendorType.DISTRIBUTOR), eq("d1"), anyCollection(), eq(OTHER_VENDOR_ID), eq(NOW));
     }
 
     @Test
@@ -411,8 +411,8 @@ class VendorFeedMappingServiceImplTest {
         Map<String, ResolvedFeedVendor> resolved =
                 service.resolveAll(FeedVendorType.DISTRIBUTOR, List.of("D1", " D2", "D3"));
 
-        assertThat(resolved).containsOnlyKeys("D1");
-        assertThat(resolved.get("D1").vendorId()).isEqualTo(VENDOR_ID);
+        assertThat(resolved).containsOnlyKeys("d1");
+        assertThat(resolved.get("d1").vendorId()).isEqualTo(VENDOR_ID);
     }
 
     @Test
@@ -466,11 +466,11 @@ class VendorFeedMappingServiceImplTest {
         assertThat(unmapped)
                 .extracting(UnmappedFeedVendorResponse::getFeedVendorRef, UnmappedFeedVendorResponse::getReason)
                 .containsExactly(
-                        org.assertj.core.api.Assertions.tuple("D-INACTIVE", "VENDOR_INACTIVE"),
-                        org.assertj.core.api.Assertions.tuple("D-MISSING", "VENDOR_NOT_IN_COPY"),
-                        org.assertj.core.api.Assertions.tuple("D-UNMAPPED", "UNMAPPED"));
+                        org.assertj.core.api.Assertions.tuple("d-inactive", "VENDOR_INACTIVE"),
+                        org.assertj.core.api.Assertions.tuple("d-missing", "VENDOR_NOT_IN_COPY"),
+                        org.assertj.core.api.Assertions.tuple("d-unmapped", "UNMAPPED"));
         assertThat(unmapped.stream()
-                        .filter(u -> u.getFeedVendorRef().equals("D-UNMAPPED"))
+                        .filter(u -> u.getFeedVendorRef().equals("d-unmapped"))
                         .findFirst()
                         .orElseThrow()
                         .getProductCount())
