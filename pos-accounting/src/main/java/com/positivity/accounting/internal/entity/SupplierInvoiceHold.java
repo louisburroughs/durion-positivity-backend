@@ -27,7 +27,8 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  * An EDI invoice fact that cannot become a bill yet (CAP:550 S24, #2517; SPEC-accounting-workspace §9.2 "stored
  * durably even when the bill can't be created yet"). Written with the fact's processed mark in the handler transaction,
  * so the fact is never dropped. A {@link Reason#VENDOR_NOT_IN_COPY} hold is released, through the same bill creation,
- * once the vendor is copied; a {@link Reason#VENDOR_ID_MISSING} hold waits for a person (S25 turns it into a draft).
+ * once the vendor is copied. A {@link Reason#VENDOR_ID_MISSING} hold is retired (CAP:550 S25): no fact takes it any more,
+ * and the open ones are converted once into bill drafts.
  */
 @Getter
 @Setter
@@ -41,7 +42,10 @@ public class SupplierInvoiceHold extends TenantScopedEntity {
 
     /** Why the fact is held. */
     public enum Reason {
-        /** The fact names no pos-supplier vendor; waits for a person (S25). */
+        /**
+         * Retired by S25 (#2518): a fact that names no vendor becomes a bill draft. Kept so stored rows still read; the
+         * open ones are converted once into drafts, released with {@code releasedIntakeId}.
+         */
         VENDOR_ID_MISSING,
         /** The fact names a vendor accounting has not copied yet; released when it is. */
         VENDOR_NOT_IN_COPY
@@ -83,6 +87,13 @@ public class SupplierInvoiceHold extends TenantScopedEntity {
     /** The bill the release created, or the original it was flagged against (S0). */
     @Column(name = "released_bill_id")
     private UUID releasedBillId;
+
+    /**
+     * The bill draft a {@link Reason#VENDOR_ID_MISSING} hold was converted into (CAP:550 S25); {@code releasedBillId}
+     * stays null for it.
+     */
+    @Column(name = "released_intake_id")
+    private UUID releasedIntakeId;
 
     /** ADR-0024: when the row was written first. */
     @CreatedDate

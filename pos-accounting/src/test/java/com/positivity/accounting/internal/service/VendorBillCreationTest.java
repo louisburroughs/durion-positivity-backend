@@ -10,6 +10,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.billintake.service.BillIntakePortImpl;
+import com.positivity.accounting.internal.billintake.service.TestBillIntakePorts;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.entity.AccountingSequence;
@@ -32,14 +34,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * Unit tests of goods-receipt bill creation in VendorBillServiceImpl: the per-tenant bill number, the vendor
+ * Unit tests of goods-receipt bill creation in BillIntakePortImpl (moved from VendorBillServiceImpl, S25 #2518): the per-tenant bill number, the vendor
  * copy (S24), and (AW37, #2509) that creation posts nothing: the bill posts once, at approval.
  */
 @ExtendWith(MockitoExtension.class)
@@ -89,8 +90,8 @@ class VendorBillCreationTest {
     /** The tenant's counter for the fixed clock's month, 2024-01, about to hand out 42. */
     private final AccountingSequence billCounter = new AccountingSequence();
 
-    @InjectMocks
-    private VendorBillServiceImpl vendorBillService;
+    /** The single writer of new bills (S25): the goods-receipt create lives in the port, over these mocks. */
+    private BillIntakePortImpl vendorBillService;
 
     private GoodsReceivedEvent testEvent;
     private UUID testVendorId;
@@ -100,6 +101,17 @@ class VendorBillCreationTest {
 
     @BeforeEach
     void setUp() {
+        vendorBillService = TestBillIntakePorts.builder()
+                .with(clock)
+                .with(zoneResolver)
+                .with(billRepository)
+                .with(billLineRepository)
+                .with(vendorCopies)
+                .with(duplicateGuard)
+                .with(reader)
+                .with(sequenceLocker)
+                .with(transactionManager)
+                .build();
         billCounter.setScopeKey("BILL-202401");
         billCounter.setNextValue(42L);
         // Lenient: the replayed-event test returns the existing bill before any number is drawn.
@@ -156,7 +168,7 @@ class VendorBillCreationTest {
             return persisted;
         });
 
-        vendorBillService.handleGoodsReceivedEvent(testEvent);
+        vendorBillService.acceptGoodsReceipt(testEvent);
 
         ArgumentCaptor<VendorBill> saved = ArgumentCaptor.forClass(VendorBill.class);
         verify(billRepository).saveAndFlush(saved.capture());
@@ -181,7 +193,7 @@ class VendorBillCreationTest {
             return persisted;
         });
 
-        vendorBillService.handleGoodsReceivedEvent(testEvent);
+        vendorBillService.acceptGoodsReceipt(testEvent);
 
         verify(sequenceLocker).lockOrProvision("BILL-202601");
         ArgumentCaptor<VendorBill> saved = ArgumentCaptor.forClass(VendorBill.class);
@@ -195,7 +207,7 @@ class VendorBillCreationTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
         when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
 
-        vendorBillService.handleGoodsReceivedEvent(testEvent);
+        vendorBillService.acceptGoodsReceipt(testEvent);
 
         ArgumentCaptor<VendorBill> saved = ArgumentCaptor.forClass(VendorBill.class);
         verify(billRepository).saveAndFlush(saved.capture());
@@ -209,7 +221,7 @@ class VendorBillCreationTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
         when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
 
-        vendorBillService.handleGoodsReceivedEvent(testEvent);
+        vendorBillService.acceptGoodsReceipt(testEvent);
 
         InOrder order = inOrder(vendorCopies, sequenceLocker, billRepository);
         order.verify(vendorCopies).requireForNewBusiness(testVendorId, "A bill");
@@ -224,7 +236,7 @@ class VendorBillCreationTest {
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.empty());
         when(billRepository.saveAndFlush(any(VendorBill.class))).thenReturn(createSavedBill());
 
-        vendorBillService.handleGoodsReceivedEvent(testEvent);
+        vendorBillService.acceptGoodsReceipt(testEvent);
 
         ArgumentCaptor<VendorBill> saved = ArgumentCaptor.forClass(VendorBill.class);
         verify(billRepository).saveAndFlush(saved.capture());
@@ -251,7 +263,7 @@ class VendorBillCreationTest {
         VendorBill existingBill = createSavedBill();
         when(billRepository.findByOriginEventId(testEvent.getEventId())).thenReturn(Optional.of(existingBill));
 
-        vendorBillService.handleGoodsReceivedEvent(testEvent);
+        vendorBillService.acceptGoodsReceipt(testEvent);
 
         verify(billRepository, never()).saveAndFlush(any(VendorBill.class));
         verify(billLineRepository, never()).save(any(VendorBillLine.class));

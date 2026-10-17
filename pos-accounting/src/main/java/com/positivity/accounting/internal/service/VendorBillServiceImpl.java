@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.billintake.service.BillIntakePort;
 import com.positivity.accounting.internal.dto.BillMatchResult;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillListRow;
@@ -7,8 +8,6 @@ import com.positivity.accounting.internal.dto.VendorBillMatchCandidateResponse;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
 import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
-import com.positivity.accounting.internal.entity.AccountingSequence;
-import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.entity.VendorBillLine;
 import com.positivity.accounting.internal.entity.VendorBillMatchCandidate;
@@ -16,25 +15,21 @@ import com.positivity.accounting.internal.entity.VendorBillMatchEvidence;
 import com.positivity.accounting.internal.enums.MatchConfidence;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
-import com.positivity.accounting.internal.exception.VendorBillDuplicateException;
 import com.positivity.accounting.internal.exception.VendorBillMatchNotFoundException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.VendorBillLineRepository;
 import com.positivity.accounting.internal.repository.VendorBillMatchCandidateRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.security.common.SecurityContextHelper;
-import java.io.Serial;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,16 +37,13 @@ import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Implementation of Vendor Bill lifecycle management (Issue #130), up to the point a person decides (#2509).
@@ -79,60 +71,42 @@ public class VendorBillServiceImpl implements VendorBillService {
 
     private static final String SYSTEM_USER = "SYSTEM";
 
-    /** Prefix of the per-tenant {@code accounting_sequence} scope that numbers goods-receipt bills. */
-    static final String BILL_NUMBER_SCOPE_PREFIX = "BILL-";
-
     private final VendorBillRepository billRepository;
     private final VendorBillLineRepository billLineRepository;
     private final VendorBillMatchCandidateRepository matchCandidateRepository;
-    private final SupplierVendorCopies vendorCopies;
     private final VendorBillDuplicateGuard duplicateGuard;
-    private final AccountingSequenceLocker sequenceLocker;
     private final VendorBillInvoiceMatcher matcher;
     private final VendorBillReader reader;
     private final AccountingAuditLogRepository auditLogs;
     private final VendorBillLocks locks;
     private final VendorBillAutoApproval autoApproval;
 
-    private final AccountingCalendarZoneResolver zoneResolver;
-
-    /**
-     * The goods-receipt create, in a transaction this class can see the end of (#2501): the original
-     * of a bill that lost a race under {@code uq_vendor_bill_duplicate_rule} is read after this
-     * template has returned. By then the failed transaction has rolled back when this class began it,
-     * and is marked rollback-only when it joined a caller's.
-     */
-    private final TransactionTemplate goodsReceiptTransaction;
+    /** The single writer of new bills (CAP:550 S25): a goods receipt is accepted through it. */
+    private final BillIntakePort billIntake;
 
     public VendorBillServiceImpl(
             Clock clock,
             VendorBillRepository billRepository,
             VendorBillLineRepository billLineRepository,
             VendorBillMatchCandidateRepository matchCandidateRepository,
-            SupplierVendorCopies vendorCopies,
             VendorBillDuplicateGuard duplicateGuard,
-            AccountingSequenceLocker sequenceLocker,
-            PlatformTransactionManager transactionManager,
-            AccountingCalendarZoneResolver zoneResolver,
             VendorBillInvoiceMatcher matcher,
             VendorBillReader reader,
             AccountingAuditLogRepository auditLogs,
             VendorBillLocks locks,
-            VendorBillAutoApproval autoApproval) {
-        this.zoneResolver = zoneResolver;
+            VendorBillAutoApproval autoApproval,
+            BillIntakePort billIntake) {
         this.clock = clock;
         this.billRepository = billRepository;
         this.billLineRepository = billLineRepository;
         this.matchCandidateRepository = matchCandidateRepository;
-        this.vendorCopies = vendorCopies;
         this.duplicateGuard = duplicateGuard;
-        this.sequenceLocker = sequenceLocker;
         this.matcher = matcher;
         this.reader = reader;
         this.auditLogs = auditLogs;
         this.locks = locks;
         this.autoApproval = autoApproval;
-        this.goodsReceiptTransaction = new TransactionTemplate(transactionManager);
+        this.billIntake = billIntake;
     }
 
     private String getCurrentUser() {
@@ -148,165 +122,12 @@ public class VendorBillServiceImpl implements VendorBillService {
     /**
      * {@inheritDoc}
      *
-     * <p>Not {@code @Transactional}: the work runs in {@link #goodsReceiptTransaction}, which joins a
-     * caller's transaction when there is one. A bill that would duplicate a live one (#2501; same
-     * vendor, normalised number and bill date) is refused with {@link VendorBillDuplicateException}
-     * before anything is saved. When a concurrent writer commits the same key between that check and
-     * the insert, the unique index refuses the insert instead and Postgres aborts the transaction. If
-     * this method began it, it has rolled back by the time the original is read; if it joined a
-     * caller's, it is only marked rollback-only and the caller rolls it back. In both cases the
-     * original is read by {@link VendorBillDuplicateGuard#findOriginalAfterCollision} in a {@code
-     * REQUIRES_NEW} transaction of its own, which is what makes the read possible, so both paths
-     * give the same answer.
-     *
-     * <p><strong>Connections.</strong> The bill's number is drawn under the tenant's counter row lock
-     * ({@link #generateBillNumber}), which is held until the transaction ends, so concurrent creates in
-     * a tenant queue on it, each holding a pooled connection. While that lock is held this method
-     * therefore asks for no second connection: on a small pool the holder would wait for one behind
-     * the very writers waiting for its lock, until the pool's timeout, and for that long no tenant
-     * would get a connection at all (the defect #2342 removed from the counter's own bootstrap). The
-     * vendor is read from the copy before the number is drawn (CAP:550 S24, #2517). Nothing else between the number
-     * and the commit leaves the bill's connection: the duplicate check, the bill and its lines all join this
-     * transaction. Nothing is posted (AW37).
-     *
-     * <p>One exception remains, on the collision path only. When this method runs inside a caller's
-     * transaction and the unique index refuses the insert, that transaction is aborted but still
-     * holds the counter lock until the caller rolls it back, and reading the original takes one more
-     * connection meanwhile. The cost is bounded: one extra connection per refused create, for one
-     * indexed read, and only for a collision inside a caller's transaction. If the pool has none to
-     * give, the read fails after the pool's connection timeout and that error is thrown instead of
-     * the refusal; no bill is created either way. When this method began the transaction itself, it
-     * has rolled back, lock and connection released, before the original is read.
+     * <p>Delegates to {@link BillIntakePort#acceptGoodsReceipt}, the single writer of new bills (CAP:550 S25, #2518):
+     * the transaction shape, the duplicate rule (#2501), the vendor guards and the bill number all live there.
      */
     @Override
     public @NonNull VendorBillResponse handleGoodsReceivedEvent(@NonNull GoodsReceivedEvent event) {
-        try {
-            return Objects.requireNonNull(goodsReceiptTransaction.execute(_ -> createFromGoodsReceipt(event)));
-        } catch (LostDuplicateRace lost) {
-            VendorBill original = duplicateGuard
-                    .findOriginalAfterCollision(event.getVendorId(), lost.billNumber, lost.billDate)
-                    .orElseThrow(lost::getCause);
-            throw duplicateGuard.refusal(
-                    VendorBillDuplicateGuard.Channel.GOODS_RECEIPT,
-                    event.getVendorId(),
-                    lost.billNumber,
-                    lost.billDate,
-                    original);
-        }
-    }
-
-    /**
-     * An insert refused by {@code uq_vendor_bill_duplicate_rule}: carries what is needed to find the
-     * original out of the failed transaction.
-     */
-    private static final class LostDuplicateRace extends RuntimeException {
-
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        private final String billNumber;
-        private final LocalDateTime billDate;
-
-        LostDuplicateRace(String billNumber, LocalDateTime billDate, DataIntegrityViolationException cause) {
-            super(cause);
-            this.billNumber = billNumber;
-            this.billDate = billDate;
-        }
-
-        @Override
-        public synchronized @NonNull DataIntegrityViolationException getCause() {
-            return (DataIntegrityViolationException) super.getCause();
-        }
-    }
-
-    private @NonNull VendorBillResponse createFromGoodsReceipt(@NonNull GoodsReceivedEvent event) {
-        log.info(
-                "Processing GoodsReceivedEvent | eventId={} | vendorId={} | poId={}",
-                event.getEventId(),
-                event.getVendorId(),
-                event.getPurchaseOrderId());
-
-        String currentUser = getCurrentUser();
-
-        // Step 1: Idempotency check
-        Optional<VendorBill> existingBill = billRepository.findByOriginEventId(event.getEventId());
-        if (existingBill.isPresent()) {
-            log.warn("Duplicate GoodsReceivedEvent ignored | eventId={}", event.getEventId());
-            return reader.read(existingBill.get());
-        }
-
-        // Step 1b: The vendor (CAP:550 S24, #2517): a pos-supplier vendor in the copy (503 VENDOR_REPLICATION_PENDING)
-        // that is
-        // ACTIVE (422 VENDOR_INACTIVE). The bill keeps the copy's display name, never the caller's.
-        ExtSupplierVendor vendor = vendorCopies.requireForNewBusiness(event.getVendorId(), "A bill");
-
-        // Step 2: Create vendor bill
-        VendorBill bill = new VendorBill();
-        bill.setVendorId(event.getVendorId());
-        bill.setVendorName(vendor.getDisplayName());
-        bill.setBillDate(event.getReceivedDate());
-        bill.setStatus(VendorBillStatus.PENDING_RECEIPT_MATCH);
-        bill.setOriginEventId(event.getEventId());
-        bill.setOriginEventType("GOODS_RECEIVED");
-        bill.setPurchaseOrderId(event.getPurchaseOrderId()); // Store PO reference
-        bill.setCreatedBy(currentUser);
-        bill.setModifiedBy(currentUser);
-
-        // Step 3: Calculate total amount from line items
-        BigDecimal totalAmount = event.getLineItems().stream()
-                .map(line -> line.getQuantity().multiply(line.getUnitPrice()))
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        bill.setTotalAmount(totalAmount);
-
-        // The number, as late as it can be drawn: from here to the end of this transaction the
-        // tenant's counter row is locked, and nothing below asks for a second connection.
-        bill.setBillNumber(generateBillNumber(event.getVendorId()));
-
-        // Step 4: The duplicate rule (#2501), then the insert. Flushed here so the unique index
-        // answers before the lines or the GL posting event see the bill.
-        duplicateGuard.refuseIfDuplicate(
-                VendorBillDuplicateGuard.Channel.GOODS_RECEIPT,
-                bill.getVendorId(),
-                bill.getBillNumber(),
-                bill.getBillDate(),
-                null);
-        VendorBill savedBill;
-        try {
-            savedBill = billRepository.saveAndFlush(bill);
-        } catch (DataIntegrityViolationException e) {
-            if (VendorBillDuplicateGuard.isDuplicateRuleViolation(e)) {
-                throw new LostDuplicateRace(bill.getBillNumber(), bill.getBillDate(), e);
-            }
-            throw e;
-        }
-
-        // Step 5: Save line items for three-way matching
-        int lineNumber = 1;
-        for (GoodsReceivedEvent.ReceivedLineItem eventLine : event.getLineItems()) {
-            VendorBillLine billLine = new VendorBillLine();
-            billLine.setVendorBill(savedBill);
-            billLine.setLineNumber(lineNumber++);
-            billLine.setProductId(eventLine.getProductId());
-            billLine.setDescription(eventLine.getDescription());
-            billLine.setQuantity(eventLine.getQuantity());
-            billLine.setUnitPrice(eventLine.getUnitPrice());
-            billLine.setLineTotal(eventLine.getQuantity().multiply(eventLine.getUnitPrice()));
-            billLine.setInventoryItem(eventLine.isInventoryItem());
-            billLineRepository.save(billLine);
-        }
-
-        log.info(
-                "Vendor bill created | billId={} | eventId={} | poId={} | totalAmount={} | lineCount={} | status={}",
-                savedBill.getVendorBillId(),
-                event.getEventId(),
-                event.getPurchaseOrderId(),
-                totalAmount,
-                event.getLineItems().size(),
-                savedBill.getStatus());
-
-        // Nothing posts at creation (AW37): the receipt's own accrual is S41's, and the bill posts once, at
-        // approval (VendorBillPostingService).
-        return reader.read(savedBill);
+        return billIntake.acceptGoodsReceipt(event);
     }
 
     @Override
@@ -716,36 +537,6 @@ public class VendorBillServiceImpl implements VendorBillService {
         return event.getLineItems().stream()
                 .map(line -> line.getQuantity().multiply(line.getUnitPrice()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    /**
-     * Generates a goods-receipt bill number: {@code BILL_<VendorPrefix>_<YYYYMMDD>_<Sequence>}, for
-     * example {@code BILL_A1B2C3D4_20250211_0001234}. The date is the day the bill is recorded.
-     *
-     * <p>The sequence is the bound tenant's own (ADR-0062 section 9; #2501): the per-tenant {@code
-     * accounting_sequence} counter under scope {@code BILL-{YYYYMM}}, the month of that same date,
-     * through the {@link AccountingSequenceLocker} machinery that numbers journal entries
-     * ({@code JournalEntryServiceImpl.assignEntryNumber}, #942) and credit memos
-     * ({@code CreditMemoServiceImpl.assignCreditMemoReference}). No database sequence is involved: a
-     * shared one would hand every tenant numbers out of one series.
-     *
-     * <p>The counter row is read under {@code FOR UPDATE} and incremented inside the bill's own
-     * transaction, so concurrent creates in a tenant take distinct numbers one after another (and
-     * the caller must request no second pooled connection until that transaction ends; see {@link
-     * #handleGoodsReceivedEvent}), and a create that rolls back (a refused duplicate included) rolls the increment back with it: the
-     * number is not consumed, and the next create takes it. A tenant's row for a month is created on
-     * first use by the locker; nothing provisions it.
-     */
-    private @NonNull String generateBillNumber(@NonNull UUID vendorId) {
-        String vendorPrefix = vendorId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
-        // The bill's month in the tenant's accounting calendar (#2558).
-        LocalDate recorded = zoneResolver.today();
-        AccountingSequence sequence = sequenceLocker.lockOrProvision(
-                String.format("%s%04d%02d", BILL_NUMBER_SCOPE_PREFIX, recorded.getYear(), recorded.getMonthValue()));
-        long assigned = sequence.getNextValue();
-        sequence.setNextValue(assigned + 1);
-        return String.format(
-                "BILL_%s_%s_%07d", vendorPrefix, recorded.format(DateTimeFormatter.BASIC_ISO_DATE), assigned);
     }
 
     // ===== Match Candidate Persistence & Selection =====

@@ -16,6 +16,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.positivity.accounting.internal.billintake.service.TestBillIntakePorts;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.VendorBill;
@@ -110,20 +111,28 @@ class SupplierEventsListenerTest {
     @BeforeEach
     void setUp() {
         ObjectProvider<MeterRegistry> noMeters = mock();
+        // The real guard over the mocked repository: the listener's lookup is the rule's query.
+        VendorBillDuplicateGuard guard = new VendorBillDuplicateGuard(vendorBillRepository, noMeters);
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
         listener = new SupplierEventsListener(
-                Clock.fixed(NOW, ZoneOffset.UTC),
+                clock,
                 new ObjectMapper(),
                 processedEventRepository,
-                vendorBillRepository,
                 vendorCopy,
                 holds,
-                new LedgerCurrency("USD"),
-                ingestionRecorder,
-                // The real guard over the mocked repository: the listener's lookup is the rule's query.
-                new VendorBillDuplicateGuard(vendorBillRepository, noMeters),
-                reissueRepository,
-                locks,
-                statedTax,
+                guard,
+                TestBillIntakePorts.builder()
+                        .with(clock)
+                        .with(vendorBillRepository)
+                        .with(vendorCopy)
+                        .with(guard)
+                        .with(reissueRepository)
+                        .with(locks)
+                        .with(statedTax)
+                        .with(new LedgerCurrency("USD"))
+                        .with(ingestionRecorder)
+                        .withMeters(noMeters)
+                        .build(),
                 noMeters,
                 mock(PlatformTransactionManager.class));
         // The lock re-reads the bill as it is now; here it is unchanged.

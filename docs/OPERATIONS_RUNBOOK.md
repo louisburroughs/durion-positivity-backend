@@ -1555,7 +1555,7 @@ retries it hourly (`pos.accounting.supplier-invoice-hold.sweep-interval`, defaul
 gauge `accounting.supplier_invoice.held{reason}`, and WARN-logs holds older than 24 hours once a day. The sweep
 has no cluster lock (no ShedLock): every pos-accounting instance runs it. That is safe because each release
 locks its hold row and re-checks `released_at` under the lock, so concurrent sweeps release a hold once; the
-loser only logs contention. A `VENDOR_ID_MISSING` hold (a fact with no `vendorId`) waits for a person (S25).
+loser only logs contention. `VENDOR_ID_MISSING` is retired (S25 #2518): a fact with no `vendorId` becomes a bill draft, and the holds still open are converted once at startup into drafts.
 
 **Alpha AP data is reseeded, not migrated (ADR-0070 Consequences).** Bills and AP payments created before S24
 name vendor-profile ids or caller-supplied ids that are not pos-supplier vendor ids, and their bills carry no

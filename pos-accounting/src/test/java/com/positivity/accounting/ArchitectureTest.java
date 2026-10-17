@@ -98,13 +98,22 @@ public class ArchitectureTest {
     // carry their own layer sub-packages (SPEC-manual-bank-reconciliation §2.1, #2300); the layering rules
     // below bind them exactly as they bind the module's flat internal.* layers.
     static final String[] CONTROLLER_PACKAGES = {
-        "..internal.controller..", "..internal.bankrec.controller..", "..internal.bankfeed..controller.."
+        "..internal.controller..",
+        "..internal.bankrec.controller..",
+        "..internal.bankfeed..controller..",
+        "..internal.billintake.controller.."
     };
     static final String[] REPOSITORY_PACKAGES = {
-        "..internal.repository..", "..internal.bankrec.repository..", "..internal.bankfeed..repository.."
+        "..internal.repository..",
+        "..internal.bankrec.repository..",
+        "..internal.bankfeed..repository..",
+        "..internal.billintake.repository.."
     };
     static final String[] ENTITY_PACKAGES = {
-        "..internal.entity..", "..internal.bankrec.entity..", "..internal.bankfeed..entity.."
+        "..internal.entity..",
+        "..internal.bankrec.entity..",
+        "..internal.bankfeed..entity..",
+        "..internal.billintake.entity.."
     };
 
     /**
@@ -300,7 +309,8 @@ public class ArchitectureTest {
                     "..internal.entity..",
                     "..internal.model..",
                     "..internal.bankrec.entity..",
-                    "..internal.bankfeed..entity..")
+                    "..internal.bankfeed..entity..",
+                    "..internal.billintake.entity..")
             .and()
             .areAnnotatedWith("jakarta.persistence.Entity")
             // Replica (Ext*) and idempotency-guard entities carry externally assigned identifiers
@@ -332,7 +342,8 @@ public class ArchitectureTest {
                     "..internal.entity..",
                     "..internal.model..",
                     "..internal.bankrec.entity..",
-                    "..internal.bankfeed..entity..")
+                    "..internal.bankfeed..entity..",
+                    "..internal.billintake.entity..")
             .and()
             .areAnnotatedWith("jakarta.persistence.Entity")
             .should()
@@ -402,6 +413,39 @@ public class ArchitectureTest {
             .because("#2554: a CustomerCredit is created only by PaymentApplicationServiceImpl, which refuses one on"
                     + " the CASH walk-in account (CASH_CUSTOMER_CREDIT_NOT_ALLOWED) and posts its Dr 1090 / Cr 2300"
                     + " issuance in the same transaction");
+
+    /** The one class that constructs a {@code VendorBill} (S25, #2518; ruling 10): {@code BillIntakePort}'s implementation. */
+    static final String BILL_INTAKE_PORT_IMPL =
+            "com.positivity.accounting.internal.billintake.service.BillIntakePortImpl";
+
+    static final String VENDOR_BILL = "com.positivity.accounting.internal.entity.VendorBill";
+
+    /**
+     * Any call of {@code VendorBill}'s no-argument constructor (it has no builder; a future one needs a rule too). The id-only reference
+     * constructor, {@code VendorBill(UUID)}, stays allowed: associations take it to name a bill they do not own. Matched
+     * by owner name and parameter count only, so no class hierarchy is resolved.
+     */
+    static final DescribedPredicate<JavaConstructorCall> VENDOR_BILL_CREATION =
+            new DescribedPredicate<>("construct a VendorBill with no arguments") {
+                @Override
+                public boolean test(JavaConstructorCall input) {
+                    return VENDOR_BILL.equals(input.getTargetOwner().getName())
+                            && input.getTarget().getRawParameterTypes().isEmpty();
+                }
+            };
+
+    /** BillIntakeConstructionRuleTest proves this rule catches a second creator and passes the port's implementation. */
+    @ArchTest
+    static final ArchRule vendor_bills_are_created_only_by_the_bill_intake_port = noClasses()
+            .that()
+            .resideInAPackage("com.positivity.accounting..")
+            .and()
+            .doNotHaveFullyQualifiedName(BILL_INTAKE_PORT_IMPL)
+            .should()
+            .callConstructorWhere(VENDOR_BILL_CREATION)
+            .because("#2518 (ruling 10): a new VendorBill is born only in BillIntakePortImpl, which applies the vendor"
+                    + " guards, the duplicate rule (#2501) and the delivery check; VendorBill(UUID), the id-only"
+                    + " reference, is allowed. Test fixtures are outside the rule");
 
     // ---- Bank reconciliation core ↔ adapter walls (SPEC-manual-bank-reconciliation §2.1, §8.4; #2300) ----
     // The core (internal.bankrec) is provider- and format-neutral; the adapters (internal.bankfeed.*) reach it
