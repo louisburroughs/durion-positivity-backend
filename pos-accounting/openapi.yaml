@@ -26,6 +26,8 @@ tags:
   name: Journal Entries
 - description: General ledger reconciliation
   name: Accounting GL
+- description: Your cash and where it sits, and the 30-day outlook
+  name: Cash Position
 - description: The change float kept in each register's drawer
   name: Accounting Register Float
 - description: Period-close-aligned freeze of the Sales-Tax Liability report
@@ -46,7 +48,7 @@ tags:
   name: Accounting Tenant Template
 - description: 'Bank transactions as the bank reported them: reads, duplicate review, exclude and restore.'
   name: Bank Transactions
-- description: 'Tenant accounting configuration: the accounting-calendar time zone in which postings are dated and periods are cut.'
+- description: 'Tenant accounting configuration: the accounting-calendar time zone in which postings are dated and periods are cut, the cash safety cushion, and the aged-item thresholds.'
   name: Accounting Configuration
 - description: Endpoints for vendor bill creation, matching, retrieval, and exception resolution
   name: Vendor Bill API
@@ -3293,6 +3295,303 @@ paths:
       - Bank Transactions
       x-required-permissions:
       - accounting:reconciliation:approve
+  /v1/accounting/cash-outlook:
+    get:
+      description: 'Projects the shop''s cash day by day from what is in the bank and waiting to be deposited, adding open customer invoices on their due dates and subtracting approved vendor bills on their due dates, with the lowest point, the bills lane (overdue, due in 7 days, due later, due date estimated) and the safety cushion check. Bills without a due date use an estimate from their terms and are flagged; pending bills, overdue invoices and vendor credits are shown apart and left out of the line.
+
+        Use this tool to answer "will we have enough cash over the next weeks"; do not use this tool for the cash held now, use getCashPosition for that, and do not use this tool for what each vendor is owed, use the aged payables report for that.
+
+        Preconditions: the caller needs reporting:view:financial-statements authority; the projection starts from the bank and what waits to be deposited, never drawer cash or the float, and nothing is posted or stored.
+
+        Required inputs: days, optional, from 1 to 90 and 30 when omitted.
+
+        Emits an ACCOUNTING_CASH_OUTLOOK_GET event and changes no state; no bill''s due date is ever written.
+
+        Returns 200 with the outlook, 400 VALIDATION_ERROR when days is outside 1 to 90 and 403 when the caller lacks the authority.
+
+        '
+      operationId: getCashOutlook
+      parameters:
+      - description: Days to project after today, from 1 to 90
+        example: 30
+        in: query
+        name: days
+        required: false
+        schema:
+          default: 30
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashOutlookResponse'
+          description: The projected daily balances, low point, bills lane and cushion check
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: days is outside 1 to 90 (VALIDATION_ERROR)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks reporting:view:financial-statements
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      summary: Get Cash Outlook
+      tags:
+      - Cash Position
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/cash-position:
+    get:
+      description: 'Reads how much cash the shop has and where it sits: in the bank (the books balance of each active functional-currency bank account), waiting to be deposited (undeposited funds and register cash clearing, netted) and kept in drawers, with their total, plus what needs attention (settlement suspense, aged undeposited sessions, a clearing residual, aged unapplied vendor cash payments, a low point below the safety cushion) and the unpaid walk-in sales.
+
+        Use this tool to answer "how much cash do we have and where is it"; do not use this tool for what comes next, use getCashOutlook for that, and do not use this tool for the books by account, use the balance sheet for that.
+
+        Preconditions: the caller needs reporting:view:financial-statements authority; with accounting:reconciliation:view each reconcilable bank row also carries the latest statement''s closing balance, the reconciled-through date, open outstanding items and unmatched bank lines, shown beside the books balance and never added to the total.
+
+        Required inputs: none.
+
+        Emits an ACCOUNTING_CASH_POSITION_GET event and changes no state; foreign-currency bank accounts are left out and counted in excludedForeignCurrencyAccounts, and eventFedAsOf names when the newest invoice or register session fact arrived and lagging flags a stalled consumer.
+
+        Returns 200 with the position and 403 when the caller lacks the authority.
+
+        '
+      operationId: getCashPosition
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashPositionResponse'
+          description: The cash position with its components, needs-attention items and unpaid walk-in sales
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks reporting:view:financial-statements
+      security:
+      - bearerAuth:
+        - reporting:view:financial-statements
+      summary: Get Cash Position
+      tags:
+      - Cash Position
+      x-required-permissions:
+      - reporting:view:financial-statements
+  /v1/accounting/configuration/aged-thresholds:
+    get:
+      description: 'Returns the tenant''s three aged-item thresholds, in calendar days on the accounting date: undepositedCashAgedDays (default 3), vendorCodUnappliedAgedDays (default 14) and deliveriesNotBilledDays (default 30). They decide when undeposited register cash, an unapplied vendor cash-on-delivery payment and a delivery with no approved bill become to-do items.
+
+        Use this tool to read the current thresholds before changing them; use setAgedThresholds instead to change them, and do not use it to list the aged items themselves.
+
+        Preconditions: the caller holds accounting:period:hard_lock.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits an ACCOUNTING_CONFIGURATION_AGED_THRESHOLDS_VIEW audit event; nothing is changed.
+
+        Returns 200 with the three effective values; a value never written reads as its default.
+
+        '
+      operationId: getAgedThresholds
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgedThresholdsResponse'
+          description: The effective thresholds
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:period:hard_lock permission
+      security:
+      - bearerAuth:
+        - accounting:period:hard_lock
+      summary: Get Aged Thresholds
+      tags:
+      - Accounting Configuration
+      x-required-permissions:
+      - accounting:period:hard_lock
+    put:
+      description: 'Replaces the tenant''s three aged-item thresholds, in calendar days on the accounting date: undepositedCashAgedDays (1 to 30), vendorCodUnappliedAgedDays (1 to 90) and deliveriesNotBilledDays (7 to 120).
+
+        Use this tool when Finance changes how long undeposited register cash, an unapplied vendor cash-on-delivery payment or a delivery with no approved bill may wait before it is flagged; use getAgedThresholds instead to read them, and do not use it to act on an aged item.
+
+        Preconditions: the caller holds accounting:period:hard_lock.
+
+        Required inputs: all three day counts, a justification of at least 10 characters, and requestId, a UUID generated once per change.
+
+        Emits an ACCOUNTING_CONFIGURATION_AGED_THRESHOLDS_SET event and writes one audit row per threshold whose value changes (old and new value, justification, requestId); an unchanged threshold writes nothing, and a replayed requestId changes nothing.
+
+        Returns 400 VALIDATION_ERROR for a missing field or a value outside its range, 400 JUSTIFICATION_REQUIRED for a justification of 1 to 9 characters, and 409 for a requestId already used with another body.
+
+        '
+      operationId: setAgedThresholds
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Defaults:
+                description: Defaults
+                value:
+                  deliveriesNotBilledDays: 30
+                  justification: Back to the standard thresholds
+                  requestId: 019a1d3e-6f7a-7b8c-9d0e-1f2a3b4c5d6f
+                  undepositedCashAgedDays: 3
+                  vendorCodUnappliedAgedDays: 14
+            schema:
+              $ref: '#/components/schemas/AgedThresholdsRequest'
+        description: The three thresholds with the audit justification and the request id.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgedThresholdsResponse'
+          description: Thresholds stored; the effective thresholds are returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A field is missing or outside its range (VALIDATION_ERROR), or the justification is shorter than 10 characters (JUSTIFICATION_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:period:hard_lock permission
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The requestId was already used with another body
+      security:
+      - bearerAuth:
+        - accounting:period:hard_lock
+      summary: Set Aged Thresholds
+      tags:
+      - Accounting Configuration
+      x-required-permissions:
+      - accounting:period:hard_lock
+  /v1/accounting/configuration/cash-safety-cushion:
+    get:
+      description: 'Returns the tenant''s cash safety cushion: a management threshold in the functional currency that the 30-day cash outlook compares its lowest projected balance against. The amount is null while the cushion is unset, and 0 is a real value.
+
+        Use this tool to read the current cushion before changing it; use setCashSafetyCushion instead to change or clear it, and do not use it to read cash balances.
+
+        Preconditions: the caller holds accounting:period:hard_lock.
+
+        Required inputs: none; there are no parameters and no request body.
+
+        Emits an ACCOUNTING_CONFIGURATION_CASH_SAFETY_CUSHION_VIEW audit event; nothing is changed.
+
+        Returns 200 with the amount (null when unset) and the functional currency code.
+
+        '
+      operationId: getCashSafetyCushion
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashSafetyCushionResponse'
+          description: The cushion; amount is null while unset
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:period:hard_lock permission
+      security:
+      - bearerAuth:
+        - accounting:period:hard_lock
+      summary: Get Cash Safety Cushion
+      tags:
+      - Accounting Configuration
+      x-required-permissions:
+      - accounting:period:hard_lock
+    put:
+      description: 'Sets or clears the tenant''s cash safety cushion: the amount, in the functional currency, below which the 30-day cash outlook warns that the lowest projected balance falls short. It is only a threshold: it is never posted, never reserved and never taken off the cash shown, and it refuses nothing.
+
+        Use this tool when Finance sets, raises, lowers or removes the cushion; use getCashSafetyCushion instead to read it, and do not use it to move money.
+
+        Preconditions: the caller holds accounting:period:hard_lock, and currencyCode is the tenant''s functional currency.
+
+        Required inputs: amount (not negative, at the currency''s minor-unit precision, 0 allowed; null clears the cushion), currencyCode (ISO 4217), a justification of at least 10 characters, and requestId, a UUID generated once per change.
+
+        Emits an ACCOUNTING_CONFIGURATION_CASH_SAFETY_CUSHION_SET event and audits the old and new amount with the justification and requestId; setting the current value again, or replaying a requestId, changes nothing.
+
+        Returns 400 VALIDATION_ERROR for a missing field, an unknown currency code, a negative amount or too many decimal places, 400 JUSTIFICATION_REQUIRED for a justification of 1 to 9 characters, 409 for a requestId already used with another body, and 422 CURRENCY_NOT_SUPPORTED for a currency other than the functional one.
+
+        '
+      operationId: setCashSafetyCushion
+      requestBody:
+        content:
+          application/json:
+            examples:
+              One payroll:
+                description: One payroll
+                value:
+                  amount: 25000.0
+                  currencyCode: USD
+                  justification: One payroll of cushion after the Q3 review
+                  requestId: 019a1d3e-6f7a-7b8c-9d0e-1f2a3b4c5d6e
+            schema:
+              $ref: '#/components/schemas/CashSafetyCushionRequest'
+        description: The cushion with its currency, the audit justification and the request id.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashSafetyCushionResponse'
+          description: Cushion stored (or cleared); the stored cushion is returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: A field is missing or invalid (VALIDATION_ERROR), or the justification is shorter than 10 characters (JUSTIFICATION_REQUIRED)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller lacks the accounting:period:hard_lock permission
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The requestId was already used with another body
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: currencyCode is not the tenant's functional currency (CURRENCY_NOT_SUPPORTED)
+      security:
+      - bearerAuth:
+        - accounting:period:hard_lock
+      summary: Set Cash Safety Cushion
+      tags:
+      - Accounting Configuration
+      x-required-permissions:
+      - accounting:period:hard_lock
   /v1/accounting/configuration/time-zone:
     put:
       description: 'Sets the tenant''s accounting-calendar time zone: the zone in which every settlement, payment application and posting is dated and every accounting period begins and ends. A tenant without a zone posts nothing; its facts are held SUSPENDED with ACCOUNTING_TIME_ZONE_UNSET.
@@ -15252,11 +15551,19 @@ components:
           example: '2026-06-30'
           format: date
           type: string
+        estimatedDueDateAmount:
+          description: Open amount of approved bills aged on an estimated due date across all vendors; part of totals.totalOutstanding, not added to it
+          example: 200.0
+          type: number
         generatedAt:
           description: Timestamp when the report was generated (ISO 8601)
           example: '2026-06-30T08:00:00Z'
           format: date-time
           type: string
+        netOwed:
+          description: 'totals.totalOutstanding + unappliedPayments: approved open bills less unapplied AP payments only; credit notes and unapproved bills are not netted'
+          example: 3900.0
+          type: number
         rows:
           description: Per-vendor aging rows ordered by vendor name; empty when no open payables exist
           items:
@@ -15268,6 +15575,10 @@ components:
           type: number
         totals:
           $ref: '#/components/schemas/AgingSummary'
+        unappliedPayments:
+          description: Minus the sum of every vendor's unapplied AP payments (not voided, functional currency only); zero or negative
+          example: -50.0
+          type: number
         unapproved:
           description: Open amount on bills not yet approved (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION) across all vendors; never aged
           example: 300.0
@@ -15279,15 +15590,18 @@ components:
           type: integer
       required:
       - asOfDate
+      - estimatedDueDateAmount
       - generatedAt
+      - netOwed
       - rows
       - totalIncludingUnapproved
       - totals
+      - unappliedPayments
       - unapproved
       - unapprovedBillCount
       type: object
     AgedPayablesRow:
-      description: Per-vendor aged payables row with bucketed open vendor-bill balances. Age is measured from the bill due date, falling back to the bill date when no due date is recorded; only APPROVED bills are aged, unapproved bills are reported separately and unaged.
+      description: Per-vendor aged payables row with bucketed open vendor-bill balances. Age is measured from the bill due date, or from an estimated due date (bill date plus payment terms) when none is recorded; only APPROVED bills are aged, unapproved bills are reported separately and unaged. Unapplied vendor payments are reported as a negative amount and netted into netOwed.
       properties:
         days1To30:
           description: Approved bills outstanding 1-30 days past due
@@ -15305,6 +15619,14 @@ components:
           description: Outstanding more than 90 days past due
           example: 0.0
           type: number
+        estimatedDueDateAmount:
+          description: Open amount of this vendor's approved bills that have no due date and were aged on an estimated due date (bill date plus payment terms); part of totalOutstanding, not added to it
+          example: 200.0
+          type: number
+        netOwed:
+          description: 'Approved open bills less unapplied AP payments only: totalOutstanding + unappliedPayments; credit notes and unapproved bills are not netted; negative when the vendor holds more of our money than it is owed'
+          example: 3900.0
+          type: number
         notYetDue:
           description: 'Approved bills outstanding not yet due: due today or later (due today is not overdue)'
           example: 2500.0
@@ -15320,6 +15642,10 @@ components:
         totalOutstanding:
           description: 'Total outstanding on approved bills: notYetDue + overdue'
           example: 3950.0
+          type: number
+        unappliedPayments:
+          description: Minus the sum of this vendor's unapplied AP payments (not voided, unapplied amount above zero, functional currency only); zero or negative
+          example: -50.0
           type: number
         unapproved:
           description: Open amount on bills not yet approved (PENDING_RECEIPT_MATCH, MATCH_EXCEPTION); never aged
@@ -15344,10 +15670,13 @@ components:
       - days31To60
       - days61To90
       - days90Plus
+      - estimatedDueDateAmount
+      - netOwed
       - notYetDue
       - overdue
       - totalIncludingUnapproved
       - totalOutstanding
+      - unappliedPayments
       - unapproved
       - unapprovedBillCount
       - vendorId
@@ -15431,6 +15760,63 @@ components:
       - notYetDue
       - overdue
       - totalOutstanding
+      type: object
+    AgedThresholdsRequest:
+      description: Replaces the tenant's three aged-item thresholds; all fields are required
+      properties:
+        deliveriesNotBilledDays:
+          description: Calendar days a goods receipt waits for its approved bill before it is listed; 7 to 120, default 30
+          example: 30
+          format: int32
+          type: integer
+        justification:
+          description: Why the thresholds change; 10 to 1000 characters; recorded on each audit row
+          example: Finance tightens deposit ageing after the Q3 review
+          type: string
+        requestId:
+          description: 'Client-generated UUID that makes the PUT idempotent: a replay with the same body writes nothing, a reuse with another body is refused 409'
+          example: 019a1d3e-6f7a-7b8c-9d0e-1f2a3b4c5d6e
+          format: uuid
+          type: string
+        undepositedCashAgedDays:
+          description: Calendar days an undeposited register session waits before it is aged, from its business date; 1 to 30, default 3
+          example: 3
+          format: int32
+          type: integer
+        vendorCodUnappliedAgedDays:
+          description: Calendar days a vendor cash-on-delivery payment sits unapplied before it is aged, from its payment date; 1 to 90, default 14
+          example: 14
+          format: int32
+          type: integer
+      required:
+      - deliveriesNotBilledDays
+      - justification
+      - requestId
+      - undepositedCashAgedDays
+      - vendorCodUnappliedAgedDays
+      type: object
+    AgedThresholdsResponse:
+      description: The tenant's effective aged-item thresholds, in calendar days on the accounting date
+      properties:
+        deliveriesNotBilledDays:
+          description: Days before a delivery with no approved bill is listed; 7 to 120
+          example: 30
+          format: int32
+          type: integer
+        undepositedCashAgedDays:
+          description: Days before an undeposited session is aged; 1 to 30
+          example: 3
+          format: int32
+          type: integer
+        vendorCodUnappliedAgedDays:
+          description: Days before an unapplied vendor cash-on-delivery payment is aged; 1 to 90
+          example: 14
+          format: int32
+          type: integer
+      required:
+      - deliveriesNotBilledDays
+      - undepositedCashAgedDays
+      - vendorCodUnappliedAgedDays
       type: object
     AgingSummary:
       description: Grand-total aging buckets across all rows of an aged AR/AP report
@@ -18495,6 +18881,323 @@ components:
           description: Candidate signed amount
           example: 250.0
           type: number
+      type: object
+    CashNeedsAttention:
+      description: One thing about the cash that needs attention
+      properties:
+        amount:
+          description: The money at stake
+          example: 35.0
+          type: number
+        code:
+          description: What kind of thing it is
+          enum:
+          - SETTLEMENT_SUSPENSE_NOT_ZERO
+          - UNDEPOSITED_CASH_AGED
+          - CLEARING_RESIDUAL_NOT_ZERO
+          - VENDOR_COD_UNAPPLIED_AGED
+          - BELOW_SAFETY_CUSHION
+          type: string
+        count:
+          description: How many sources make it up; null for a ledger balance
+          example: 2
+          format: int32
+          type: integer
+        reason:
+          description: Why it stands apart from its kind; null when there is no such reason
+          enum:
+          - UNBALANCED
+          type: string
+        since:
+          description: The date it has stood since; null when it has none
+          format: date
+          type: string
+      type: object
+    CashOutlookBillsLane:
+      description: Open approved bills by due state
+      properties:
+        dueDateEstimated:
+          $ref: '#/components/schemas/CashOutlookFigure'
+        dueIn7Days:
+          $ref: '#/components/schemas/CashOutlookFigure'
+        dueLater:
+          $ref: '#/components/schemas/CashOutlookFigure'
+        overdue:
+          $ref: '#/components/schemas/CashOutlookFigure'
+        total:
+          description: The four added up
+          example: 1150.0
+          type: number
+      type: object
+    CashOutlookFigure:
+      description: An amount and the number of items behind it
+      properties:
+        amount:
+          description: The amount
+          example: 300.0
+          type: number
+        count:
+          description: How many items
+          example: 2
+          format: int32
+          type: integer
+      type: object
+    CashOutlookPoint:
+      description: The projected balance at the end of one day
+      properties:
+        balance:
+          description: The projected balance at the end of the day
+          example: 13640.0
+          type: number
+        date:
+          description: The day
+          example: '2026-10-17'
+          format: date
+          type: string
+        estimatedMoneyOut:
+          description: The part of that day's money out whose due date is an estimate (estimated true)
+          example: 500.0
+          type: number
+        moneyIn:
+          description: Money in that day
+          example: 0.0
+          type: number
+        moneyOut:
+          description: Money out that day, estimated due dates included
+          example: 500.0
+          type: number
+      type: object
+    CashOutlookResponse:
+      description: A projection of cash over the coming days from approved bills and open invoices
+      properties:
+        asOf:
+          description: When the outlook was computed
+          example: '2026-10-17T15:00:00Z'
+          format: date-time
+          type: string
+        belowCushion:
+          description: True when the low point is strictly below the cushion; false while no cushion is set
+          example: false
+          type: boolean
+        billsLane:
+          $ref: '#/components/schemas/CashOutlookBillsLane'
+        currencyCode:
+          description: 'ISO 4217 code of every amount: the functional currency'
+          example: USD
+          type: string
+        days:
+          description: Days projected after the first
+          example: 30
+          format: int32
+          type: integer
+        estimatedDueDates:
+          $ref: '#/components/schemas/CashOutlookFigure'
+        expectedIn:
+          description: 'Money in over the period: open invoices on their due dates'
+          type: number
+        expectedOut:
+          description: 'Money out over the period: approved bills on their due dates'
+          type: number
+        lowPoint:
+          $ref: '#/components/schemas/CashOutlookPoint'
+        overdueIn:
+          $ref: '#/components/schemas/CashOutlookFigure'
+        points:
+          description: The projected balance at the end of each day, days plus one points from today
+          items:
+            $ref: '#/components/schemas/CashOutlookPoint'
+          type: array
+        possibleOut:
+          $ref: '#/components/schemas/CashOutlookFigure'
+        projection:
+          description: 'Always true: this is a projection, never a posted figure'
+          example: true
+          type: boolean
+        safetyCushion:
+          description: The tenant's cash safety cushion; null while unset
+          type: number
+        startDate:
+          description: The first day, today in the tenant's accounting time zone
+          example: '2026-10-17'
+          format: date
+          type: string
+        startingBalance:
+          description: 'Where the projection starts: in the bank plus waiting to be deposited, never drawers or the float'
+          example: 13640.0
+          type: number
+        vendorCredits:
+          $ref: '#/components/schemas/CashOutlookFigure'
+      type: object
+    CashPositionAccount:
+      description: One account of a cash component
+      properties:
+        accountCode:
+          description: Account code
+          example: '1000'
+          type: string
+        accountName:
+          description: Account name
+          example: Operating Bank
+          type: string
+        balance:
+          description: 'Books balance: debits minus credits over posted and reversed entries'
+          example: 12400.0
+          type: number
+        depositsInTransit:
+          $ref: '#/components/schemas/CashPositionTimingItems'
+        glAccountId:
+          description: The account, for links
+          format: uuid
+          type: string
+        outstandingChecks:
+          $ref: '#/components/schemas/CashPositionTimingItems'
+        reconciledThrough:
+          description: The date the account is reconciled through; null when never reconciled
+          format: date
+          type: string
+        statementClosingBalance:
+          description: Closing balance of the latest committed bank statement; shown beside the books balance, never added to the total
+          type: number
+        statementEndDate:
+          description: End date of that statement
+          format: date
+          type: string
+        unmatchedBankLineCount:
+          description: Bank lines still to be matched or reviewed
+          example: 2
+          format: int64
+          type: integer
+      type: object
+    CashPositionComponent:
+      description: One component of your cash and the accounts behind it
+      properties:
+        accounts:
+          description: One row per account, by account code
+          items:
+            $ref: '#/components/schemas/CashPositionAccount'
+          type: array
+        total:
+          description: The accounts' balances added up
+          example: 12400.0
+          type: number
+      type: object
+    CashPositionResponse:
+      description: 'Your cash: in the bank, waiting to be deposited and kept in drawers, with what needs attention'
+      properties:
+        asOf:
+          description: When the ledger figures were read
+          example: '2026-10-17T15:00:00Z'
+          format: date-time
+          type: string
+        currencyCode:
+          description: 'ISO 4217 code of every amount: the functional currency'
+          example: USD
+          type: string
+        eventFedAsOf:
+          description: When accounting received the newest invoice or register session fact behind the event-fed figures (the unpaid walk-in sales); null when it has received none
+          format: date-time
+          type: string
+        excludedForeignCurrencyAccounts:
+          description: Active bank accounts left out because they are in a currency other than the functional one
+          example: 0
+          format: int32
+          type: integer
+        inTheBank:
+          $ref: '#/components/schemas/CashPositionComponent'
+        keptInDrawers:
+          $ref: '#/components/schemas/CashPositionComponent'
+        lagging:
+          description: 'Whether accounting is behind its sources: true when the newest ingested invoice or register session fact was received more than the fact-lag threshold after the fact''s own time (a proxy for replica lag); false when no such fact exists'
+          example: false
+          type: boolean
+        needsAttention:
+          description: What needs attention, in a fixed order; empty when nothing does
+          items:
+            $ref: '#/components/schemas/CashNeedsAttention'
+          type: array
+        total:
+          description: 'Your cash: in the bank plus waiting to be deposited plus kept in drawers; settlement suspense is never part of it and the bank statement''s view is never added'
+          example: 14197.0
+          type: number
+        unpaidWalkInSales:
+          $ref: '#/components/schemas/CashPositionUnpaidWalkInSales'
+        waitingToBeDeposited:
+          $ref: '#/components/schemas/CashPositionComponent'
+      type: object
+    CashPositionTimingItems:
+      description: Open outstanding items of one kind
+      properties:
+        amount:
+          description: Their total, signed as the ledger line (debit minus credit)
+          example: 450.0
+          type: number
+        count:
+          description: How many are open
+          example: 1
+          format: int64
+          type: integer
+      type: object
+    CashPositionUnpaidWalkInSales:
+      description: Unpaid walk-in sales on the CASH house account
+      properties:
+        balance:
+          description: What is still owed on the CASH account
+          example: 86.0
+          type: number
+        houseAccountKnown:
+          description: 'False when accounting has not yet received the CASH account: the zero cannot be vouched for'
+          example: true
+          type: boolean
+        invoiceCount:
+          description: Open walk-in invoices
+          example: 3
+          format: int32
+          type: integer
+      type: object
+    CashSafetyCushionRequest:
+      description: Sets or clears the tenant's cash safety cushion, a management threshold of the cash outlook
+      properties:
+        amount:
+          description: 'The cushion in the tenant''s functional currency, at its minor-unit precision and not negative; 0 is a real value. The key is required: send null to clear it (unset).'
+          example: 2500.0
+          type:
+          - number
+          - 'null'
+        currencyCode:
+          description: ISO 4217 code of the amount; must be the tenant's functional currency (422 CURRENCY_NOT_SUPPORTED otherwise)
+          example: USD
+          type: string
+        justification:
+          description: Why the cushion changes; 10 to 1000 characters; recorded on the audit row
+          example: Treasury sets the cushion at one payroll after the Q3 review
+          type: string
+        requestId:
+          description: 'Client-generated UUID that makes the PUT idempotent: a replay with the same body writes nothing, a reuse with another body is refused 409'
+          example: 019a1d3e-6f7a-7b8c-9d0e-1f2a3b4c5d6e
+          format: uuid
+          type: string
+      required:
+      - amount
+      - currencyCode
+      - justification
+      - requestId
+      type: object
+    CashSafetyCushionResponse:
+      description: The tenant's cash safety cushion; amount is null while it is unset
+      properties:
+        amount:
+          description: The cushion in the functional currency; null when unset (no line, no warning); 0 is a real value
+          example: 2500.0
+          type:
+          - number
+          - 'null'
+        currencyCode:
+          description: The tenant's functional currency
+          example: USD
+          type: string
+      required:
+      - amount
+      - currencyCode
       type: object
     ChangeTaxRegistrationRequest:
       description: A tax registration's new number or dates
