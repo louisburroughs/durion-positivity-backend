@@ -12,6 +12,7 @@ import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
 
@@ -89,4 +90,11 @@ public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
      */
     List<ExtInvoice> findByStatusInAndFinalizedAtGreaterThanEqualAndFinalizedAtLessThanOrderByFinalizedAtAsc(
             Collection<String> statuses, Instant from, Instant to, Limit limit);
+
+    /**
+     * The newest replica update among the given parties' invoices (#2515): the freshest fact the unpaid walk-in balance
+     * rests on; null when they have none. The parties are matched as stored (canonical UUID strings).
+     */
+    @Query("SELECT MAX(i.updatedAt) FROM ExtInvoice i WHERE i.partyId IN :partyIds")
+    Instant findNewestUpdateByPartyIdIn(@Param("partyIds") Collection<String> partyIds);
 }

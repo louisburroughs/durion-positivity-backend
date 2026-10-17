@@ -120,4 +120,15 @@ public interface BankStatementRepository
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM BankStatement s WHERE s.statementId = :id")
     Optional<BankStatement> lockById(@Param("id") @NonNull UUID statementId);
+
+    /**
+     * The latest-ending {@code status} statement of each named account (the cash position's statement balance, #2515).
+     * Statement windows on an account never overlap (U2), so there is one per account.
+     */
+    @Query("SELECT s FROM BankStatement s WHERE s.glAccountId IN :ids AND s.status = :status"
+            + " AND s.endDate = (SELECT MAX(s2.endDate) FROM BankStatement s2"
+            + " WHERE s2.glAccountId = s.glAccountId AND s2.status = :status)")
+    @NonNull
+    List<BankStatement> findLatestByGlAccountIdIn(
+            @Param("ids") @NonNull Collection<UUID> glAccountIds, @Param("status") @NonNull BankStatementStatus status);
 }
