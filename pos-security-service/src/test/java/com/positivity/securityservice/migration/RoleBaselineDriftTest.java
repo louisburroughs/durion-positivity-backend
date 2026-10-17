@@ -185,6 +185,66 @@ class RoleBaselineDriftTest {
     }
 
     @Test
+    @DisplayName("every grantTo to a seed role in a permissions.yaml is in the SQL seed (#2625)")
+    void seedCoversEveryDeclaredGrantToASeedRole() throws IOException {
+        // The reverse of baselineGrantsSupersetOfSeed: generate-permissions.py used to drop a grantTo
+        // naming a template-floor role from the SQL seed while still writing the alpha CSV grant, so a
+        // tenant provisioned from the template 403'd on a permission its role was declared to hold.
+        Set<String> seedRoles = new TreeSet<>(BOOTSTRAP_FLOOR);
+        seedRoles.addAll(VERSIONED_RESIDUE);
+        seedRoles.addAll(TEMPLATE_FLOOR);
+        Map<String, Set<String>> seeded = seededGrants();
+        List<String> missing = new ArrayList<>();
+        for (Map.Entry<String, Set<String>> declared : declaredGrantTargets().entrySet()) {
+            for (String role : declared.getValue()) {
+                if (seedRoles.contains(role)
+                        && !seeded.getOrDefault(role, Set.of()).contains(declared.getKey())) {
+                    missing.add(role + " -> " + declared.getKey());
+                }
+            }
+        }
+        assertThat(missing)
+                .as("grantTo entries for seed roles missing from R__seed_role_permissions.sql;"
+                        + " run scripts/generate-permissions.sh --sync")
+                .isEmpty();
+    }
+
+    /** permission -> grantTo roles declared in every module's permissions.yaml. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Set<String>> declaredGrantTargets() throws IOException {
+        Map<String, Set<String>> targets = new LinkedHashMap<>();
+        org.yaml.snakeyaml.Yaml yaml = new org.yaml.snakeyaml.Yaml();
+        try (java.util.stream.Stream<Path> modules = Files.list(Path.of(".."))) {
+            for (Path module : modules.sorted().toList()) {
+                Path manifest = module.resolve("src/main/resources/permissions.yaml");
+                if (!module.getFileName().toString().startsWith("pos-") || !Files.isRegularFile(manifest)) {
+                    continue;
+                }
+                Object loaded = yaml.load(Files.readString(manifest, StandardCharsets.UTF_8));
+                if (!(loaded instanceof Map<?, ?> document)) {
+                    continue;
+                }
+                Object permissions = document.get("permissions");
+                if (!(permissions instanceof List<?> entries)) {
+                    continue;
+                }
+                for (Object entry : entries) {
+                    if (entry instanceof Map<?, ?> permission
+                            && permission.get("name") != null
+                            && permission.get("grantTo") != null) {
+                        Object grantTo = permission.get("grantTo");
+                        List<Object> roles = grantTo instanceof List<?> list ? (List<Object>) list : List.of(grantTo);
+                        Set<String> names = targets.computeIfAbsent(
+                                String.valueOf(permission.get("name")), key -> new LinkedHashSet<>());
+                        roles.forEach(role -> names.add(String.valueOf(role)));
+                    }
+                }
+            }
+        }
+        return targets;
+    }
+
+    @Test
     @DisplayName("the baseline carries grants for every expected role")
     void baselineGrantsCoverEveryExpectedRole() throws IOException {
         // A role provisioned with no grants can sign in and do nothing, which reads as a broken
