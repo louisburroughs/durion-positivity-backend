@@ -155,6 +155,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             FunctionalCurrency functionalCurrency,
             DrawerStatedTax drawerStatedTax,
             ActorDisplayNames actorDisplayNames,
+            SupplierVendorGuard vendorGuard,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.registerSessionRepository = registerSessionRepository;
@@ -170,6 +171,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         this.functionalCurrency = functionalCurrency;
         this.drawerStatedTax = drawerStatedTax;
         this.actorDisplayNames = actorDisplayNames;
+        this.vendorGuard = vendorGuard;
         this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
