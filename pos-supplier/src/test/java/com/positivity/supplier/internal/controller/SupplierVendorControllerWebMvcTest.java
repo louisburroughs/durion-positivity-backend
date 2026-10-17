@@ -238,7 +238,8 @@ class SupplierVendorControllerWebMvcTest {
     @Test
     void createWithRequestIdPassesTheKeyAndMapsTheIdempotencyConflict() throws Exception {
         when(vendorService.createVendor(any())).thenReturn(view());
-        String keyed = CREATE.replace("\"defaultCurrency\":\"USD\"",
+        String keyed = CREATE.replace(
+                "\"defaultCurrency\":\"USD\"",
                 "\"defaultCurrency\":\"USD\",\"requestId\":\"019a0000-0000-7000-8000-000000000101\"");
 
         mockMvc.perform(authed(

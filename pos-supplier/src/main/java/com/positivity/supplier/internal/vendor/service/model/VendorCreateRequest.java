@@ -69,7 +69,15 @@ public record VendorCreateRequest(
             @Nullable RemitToDto remitTo,
             @NonNull String defaultPaymentTerms,
             @NonNull String defaultCurrency) {
-        this(vendorNumber, legalName, displayName, taxRegistrations, remitTo, defaultPaymentTerms, defaultCurrency, null);
+        this(
+                vendorNumber,
+                legalName,
+                displayName,
+                taxRegistrations,
+                remitTo,
+                defaultPaymentTerms,
+                defaultCurrency,
+                null);
     }
 
     public VendorCreateRequest {

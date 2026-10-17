@@ -4,21 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures;
-import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
 import com.positivity.supplier.internal.entity.SupplierVendorCreateRequestEntity;
-import com.positivity.supplier.internal.repository.SupplierVendorCreateRequestRepository;
-import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierForbiddenException;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorCreateRequestRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRemitChangeRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
@@ -895,8 +895,10 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             long vendors = vendorRepository.count();
 
             assertThatThrownBy(() -> as("clerk.a", () -> service.createVendor(keyed(key, "Michelin Tires"))))
-                    .isInstanceOfSatisfying(SupplierConflictException.class, refused -> assertThat(refused.getCode())
-                            .isEqualTo(SupplierConflictException.IDEMPOTENCY_CONFLICT));
+                    .isInstanceOfSatisfying(
+                            SupplierConflictException.class,
+                            refused -> assertThat(refused.getCode())
+                                    .isEqualTo(SupplierConflictException.IDEMPOTENCY_CONFLICT));
             assertThat(vendorRepository.count()).isEqualTo(vendors);
         }
 
