@@ -207,6 +207,14 @@ pos-supplier (ADR-0044 R1): it reads its own copy of the vendor master.
   `POST /{poId}/revisions` takes an optional `vendorId`: it changes the vendor of a `DRAFT` order only (another
   vendor on an order past `DRAFT` is 409 `PURCHASE_ORDER_INVALID_STATE`), passes the same guard, and an absent
   `vendorId` keeps the vendor.
+- **Reads for the purchase-order screens (#2680).** `GET /v1/orders/purchase-order-vendors`
+  (`listPurchaseOrderVendors`; `status`, `q` on vendor number or display name, `page`/`size`/`sort` on
+  `vendorNumber`, `displayName` or `status`, default `displayName,asc`, `vendorId` tie-breaker; any other sort is
+  400 `PURCHASE_ORDER_BAD_REQUEST`) and `GET /v1/orders/purchase-order-vendors/{vendorId}` (`getPurchaseOrderVendor`)
+  serve the copy under `order:purchase_order:view`, which every purchase-order persona holds; the item is exactly
+  `vendorId`, `vendorNumber`, `displayName`, `status`, so inventory staff see no remit-to or tax-registration data
+  (ADR-0044 R3). An `INACTIVE` vendor reads as such (200); an id the copy does not hold is **503
+  `VENDOR_REPLICATION_PENDING`**, never 404. A vendor listed `ACTIVE` here is one the guard will accept.
 - **Requested orders.** An order requested on `order.commands.v1` (pos-inventory's purchase suggestions) is placed in
   `DRAFT` whatever vendor it names, since a suggestion may still name a manufacturer or distributor feed id (S36);
   approval answers 503 `VENDOR_REPLICATION_PENDING` until the buyer revises the vendor to one in the copy.

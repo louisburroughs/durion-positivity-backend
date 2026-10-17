@@ -60,6 +60,24 @@ public class ArchitectureTest {
             .allowEmptyShould(true)
             .because("owned-ATP is owned stock only; a supplier hint never satisfies the gate (CAP #1315)");
 
+    /**
+     * The purchase-order vendor read (CAP:550, #2680) serves pos-order's own copy of the vendor master and nothing
+     * else: it never asks pos-supplier (ADR-0044 R1). Asserted structurally because the tempting fix for "the copy
+     * does not hold it yet" is a live lookup, which no behavioural test would fail on.
+     */
+    @ArchTest
+    static final ArchRule purchase_order_vendor_read_should_not_call_other_services = noClasses()
+            .that()
+            .haveSimpleNameStartingWith("PurchaseOrderVendor")
+            .should()
+            .dependOnClassesThat()
+            .resideInAPackage("..internal.client..")
+            .orShould()
+            .dependOnClassesThat()
+            .haveSimpleNameContaining("RestClient")
+            .allowEmptyShould(true)
+            .because("the vendor read serves the copy only; a vendor the copy lacks is 503, not a pos-supplier call");
+
     @ArchTest
     static final ArchRule controllers_should_not_access_repositories_directly = noClasses()
             .that()
