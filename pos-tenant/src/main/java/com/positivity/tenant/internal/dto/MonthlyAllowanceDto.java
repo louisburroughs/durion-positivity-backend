@@ -22,13 +22,19 @@ import lombok.NoArgsConstructor;
 @Schema(description = "A monthly allowance: amount and ISO 4217 currency")
 public class MonthlyAllowanceDto {
 
-    @Schema(description = "Amount per calendar month, at least zero, four decimals at most", example = "20.00", requiredMode = REQUIRED)
+    @Schema(
+            description = "Amount per calendar month, at least zero, four decimals at most",
+            example = "20.00",
+            requiredMode = REQUIRED)
     @NotNull
     @DecimalMin("0.0000")
     @Digits(integer = 15, fraction = 4)
     private BigDecimal amount;
 
-    @Schema(description = "ISO 4217 code; USD for now (the platform's reading bill is in USD)", example = "USD", requiredMode = REQUIRED)
+    @Schema(
+            description = "ISO 4217 code; USD for now (the platform's reading bill is in USD)",
+            example = "USD",
+            requiredMode = REQUIRED)
     @NotBlank
     @Pattern(regexp = "^[A-Z]{3}$")
     private String currencyCode;

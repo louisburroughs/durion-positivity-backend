@@ -50,7 +50,8 @@ public record TenantReadingAllowanceV1(
      * @param amount the allowance, at least zero, four decimals at most
      * @param currencyCode ISO 4217 code
      */
-    public record MonthlyAllowance(@NonNull BigDecimal amount, @NonNull String currencyCode) {
+    public record MonthlyAllowance(
+            @NonNull BigDecimal amount, @NonNull String currencyCode) {
         public MonthlyAllowance {
             if (amount == null || amount.signum() < 0) {
                 throw new IllegalArgumentException("amount must be at least zero");

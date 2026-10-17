@@ -50,8 +50,9 @@ public class TenantApiExceptionHandler {
 
     private ResponseEntity<ApiError> build(HttpStatus status, String code, String message, HttpServletRequest request) {
         String header = request == null ? null : request.getHeader(X_CORRELATION_ID);
-        String correlationId =
-                header != null && !header.isBlank() ? header : UUIDv7Generator.generate().toString();
+        String correlationId = header != null && !header.isBlank()
+                ? header
+                : UUIDv7Generator.generate().toString();
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         return new ResponseEntity<>(

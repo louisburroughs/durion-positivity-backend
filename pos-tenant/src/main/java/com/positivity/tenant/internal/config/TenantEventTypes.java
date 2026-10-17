@@ -64,8 +64,9 @@ public final class TenantEventTypes {
             .build();
 
     /** #2619: the reading-tier catalog. */
-    public static final EventTypeRegistration READING_TIER_LIST =
-            EventTypeRegistration.search("READING_TIER_LIST", "List reading tiers").build();
+    public static final EventTypeRegistration READING_TIER_LIST = EventTypeRegistration.search(
+                    "READING_TIER_LIST", "List reading tiers")
+            .build();
 
     public static final EventTypeRegistration READING_TIER_CREATE = EventTypeRegistration.write(
                     "READING_TIER_CREATE", "Create a reading tier (a monthly document-reading allowance)")

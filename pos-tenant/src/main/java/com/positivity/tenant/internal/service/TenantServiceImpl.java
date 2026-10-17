@@ -137,7 +137,8 @@ public class TenantServiceImpl implements TenantService {
             }
         }
         ReadingTierEntity assignedTier = null;
-        if (request.getReadingTierCode() != null && !request.getReadingTierCode().equals(tenant.getReadingTierCode())) {
+        if (request.getReadingTierCode() != null
+                && !request.getReadingTierCode().equals(tenant.getReadingTierCode())) {
             assignedTier = readingTiers.requireAssignable(request.getReadingTierCode());
             tenant.setReadingTierCode(assignedTier.getCode());
             changed = true;

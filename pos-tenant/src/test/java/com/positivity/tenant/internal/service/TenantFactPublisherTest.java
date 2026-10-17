@@ -82,7 +82,8 @@ class TenantFactPublisherTest {
     }
 
     @Test
-    @DisplayName("#2619: tenant.reading-allowance.changed carries the tier's allowance, keyed and versioned by the tenant")
+    @DisplayName(
+            "#2619: tenant.reading-allowance.changed carries the tier's allowance, keyed and versioned by the tenant")
     void readingAllowance() {
         com.positivity.tenant.internal.entity.ReadingTierEntity pro =
                 com.positivity.tenant.internal.entity.ReadingTierEntity.builder()

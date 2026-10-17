@@ -59,7 +59,11 @@ public class ReadingTierServiceImpl implements ReadingTierService {
         } catch (DataIntegrityViolationException e) {
             throw new ReadingTierExistsException("Reading tier already exists: " + request.getCode());
         }
-        log.info("Created reading tier code={} allowance={} {}", saved.getCode(), saved.getMonthlyAllowanceAmount(), saved.getMonthlyAllowanceCurrency());
+        log.info(
+                "Created reading tier code={} allowance={} {}",
+                saved.getCode(),
+                saved.getMonthlyAllowanceAmount(),
+                saved.getMonthlyAllowanceCurrency());
         return toResponse(saved);
     }
 
@@ -127,7 +131,8 @@ public class ReadingTierServiceImpl implements ReadingTierService {
     }
 
     private ReadingTierEntity load(String code) {
-        return tiers.findByCode(code).orElseThrow(() -> new ResourceNotFoundException("Reading tier not found: " + code));
+        return tiers.findByCode(code)
+                .orElseThrow(() -> new ResourceNotFoundException("Reading tier not found: " + code));
     }
 
     static ReadingTierResponse toResponse(ReadingTierEntity tier) {

@@ -89,7 +89,8 @@ class PlatformReadingTierControllerWebMvcTest {
                 .andExpect(jsonPath("$[0].code").value("STANDARD"))
                 .andExpect(jsonPath("$[0].monthlyAllowance.amount").value(20.00));
 
-        String body = "{\"code\":\"PRO\",\"displayName\":\"Pro\",\"monthlyAllowance\":{\"amount\":60.00,\"currencyCode\":\"USD\"}}";
+        String body =
+                "{\"code\":\"PRO\",\"displayName\":\"Pro\",\"monthlyAllowance\":{\"amount\":60.00,\"currencyCode\":\"USD\"}}";
         mockMvc.perform(authed(post("/v1/platform/reading-tiers"), "platform:reading_tier:read")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
@@ -124,9 +125,11 @@ class PlatformReadingTierControllerWebMvcTest {
     @DisplayName("409 READING_TIER_EXISTS and 409 READING_TIER_IN_USE are named, with a correlation id")
     void namedCodes() throws Exception {
         when(readingTiers.create(any())).thenThrow(new ReadingTierExistsException("Reading tier already exists: PRO"));
-        mockMvc.perform(authed(post("/v1/platform/reading-tiers"), "platform:reading_tier:manage")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"PRO\",\"displayName\":\"Pro\",\"monthlyAllowance\":{\"amount\":60.00,\"currencyCode\":\"USD\"}}"))
+        mockMvc.perform(
+                        authed(post("/v1/platform/reading-tiers"), "platform:reading_tier:manage")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        "{\"code\":\"PRO\",\"displayName\":\"Pro\",\"monthlyAllowance\":{\"amount\":60.00,\"currencyCode\":\"USD\"}}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("READING_TIER_EXISTS"))
                 .andExpect(header().exists("X-Correlation-Id"));

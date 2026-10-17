@@ -99,10 +99,7 @@ public class PlatformReadingTierController {
                             content =
                                     @Content(
                                             mediaType = "application/json",
-                                            examples =
-                                                    @ExampleObject(
-                                                            name = "A PRO tier at 60.00 USD",
-                                                            value = """
+                                            examples = @ExampleObject(name = "A PRO tier at 60.00 USD", value = """
                                                             {"code":"PRO","displayName":"Pro",\
                                                             "monthlyAllowance":{"amount":60.00,"currencyCode":"USD"}}
                                                             """)))

@@ -2056,7 +2056,6 @@ class SecurityGatewayConfigTest {
         assertThat(GatewayPermissionCatalog.authorityForBit(565)).isEqualTo("PERM_platform:reading_tier:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(566)).isEqualTo("PERM_platform:reading_tier:read");
         assertThat(GatewayPermissionCatalog.authorityForBit(567)).isNull();
-
     }
 
     @Test

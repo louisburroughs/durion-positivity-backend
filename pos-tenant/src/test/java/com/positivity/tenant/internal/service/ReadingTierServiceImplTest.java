@@ -127,23 +127,28 @@ class ReadingTierServiceImplTest {
         when(tenants.existsByReadingTierCodeAndStatusNot("STANDARD", TenantStatus.DECOMMISSIONED))
                 .thenReturn(true);
         assertThatThrownBy(() -> service.update(
-                        "STANDARD", ReadingTierUpdateRequest.builder().active(false).build()))
+                        "STANDARD",
+                        ReadingTierUpdateRequest.builder().active(false).build()))
                 .isInstanceOf(ReadingTierInUseException.class);
         assertThat(standard.isActive()).isTrue();
 
         when(tenants.existsByReadingTierCodeAndStatusNot("STANDARD", TenantStatus.DECOMMISSIONED))
                 .thenReturn(false);
-        assertThat(service.update("STANDARD", ReadingTierUpdateRequest.builder().active(false).build())
+        assertThat(service.update(
+                                "STANDARD",
+                                ReadingTierUpdateRequest.builder().active(false).build())
                         .isActive())
                 .isFalse();
 
         when(tiers.findByCode("NOPE")).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.update("NOPE", ReadingTierUpdateRequest.builder().active(true).build()))
+        assertThatThrownBy(() -> service.update(
+                        "NOPE", ReadingTierUpdateRequest.builder().active(true).build()))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
-    @DisplayName("requireAssignable: STANDARD by default; an inactive or unknown tier is 422 READING_TIER_NOT_ASSIGNABLE")
+    @DisplayName(
+            "requireAssignable: STANDARD by default; an inactive or unknown tier is 422 READING_TIER_NOT_ASSIGNABLE")
     void requireAssignable() {
         assertThat(service.requireAssignable(null)).isSameAs(standard);
         assertThat(service.requireAssignable(" ")).isSameAs(standard);

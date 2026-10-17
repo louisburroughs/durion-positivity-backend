@@ -27,7 +27,8 @@ public class ReadingTierUpdateRequest {
     private String displayName;
 
     @Schema(
-            description = "New monthly allowance; publishes tenant.reading-allowance.changed for every tenant on the tier",
+            description =
+                    "New monthly allowance; publishes tenant.reading-allowance.changed for every tenant on the tier",
             requiredMode = NOT_REQUIRED)
     @Valid
     private MonthlyAllowanceDto monthlyAllowance;

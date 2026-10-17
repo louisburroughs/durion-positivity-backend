@@ -139,7 +139,8 @@ class TenantServiceImplTest {
     }
 
     @Test
-    @DisplayName("#2619: a create naming an inactive or unknown tier is 422 READING_TIER_NOT_ASSIGNABLE before any save")
+    @DisplayName(
+            "#2619: a create naming an inactive or unknown tier is 422 READING_TIER_NOT_ASSIGNABLE before any save")
     void createRefusesAnUnassignableTier() {
         when(accounts.existsById(ACCOUNT)).thenReturn(true);
         when(tenants.existsBySlug("acme")).thenReturn(false);
@@ -160,17 +161,19 @@ class TenantServiceImplTest {
         tenant.setReadingTierCode("STANDARD");
 
         TenantResponse moved = service.update(
-                tenant.getId(), TenantUpdateRequest.builder().readingTierCode("PRO").build());
+                tenant.getId(),
+                TenantUpdateRequest.builder().readingTierCode("PRO").build());
 
         assertThat(moved.getReadingTierCode()).isEqualTo("PRO");
         verify(facts).tenantUpdated(any());
         verify(facts)
                 .readingAllowanceChanged(
-                        any(),
-                        org.mockito.ArgumentMatchers.argThat(tier -> "PRO".equals(tier.getCode())));
+                        any(), org.mockito.ArgumentMatchers.argThat(tier -> "PRO".equals(tier.getCode())));
 
         org.mockito.Mockito.clearInvocations(facts);
-        service.update(tenant.getId(), TenantUpdateRequest.builder().readingTierCode("PRO").build());
+        service.update(
+                tenant.getId(),
+                TenantUpdateRequest.builder().readingTierCode("PRO").build());
         verify(facts, org.mockito.Mockito.never()).tenantUpdated(any());
         verify(facts, org.mockito.Mockito.never()).readingAllowanceChanged(any(), any());
     }
