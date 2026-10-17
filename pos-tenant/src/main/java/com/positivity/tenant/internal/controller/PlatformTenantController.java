@@ -48,11 +48,11 @@ public class PlatformTenantController {
     private static final String TENANT_CREATE_EXAMPLE = """
             {"slug":"acme-tire","displayName":"Acme Tire & Auto — Tucson",
              "accountId":"01990000-0000-7000-8000-00000000a001","cell":"us-east-1",
-             "initialAdminEmail":"owner@acme.example"}
+             "initialAdminEmail":"owner@acme.example","locale":"en-US","readingTierCode":"STANDARD"}
             """;
 
     private static final String TENANT_UPDATE_EXAMPLE = """
-            {"displayName":"Acme Tire & Auto Group","cell":"us-east-2"}
+            {"displayName":"Acme Tire & Auto Group","cell":"us-east-2","locale":"fr-CA"}
             """;
 
     @Operation(operationId = "createTenant", summary = "Register a Tenant", description = """
@@ -62,12 +62,15 @@ public class PlatformTenantController {
             Use this tool once per customer tenancy, after createAccount when the owning account does not exist; do not use \
             it to change an existing tenant, use updateTenant or the lifecycle operations instead.
             Preconditions: the account exists, and neither the slug nor the display name is taken.
-            Required inputs: slug, accountId and initialAdminEmail; cell and displayName are optional. Omitting \
+            Required inputs: slug, accountId, initialAdminEmail and locale (a BCP 47 tag with a region from \
+            pos.tenant.supported-locales, #2618; a bare language or an unlisted tag is 400 VALIDATION_ERROR with \
+            fieldErrors[locale]); cell, displayName and readingTierCode (STANDARD when omitted; an inactive or \
+            unknown tier is 422 READING_TIER_NOT_ASSIGNABLE, #2619) are optional. Omitting \
             displayName seeds it from the account's legal name, suffixed " #2", " #3" and so on only where that \
             would collide — a fallback, so prefer naming the tenant explicitly.
             Emits a TENANT_CREATE event.
-            Returns 201 with the tenant, 404 when the account is unknown and 409 when the slug or the display name \
-            is taken.
+            Returns 201 with the tenant, 404 when the account is unknown, 409 when the slug or the display name \
+            is taken and 422 READING_TIER_NOT_ASSIGNABLE for an unknown or inactive tier.
             """)
     @ApiResponse(responseCode = "201", description = "Tenant registered")
     @ApiResponse(
@@ -77,6 +80,10 @@ public class PlatformTenantController {
     @ApiResponse(
             responseCode = "409",
             description = "Slug or display name already taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "READING_TIER_NOT_ASSIGNABLE: the reading tier does not exist or is inactive (#2619)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_CREATE + "')")
@@ -147,17 +154,19 @@ public class PlatformTenantController {
     }
 
     @Operation(operationId = "updateTenant", summary = "Update a Tenant", description = """
-            Changes a tenant's display name or cell and publishes tenant.updated; slug, account and status are \
-            never changed here.
+            Changes a tenant's display name, cell, locale or reading tier and publishes tenant.updated (a tier \
+            change also publishes tenant.reading-allowance.changed, #2619); slug, account and status are never \
+            changed here.
             Use this tool for descriptive edits; do not use it to change status, use suspendTenant, reactivateTenant or \
             decommissionTenant instead.
             Preconditions: the tenant exists, is not DECOMMISSIONED, and the new display name is not already held \
             by another tenant.
-            Required inputs: id (UUID) as a path parameter and a body with displayName and/or cell; a null field \
-            leaves the value unchanged.
+            Required inputs: id (UUID) as a path parameter and a body with any of displayName, cell, locale (a \
+            listed BCP 47 tag with a region, #2618) and readingTierCode (an active tier, else 422 \
+            READING_TIER_NOT_ASSIGNABLE); a null field leaves the value unchanged.
             Emits a TENANT_UPDATE event.
-            Returns 200 with the tenant, 404 when it does not exist and 409 when it is decommissioned or the \
-            display name is taken.
+            Returns 200 with the tenant, 404 when it does not exist, 409 when it is decommissioned or the \
+            display name is taken and 422 READING_TIER_NOT_ASSIGNABLE for an unknown or inactive tier.
             """)
     @ApiResponse(responseCode = "200", description = "Tenant updated")
     @ApiResponse(
@@ -167,6 +176,10 @@ public class PlatformTenantController {
     @ApiResponse(
             responseCode = "409",
             description = "Tenant is decommissioned, or the display name is taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "READING_TIER_NOT_ASSIGNABLE: the reading tier does not exist or is inactive (#2619)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_UPDATE + "')")

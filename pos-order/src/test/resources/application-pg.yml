@@ -44,3 +44,5 @@ pos.events.base-url: http://127.0.0.1:1
 # ADR-0067 R-2: the functional currency has no default in application.yml; tests state it (FlywayConfig
 # passes it to V4's placeholder too).
 pos.order.functional-currency: USD
+# ADR-0067 A8 (#2662): the shipped increment, so the cash tender tests see what production does.
+pos.order.cash-increments.CAD: 0.05

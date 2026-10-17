@@ -88,6 +88,9 @@ pos:
     unenforced-paths:
       - /internal/v1/tenants
   tenant:
+    # CAP:550 S44 (#2618): the locales a tenant may be set to (BCP 47 with a region). The default list is the
+    # locales the frontend registers; en-CA joins with ADR-0067 OP-15.
+    supported-locales: ${POS_TENANT_SUPPORTED_LOCALES:en-US,es-US,es-MX,fr-CA,fr-FR}
     registry:
       # Shared secret for GET /internal/v1/tenants (plan WS4-2): the value every module's
       # pos.tenancy.registry.secret sends as X-Tenant-Registry-Secret. Blank refuses every call.

@@ -105,8 +105,21 @@ public record OrderCompletedV1(
      * Settlement summary entry.
      *
      * @param methodType CASH / CARD / ON_ACCOUNT / OTHER
-     * @param amount settled amount for the method
+     * @param amount settled amount for the method: the amount applied to the order (the fact's {@code amount})
+     * @param settledAmount ADR-0067 A8 (#2662): for CASH, the cash that actually changed hands after rounding to the
+     *     currency's cash increment; null on other methods and on facts published before A8 (read as {@code amount})
+     * @param cashRoundingAmount ADR-0067 A8: signed {@code settledAmount − amount} summed over the method (positive
+     *     when the customer paid more than due); null when no rounding applied
      */
     public record Tender(
-            @NonNull String methodType, @NonNull BigDecimal amount) {}
+            @NonNull String methodType,
+            @NonNull BigDecimal amount,
+            @Nullable BigDecimal settledAmount,
+            @Nullable BigDecimal cashRoundingAmount) {
+
+        /** Pre-A8 shape: no rounding fields. */
+        public Tender(@NonNull String methodType, @NonNull BigDecimal amount) {
+            this(methodType, amount, null, null);
+        }
+    }
 }

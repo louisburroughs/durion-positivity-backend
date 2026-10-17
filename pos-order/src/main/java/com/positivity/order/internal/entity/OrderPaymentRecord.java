@@ -71,6 +71,26 @@ public class OrderPaymentRecord extends TenantScopedEntity {
     private BigDecimal amount;
 
     /**
+     * ADR-0067 A8 (#2662): on a CASH record, the cash that changed hands after rounding to the cash increment;
+     * null on other methods and on rows written before A8 (read as {@code amount}).
+     */
+    @Column(name = "settled_amount", precision = 19, scale = 4)
+    private BigDecimal settledAmount;
+
+    /** ADR-0067 A8: {@code settledAmount − amount}, signed (positive when the customer paid more); null = 0. */
+    @Column(name = "cash_rounding_amount", precision = 19, scale = 4)
+    private BigDecimal cashRoundingAmount;
+
+    /** ADR-0067 A8: the cash increment the register rounded to; null when the currency has none. */
+    @Column(name = "cash_increment", precision = 19, scale = 4)
+    private BigDecimal cashIncrement;
+
+    /** The cash this record moved through the drawer: {@code settledAmount} when rounded, else {@code amount}. */
+    public BigDecimal cashAmount() {
+        return settledAmount != null ? settledAmount : amount;
+    }
+
+    /**
      * ISO 4217 code the payment settled (or was reversed) in, copied from the pos-invoice fact's
      * {@code currencyCode} (ADR-0067 PC-3, DF-3). Never defaulted: a payment reversal states this
      * currency. Null on an ON_ACCOUNT entry, which has no gateway leg to reverse and whose order

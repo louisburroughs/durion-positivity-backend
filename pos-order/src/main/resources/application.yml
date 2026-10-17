@@ -157,6 +157,13 @@ pos:
     # change applies to drawers opened afterwards. A request in another currency is 422
     # CURRENCY_NOT_SUPPORTED.
     functional-currency: ${POS_ORDER_FUNCTIONAL_CURRENCY}
+    # ADR-0067 A8 (#2662): the cash increment per currency, the smallest coin a drawer hands back, to which
+    # pos-order rounds a cash tender HALF_UP at the register (never a document total or tax). Deployment
+    # configuration, not a tenant setting: coinage is a property of the currency. A currency with no entry does
+    # not round (USD, JPY). Override or extend per environment: POS_ORDER_CASH_INCREMENTS_CAD=0.05. Startup
+    # fails on a non-ISO key, a value that is not positive, not a whole multiple of the minor unit, or equal to it.
+    cash-increments:
+      CAD: 0.05
     session:
       # The over/short tolerance above which a close needs order:session:approve_variance is the
       # tenant's drawer policy (GET/PUT /v1/orders/session-policy, CAP:550 S16), not a setting here.

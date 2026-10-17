@@ -786,6 +786,68 @@ paths:
       - Tax
       x-required-permissions:
       - tax:rates:view
+  /v1/tax/registration-schemes:
+    get:
+      description: 'Returns the closed vocabulary of tax-registration schemes: per country, each scheme''s code,
+
+        label, holder type (BUSINESS or PERSON) and whether a registration under it belongs to one
+
+        region, with the allowed regions. Codes are unique across countries, so a code alone
+
+        identifies a scheme.
+
+        Use this tool when pos-supplier validates a vendor''s tax registrations at entry or offers
+
+        the scheme picker of the vendor form; do not use it to read tax rates, evidence rules or
+
+        information-return forms, which are getTaxRates, getTaxEvidenceRules and
+
+        getTaxInformationReturnForms instead.
+
+        Preconditions: this endpoint is internal-only (ADR-0021/ADR-0014), reached by direct
+
+        in-cluster calls from pos-supplier with the service authority, never through pos-api-gateway.
+
+        Required inputs: none; countryCode, two upper-case letters, narrows the answer to one country.
+
+        No events are emitted, no state changes and no tenant data is read; every value is
+
+        configuration held for expert advice, so source is always STUB.
+
+        Returns 200 with an empty list for a well-formed country without a configured scheme, and
+
+        400 VALIDATION_ERROR when countryCode is malformed.
+
+        '
+      operationId: getTaxRegistrationSchemes
+      parameters:
+      - in: query
+        name: countryCode
+        required: false
+        schema:
+          pattern: ^[A-Z]{2}$
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationSchemesResponse'
+          description: Schemes resolved (empty for a country without one)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed countryCode
+      security:
+      - bearerAuth:
+        - tax:rates:view
+      summary: List the tax-registration schemes, per country
+      tags:
+      - Tax
+      x-required-permissions:
+      - tax:rates:view
   /v1/tax/registrations:
     post:
       description: 'Records a tenant''s registration for one country''s indirect-tax regime from a date, and queues tax.registration.changed on the outbox in the same transaction.
@@ -2261,6 +2323,12 @@ components:
     TaxRegimeEntry:
       description: One registration and recovery regime a country declares
       properties:
+        label:
+          description: Configured display label; null when the profile sets none (never the code)
+          example: Example regime
+          type:
+          - string
+          - 'null'
         regime:
           description: Regime name
           example: REGIME_1
@@ -2382,6 +2450,53 @@ components:
       - updatedBy
       - version
       type: object
+    TaxRegistrationScheme:
+      description: One configured tax-registration scheme
+      properties:
+        countryCode:
+          description: ISO 3166-1 alpha-2 country code
+          example: CA
+          type: string
+        holderType:
+          description: Who holds a registration under the scheme
+          example: BUSINESS
+          type: string
+        label:
+          description: Label shown beside the code
+          example: Quebec sales tax (placeholder)
+          type: string
+        regional:
+          description: Whether a registration belongs to one region
+          example: true
+          type: boolean
+        regions:
+          description: Allowed ISO 3166-2 subdivision codes without the country prefix; empty unless regional
+          example:
+          - QC
+          items:
+            type: string
+          type: array
+        scheme:
+          description: Scheme code, unique across countries
+          example: QST
+          type: string
+      type: object
+    TaxRegistrationSchemesResponse:
+      description: The tax-registration schemes configured per country, a closed vocabulary
+      properties:
+        schemes:
+          description: The schemes, ordered by countryCode then scheme; empty for a country without any
+          items:
+            $ref: '#/components/schemas/TaxRegistrationScheme'
+          type: array
+        source:
+          description: Origin of the answer; always STUB, because every value is a placeholder
+          example: STUB
+          type: string
+      required:
+      - schemes
+      - source
+      type: object
     TaxRegistrationUpdateRequest:
       description: A tax registration's new number or dates
       properties:
@@ -2456,6 +2571,12 @@ components:
           - SPECIAL
           example: COUNTRY
           type: string
+        label:
+          description: Configured display label; null when the profile sets none (never the code)
+          example: Example levy
+          type:
+          - string
+          - 'null'
         regime:
           description: Regime the tax type is registered and recovered under; null when it has none
           example: REGIME_1

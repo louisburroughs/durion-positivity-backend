@@ -44,7 +44,8 @@ public record RegisterSessionSummary(
         @Nullable Instant closingStartedAt,
         @Nullable Instant closedAt,
         @Nullable String openedByName,
-        @Nullable String closedByName) {
+        @Nullable String closedByName,
+        @Nullable BigDecimal cashIncrement) {
 
     /** Never prints the actors' display names (ADR-0072). */
     @Override

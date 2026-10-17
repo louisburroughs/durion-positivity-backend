@@ -145,6 +145,8 @@ FROM (VALUES
     ('PLATFORM_ADMIN', 'platform:account:create'),
     ('PLATFORM_ADMIN', 'platform:account:read'),
     ('PLATFORM_ADMIN', 'platform:account:update'),
+    ('PLATFORM_ADMIN', 'platform:reading_tier:manage'),
+    ('PLATFORM_ADMIN', 'platform:reading_tier:read'),
     ('PLATFORM_ADMIN', 'platform:tenant:create'),
     ('PLATFORM_ADMIN', 'platform:tenant:decommission'),
     ('PLATFORM_ADMIN', 'platform:tenant:impersonate'),

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.domainevents.order.OrderCompletedV1;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
@@ -153,6 +154,63 @@ class PaymentEventsListenerTest {
                    "methodType":"CARD","amount":%s,
                    "gatewayReference":"ref-1","settledAt":"2026-07-23T11:59:00Z"}}
                 """.formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, amount);
+    }
+
+    /** ADR-0067 A8 (#2662): a CASH fact with the additive rounding triple; amount stays the applied amount. */
+    private static String cashSettledEnvelope(
+            String eventId, String amount, String settled, String rounding, String increment) {
+        return """
+                {"eventId":"%s","eventType":"payment.payment.settled","schemaVersion":2,
+                 "aggregateId":"%s","aggregateVersion":0,"occurredAtUtc":"2026-07-23T11:59:00Z",
+                 "sourceService":"pos-invoice",
+                 "payload":{"paymentIntentId":"%s","invoiceId":"%s","orderId":"%s",
+                   "methodType":"CASH","amount":%s,"currencyCode":"CAD",
+                   "settledAmount":%s,"cashRoundingAmount":%s,"cashIncrement":%s,
+                   "settledAt":"2026-07-23T11:59:00Z"}}
+                """.formatted(eventId, INTENT_ID, INTENT_ID, INVOICE_ID, ORDER_ID, amount, settled, rounding, increment);
+    }
+
+    @Test
+    @DisplayName("A8: a rounded cash fact completes the order on amount and keeps the rounding triple on the record")
+    void cashSettled_completesOnAmountAndKeepsTheTriple() {
+        order.setGrandTotal(money("99.98"));
+        order.setBalanceDue(money("99.98"));
+
+        listener.onPaymentEvent(cashSettledEnvelope("evt-cash", "99.98", "100.00", "0.02", "0.05"));
+
+        assertThat(order.getStatus()).isEqualTo(SalesOrderStatus.COMPLETED);
+        assertThat(order.getAmountPaid()).isEqualByComparingTo("99.98");
+        assertThat(order.getBalanceDue()).isEqualByComparingTo("0");
+        verify(domainEventPublisher, never()).publishPaymentIntegrityAlert(any());
+        OrderPaymentRecord record = ledger.getFirst();
+        assertThat(record.getMethodType()).isEqualTo("CASH");
+        assertThat(record.getAmount()).isEqualByComparingTo("99.98");
+        assertThat(record.getSettledAmount()).isEqualByComparingTo("100.00");
+        assertThat(record.getCashRoundingAmount()).isEqualByComparingTo("0.02");
+        assertThat(record.getCashIncrement()).isEqualByComparingTo("0.05");
+        assertThat(record.cashAmount()).isEqualByComparingTo("100.00");
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<OrderCompletedV1.Tender>> tenders =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(domainEventPublisher).publishOrderCompleted(eq(order), tenders.capture());
+        assertThat(tenders.getValue()).singleElement().satisfies(t -> {
+            assertThat(t.methodType()).isEqualTo("CASH");
+            assertThat(t.amount()).isEqualByComparingTo("99.98");
+            assertThat(t.settledAmount()).isEqualByComparingTo("100.00");
+            assertThat(t.cashRoundingAmount()).isEqualByComparingTo("0.02");
+        });
+    }
+
+    @Test
+    @DisplayName("A8: a fact without the rounding fields (pre-A8, card) leaves them null and cashAmount = amount")
+    void legacyFact_leavesTheTripleNull() {
+        listener.onPaymentEvent(settledEnvelope("evt-1", "100.00"));
+
+        OrderPaymentRecord record = ledger.getFirst();
+        assertThat(record.getSettledAmount()).isNull();
+        assertThat(record.getCashRoundingAmount()).isNull();
+        assertThat(record.getCashIncrement()).isNull();
+        assertThat(record.cashAmount()).isEqualByComparingTo("100.00");
     }
 
     @Test

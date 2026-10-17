@@ -83,6 +83,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
                     .displayName("Isolation")
                     .accountId(account.getId())
                     .initialAdminEmail("owner@" + slug + ".example")
+                    .locale("en-US")
                     .build());
         });
         assertThat(created.getStatus()).isEqualTo(TenantStatus.PENDING);

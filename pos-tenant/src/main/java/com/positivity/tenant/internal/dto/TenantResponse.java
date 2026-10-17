@@ -41,6 +41,15 @@ public class TenantResponse {
     @Schema(description = "Email of the initial administrator", requiredMode = REQUIRED)
     private String initialAdminEmail;
 
+    @Schema(description = "The shop's locale (BCP 47)", example = "en-US", requiredMode = REQUIRED)
+    private String locale;
+
+    @Schema(
+            description = "The reading tier the tenant is on (CAP:550 S45)",
+            example = "STANDARD",
+            requiredMode = REQUIRED)
+    private String readingTierCode;
+
     @Schema(description = "Registered at (ISO 8601)", requiredMode = REQUIRED)
     private Instant createdAt;
 

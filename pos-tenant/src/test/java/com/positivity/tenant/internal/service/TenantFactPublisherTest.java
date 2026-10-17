@@ -50,6 +50,7 @@ class TenantFactPublisherTest {
                 .status(status)
                 .accountId(UUID.randomUUID())
                 .initialAdminEmail("owner@acme.example")
+                .locale("fr-CA")
                 .version(4L)
                 .build();
     }
@@ -75,7 +76,35 @@ class TenantFactPublisherTest {
         TenantCreatedV1 payload = (TenantCreatedV1) envelope.payload();
         assertThat(payload.status()).isEqualTo("PENDING");
         assertThat(payload.initialAdminEmail()).isEqualTo("owner@acme.example");
+        assertThat(payload.locale()).isEqualTo("fr-CA");
         assertThat(payload.projection().slug()).isEqualTo("acme");
+        assertThat(payload.projection().locale()).isEqualTo("fr-CA");
+    }
+
+    @Test
+    @DisplayName(
+            "#2619: tenant.reading-allowance.changed carries the tier's allowance, keyed and versioned by the tenant")
+    void readingAllowance() {
+        com.positivity.tenant.internal.entity.ReadingTierEntity pro =
+                com.positivity.tenant.internal.entity.ReadingTierEntity.builder()
+                        .code("PRO")
+                        .displayName("Pro")
+                        .monthlyAllowanceAmount(new java.math.BigDecimal("60.00"))
+                        .monthlyAllowanceCurrency("USD")
+                        .build();
+
+        publisher.readingAllowanceChanged(tenant(TenantStatus.ACTIVE), pro);
+
+        DomainEventEnvelope<Object> envelope = captured();
+        assertThat(envelope.eventType()).isEqualTo(TenantEventTypes.READING_ALLOWANCE_CHANGED);
+        assertThat(envelope.aggregateId()).isEqualTo(UUID.fromString("01990000-0000-7000-8000-000000000123"));
+        assertThat(envelope.aggregateVersion()).isEqualTo(4L);
+        com.positivity.domainevents.tenant.TenantReadingAllowanceV1 payload =
+                (com.positivity.domainevents.tenant.TenantReadingAllowanceV1) envelope.payload();
+        assertThat(payload.tierCode()).isEqualTo("PRO");
+        assertThat(payload.monthlyAllowance().amount()).isEqualByComparingTo("60.00");
+        assertThat(payload.monthlyAllowance().currencyCode()).isEqualTo("USD");
+        assertThat(payload.effectiveAt()).isEqualTo(Instant.parse("2026-09-10T12:00:00Z"));
     }
 
     @Test
@@ -86,6 +115,7 @@ class TenantFactPublisherTest {
         assertThat(envelope.eventType()).isEqualTo(TenantEventTypes.SUSPENDED);
         assertThat(envelope.payload()).isInstanceOf(TenantProjectionV1.class);
         assertThat(((TenantProjectionV1) envelope.payload()).status()).isEqualTo("SUSPENDED");
+        assertThat(((TenantProjectionV1) envelope.payload()).locale()).isEqualTo("fr-CA");
     }
 
     @Test

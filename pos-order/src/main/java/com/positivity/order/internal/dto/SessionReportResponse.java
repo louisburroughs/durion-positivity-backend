@@ -27,7 +27,13 @@ public record SessionReportResponse(
 
         List<CashMovementResponse> movements,
         Instant openedAt,
-        Instant generatedAt) {
+        Instant generatedAt,
+
+        @Schema(
+                description = "ADR-0067 A8: signed sum of the cash rounding over the session's cash tenders"
+                        + " (positive when customers paid more than due); informational, never part of over/short",
+                example = "0.02")
+        BigDecimal cashRoundingTotal) {
 
     @Schema(description = "Net settled amount for one tender method")
     public record TenderTotal(String methodType, BigDecimal amount) {}
@@ -69,6 +75,7 @@ public record SessionReportResponse(
                         .toList(),
                 r.movements().stream().map(CashMovementResponse::from).toList(),
                 r.openedAt(),
-                r.generatedAt());
+                r.generatedAt(),
+                r.cashRoundingTotal());
     }
 }

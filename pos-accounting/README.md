@@ -229,9 +229,34 @@ tenant (the applier holds the tenant's state row `FOR UPDATE` for the length of 
 
 | Path | When | Notes |
 | --- | --- | --- |
-| `TenantEventsListener` | `tenant.created` on `tenant.events.v1` (group `pos-accounting-tenant-events`, `auto.offset.reset=earliest`) | Reads the template under the platform binding, then provisions under the new tenant's. Idempotent on eventId (`processed_events`, owner `tenant`). An empty template or a failure propagates: retry, then `tenant.events.v1.dlq`. `tenant.created` for the platform tenant is recorded and skipped |
+| `TenantEventsListener` | `tenant.created` on `tenant.events.v1` (group `pos-accounting-tenant-events`, `auto.offset.reset=earliest`) | Reads the template under the platform binding, then provisions under the new tenant's. Idempotent on eventId (`processed_events`, owner `tenant`). An empty template or a failure propagates: retry, then `tenant.events.v1.dlq`. `tenant.created` for the platform tenant is recorded and skipped (its locale is still stored). The same listener keeps the locale replica (see below) |
 | `AccountingTemplateStartupSweep` | every start, per `TenantIterator` tenant | The alpha default tenant has no `tenant.created` fact, so this is the path that provisions it; it also carries template additions to tenants provisioned earlier. Logs and continues past a failing tenant; never blocks startup; an empty template (Flyway off) is one ERROR line |
 | Add-on choice | `PUT /v1/accounting/tenant-template/add-ons/retread-plant` | Records the tenant's choice, audits it with the caller, reconciles the tenant |
+
+**Tenant locale (#2618, CAP:550 S44).** `ext_tenant` (V33) is a tenant-scoped replica, one row per tenant, of the locale
+(BCP 47, `character varying(35)`) that pos-tenant records. Its key `ext_tenant_id` holds the tenant's own id, with
+`UNIQUE (tenant_id)` (the entity extends `TenantScopedEntity`, so `tenant_id` cannot also be the `@Id`). `TenantEventsListener`
+writes it through `TenantLocaleReplicaWriter`, bound to the fact's tenant in its own transaction: `tenant.created` before
+provisioning (so a failure anywhere redelivers both and the upsert repeats harmlessly; the platform tenant, never
+provisioned, still gets its row), and `tenant.updated` or any other projection fact
+that carries a locale, with its eventId recorded in the same transaction. A fact older than the stored row's
+`aggregate_version` is ignored (an equal version applies, so replay repairs); a fact without a locale changes nothing.
+`TenantLocaleResolver.localeOf(tenantId)` / `localeOfCurrentTenant()` return the stored locale or `en-US` (ADR-0030 §2); S26's
+extraction `localeHint` derives from it. Locale is not money, so nothing fails closed on a missing row.
+
+**Reading allowance (#2619, CAP:550 S45).** `bill_intake_reading_allowance` (V34) is a tenant-scoped replica, one row per
+tenant (`reading_allowance_id` holds the tenant's own id, `UNIQUE (tenant_id)`), of the monthly document-reading allowance
+(`tier_code`, `amount numeric(19,4)` with its `currency`, `effective_at`, `aggregate_version`) that a platform operator's
+reading tier gives the tenant in pos-tenant. The fact is `tenant.reading-allowance.changed` v1 (`TenantReadingAllowanceV1`)
+on `tenant.events.v1`, kept off the public tenant projection. `TenantEventsListener` handles it before the projection
+filter and writes it through `ReadingAllowanceReplicaWriter`, bound to the fact's tenant in its own transaction with the
+eventId recorded in the same transaction; a fact older than the stored `aggregate_version` is ignored (an equal version
+applies, so replay repairs), and a malformed fact is logged and skipped without a `processed_events` row.
+`TenantReadingAllowanceReader.allowanceOf(tenantId)` returns the stored allowance or empty. Empty fails closed: S26's meter
+(#2519) makes no provider call and the draft opens for manual entry with reason `EXTRACTION_ALLOWANCE_UNKNOWN` (a reason code
+that belongs to S26 and is only named here), because the platform never pays for reading it cannot attribute; reading
+resumes once the fact is consumed. Within a month a new amount applies from `effective_at` on and month-to-date usage is
+unchanged (S26's arithmetic).
 
 The provisioner also seeds the policy defaults (three override thresholds, one refund policy, the `UTC`
 accounting time zone of #2558, each only when

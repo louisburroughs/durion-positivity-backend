@@ -36,6 +36,14 @@ Order management service for the Durion Positivity ETSMS platform. Manages sales
   account (permission `order:order:charge_on_account`) and completes the order synchronously —
   the accepted AR invoice counts as settlement. The cart must name a customer; for a walk-in cart
   the body's `tenderedAmount` (cash and card taken now) must cover the final grand total.
+- `POST /v1/orders/{orderId}/payments/cash` — record a register cash tender (`Idempotency-Key`
+  required; `order:order:checkout`, ADR-0067 A8, #2662). pos-order rounds the cash due HALF_UP to the
+  currency's cash increment (`pos.order.cash-increments.<CUR>`, shipped `CAD: 0.05`), checks the
+  tender covers it and records the tender through pos-invoice, which publishes the settled fact; the
+  response carries `amountDue`, `cashIncrement`, `cashDue`, `cashRoundingAmount`, `cashTendered` and
+  `changeDue`. A partial `cashApplied` rounds nothing and must be a whole multiple of the increment. Above
+  500.00 pos-invoice's limit control applies: the clerk must hold `invoice:payment:limit_override` (403 otherwise).
+  A replayed key answers from the order's own payment record once the settled fact has landed.
 - `POST /v1/orders/{orderId}/void` — terminal void of a PENDING_PAYMENT order before any
   settlement; cancels the fronting invoice; 409 when settled payments exist (use cancel)
 - `POST /v1/orders/{orderId}/cancel` — cancel an order
@@ -549,7 +557,10 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_CANCELLATION_INVALID` | 409 | Order cannot be cancelled in its current state |
 | `ORDER_NOT_EDITABLE` | 409 | The order's status no longer allows edits |
 | `ORDER_INVALID_STATE_TRANSITION` | 409 | The requested status transition is not allowed from the order's current status |
-| `ORDER_CONFLICT` | 409 | The order was modified concurrently; retry with fresh state |
+| `CASH_TENDER_INSUFFICIENT` | 422 | `cashTendered` is below the rounded cash due; `fieldErrors[cashTendered]` names `cashDue`. Nothing is recorded; a split tender states `cashApplied` explicitly (#2662). |
+| `CASH_AMOUNT_NOT_IN_INCREMENT` | 422 | A partial `cashApplied` is not a whole multiple of the currency's cash increment; `fieldErrors[cashApplied]` names the increment (#2662). |
+| `CASH_TENDER_SESSION_REQUIRED` | 422 | The order has no register session, so there is no drawer for the cash to go into (#2662). |
+| `ORDER_CONFLICT` | 409 | The order was modified concurrently; retry with fresh state. Also answered when pos-invoice refuses a cash tender because its open balance or its check of the rounding triple disagrees with the figures the register computed from the facts it has seen (#2662). |
 | `ORDER_VOID_BLOCKED` | 409 | A void was requested on an order that already has settled payments; use cancellation so the money is reversed |
 | `PURCHASE_ORDER_INVALID_STATE` | 409 | The purchase order's status does not allow the operation, including a revise of an order that is not `DRAFT` or `APPROVED`, or has goods received on any line (#2632); a reopen, line cancel or close on a `CANCELLED`/`CLOSED` order, a line cancel on a `DRAFT` (`nextAction`: revise), a close with nothing received (`nextAction`: cancel), a reopen above the returned quantity or a line cancel above the open quantity (#2635) |
 | `PURCHASE_ORDER_VERSION_CONFLICT` | 409 | A revise, or an approve that sends one, whose `expectedVersionNumber` is not the order's current `versionNumber`; nothing changes and no fact is published. Re-read the order and apply the change to the current version (#2681) |

@@ -16,6 +16,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.order.internal.client.TaxPlausibilityPort;
+import com.positivity.order.internal.config.CashIncrements;
 import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.controller.RegisterSessionExceptionHandler;
@@ -144,6 +145,7 @@ class RegisterSessionStatedTaxTest {
                 new com.positivity.order.internal.service.ActorDisplayNames(org.mockito.Mockito.mock(
                         com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository.class)),
                 new SupplierVendorGuard(vendorCopies),
+                new CashIncrements(Map.of("CAD", new BigDecimal("0.05"))),
                 CLOCK,
                 meters);
         session = RegisterSession.builder()

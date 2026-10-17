@@ -3,6 +3,7 @@ package com.positivity.tenant.internal.service;
 import com.positivity.tenant.internal.dto.TenantCreateRequest;
 import com.positivity.tenant.internal.dto.TenantResponse;
 import com.positivity.tenant.internal.dto.TenantUpdateRequest;
+import com.positivity.tenant.internal.entity.ReadingTierEntity;
 import com.positivity.tenant.internal.entity.TenantEntity;
 import com.positivity.tenant.internal.enums.TenantStatus;
 import com.positivity.tenant.internal.exception.DuplicateResourceException;
@@ -10,6 +11,7 @@ import com.positivity.tenant.internal.exception.InvalidStatusTransitionException
 import com.positivity.tenant.internal.exception.ResourceNotFoundException;
 import com.positivity.tenant.internal.repository.AccountRepository;
 import com.positivity.tenant.internal.repository.TenantRepository;
+import com.positivity.tenant.internal.validation.TenantLocales;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -38,6 +40,8 @@ public class TenantServiceImpl implements TenantService {
     private final TenantRepository tenantRepository;
     private final AccountRepository accountRepository;
     private final TenantFactPublisher factPublisher;
+    private final TenantLocales locales;
+    private final ReadingTierService readingTiers;
     private final Clock clock;
 
     @Override
@@ -50,6 +54,7 @@ public class TenantServiceImpl implements TenantService {
             throw new DuplicateResourceException("Tenant slug already taken: " + request.getSlug());
         }
         String displayName = resolveDisplayName(request);
+        ReadingTierEntity tier = readingTiers.requireAssignable(request.getReadingTierCode());
         TenantEntity tenant = TenantEntity.builder()
                 .slug(request.getSlug())
                 .displayName(displayName)
@@ -58,6 +63,8 @@ public class TenantServiceImpl implements TenantService {
                 .accountId(request.getAccountId())
                 .cell(request.getCell())
                 .initialAdminEmail(request.getInitialAdminEmail())
+                .locale(locales.canonical(request.getLocale()))
+                .readingTierCode(tier.getCode())
                 .build();
         TenantEntity saved;
         try {
@@ -72,6 +79,8 @@ public class TenantServiceImpl implements TenantService {
             throw e;
         }
         factPublisher.tenantCreated(saved);
+        // #2619: the allowance is its own narrow fact, never part of the projection.
+        factPublisher.readingAllowanceChanged(saved, tier);
         log.info("Registered tenant id={} slug={} account={}", saved.getId(), saved.getSlug(), saved.getAccountId());
         return toResponse(saved);
     }
@@ -120,6 +129,20 @@ public class TenantServiceImpl implements TenantService {
             tenant.setCell(request.getCell());
             changed = true;
         }
+        if (request.getLocale() != null) {
+            String locale = locales.canonical(request.getLocale());
+            if (!locale.equals(tenant.getLocale())) {
+                tenant.setLocale(locale);
+                changed = true;
+            }
+        }
+        ReadingTierEntity assignedTier = null;
+        if (request.getReadingTierCode() != null
+                && !request.getReadingTierCode().equals(tenant.getReadingTierCode())) {
+            assignedTier = readingTiers.requireAssignable(request.getReadingTierCode());
+            tenant.setReadingTierCode(assignedTier.getCode());
+            changed = true;
+        }
         if (!changed) {
             return toResponse(tenant);
         }
@@ -133,6 +156,9 @@ public class TenantServiceImpl implements TenantService {
             throw e;
         }
         factPublisher.tenantUpdated(saved);
+        if (assignedTier != null) {
+            factPublisher.readingAllowanceChanged(saved, assignedTier);
+        }
         return toResponse(saved);
     }
 
@@ -242,6 +268,8 @@ public class TenantServiceImpl implements TenantService {
                 .accountId(tenant.getAccountId())
                 .cell(tenant.getCell())
                 .initialAdminEmail(tenant.getInitialAdminEmail())
+                .locale(tenant.getLocale())
+                .readingTierCode(tenant.getReadingTierCode())
                 .createdAt(tenant.getCreatedAt())
                 .updatedAt(tenant.getUpdatedAt())
                 .activatedAt(tenant.getActivatedAt())

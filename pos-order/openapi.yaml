@@ -1186,6 +1186,162 @@ paths:
       - Price Overrides
       x-required-permissions:
       - order:price_override:reject
+  /v1/orders/purchase-order-vendors:
+    get:
+      description: 'Returns a page of the vendors a purchase order may name, from pos-order''s own copy of the pos-supplier vendor master: vendorId, vendorNumber, displayName and status, nothing else.
+
+        Use this tool to pick the vendorId for createPurchaseOrder or a vendor-changing revision; do not use it to read or change the vendor master itself, which is supplier-owned (use the pos-supplier vendor endpoints instead). A vendor listed here as ACTIVE never answers 503 VENDOR_REPLICATION_PENDING on create, and a DRAFT order whose vendor is not in the ACTIVE list is one approvePurchaseOrder will refuse.
+
+        Preconditions: none; the copy is fed by supplier.vendor.updated, so a vendor created in pos-supplier moments ago may not be listed yet.
+
+        Required inputs: none; status (ACTIVE or INACTIVE, upper case) and q (a case-insensitive substring of the vendor number or display name, at most 255 characters) narrow the result, and page, size and sort (vendorNumber, displayName, status or vendorId; default displayName,asc) control pagination.
+
+        Emits an ORDER_PURCHASE_ORDER_VENDOR_LIST audit event; a read-only projection that never calls pos-supplier.
+
+        Returns 200 with an empty page when nothing matches; 400 PURCHASE_ORDER_BAD_REQUEST on a sort property outside the four listed, and 400 VALIDATION_ERROR (with fieldErrors) on a status that is not ACTIVE or INACTIVE or a q over 255 characters.
+
+        '
+      operationId: listPurchaseOrderVendors
+      parameters:
+      - description: Only vendors in this status; omit for every vendor of the copy, active or inactive
+        example: ACTIVE
+        in: query
+        name: status
+        required: false
+        schema:
+          description: 'Vendor status as pos-supplier publishes it: only an ACTIVE vendor takes a new purchase order'
+          enum:
+          - ACTIVE
+          - INACTIVE
+          example: ACTIVE
+          type: string
+      - description: Case-insensitive substring of the vendor number or display name
+        example: acme
+        in: query
+        name: q
+        required: false
+        schema:
+          description: Case-insensitive substring of the vendor number or display name
+          example: acme
+          maxLength: 255
+          minLength: 0
+          type: string
+      - description: Zero-based page index (0..N)
+        in: query
+        name: page
+        required: false
+        schema:
+          default: 0
+          minimum: 0
+          type: integer
+      - description: The size of the page to be returned
+        in: query
+        name: size
+        required: false
+        schema:
+          default: 10
+          minimum: 1
+          type: integer
+      - description: 'Sorting criteria in the format: property,(asc|desc). Default sort order is ascending. Multiple sort criteria are supported.'
+        in: query
+        name: sort
+        required: false
+        schema:
+          default:
+          - displayName,ASC
+          items:
+            type: string
+          type: array
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagePurchaseOrderVendorResponse'
+          description: Vendors returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PURCHASE_ORDER_BAD_REQUEST: a sort property other than vendorNumber, displayName, status or vendorId; VALIDATION_ERROR (fieldErrors): status not ACTIVE or INACTIVE, or q over 255 characters'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required purchase order view authority
+      security:
+      - bearerAuth:
+        - order:purchase_order:view
+      summary: List Purchase-Order Vendors
+      tags:
+      - Purchase Orders
+      x-required-permissions:
+      - order:purchase_order:view
+  /v1/orders/purchase-order-vendors/{vendorId}:
+    get:
+      description: 'Returns one vendor of pos-order''s vendor copy by its pos-supplier vendor id: vendorNumber, displayName and status.
+
+        Use this tool to name the vendor on a purchase-order screen when the vendorId is already known; do not use it to search, use listPurchaseOrderVendors instead to find one.
+
+        Preconditions: none. An INACTIVE vendor is returned as such (200), since that is a fact about the vendor, not a refusal of this read.
+
+        Required inputs: vendorId (path).
+
+        Emits an ORDER_PURCHASE_ORDER_VENDOR_GET audit event; read-only, never calls pos-supplier.
+
+        Returns 503 VENDOR_REPLICATION_PENDING with Retry-After when the copy does not hold the id: pos-order cannot tell a vendor that does not exist from one whose fact has not arrived, so it never answers 404 (ADR-0017 §1). A malformed vendorId is 400.
+
+        '
+      operationId: getPurchaseOrderVendor
+      parameters:
+      - description: The pos-supplier vendor id
+        in: path
+        name: vendorId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrderVendorResponse'
+          description: Vendor returned
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: vendorId is not a UUID
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required purchase order view authority
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VENDOR_REPLICATION_PENDING: the vendor has not reached pos-order''s copy of the pos-supplier vendor master yet. Not-yet, not no: retry after the Retry-After interval.'
+          headers:
+            Retry-After:
+              description: Seconds to wait before retrying
+              schema:
+                type: integer
+              style: simple
+      security:
+      - bearerAuth:
+        - order:purchase_order:view
+      summary: Get Purchase-Order Vendor
+      tags:
+      - Purchase Orders
+      x-required-permissions:
+      - order:purchase_order:view
   /v1/orders/purchase-orders:
     get:
       description: 'Returns a page of purchase orders matching the optional filter criteria, with lifecycle status, totals and open balances.
@@ -1493,11 +1649,11 @@ paths:
 
         Preconditions: the purchase order must exist and be in DRAFT status, and its vendor must be ACTIVE in pos-order''s vendor copy; an order requested by pos-inventory may name another vendor and is revised to a valid one first.
 
-        Required inputs: poId (UUIDv7) path parameter and a JSON body where approvalNotes is optional, so an empty object is acceptable.
+        Required inputs: poId (UUIDv7) path parameter and a JSON body where approvalNotes and expectedVersionNumber are optional, so an empty object is acceptable; send expectedVersionNumber (the versionNumber the approver read) so the approval applies only to the content they saw.
 
         Emits an ORDER_PURCHASE_ORDER_APPROVE event; the order becomes eligible for ASNs, goods receipts and receiving sessions.
 
-        Returns 404 when the purchase order does not exist, 409 when it is not in DRAFT status, 422 VENDOR_INACTIVE when its vendor is inactive, and 503 VENDOR_REPLICATION_PENDING with Retry-After when its vendor has not reached the copy yet.
+        Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_INVALID_STATE when it is not in DRAFT status, 409 PURCHASE_ORDER_VERSION_CONFLICT when expectedVersionNumber is not the order''s current versionNumber (nothing changes; re-read and approve again), 422 VENDOR_INACTIVE when its vendor is inactive, and 503 VENDOR_REPLICATION_PENDING with Retry-After when its vendor has not reached the copy yet.
 
         '
       operationId: approvePurchaseOrder
@@ -1635,6 +1791,247 @@ paths:
       - Purchase Orders
       x-required-permissions:
       - order:purchase_order:approve
+  /v1/orders/purchase-orders/{poId}/close:
+    post:
+      description: 'Short-closes a purchase order something was received on (CAP:550 #2635): every remaining open quantity on every line is cancelled with its value, the balance falls to what was received, the order is CLOSED and its state is published, so receiving expects nothing more.
+
+        Use this tool when the vendor will not ship the rest; do not use it for one line (cancelPurchaseOrderLine) or for an order nothing arrived on (cancelPurchaseOrder instead).
+
+        Preconditions: the order is APPROVED, PARTIALLY_RECEIVED or FULLY_RECEIVED and something was received on it.
+
+        Required inputs: poId path parameter and a reason.
+
+        Emits an ORDER_PURCHASE_ORDER_CLOSE event and publishes purchaseorder.updated.
+
+        Returns 200 with the order, 400 PURCHASE_ORDER_BAD_REQUEST for a missing reason, 404 PURCHASE_ORDER_NOT_FOUND, and 409 PURCHASE_ORDER_INVALID_STATE on a DRAFT, CANCELLED or CLOSED order, or on an order with nothing received (nextAction names cancelPurchaseOrder).
+
+        '
+      operationId: closePurchaseOrder
+      parameters:
+      - description: Purchase order identifier
+        in: path
+        name: poId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Short-close with a reason:
+                description: Short-close with a reason
+                value:
+                  reason: Vendor will not ship the rest
+            schema:
+              $ref: '#/components/schemas/ClosePurchaseOrderRequest'
+        description: Why the remaining open quantity is cancelled.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrderResponse'
+          description: Purchase order closed
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: The reason is missing
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required purchase order approval authority
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Purchase order not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PURCHASE_ORDER_INVALID_STATE: the order is DRAFT, CANCELLED or CLOSED, or nothing was received on it (nextAction names cancelPurchaseOrder)'
+      security:
+      - bearerAuth:
+        - order:purchase_order:approve
+      summary: 'Close a purchase order: cancel every remaining open quantity'
+      tags:
+      - Purchase Orders
+      x-required-permissions:
+      - order:purchase_order:approve
+  /v1/orders/purchase-orders/{poId}/lines/{lineId}/cancel:
+    post:
+      description: 'Cancels part or all of one line''s open quantity because the vendor will not ship it (CAP:550 #2635): the line''s cancelled figures take the quantity and its value, open and balance fall by the same, the status is re-derived (CLOSED once every line is settled with a short-closed remainder) and the order''s state is published, so receiving expects nothing more for it.
+
+        Use this tool for one line; do not use it for every remainder at once (closePurchaseOrder) or for an order nothing arrived on (cancelPurchaseOrder instead).
+
+        Preconditions: the order is APPROVED, PARTIALLY_RECEIVED or FULLY_RECEIVED (a DRAFT is revised, not short-closed); the line belongs to the order; quantity is at most the line''s open quantity.
+
+        Required inputs: poId and lineId path parameters; quantity (base units, > 0) and a reason.
+
+        Emits an ORDER_PURCHASE_ORDER_LINE_CANCEL event and publishes purchaseorder.updated.
+
+        Returns 200 with the order, 400 PURCHASE_ORDER_BAD_REQUEST for a missing reason or a quantity that is not positive, 404 PURCHASE_ORDER_NOT_FOUND for an unknown order or line, and 409 PURCHASE_ORDER_INVALID_STATE on a DRAFT (nextAction: revise), CANCELLED or CLOSED order or a quantity above the open quantity.
+
+        '
+      operationId: cancelPurchaseOrderLine
+      parameters:
+      - description: Purchase order identifier
+        in: path
+        name: poId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Purchase order line identifier
+        in: path
+        name: lineId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Cancel five units:
+                description: Cancel five units
+                value:
+                  quantity: 5
+                  reason: Vendor discontinued the item
+            schema:
+              $ref: '#/components/schemas/CancelPurchaseOrderLineRequest'
+        description: The quantity to cancel and why the vendor will not ship it.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrderResponse'
+          description: Remainder cancelled
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Quantity is not positive or the reason is missing
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks required purchase order approval authority
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Purchase order or line not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PURCHASE_ORDER_INVALID_STATE: the order is DRAFT (nextAction names revise), CANCELLED or CLOSED, or the quantity exceeds the line''s open quantity'
+      security:
+      - bearerAuth:
+        - order:purchase_order:approve
+      summary: Cancel a remainder of a purchase-order line
+      tags:
+      - Purchase Orders
+      x-required-permissions:
+      - order:purchase_order:approve
+  /v1/orders/purchase-orders/{poId}/lines/{lineId}/reopen:
+    post:
+      description: 'Reopens part or all of a line''s returned quantity because the vendor will replace the goods on this order (CAP:550 #2635): the quantity leaves the line''s returned figures and is open again, the open balance rises by its value, the status is re-derived (FULLY_RECEIVED becomes PARTIALLY_RECEIVED) and the order''s state is published, so receiving expects the replacement on the original line. Never a new purchase order (ADR-0052).
+
+        Use this tool after pos-inventory recorded a RETURN_TO_VENDOR and the vendor agreed to replace; do not use it for a receipt correction, which reopens the line by itself.
+
+        Preconditions: the order is not CANCELLED or CLOSED; the line belongs to the order; quantity is at most the line''s returned quantity.
+
+        Required inputs: poId and lineId path parameters; quantity (base units, > 0); vendorReturnId is optional, kept for the audit trail.
+
+        Emits an ORDER_PURCHASE_ORDER_LINE_REOPEN event and publishes purchaseorder.updated.
+
+        Returns 200 with the order, 400 PURCHASE_ORDER_BAD_REQUEST for a quantity that is not positive, 404 PURCHASE_ORDER_NOT_FOUND for an unknown order or line, and 409 PURCHASE_ORDER_INVALID_STATE on a CANCELLED or CLOSED order or a quantity above what was returned.
+
+        '
+      operationId: reopenPurchaseOrderLine
+      parameters:
+      - description: Purchase order identifier
+        in: path
+        name: poId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: Purchase order line identifier
+        in: path
+        name: lineId
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Reopen two units:
+                description: Reopen two units
+                value:
+                  quantity: 2
+                  vendorReturnId: 019a0000-0000-7000-8000-000000002635
+            schema:
+              $ref: '#/components/schemas/ReopenPurchaseOrderLineRequest'
+        description: The quantity to reopen and, optionally, the vendor return it belongs to.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrderResponse'
+          description: Line reopened
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Quantity is not positive
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: User lacks order:purchase_order:reopen
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Purchase order or line not found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'PURCHASE_ORDER_INVALID_STATE: the order is CANCELLED or CLOSED, or the quantity exceeds what the line has returned'
+      security:
+      - bearerAuth:
+        - order:purchase_order:reopen
+      summary: Reopen a returned quantity of a purchase-order line for a replacement
+      tags:
+      - Purchase Orders
+      x-required-permissions:
+      - order:purchase_order:reopen
   /v1/orders/purchase-orders/{poId}/revisions:
     post:
       description: 'Revises an existing purchase order in place: the version number increments, the header fields and every line are replaced, totals are recomputed, and the open balance resets to the ex-tax value (subtotal) of the new lines.
@@ -1643,11 +2040,11 @@ paths:
 
         Preconditions: the purchase order must exist and be DRAFT, or APPROVED with nothing received on any line (every line''s open quantity still equals its ordered quantity), because a revision replaces every line with new line ids; from PARTIALLY_RECEIVED on, and on CLOSED or CANCELLED orders, revise is refused and nothing changes.
 
-        Required inputs: poId (UUIDv7) path parameter plus poDate, revisionReason and the full replacement lines list, because every line is replaced rather than merged; paymentTermsId, expectedDeliveryDate, shipToLocationId, requestedBy and comment overwrite the stored values even when omitted, while an optional vendorId changes the vendor of a DRAFT order only.
+        Required inputs: poId (UUIDv7) path parameter plus expectedVersionNumber (the versionNumber the last read returned; the revise applies only if the order is still at that version), poDate, revisionReason and the full replacement lines list, because every line is replaced rather than merged; each line''s taxCodeId and glAccountId are returned by getPurchaseOrder, so a read, edited and revised line keeps them. paymentTermsId, expectedDeliveryDate, shipToLocationId and comment overwrite the stored values even when omitted; requestedBy is the order''s requester (not the reviser, who is the caller): omitted keeps it, blank clears it, a value corrects it; an optional vendorId changes the vendor of a DRAFT order only.
 
         Emits an ORDER_PURCHASE_ORDER_REVISE event carrying the field-level delta and the revision reason.
 
-        Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_INVALID_STATE when the order is not DRAFT or APPROVED or has received goods on any line, or when vendorId changes the vendor of an order past DRAFT, 422 VENDOR_INACTIVE for an inactive new vendor or when a line''s documentUom has no conversion path to the product''s base UoM, and 503 VENDOR_REPLICATION_PENDING with Retry-After when the new vendor has not reached the copy yet.
+        Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_VERSION_CONFLICT when expectedVersionNumber is not the order''s current versionNumber (nothing changes, no fact is published; re-read the order and revise again), 409 PURCHASE_ORDER_INVALID_STATE when the order is not DRAFT or APPROVED or has received goods on any line, or when vendorId changes the vendor of an order past DRAFT, 422 VENDOR_INACTIVE for an inactive new vendor or when a line''s documentUom has no conversion path to the product''s base UoM, and 503 VENDOR_REPLICATION_PENDING with Retry-After when the new vendor has not reached the copy yet.
 
         '
       operationId: revisePurchaseOrder
@@ -1667,6 +2064,7 @@ paths:
                 description: Quantity increase
                 value:
                   expectedDeliveryDate: '2026-09-03'
+                  expectedVersionNumber: 1
                   lines:
                   - description: Stainless steel water bottle, 750ml
                     lineNumber: 1
@@ -1963,17 +2361,17 @@ paths:
       x-required-permissions:
       - order:session_policy:manage
     put:
-      description: 'Replaces the two configurable movement types (petty expenses and vendor cash on delivery: allowed and cashier limit) and the over/short tolerance, with a justification. Each changed setting writes one history row (old and new value, actor, justification); a request that changes nothing writes nothing. Switching a type off is never retroactive: recorded movements stand and are carried on the close fact.
+      description: 'Replaces the two configurable movement types (petty expenses and vendor cash on delivery: allowed and cashier limit) and the over/short tolerance, with a justification: each changed setting writes one history row (old and new value, actor, justification), and a request that changes nothing writes nothing. Switching a type off is never retroactive: recorded movements stand and are carried on the close fact.
 
         Use this tool to change the drawer limits after reading them with getSessionPolicy; do not use it to see what one register session may record now — use getCashMovementOptions instead.
 
-        Preconditions: an allowed type needs a cashier limit; vendor cash on delivery stays off until pos-order holds the vendor list.
+        Preconditions: an allowed type needs a cashier limit; vendor cash on delivery may be switched on (#2576), and a VENDOR_COD movement then names an ACTIVE vendor of pos-order''s vendor copy.
 
         Required inputs: the version read (null only while the defaults apply), currencyCode (the functional currency, ISO 4217), pettyExpense and vendorCod (allowed, cashierLimit), overShortTolerance and a justification of at least 10 characters; limits and the tolerance must not be negative.
 
         Emits an ORDER_SESSION_POLICY_UPDATE event when a setting changes, and nothing otherwise.
 
-        Returns 200 with the policy and its history, 400 VALIDATION_ERROR for a field rule or a missing or non-ISO currencyCode, 409 SESSION_POLICY_CONFLICT when the version read is not the current one or another change won a race (read again and retry), and 422 CURRENCY_NOT_SUPPORTED for a currency other than the functional currency.
+        Returns 200 with the policy and its history, 400 VALIDATION_ERROR for a field rule or a missing or non-ISO currencyCode, 409 SESSION_POLICY_CONFLICT when the version read is not the current one or another change won a race (read again and retry), 422 CURRENCY_NOT_SUPPORTED for a currency other than the functional currency, and 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY when a limit or the tolerance has more decimals than the currency allows (fieldErrors names each; nothing is rounded, ADR-0067 PC-6).
 
         '
       operationId: updateSessionPolicy
@@ -2009,7 +2407,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: justification under 10 characters, a negative limit or tolerance, an allowed type without a limit, or vendor cash on delivery switched on.'
+          description: 'VALIDATION_ERROR: justification under 10 characters, a negative limit or tolerance, an allowed type without a limit, a missing or non-ISO currencyCode. fieldErrors[0].field is the refused field''s JSON path (justification, pettyExpense.allowed, pettyExpense.cashierLimit, vendorCod.allowed, vendorCod.cashierLimit, overShortTolerance, currencyCode).'
         '409':
           content:
             application/json:
@@ -2021,7 +2419,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'CURRENCY_NOT_SUPPORTED: the request states a currency other than the functional currency.'
+          description: 'CURRENCY_NOT_SUPPORTED: the request states a currency other than the functional currency; or AMOUNT_PRECISION_EXCEEDS_CURRENCY: a limit or the tolerance has more decimals than the currency allows (fieldErrors names each; nothing is rounded).'
       security:
       - bearerAuth: []
       summary: Replace the Drawer Policy
@@ -2187,7 +2585,7 @@ paths:
 
         Emits an ORDER_SESSION_BEGIN_CLOSE event.
 
-        Returns 200 with the CLOSING session, 404 when the session does not exist, and 409 when the session is already closed or an order on the session is still awaiting payment.
+        Returns 200 with the CLOSING session, 404 when the session does not exist, 409 when the session is already closed or an order on the session is still awaiting payment, and 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY when countedCash has more decimals than the drawer''s currency allows (nothing is rounded, ADR-0067 PC-6).
 
         '
       operationId: beginSessionClose
@@ -2300,13 +2698,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'CURRENCY_NOT_SUPPORTED: the amount is in a currency other than the functional currency.'
+          description: 'CURRENCY_NOT_SUPPORTED: the amount is in a currency other than the drawer''s; or AMOUNT_PRECISION_EXCEEDS_CURRENCY: the amount has more decimals than the drawer''s currency allows (fieldErrors names amount; nothing is rounded, ADR-0067 PC-6).'
         '503':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: The credentials could not be checked right now (CASH_MOVEMENT_APPROVAL_UNAVAILABLE).
+          description: The credentials could not be checked right now (CASH_MOVEMENT_APPROVAL_UNAVAILABLE); Retry-After says when to try again.
       security:
       - bearerAuth: []
       summary: Approve a Drawer Cash Movement (Manager Step-Up)
@@ -2415,7 +2813,7 @@ paths:
 
         Emits an ORDER_SESSION_CASH_MOVEMENT event; with stated tax it first asks pos-tax''s plausibility check, and any refusal records nothing and leaves the approval token unspent, so the register may resend the same requestId with a corrected payload.
 
-        Returns 201 with the recorded movement and 200 with the first result when the requestId was already recorded with the same payload; 400 REGISTER_SESSION_INVALID_ARGUMENT with fieldErrors for a missing or malformed field (VALIDATION_ERROR for a non-ISO currencyCode), 403 for the approval rules or LOCATION_SCOPE_DENIED, 404 when the session does not exist, 409 REGISTER_SESSION_CONFLICT when the session is not OPEN or IDEMPOTENCY_CONFLICT when the requestId was used for another movement, 422 for a drawer rule, CURRENCY_NOT_SUPPORTED, AMOUNT_PRECISION_EXCEEDS_CURRENCY, TAX_REGIME_NOT_OFFERED, TAX_AMOUNT_IMPLAUSIBLE or SUPPLIER_REGISTRATION_NOT_ACCEPTED, and 503 TAX_CHECK_UNAVAILABLE with Retry-After when the supplier''s number was sent and pos-tax cannot check it.
+        Returns 201 with the recorded movement and 200 with the first result when the requestId was already recorded with the same payload; 400 REGISTER_SESSION_INVALID_ARGUMENT with fieldErrors for a missing or malformed field (VALIDATION_ERROR for a non-ISO currencyCode), 403 for the approval rules or LOCATION_SCOPE_DENIED, 404 when the session does not exist, 409 REGISTER_SESSION_CONFLICT when the session is not OPEN or IDEMPOTENCY_CONFLICT when the requestId was used for another movement, 422 for a drawer rule, CURRENCY_NOT_SUPPORTED, AMOUNT_PRECISION_EXCEEDS_CURRENCY, TAX_REGIME_NOT_OFFERED, TAX_AMOUNT_IMPLAUSIBLE, SUPPLIER_REGISTRATION_NOT_ACCEPTED or VENDOR_INACTIVE, and 503 TAX_CHECK_UNAVAILABLE with Retry-After when the supplier''s number was sent and pos-tax cannot check it, or 503 VENDOR_REPLICATION_PENDING with Retry-After when the VENDOR_COD vendor is not in the vendor copy yet.
 
         '
       operationId: recordCashMovement
@@ -2509,13 +2907,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'Refused by a drawer rule: CASH_MOVEMENT_TYPE_NOT_ALLOWED (the reason''s type is switched off in the drawer policy), PETTY_EXPENSE_CATEGORY_UNKNOWN (not an ACTIVE petty-expense category) or FLOAT_CHANGE_NOT_RECORDED (the amount does not close the gap between the configured float and the drawer''s float) or CURRENCY_NOT_SUPPORTED (an amount in a currency other than the functional currency); AMOUNT_PRECISION_EXCEEDS_CURRENCY (the amount or a stated tax amount has more decimals than the currency allows, never rounded), TAX_REGIME_NOT_OFFERED (a stated regime the category does not offer here and today), TAX_AMOUNT_IMPLAUSIBLE (a stated amount, or their sum, at or above the amount, or above pos-tax''s maximum) or SUPPLIER_REGISTRATION_NOT_ACCEPTED (a supplier''s number for a country that names no supplier regime); fieldErrors name each offending field'
+          description: 'Refused by a drawer rule: CASH_MOVEMENT_TYPE_NOT_ALLOWED (the reason''s type is switched off in the drawer policy), PETTY_EXPENSE_CATEGORY_UNKNOWN (not an ACTIVE petty-expense category) or FLOAT_CHANGE_NOT_RECORDED (the amount does not close the gap between the configured float and the drawer''s float) or CURRENCY_NOT_SUPPORTED (an amount in a currency other than the functional currency); VENDOR_INACTIVE (the VENDOR_COD vendor is INACTIVE in the vendor copy); AMOUNT_PRECISION_EXCEEDS_CURRENCY (the amount or a stated tax amount has more decimals than the currency allows, never rounded), TAX_REGIME_NOT_OFFERED (a stated regime the category does not offer here and today), TAX_AMOUNT_IMPLAUSIBLE (a stated amount, or their sum, at or above the amount, or above pos-tax''s maximum) or SUPPLIER_REGISTRATION_NOT_ACCEPTED (a supplier''s number for a country that names no supplier regime); fieldErrors name each offending field'
         '503':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'TAX_CHECK_UNAVAILABLE: the supplier''s registration number was sent and pos-tax could not check it; nothing was recorded. Retry after Retry-After seconds, or resend the same requestId without the number.'
+          description: 'TAX_CHECK_UNAVAILABLE: the supplier''s registration number was sent and pos-tax could not check it; nothing was recorded. Retry after Retry-After seconds, or resend the same requestId without the number. VENDOR_REPLICATION_PENDING (with Retry-After): the VENDOR_COD vendor has not reached pos-order''s vendor copy yet; retry shortly.'
           headers:
             Retry-After:
               description: Seconds to wait before retrying
@@ -3337,6 +3735,12 @@ components:
           description: Free-text notes recorded by the approver explaining the approval decision
           example: Approved within budget for Q1 restock
           type: string
+        expectedVersionNumber:
+          description: 'Optional: the versionNumber of the order the approver read. When given, the approval is applied only if the order is still at that version, so a person approves the content they saw; otherwise 409 PURCHASE_ORDER_VERSION_CONFLICT and nothing changes (#2681). Absent approves the current version'
+          example: 2
+          format: int32
+          minimum: 1
+          type: integer
       type: object
     BeginCloseRequest:
       description: Request payload for beginning a register session close
@@ -3368,6 +3772,24 @@ components:
           type: string
       required:
       - cancellationReason
+      type: object
+    CancelPurchaseOrderLineRequest:
+      description: 'Cancel part or all of a line''s open quantity: the vendor will not ship it'
+      properties:
+        quantity:
+          description: Base units to cancel; at most the line's open quantity
+          example: 3
+          minimum: 0
+          type: number
+        reason:
+          description: Why the remainder is cancelled
+          example: Vendor discontinued the part
+          maxLength: 500
+          minLength: 0
+          type: string
+      required:
+      - quantity
+      - reason
       type: object
     CancellationResponse:
       description: Response returned after cancelling an order
@@ -3492,6 +3914,11 @@ components:
           description: The session
           format: uuid
           type: string
+        vendors:
+          description: The ACTIVE vendors a drawer may pay cash on delivery (VENDOR_COD), by display name; pos-order's copy of the pos-supplier vendor master (#2576)
+          items:
+            $ref: '#/components/schemas/VendorOption'
+          type: array
       type: object
     CashMovementRequest:
       description: Request payload for recording a drawer cash movement with one of the fixed reasons
@@ -3775,6 +4202,18 @@ components:
           description: Total of the clerk's walk-in orders
           example: 84.37
           type: number
+      type: object
+    ClosePurchaseOrderRequest:
+      description: 'Close a purchase order: every remaining open quantity on every line is cancelled'
+      properties:
+        reason:
+          description: Why the remainder is cancelled
+          example: Vendor will not ship the rest
+          maxLength: 500
+          minLength: 0
+          type: string
+      required:
+      - reason
       type: object
     Conflict:
       description: A single named conflict behind a 409 response
@@ -4068,6 +4507,38 @@ components:
         content:
           items:
             $ref: '#/components/schemas/PurchaseOrderTransmissionEvent'
+          type: array
+        empty:
+          type: boolean
+        first:
+          type: boolean
+        last:
+          type: boolean
+        number:
+          format: int32
+          type: integer
+        numberOfElements:
+          format: int32
+          type: integer
+        pageable:
+          $ref: '#/components/schemas/PageableObject'
+        size:
+          format: int32
+          type: integer
+        sort:
+          $ref: '#/components/schemas/SortObject'
+        totalElements:
+          format: int64
+          type: integer
+        totalPages:
+          format: int32
+          type: integer
+      type: object
+    PagePurchaseOrderVendorResponse:
+      properties:
+        content:
+          items:
+            $ref: '#/components/schemas/PurchaseOrderVendorResponse'
           type: array
         empty:
           type: boolean
@@ -4428,6 +4899,10 @@ components:
     PurchaseOrderLineResponse:
       description: A single line item returned as part of a purchase order
       properties:
+        cancelledQuantityDecimal:
+          description: 'Base units short-closed: the vendor will not ship them (#2635)'
+          example: 2
+          type: number
         conversionFactor:
           description: Effective base-per-document-unit conversion factor applied at derivation time
           example: 12
@@ -4443,6 +4918,10 @@ components:
         documentUom:
           description: UoM the line was keyed in when it differed from the product's base UoM
           example: CASE
+          type: string
+        glAccountId:
+          description: GL account the line was written with; null when none. Returned so a read, edited and revised line keeps it (#2681)
+          example: '5000'
           type: string
         lineId:
           description: Unique identifier of this purchase order line
@@ -4460,17 +4939,29 @@ components:
           format: int64
           type: integer
         openQuantityDecimal:
-          description: Quantity on this line not yet received
+          description: 'Quantity on this line the vendor still owes: ordered − received − returned − cancelled, never negative (#2635)'
           example: 4
           type: number
         quantityDecimal:
           description: Quantity ordered on this line
           example: 12
           type: number
+        receivedQuantityDecimal:
+          description: Base units received, net of receipt corrections and returns (#2635)
+          example: 6
+          type: number
+        returnedQuantityDecimal:
+          description: Base units returned to the vendor for credit; a reopen for replacement takes them back (#2635)
+          example: 0
+          type: number
         skuId:
           description: Identifier of the SKU on this line
           example: 01960003-0000-7000-8000-000000000010
           format: uuid
+          type: string
+        taxCodeId:
+          description: Tax code the line was written with; null when none. Returned so a read, edited and revised line keeps it (#2681)
+          example: TAX-STD
           type: string
         taxMinor:
           description: Tax amount for this line in the smallest currency unit (e.g. cents)
@@ -4587,6 +5078,10 @@ components:
           example: 1439
           format: int64
           type: integer
+        transmittable:
+          description: 'Whether the order has a purchasing channel to be sent through: its vendor''s designated transmission profile, stamped at create, vendor-changing revise, approve and (until the first send) transmit (#2713); while nothing was sent it also reflects a channel the vendor gained since, which transmit would stamp. False predicts 422 SUPPLIER_REF_MISSING on transmit; the vendor''s administrator designates a purchasing profile in pos-supplier'
+          example: true
+          type: boolean
         updatedAt:
           description: Timestamp at which the purchase order was last updated
           example: '2026-01-15T09:30:00Z'
@@ -4612,6 +5107,7 @@ components:
       - poNumber
       - purchaseOrderId
       - status
+      - transmittable
       - updatedAt
       - vendorId
       - versionNumber
@@ -4767,6 +5263,40 @@ components:
           description: The vendor's own wording — a rejection reason or review detail — when it gave one.
           type: string
       type: object
+    PurchaseOrderVendorResponse:
+      description: 'A vendor of pos-order''s vendor copy: the number, name and status a purchase order needs'
+      properties:
+        displayName:
+          description: The vendor's display name
+          example: Acme Tire Supply
+          type: string
+        status:
+          description: ACTIVE vendors take new purchase orders; INACTIVE ones are refused at create, approve and transmit (422 VENDOR_INACTIVE)
+          enum:
+          - ACTIVE
+          - INACTIVE
+          example: ACTIVE
+          type: string
+        transmittable:
+          description: 'Whether the vendor has a purchasing channel (a designated transmission profile in pos-supplier, #2713): an order to it can be sent; false predicts 422 SUPPLIER_REF_MISSING on transmit'
+          example: true
+          type: boolean
+        vendorId:
+          description: The pos-supplier vendor id to name on a purchase order
+          example: 01960003-0000-7000-8000-000000000001
+          format: uuid
+          type: string
+        vendorNumber:
+          description: The vendor number
+          example: V-000123
+          type: string
+      required:
+      - displayName
+      - status
+      - transmittable
+      - vendorId
+      - vendorNumber
+      type: object
     ReasonOption:
       description: One reason's options
       properties:
@@ -4884,6 +5414,22 @@ components:
       required:
       - reason
       type: object
+    ReopenPurchaseOrderLineRequest:
+      description: 'Reopen a returned quantity of a line: the vendor will replace the goods on this order'
+      properties:
+        quantity:
+          description: Base units to reopen; at most the line's returned quantity
+          example: 2
+          minimum: 0
+          type: number
+        vendorReturnId:
+          description: The vendor return the replacement answers (pos-inventory's vendorReturnId), kept for the audit trail
+          example: 019a0000-0000-7000-8000-000000002635
+          format: uuid
+          type: string
+      required:
+      - quantity
+      type: object
     ReturnLineRequest:
       description: One requested return line
       properties:
@@ -4986,6 +5532,12 @@ components:
           example: '2026-02-03'
           format: date
           type: string
+        expectedVersionNumber:
+          description: The versionNumber of the order this revision was built on, as the last read returned it. The revise is applied only if the order is still at that version; otherwise 409 PURCHASE_ORDER_VERSION_CONFLICT and nothing changes (#2681)
+          example: 1
+          format: int32
+          minimum: 1
+          type: integer
         lines:
           description: Order lines replacing the existing purchase order lines
           items:
@@ -5002,7 +5554,7 @@ components:
           format: date
           type: string
         requestedBy:
-          description: Identifier or name of the person who requested the revision
+          description: 'The order''s requester: the person the goods are for, as on create. Not the reviser, who is the authenticated caller. Omitted keeps the order''s current requester, blank clears it, a value corrects it'
           example: user-jdoe
           type: string
         revisionReason:
@@ -5021,6 +5573,7 @@ components:
           format: uuid
           type: string
       required:
+      - expectedVersionNumber
       - lines
       - poDate
       - revisionReason
@@ -5448,6 +6001,22 @@ components:
       - overShortTolerance
       - pettyExpense
       - vendorCod
+      type: object
+    VendorOption:
+      description: A vendor the drawer may pay cash on delivery
+      properties:
+        displayName:
+          description: Display name
+          example: Acme Parts
+          type: string
+        vendorId:
+          description: The vendor
+          format: uuid
+          type: string
+        vendorNumber:
+          description: Vendor number
+          example: V-000123
+          type: string
       type: object
     VoidOrderRequest:
       description: Request payload for voiding an unsettled order

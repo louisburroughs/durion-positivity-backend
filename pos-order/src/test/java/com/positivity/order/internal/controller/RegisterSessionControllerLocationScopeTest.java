@@ -160,6 +160,7 @@ class RegisterSessionControllerLocationScopeTest {
                 null,
                 null,
                 "Lee Park",
+                null,
                 null);
     }
 
