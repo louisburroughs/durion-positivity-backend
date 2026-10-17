@@ -49,6 +49,11 @@ public class TestPaymentGatewayConfig {
         }
 
         @Override
+        public Optional<GatewayPaymentResponse> findByReference(String paymentRef) {
+            return Optional.ofNullable(responsesByTransactionId.get("test-gateway-" + paymentRef));
+        }
+
+        @Override
         public String getProviderName() {
             return "TestGateway";
         }

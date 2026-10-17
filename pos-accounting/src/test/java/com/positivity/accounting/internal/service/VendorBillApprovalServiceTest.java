@@ -663,7 +663,7 @@ class VendorBillApprovalServiceTest {
         void voidsAnUnpaidApprovedBill() {
             signIn("controller.cfo", REJECT, OVER_LIMIT);
             in(VendorBillStatus.APPROVED);
-            when(allocations.existsByVendorBill_VendorBillId(BILL_ID)).thenReturn(false);
+            when(allocations.existsLiveByVendorBillId(BILL_ID)).thenReturn(false);
             VendorBillGlPosting reversed = posting();
             reversed.setReversalJournalEntryId(UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a11"));
             reversed.setReversalDate(LocalDate.of(2026, 10, 3));
@@ -684,7 +684,7 @@ class VendorBillApprovalServiceTest {
         void allocatedBillIsNotVoidable() {
             signIn("controller.cfo", REJECT, OVER_LIMIT);
             in(VendorBillStatus.APPROVED);
-            when(allocations.existsByVendorBill_VendorBillId(BILL_ID)).thenReturn(true);
+            when(allocations.existsLiveByVendorBillId(BILL_ID)).thenReturn(true);
 
             assertThatThrownBy(() -> service.voidBill(BILL_ID, new VendorBillCommands.VoidBill("Billed twice", null)))
                     .satisfies(e -> assertThat(codeOf(e)).isEqualTo(VendorBillException.Code.AP_BILL_NOT_VOIDABLE));

@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.enums.APPaymentSettlementStatus;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
@@ -68,6 +69,8 @@ class APPaymentPostingServiceTest {
     private final AccountingCalendarZoneResolver zoneResolver = mock(AccountingCalendarZoneResolver.class);
     private final com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogs =
             mock(com.positivity.accounting.internal.repository.AccountingAuditLogRepository.class);
+    private final com.positivity.accounting.internal.repository.APPaymentAllocationRepository allocations =
+            mock(com.positivity.accounting.internal.repository.APPaymentAllocationRepository.class);
 
     private APPaymentPostingService service;
     private APPayment payment;
@@ -84,7 +87,8 @@ class APPaymentPostingServiceTest {
                 outbox,
                 periodGate,
                 zoneResolver,
-                auditLogs);
+                auditLogs,
+                allocations);
         payment = new APPayment(PAYMENT_ID);
         payment.setPaymentRef("PAY-412");
         payment.setVendorName("Acme Brakes");
@@ -441,5 +445,106 @@ class APPaymentPostingServiceTest {
         assertThat(APPaymentPostingService.refusalCode(
                         new com.positivity.accounting.internal.exception.GLAccountNotActiveException("inactive")))
                 .contains("GL_ACCOUNT_NOT_ACTIVE");
+    }
+
+    private static final UUID MIRROR = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f9002");
+
+    private void returnRecorded(LocalDate returnDate) {
+        payment.setSettlementStatus(APPaymentSettlementStatus.RETURNED);
+        payment.setReturnDate(returnDate);
+        payment.setReturnFailureCode("R01");
+        when(journalEntries.reverseJournalEntry(eq(ENTRY), anyString(), any(), any()))
+                .thenReturn(
+                        JournalEntryResponse.builder().journalEntryId(MIRROR).build());
+    }
+
+    @Test
+    @DisplayName(
+            "#2642: the mirror of a posted payment is the reversal of its entry on the return date when that period"
+                    + " is open (RETURN_DATE); the payment ends RETURNED and the posting is audited")
+    void postReturnOnTheReturnDate() {
+        payment.setStatus(APPaymentStatus.GL_POSTED);
+        payment.setGlJournalEntry(new JournalEntry(ENTRY));
+        LocalDate returned = PAID_ON.plusDays(4);
+        returnRecorded(returned);
+        when(periodGate.isPostingBlocked(returned)).thenReturn(false);
+
+        assertThat(service.postReturn(payment, null, null, "ana")).isEqualTo(MIRROR);
+
+        verify(journalEntries)
+                .reverseJournalEntry(
+                        eq(ENTRY),
+                        org.mockito.ArgumentMatchers.contains("PAY-412 (R01)"),
+                        eq(returned),
+                        org.mockito.ArgumentMatchers.isNull());
+        assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.RETURNED);
+        assertThat(payment.getReturnJournalEntryId()).isEqualTo(MIRROR);
+        assertThat(payment.getReturnDate()).isEqualTo(returned);
+        assertThat(payment.getReturnDateRule()).isEqualTo(APPaymentPostingService.RETURN_DATE);
+        assertThat(payment.getReturnedAt()).isEqualTo(CLOCK.instant());
+        verify(auditLogs)
+                .save(org.mockito.ArgumentMatchers.argThat(
+                        row -> "AP_PAYMENT_RETURN_GL_POSTING".equals(row.getOperation())
+                                && "ana".equals(row.getUserId())
+                                && row.getNewValue().contains("returnJournalEntryId=" + MIRROR)));
+        // Idempotent: a second call posts nothing more.
+        assertThat(service.postReturn(payment, null, null, "ana")).isEqualTo(MIRROR);
+        verify(journalEntries, org.mockito.Mockito.times(1)).reverseJournalEntry(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("#2642: a return date whose period is closed dates the mirror on today's business date"
+            + " (DETECTION_DATE); the caller's override travels to the reversal")
+    void postReturnOnTheDetectionDate() {
+        payment.setStatus(APPaymentStatus.GL_POSTED);
+        payment.setGlJournalEntry(new JournalEntry(ENTRY));
+        LocalDate returned = PAID_ON.minusMonths(2);
+        LocalDate today = PAID_ON.plusDays(1);
+        returnRecorded(null);
+        when(zoneResolver.today()).thenReturn(today);
+        when(periodGate.isPostingBlocked(returned)).thenReturn(true);
+
+        service.postReturn(payment, returned, "September reopened for the audit", "ana");
+
+        verify(journalEntries)
+                .reverseJournalEntry(eq(ENTRY), anyString(), eq(today), eq("September reopened for the audit"));
+        assertThat(payment.getReturnDate()).isEqualTo(today);
+        assertThat(payment.getReturnDateRule()).isEqualTo(APPaymentPostingService.DETECTION_DATE);
+    }
+
+    @Test
+    @DisplayName("#2642: a RETURN_PENDING payment whose original never posted posts the original and then the mirror in"
+            + " the outbox delivery; one whose original is posted retries the mirror only")
+    void returnPendingPostsOriginalThenMirror() {
+        payment.setStatus(APPaymentStatus.RETURN_PENDING);
+        returnRecorded(PAID_ON);
+        when(periodGate.isPostingBlocked(PAID_ON)).thenReturn(false);
+
+        assertThat(service.postPending(PAYMENT_ID)).isEqualTo(ENTRY);
+
+        verify(journalEntries).createJournalEntry(any());
+        verify(journalEntries).reverseJournalEntry(eq(ENTRY), anyString(), eq(PAID_ON), any());
+        assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.RETURNED);
+        assertThat(payment.getGlJournalEntryId()).isEqualTo(ENTRY);
+        assertThat(payment.getReturnJournalEntryId()).isEqualTo(MIRROR);
+
+        // The mirror alone: the original posted, the first mirror attempt fell in a closed period.
+        org.mockito.Mockito.clearInvocations(journalEntries);
+        payment.setStatus(APPaymentStatus.RETURN_PENDING);
+        payment.setReturnJournalEntryId(null);
+        payment.setGlPostError("PERIOD_CLOSED");
+        assertThat(service.retry(PAYMENT_ID, null, null)).isEqualTo(MIRROR);
+        verify(journalEntries, never()).createJournalEntry(any());
+        verify(journalEntries).reverseJournalEntry(eq(ENTRY), anyString(), eq(PAID_ON), any());
+        assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.RETURNED);
+        assertThat(payment.getGlPostError()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2642: a GL_POST_PENDING delivery with no return recorded posts the original only")
+    void noReturnNoMirror() {
+        assertThat(service.postPending(PAYMENT_ID)).isEqualTo(ENTRY);
+        verify(journalEntries, never()).reverseJournalEntry(any(), any(), any(), any());
+        assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
     }
 }

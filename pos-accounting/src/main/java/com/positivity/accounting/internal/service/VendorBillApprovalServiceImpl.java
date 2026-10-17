@@ -456,7 +456,7 @@ public class VendorBillApprovalServiceImpl implements VendorBillApprovalService 
      */
     private void voidApproved(VendorBill bill, String actor, String reason, @Nullable String override) {
         VendorBillDecisions.require(VendorBillAction.VOID_APPROVED);
-        if (allocations.existsByVendorBill_VendorBillId(bill.getVendorBillId())) {
+        if (allocations.existsLiveByVendorBillId(bill.getVendorBillId())) {
             throw new VendorBillException(
                     VendorBillException.Code.AP_BILL_NOT_VOIDABLE,
                     "Bill " + bill.getBillNumber() + " has payments allocated to it; correct it with a vendor"

@@ -725,7 +725,8 @@ class GLAccountServiceTest {
             for (APPaymentStatus status : APPaymentStatus.values()) {
                 boolean terminal = status == APPaymentStatus.GATEWAY_FAILED
                         || status == APPaymentStatus.GL_POSTED
-                        || status == APPaymentStatus.VOIDED;
+                        || status == APPaymentStatus.VOIDED
+                        || status == APPaymentStatus.RETURNED;
                 assertThat(GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES.contains(status))
                         .as(status.name())
                         .isEqualTo(!terminal);

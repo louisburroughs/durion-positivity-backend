@@ -99,8 +99,12 @@ public class GLAccountServiceImpl implements GLAccountService {
      * until someone decides otherwise. In flight at the gateway, executed and waiting for the posting outbox, or
      * {@code GL_POST_FAILED} awaiting {@code gl-posting-retry}.
      */
-    static final Set<APPaymentStatus> UNPOSTED_PAYMENT_STATES = Collections.unmodifiableSet(EnumSet.complementOf(
-            EnumSet.of(APPaymentStatus.GATEWAY_FAILED, APPaymentStatus.GL_POSTED, APPaymentStatus.VOIDED)));
+    static final Set<APPaymentStatus> UNPOSTED_PAYMENT_STATES =
+            Collections.unmodifiableSet(EnumSet.complementOf(EnumSet.of(
+                    APPaymentStatus.GATEWAY_FAILED,
+                    APPaymentStatus.GL_POSTED,
+                    APPaymentStatus.VOIDED,
+                    APPaymentStatus.RETURNED)));
 
     /**
      * Creates a new GL account.
@@ -294,7 +298,8 @@ public class GLAccountServiceImpl implements GLAccountService {
                     + ": " + unposted + " AP payment(s) naming it have not posted yet. GATEWAY_PENDING: reconcile with"
                     + " the gateway (reconcileApPaymentGateway); GL_POST_PENDING: wait for the outbox, or"
                     + " retryApPaymentGlPosting if its outbox row is FAILED; GL_POST_FAILED: retryApPaymentGlPosting,"
-                    + " with deferPastHardLock when glPostError is PERIOD_HARD_LOCKED. Then deactivate");
+                    + " with deferPastHardLock when glPostError is PERIOD_HARD_LOCKED; RETURN_PENDING: its return's"
+                    + " mirror entry is owed, retryApPaymentGlPosting once glPostError is remedied. Then deactivate");
         }
 
         account.setDeactivationDate(zoneResolver.postingDateTime(clock.instant()));

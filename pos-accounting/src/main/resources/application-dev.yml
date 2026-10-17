@@ -40,7 +40,8 @@ eureka:
 # Payment Gateway Configuration
 payment:
   gateway:
-    provider: ${PAYMENT_GATEWAY_PROVIDER:stripe}
+    # dev runs the deterministic local gateway (suffixes -PENDING / -DECLINE / -RETURN on the paymentRef, #2642)
+    provider: ${PAYMENT_GATEWAY_PROVIDER:local}
 
 stripe:
   api-key: ${STRIPE_API_KEY:DUMMY_STRIPE_API_KEY}

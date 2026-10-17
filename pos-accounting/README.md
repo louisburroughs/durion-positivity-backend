@@ -1462,7 +1462,69 @@ remedy where no money moved, and a dated posting where it did:
 - A charge that moved money and must be undone is a returned payment (mirror entry, reopened allocations, a return
   status): #2642, not here. There is no write-off concept for AP payments.
 - `ACCOUNT_HAS_UNPOSTED_PAYMENTS` (#2645) no longer counts `VOIDED` payments and its message names the remedy per
-  state. The automatic `GATEWAY_PENDING` reconciler belongs to #2642; the "stuck past N hours" line of Needs attention
+  state.
+
+**Settlement and returns (#2642, Accounting ruling of 2026-10-17; AW42 applied to a payment).** S42 posts a payment
+on the day the gateway accepts the instruction, a `PENDING` ACH included. Whether the charge then settled is a fact of
+its own: `settlementStatus` (`IN_FLIGHT` after a `PENDING`/`AUTHORIZED` acceptance or a `CHARGED` reconcile, `SETTLED`
+after a `SUCCEEDED` answer, `RETURNED`; null on `CASH` and on rows older than V32), with `settlementCheckedAt`,
+`settledAt`, `returnedAt`. The gateway port gained `findByReference(paymentRef)` (Stripe: `metadata.payment_ref`, charge
+search) and `failureCode`; a deterministic `local` provider (`payment.gateway.provider: local`, the `dev` default)
+answers by `paymentRef` suffix (`-PENDING`, `-RETURN`, `-DECLINE`).
+- **The settlement signal** is a scheduled re-read of the gateway, per tenant (`APPaymentSettlementJob`,
+  `accounting.ap.settlement.poll-interval` `PT15M`, `initial-delay` `PT2M`, `enabled`, `batch-size`), each payment in a
+  transaction of its own under its row lock. `GATEWAY_PENDING` orphans older than `orphan-grace` (`PT15M`) are looked
+  up by reference: a charge the gateway holds (SUCCEEDED, PENDING, AUTHORIZED) drives the `reconcile-gateway` CHARGED
+  path with the found transaction id (SUCCEEDED also marks it `SETTLED`); FAILED / DECLINED marks the payment
+  `GATEWAY_FAILED`; no charge at all, once `stripe.idempotency-window-hours` has passed, drives the NOT_CHARGED path
+  (`VOIDED`) only when `accounting.ap.settlement.auto-void-after-window` is on (off by default: the reference lookup
+  finds only charges stamped with `payment_ref`, so an orphan charged before that, or an empty search answer, is
+  logged for the operator instead); inside the window a not-found is left alone (a resend may still replay it). Held
+  returns (`RETURN_PENDING` with the mirror owed) are retried each sweep. In-flight charges
+  (`settlementStatus = IN_FLIGHT` on a `GL_POST_PENDING`, `GL_POSTED` or `GL_POST_FAILED` payment) are looked up by
+  transaction id: SUCCEEDED → `SETTLED` (`settledAt`, audit `AP_PAYMENT_SETTLE`, no entry); FAILED / DECLINED → the
+  return below, recorded as `system` on today's business date with the gateway's `failureCode`; PENDING / AUTHORIZED →
+  `settlementCheckedAt` only; a charge the gateway no longer finds is logged and left in flight. `SETTLED` rows are
+  never re-read. A gateway error on one payment is logged and the sweep goes on; no gateway bean, no sweep. A signed
+  webhook, when one exists, only triggers this re-read (out of scope: pos-accounting has no public ingress).
+- **In flight too long.** `GET /v1/accounting/ap/payments/in-flight` (`accounting:ap:view`, event
+  `ACCOUNTING_AP_PAYMENT_IN_FLIGHT_LIST`; `listApPaymentsInFlight`) lists the in-flight payments oldest first with
+  `ageDays` and `aged` (older than `accounting.ap.settlement.in-flight-warning`, `P7D`). The Needs-attention line
+  `AP_PAYMENT_IN_FLIGHT_AGED` and its work items belong to S19 (#2515) once its catalog exists.
+- **A returned charge** (the bank or the processor sent back money that had moved) is recorded by
+  `POST /v1/accounting/ap/payments/{paymentId}/record-return` `{requestId, returnDate?, failureCode?, justification,
+  overrideJustification?}` (`accounting:ap:pay`, event `ACCOUNTING_AP_PAYMENT_RECORD_RETURN`, approval-grade;
+  `recordApPaymentReturn`), idempotent on `requestId` (`ap_payment_return_request`; another body is 409
+  `IDEMPOTENCY_CONFLICT`). In one transaction: the allocations are reopened (`ap_payment_allocation.reopened_at`; kept
+  as history, excluded from every allocated sum, so each bill's open amount is restored, a bill part-paid by other
+  payments included; bills stay `APPROVED`), `unappliedAmount` becomes zero, the mirror entry (the journal-entry
+  reversal of `AP_PAYMENT:<paymentId>`: Dr the bank gross + fee / Cr 2000 / Cr 6030; **the fee leg reverses with the
+  entry**, a fee the processor keeps is a statement fact booked by bank reconciliation's `BANK_FEE` adjustment) is
+  posted, and audit rows `AP_PAYMENT_RETURN` (the reopened `vendorBillId:amount` list, the gateway's current answer)
+  and `AP_PAYMENT_RETURN_GL_POSTING` are written. The payment ends `RETURNED` (terminal; its bank account may be
+  deactivated).
+- **Dating (`returnDateRule`).** The mirror is dated on the return date when that period is open (`RETURN_DATE`), else
+  on today's business date (`DETECTION_DATE`), never back into a CLOSED or hard-locked period. Today's period CLOSED
+  without `overrideJustification` (`accounting:period:override`) is 422 `PERIOD_CLOSED`.
+- **`RETURN_PENDING`.** A return recorded while the original posting is `GL_POST_PENDING` or `GL_POST_FAILED` reopens
+  the allocations at once (2000 is not debited yet) and the posting service posts the mirror right after the original,
+  in the same transaction (both bank lines exist for the statement's debit and return credit). On the settlement job's
+  path a mirror refused by a period holds the payment `RETURN_PENDING` with `glPostError` and nothing reopened (2000
+  stays debited); the next sweep and `gl-posting-retry` (with `deferPastHardLock` where the original's date is
+  hard-locked) post what is owed and reopen then. The operator's command never holds: a CLOSED detection date is 422
+  `PERIOD_CLOSED` without an override. `returnReportedDate` keeps the date the bank or the gateway reported, whatever
+  dates the mirror. `RETURN_PENDING` counts as unposted for `ACCOUNT_HAS_UNPOSTED_PAYMENTS`.
+- **Refusals.** 409 `AP_PAYMENT_NOT_RETURNABLE` with `nextAction` for `INITIATED`, `GATEWAY_FAILED`, `VOIDED` (nothing
+  moved), `GATEWAY_PENDING` (reconcile first) and `CASH` (a drawer payout is corrected by a drawer movement); 409
+  `AP_PAYMENT_ALREADY_RETURNED` for `RETURNED` / `RETURN_PENDING`; 400 `VALIDATION_ERROR` for a `returnDate` after
+  today. The gateway's current answer is recorded but never refuses the command: a bank can return what the processor
+  shows as settled.
+- **Only the return reverses the entry.** A manual reversal of a payment's entry, or of its mirror, is 409
+  `AP_PAYMENT_ENTRY_NOT_REVERSIBLE` (`APPaymentReversalReaction`, the vendor-bill pattern); the whole reversal rolls
+  back. A `RETURNED` payment is never re-sent: the bills are paid again by a new pay command with a new `paymentRef`
+  (the old one is spent at the gateway). Out of scope: partial returns, a fee-recovery entry, AR chargebacks, a webhook
+  ingress.
+ The automatic `GATEWAY_PENDING` reconciler belongs to #2642; the "stuck past N hours" line of Needs attention
   is S19's (#2515).
 
 **Bounded waits (#2627).** Every gateway call carries `payment.gateway.connect-timeout` (default 5 s) and
@@ -1478,6 +1540,15 @@ again within the gateway idempotency window (`STRIPE_IDEMPOTENCY_WINDOW_HOURS`),
 and whose key replays the original outcome, or an operator reconciles it (`reconcileApPaymentGateway`). A decline
 leaves the row `GATEWAY_FAILED` (the paymentRef is spent at the gateway too). If `idle_in_transaction_session_timeout` is ever set for pos-accounting, it must exceed
 connect + read. The automatic plan still locks every `APPROVED` bill of the vendor.
+
+**Gateway port and the local provider (#2642).** `PaymentGatewayProvider.findByReference(paymentRef)` answers the charge
+the gateway holds under a payment reference (the idempotency key), or empty: it resolves a `GATEWAY_PENDING` orphan whose
+transaction id was never recorded. Stripe stamps `metadata.payment_ref` on every charge and finds it with charge search;
+a response carries the gateway's own `failureCode` (Stripe `failure_code`, an ACH return code) beside the free-text
+`failureReason`. `payment.gateway.provider=local` (the `dev` default) selects `LocalPaymentGateway`, deterministic from the
+`paymentRef` suffix: `-PENDING` stays PENDING until `payment.gateway.local.settle-after` (`PAYMENT_GATEWAY_LOCAL_SETTLE_AFTER`,
+default `PT1M`) has elapsed, then SUCCEEDED; `-DECLINE` is DECLINED (`LOCAL_DECLINE`); `-RETURN` is SUCCEEDED, then FAILED
+(`LOCAL_RETURN`) on a re-read after `settle-after`; anything else SUCCEEDED. `findByReference` answers the settled outcome.
 
 **Data.** V19 makes `ap_payment.payment_date` a `DATE`, adds the foreign key `(tenant_id, bank_account_id)` →
 `gl_account` and the two override columns, drops `net_amount`, and retires the `AP_PAYMENT_GL_POSTING` events. Same
@@ -1908,6 +1979,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED` | 422 | `gl-posting-retry` with `deferPastHardLock` and no justification (#2729) |
 | `AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED` | 422 | `reconcile-gateway` with `CHARGED` and no gateway transaction id (#2729) |
 | `AP_PAYMENT_NOT_VOIDABLE` | 409 | `reconcile-gateway` on a payment that is not a `GATEWAY_PENDING` orphan; `nextAction` names the remedy (#2729) |
+| `AP_PAYMENT_NOT_RETURNABLE` | 409 | `record-return` on a payment whose charge never moved money (`INITIATED`, `GATEWAY_PENDING`, `GATEWAY_FAILED`, `VOIDED`) or on a `CASH` payment; `nextAction` names the remedy (#2642) |
+| `AP_PAYMENT_ALREADY_RETURNED` | 409 | `record-return` on a payment already `RETURNED` or `RETURN_PENDING` (#2642) |
+| `AP_PAYMENT_ENTRY_NOT_REVERSIBLE` | 409 | A manual journal-entry reversal of an AP payment's entry (record the return instead) or of its return's mirror (never reversed; pay again with a new `paymentRef`) (#2642) |
 | `AP_PAYMENT_NOT_ALLOCATABLE` | 422 | `POST /ap/payments/{id}/allocations` of a payment with nothing unapplied; only a drawer cash-on-delivery (`CASH`) payment or a gateway orphan reconciled `CHARGED` carries an unapplied amount (S17, #2513; #2729) |
 | `IDEMPOTENCY_CONFLICT` | 409 | A `requestId` of `POST /ap/payments/{id}/allocations` was used before with another body (S17, #2513); the cash-setup commands answer the same code for theirs |
 | `LOCK_TIMEOUT` | 409 | A row lock waited beyond `accounting.ap.lock-timeout` on the AP pay command, its retry or a vendor-bill decision: another request is working on these bills (a neutral message on other paths); the transaction rolled back, retry (#2627) |
@@ -2016,6 +2090,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 | `payment.gateway.connect-timeout` / `payment.gateway.read-timeout` | `5s` / `20s` | Connect and read timeouts of every gateway call, on its Stripe `RequestOptions` (`PAYMENT_GATEWAY_CONNECT_TIMEOUT`, `PAYMENT_GATEWAY_READ_TIMEOUT`; #2627) |
+| `payment.gateway.provider` / `payment.gateway.local.settle-after` | `stripe` (`local` in `dev`) / `PT1M` | Gateway adapter (`PAYMENT_GATEWAY_PROVIDER`), and the delay before a local `-PENDING` / `-RETURN` charge settles (`PAYMENT_GATEWAY_LOCAL_SETTLE_AFTER`; #2642) |
 | `accounting.ap.lock-timeout`                        | `5s`                 | `SET LOCAL lock_timeout` on the AP pay command, its retry and the vendor-bill decisions; a longer wait is 409 `LOCK_TIMEOUT` (`ACCOUNTING_AP_LOCK_TIMEOUT`; #2627) |
 | `pos.accounting.kafka.tenant-events-topic`          | `tenant.events.v1`   | Tenant lifecycle facts; `tenant.created` provisions the new tenant from the accounting template (#2526) |
 | `pos.accounting.kafka.tenant-events-consumer-group` | `pos-accounting-tenant-events` | Consumer group of the `tenant.created` listener; reads from the earliest offset (#2526) |

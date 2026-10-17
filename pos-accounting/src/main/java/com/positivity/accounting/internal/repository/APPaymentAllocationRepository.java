@@ -32,17 +32,14 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
      */
     List<APPaymentAllocation> findByVendorBill_VendorBillId(UUID vendorBillId);
 
-    /**
-     * Calculate the sum of all allocations for a given vendor bill.
-     *
-     * This is more efficient than loading all allocations and summing in memory,
-     * as it computes the aggregate in the database.
-     *
-     * @param vendorBillId UUID of the vendor bill
-     * @return Sum of all allocations, or 0 if no allocations exist
-     */
+    /** The payment's allocations still in force: a returned payment's rows are kept but reopened (#2642). */
+    @Query("SELECT a FROM APPaymentAllocation a WHERE a.payment.paymentId = :paymentId AND a.reopenedAt IS NULL"
+            + " ORDER BY a.allocationSequence ASC")
+    List<APPaymentAllocation> findLiveByPaymentId(@Param("paymentId") UUID paymentId);
+
+    /** What is applied to the bill now; reopened rows (a returned payment, #2642) do not count. */
     @Query("SELECT COALESCE(SUM(a.appliedAmount), 0) FROM APPaymentAllocation a WHERE a.vendorBill.vendorBillId ="
-            + " :vendorBillId")
+            + " :vendorBillId AND a.reopenedAt IS NULL")
     BigDecimal sumAllocatedAmountByVendorBillId(@Param("vendorBillId") UUID vendorBillId);
 
     /**
@@ -56,7 +53,7 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
     @Query("""
         SELECT a.vendorBill.vendorBillId AS vendorBillId, COALESCE(SUM(a.appliedAmount), 0) AS allocated
         FROM APPaymentAllocation a
-        WHERE a.vendorBill.vendorBillId IN :vendorBillIds
+        WHERE a.vendorBill.vendorBillId IN :vendorBillIds AND a.reopenedAt IS NULL
         GROUP BY a.vendorBill.vendorBillId
         """)
     List<VendorBillAllocationSum> sumAllocatedAmountByVendorBillIdIn(
@@ -69,14 +66,19 @@ public interface APPaymentAllocationRepository extends JpaRepository<APPaymentAl
         BigDecimal getAllocated();
     }
 
-    /** Whether anything is allocated to the bill: an approved bill with any allocation is not voidable (AW42). */
-    boolean existsByVendorBill_VendorBillId(UUID vendorBillId);
+    /**
+     * Whether any payment still applies to the bill: an approved bill with a live allocation is not voidable (AW42);
+     * a returned payment's reopened rows do not count (#2642).
+     */
+    @Query("SELECT COUNT(a) > 0 FROM APPaymentAllocation a WHERE a.vendorBill.vendorBillId = :vendorBillId"
+            + " AND a.reopenedAt IS NULL")
+    boolean existsLiveByVendorBillId(@Param("vendorBillId") UUID vendorBillId);
 
     /** The date of the last payment allocated to each bill that has one (#2509, the DONE stage's order). */
     @Query("""
         SELECT a.vendorBill.vendorBillId AS vendorBillId, MAX(a.payment.paymentDate) AS lastPaymentDate
         FROM APPaymentAllocation a
-        WHERE a.vendorBill.vendorBillId IN :vendorBillIds
+        WHERE a.vendorBill.vendorBillId IN :vendorBillIds AND a.reopenedAt IS NULL
         GROUP BY a.vendorBill.vendorBillId
         """)
     List<VendorBillLastPayment> findLastPaymentDateByVendorBillIdIn(
