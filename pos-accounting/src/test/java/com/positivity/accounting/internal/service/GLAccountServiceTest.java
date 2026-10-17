@@ -234,7 +234,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("returns account response when found")
         void success() {
-            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
 
             GLAccountResponse result = service.getGLAccount(testAccountId);
 
@@ -698,8 +698,7 @@ class GLAccountServiceTest {
                     .thenReturn(2L);
 
             assertThatThrownBy(() -> service.deactivateGLAccount(testAccountId))
-                    .isInstanceOf(
-                            AccountHasUnpostedPaymentsException.class)
+                    .isInstanceOf(AccountHasUnpostedPaymentsException.class)
                     .hasMessageContaining("2 AP payment(s)");
             assertThat(testAccount.getDeactivationDate()).isNull();
             verify(glAccountRepository, never()).save(any(GLAccount.class));
@@ -746,7 +745,10 @@ class GLAccountServiceTest {
             org.springframework.test.util.ReflectionTestUtils.setField(
                     service, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, at10Chicago));
             when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
-            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
+            // Only the deactivate case locks; the activate case reads.
+            org.mockito.Mockito.lenient()
+                    .when(glAccountRepository.lockById(testAccountId))
+                    .thenReturn(Optional.of(testAccount));
             when(glAccountRepository.save(any(GLAccount.class))).thenAnswer(saved -> saved.getArgument(0));
         }
 
