@@ -3709,15 +3709,35 @@ paths:
 
         are optional, and each new registration needs its number, which is encrypted at once and
 
-        never returned (the response shows last4).
+        never returned (the response shows last4), and a listed scheme (#2623): a code of
+
+        listSupplierVendorTaxRegistrationSchemes (stored as that code), with region required and
+
+        listed where the scheme is regional and absent otherwise.
 
         Emits a SUPPLIER_VENDOR_CREATE audit event and queues one supplier.vendor.updated fact in the
 
         same transaction; a remitTo given here is stored as version 1 without approval.
 
-        Returns 201 with the vendor, 400 VALIDATION_ERROR when a field is missing or malformed, and
+        Send a requestId (a UUID the client mints) to make the create idempotent: a retry after a
 
-        409 SUPPLIER_VENDOR_NUMBER_TAKEN when the number is in use.
+        timeout or 5xx with the same requestId and the same payload answers the original 201 body and
+
+        creates nothing; the same requestId with another payload is refused, so reuse a requestId only
+
+        for an identical payload.
+
+        Returns 201 with the vendor, 400 VALIDATION_ERROR when a field is missing or malformed or a
+
+        registration''s scheme or region is not listed (fieldErrors names taxRegistrations[i].scheme or
+
+        .region; every violation is reported), 409 SUPPLIER_VENDOR_NUMBER_TAKEN when the number is in
+
+        use, 409 IDEMPOTENCY_CONFLICT when the requestId was used with a different payload or is in use
+
+        by a concurrent create, and 503 SERVICE_UNAVAILABLE when a registration carries a number and
+
+        pos-tax''s scheme list cannot be read (nothing is stored).
 
         '
       operationId: createSupplierVendor
@@ -3758,7 +3778,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: a field is missing or malformed.'
+          description: 'VALIDATION_ERROR: a field is missing or malformed, or a registration''s scheme or region is not in pos-tax''s list (fieldErrors[taxRegistrations[i].scheme|region], #2623).'
         '401':
           description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
@@ -3772,7 +3792,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'SUPPLIER_VENDOR_NUMBER_TAKEN: another vendor of the tenant uses the number.'
+          description: 'SUPPLIER_VENDOR_NUMBER_TAKEN: another vendor of the tenant uses the number; IDEMPOTENCY_CONFLICT: the requestId was already used with a different payload, or is in use by a concurrent create (#2678).'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_UNAVAILABLE: a registration carries a number and pos-tax''s scheme list could not be read; nothing was stored, retry.'
       security:
       - bearerAuth: []
       summary: Create vendor
@@ -3856,6 +3882,79 @@ paths:
       - Supplier Vendors
       x-required-permissions:
       - supplier:fact:replay
+  /v1/supplier/vendors/tax-registration-schemes:
+    get:
+      description: 'Returns pos-tax''s closed vocabulary of tax-registration schemes, unchanged: per country, each
+
+        scheme''s code, label, holder type (BUSINESS or PERSON) and whether a registration under it
+
+        belongs to one region, with the allowed regions. Codes are unique across countries.
+
+        Use this tool to fill the vendor form''s scheme picker (and its region picker where the scheme
+
+        is regional) before creating or updating a vendor''s tax registrations; do not use it to read a
+
+        vendor, which is getSupplierVendor.
+
+        Preconditions: none; the list is reference configuration, not tenant data, so every holder of
+
+        supplier:vendor:read may read it. People never call pos-tax directly (ADR-0071).
+
+        Required inputs: none; countryCode, two upper-case letters, narrows the list to one country.
+
+        Emits a SUPPLIER_VENDOR_TAX_REGISTRATION_SCHEME_LIST audit event; nothing is changed.
+
+        Returns 200 with the list (source is STUB while the vocabulary is a placeholder; empty for a
+
+        country without a scheme), 400 VALIDATION_ERROR for a malformed countryCode, and 503
+
+        SERVICE_UNAVAILABLE when pos-tax cannot be reached.
+
+        '
+      operationId: listSupplierVendorTaxRegistrationSchemes
+      parameters:
+      - description: ISO 3166-1 alpha-2 country code; omit for every country
+        example: CA
+        in: query
+        name: countryCode
+        required: false
+        schema:
+          pattern: ^[A-Z]{2}$
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxRegistrationSchemes'
+          description: The schemes, by country then code.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'VALIDATION_ERROR: countryCode is not two upper-case letters.'
+        '401':
+          description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Authenticated caller lacks the required supplier permission.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_UNAVAILABLE: pos-tax could not answer the list; retry.'
+      security:
+      - bearerAuth: []
+      summary: List the tax-registration schemes a vendor may be filed under
+      tags:
+      - Supplier Vendors
+      x-required-permissions:
+      - supplier:vendor:read
   /v1/supplier/vendors/{vendorId}:
     get:
       description: 'Returns one vendor with its masked tax registrations (registrationId, scheme, region and
@@ -3926,13 +4025,13 @@ paths:
 
         remit-to change a second person approves, or for the status, which is deactivation and
 
-        reactivation. The vendorNumber never changes.
+        reactivation, and the vendorNumber never changes.
 
         Preconditions: the vendor must exist, and version must be the version the caller read.
 
         Required inputs: vendorId (UUIDv7) path parameter plus the full body, because every field is
 
-        replaced; omitting taxRegistrations clears them. Send a stored registration''s registrationId
+        replaced; omitting taxRegistrations clears them; send a stored registration''s registrationId
 
         without number to keep it (its scheme and region must be unchanged), with number to replace
 
@@ -3942,13 +4041,21 @@ paths:
 
         same transaction.
 
+        A registration entered or re-keyed with a number is filed under a listed scheme (#2623): a
+
+        code of listSupplierVendorTaxRegistrationSchemes, with a region exactly where the scheme is
+
+        regional; a kept registration (registrationId without number) is not re-checked.
+
         Returns 200 with the vendor, 400 VALIDATION_ERROR for a malformed field or a refused
 
         registration (fieldErrors names taxRegistrations[i].number, .registrationId, .scheme or
 
-        .region), 404
+        .region; every scheme or region violation is reported), 404 SUPPLIER_VENDOR_NOT_FOUND, 409
 
-        SUPPLIER_VENDOR_NOT_FOUND, and 409 CONFLICT when version is stale.
+        CONFLICT when version is stale, and 503 SERVICE_UNAVAILABLE when a registration carries a
+
+        number and pos-tax''s scheme list cannot be read (nothing is stored).
 
         '
       operationId: updateSupplierVendor
@@ -3992,7 +4099,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApiError'
-          description: 'VALIDATION_ERROR: a field is missing or malformed, a registrationId is not this vendor''s, a new registration has no number, a kept registration changed its scheme or region without its number, or a scheme or region carrying a number breaks its shape (no digits). No message echoes a submitted value.'
+          description: 'VALIDATION_ERROR: a field is missing or malformed, a registrationId is not this vendor''s, a new registration has no number, a kept registration changed its scheme or region without its number, a scheme or region carrying a number breaks its shape (no digits), or its scheme or region is not in pos-tax''s list (#2623). No message echoes a submitted number.'
         '401':
           description: 'Authentication is missing or the bearer token is invalid. The response has NO body: the gateway rejects unauthenticated calls with a bodiless status, so clients must not attempt to parse an error envelope here.'
         '403':
@@ -4013,6 +4120,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ApiError'
           description: 'CONFLICT: the vendor was changed since the caller read it (stale version).'
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'SERVICE_UNAVAILABLE: a registration carries a number and pos-tax''s scheme list could not be read; nothing was stored, retry.'
       security:
       - bearerAuth: []
       summary: Update vendor
@@ -6333,6 +6446,44 @@ components:
           example: GST_HST
           type: string
       type: object
+    TaxRegistrationScheme:
+      description: One tax-registration scheme
+      properties:
+        countryCode:
+          example: CA
+          type: string
+        holderType:
+          example: BUSINESS
+          type: string
+        label:
+          example: Quebec sales tax registration (placeholder)
+          type: string
+        regional:
+          example: true
+          type: boolean
+        regions:
+          example:
+          - QC
+          items:
+            type: string
+          type: array
+        scheme:
+          example: QST
+          type: string
+      type: object
+    TaxRegistrationSchemes:
+      description: The tax-registration schemes a vendor may be filed under, per country, as pos-tax answers them
+      properties:
+        schemes:
+          description: The schemes, ordered by countryCode then scheme
+          items:
+            $ref: '#/components/schemas/TaxRegistrationScheme'
+          type: array
+        source:
+          description: Origin of the list; STUB while the vocabulary is a placeholder
+          example: STUB
+          type: string
+      type: object
     TaxRegistrationView:
       description: 'One tax registration of a vendor, masked: scheme, region and the last four characters. The number is never returned here.'
       properties:
@@ -6398,6 +6549,11 @@ components:
           type: string
         remitTo:
           $ref: '#/components/schemas/RemitToDto'
+        requestId:
+          description: 'Idempotency key the client mints (UUID). Reuse it only for an identical payload: a retry after a timeout or 5xx then answers the original 201 body instead of creating a second vendor; the same key with another payload is 409 IDEMPOTENCY_CONFLICT. Omit for no idempotency.'
+          example: 019a0000-0000-7000-8000-000000000101
+          format: uuid
+          type: string
         taxRegistrations:
           description: Tax registrations; omit or leave empty for none.
           items:

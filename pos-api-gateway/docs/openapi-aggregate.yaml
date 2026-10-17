@@ -21,10 +21,18 @@ paths:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments
   /v1/accounting/ap/payments/by-ref/{paymentRef}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1by-ref~1{paymentRef}
+  /v1/accounting/ap/payments/in-flight:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1in-flight
   /v1/accounting/ap/payments/{paymentId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1{paymentId}
+  /v1/accounting/ap/payments/{paymentId}/allocations:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1{paymentId}~1allocations
   /v1/accounting/ap/payments/{paymentId}/gl-posting-retry:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1{paymentId}~1gl-posting-retry
+  /v1/accounting/ap/payments/{paymentId}/reconcile-gateway:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1{paymentId}~1reconcile-gateway
+  /v1/accounting/ap/payments/{paymentId}/record-return:
+    $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1ap~1payments~1{paymentId}~1record-return
   /v1/accounting/audit/actor/{actorId}:
     $ref: ../../pos-accounting/openapi.yaml#/paths/~1v1~1accounting~1audit~1actor~1{actorId}
   /v1/accounting/audit/by-order/{orderId}:
@@ -1179,6 +1187,10 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1price-overrides~1{overrideId}~1approve
   /v1/orders/price-overrides/{overrideId}/reject:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1price-overrides~1{overrideId}~1reject
+  /v1/orders/purchase-order-vendors:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-order-vendors
+  /v1/orders/purchase-order-vendors/{vendorId}:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-order-vendors~1{vendorId}
   /v1/orders/purchase-orders:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders
   /v1/orders/purchase-orders/summary:
@@ -1189,6 +1201,12 @@ paths:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1approve
   /v1/orders/purchase-orders/{poId}/cancel:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1cancel
+  /v1/orders/purchase-orders/{poId}/close:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1close
+  /v1/orders/purchase-orders/{poId}/lines/{lineId}/cancel:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1lines~1{lineId}~1cancel
+  /v1/orders/purchase-orders/{poId}/lines/{lineId}/reopen:
+    $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1lines~1{lineId}~1reopen
   /v1/orders/purchase-orders/{poId}/revisions:
     $ref: ../../pos-order/openapi.yaml#/paths/~1v1~1orders~1purchase-orders~1{poId}~1revisions
   /v1/orders/purchase-orders/{poId}/supplier-availability:
@@ -1651,6 +1669,8 @@ paths:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors
   /v1/supplier/vendors/facts/replay:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1facts~1replay
+  /v1/supplier/vendors/tax-registration-schemes:
+    $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1tax-registration-schemes
   /v1/supplier/vendors/{vendorId}:
     $ref: ../../pos-supplier/openapi.yaml#/paths/~1v1~1supplier~1vendors~1{vendorId}
   /v1/supplier/vendors/{vendorId}/deactivation:
