@@ -170,7 +170,11 @@ public record PettyExpenseCategoryResponse(
         public String toString() {
             // actorName is a person's name, CONFIDENTIAL (ADR-0072): never printed.
             return "HistoryItem[changedAt=" + changedAt + ", actor=" + actor + ", changeType=" + changeType
-                    + ", oldValue=" + oldValue + ", newValue=" + newValue + ", justification=" + justification + "]";
+                    + ", oldValue=" + oldValue + ", newValue=" + newValue + ", justification=" + justification
+                    + ", oldLabel=" + oldLabel + ", newLabel=" + newLabel + ", oldExamples=" + oldExamples
+                    + ", newExamples=" + newExamples + ", oldAccountNumber=" + oldAccountNumber + ", oldAccountName="
+                    + oldAccountName + ", newAccountNumber=" + newAccountNumber + ", newAccountName=" + newAccountName
+                    + ", effectiveFrom=" + effectiveFrom + "]";
         }
     }
 

@@ -15,4 +15,8 @@ public interface PettyExpenseCategoryChangeRepository extends JpaRepository<Pett
     /** Every change of the tenant's categories, oldest first, for the history of the read. */
     @NonNull
     List<PettyExpenseCategoryChange> findAllByOrderByChangedAtAscChangeIdAsc();
+
+    /** One category's history, oldest first (#2675). */
+    List<PettyExpenseCategoryChange> findByPettyExpenseCategoryIdOrderByChangedAtAscChangeIdAsc(
+            @NonNull UUID pettyExpenseCategoryId);
 }
