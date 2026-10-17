@@ -105,7 +105,6 @@ class TenantLocaleReplicaWriterTest {
     }
 
     private static TenantProjectionEvent fact(long version, String locale) {
-        return new TenantProjectionEvent(
-                EVENT_ID, "tenant.updated", version, TENANT, "acme", "Acme", "ACTIVE", locale);
+        return new TenantProjectionEvent(EVENT_ID, "tenant.updated", version, TENANT, "acme", "Acme", "ACTIVE", locale);
     }
 }
