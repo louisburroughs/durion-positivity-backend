@@ -94,8 +94,14 @@ public class PurchaseSuggestionController {
                     String status,
             @Parameter(description = "Stock item (SKU) filter") @RequestParam(required = false) String sku,
             @Parameter(description = "Destination location filter") @RequestParam(required = false) UUID locationId,
+            @Parameter(
+                            description = "CAP:550 S36: only CONVERTED suggestions whose order needs attention for this"
+                                    + " reason (ORDER_VENDOR_INACTIVE, ORDER_VENDOR_NOT_IN_COPY, ORDER_NOT_PLACED)")
+                    @RequestParam(required = false)
+                    String orderAttention,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(purchaseSuggestionService.listPurchaseSuggestions(status, sku, locationId, pageable));
+        return ResponseEntity.ok(purchaseSuggestionService.listPurchaseSuggestions(
+                status, sku, locationId, orderAttention, pageable));
     }
 
     @GetMapping("/{suggestionId}")
@@ -274,16 +280,21 @@ public class PurchaseSuggestionController {
             operationId = "convertPurchaseSuggestions",
             summary = "Convert Purchase Suggestions To Purchase Order",
             description = """
-                    Converts ACCEPTED purchase suggestions into one multi-line DRAFT purchase order, stamping \
-                    each suggestion CONVERTED with the created order's id; a line is keyed in the vendor's pack \
-                    UoM when the suggestion captured a pack size the quantity divides evenly by.
+                    Requests one multi-line purchase order from pos-order for ACCEPTED purchase suggestions \
+                    (pos-order places it in DRAFT; the order is requested, not created here), stamping each \
+                    suggestion CONVERTED with the requested order's id and the pos-supplier vendor it resolved to; \
+                    a line is keyed in the vendor's pack UoM when the suggestion captured a pack size the quantity \
+                    divides evenly by.
                     Use this tool after acceptPurchaseSuggestion to turn approved replenishment into an order; do \
                     not use createPurchaseOrder, the manual path that ignores suggestions, and note that \
                     conversion never approves spend, so approvePurchaseOrder must still run on the DRAFT order.
-                    Preconditions: every listed suggestion must exist, be ACCEPTED, carry a vendor reference and \
-                    a feed unit cost with an ISO 4217 currency code, all must share one vendor and one currency \
-                    (codes compare case-insensitively and the order carries the upper-case code), and all must \
-                    resolve to a single ship-to site.
+                    Preconditions: every listed suggestion must exist, be ACCEPTED, carry a feed vendor reference \
+                    mapped to an ACTIVE pos-supplier vendor in pos-inventory's vendor copy (422 \
+                    PURCHASE_SUGGESTION_VENDOR_UNMAPPED, VENDOR_NOT_FOUND or VENDOR_INACTIVE otherwise) and a feed \
+                    unit cost with an ISO 4217 currency code, all must resolve to one vendor and one currency \
+                    (codes compare case-insensitively and the order carries the upper-case code) and to a single \
+                    ship-to site; a deployment without the outbox answers 422 PURCHASE_ORDER_REQUEST_UNAVAILABLE \
+                    and nothing is marked.
                     Required inputs: suggestionIds (non-empty list of UUIDs); duplicates are collapsed, and the \
                     caller needs both inventory:replenishment:manage and order:purchase_order:create.
                     Emits an INVENTORY_PURCHASE_SUGGESTION_CONVERT event and creates the DRAFT order through the \

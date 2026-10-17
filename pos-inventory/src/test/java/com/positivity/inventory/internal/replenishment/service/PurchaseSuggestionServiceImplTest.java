@@ -21,6 +21,7 @@ import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PurchaseOrderCommandPublisher;
 import com.positivity.inventory.internal.service.VendorCopyReader;
+import com.positivity.inventory.internal.service.VendorFeedMappingService;
 import com.positivity.security.common.LocationScopeDeniedException;
 import java.time.Clock;
 import java.time.Instant;
@@ -64,6 +65,12 @@ class PurchaseSuggestionServiceImplTest {
     @Mock
     private VendorCopyReader vendorCopyReader;
 
+    @Mock
+    private VendorFeedMappingService vendorFeedMappingService;
+
+    @Mock
+    private PurchaseSuggestionOrderAttentionService orderAttentionService;
+
     private PurchaseSuggestionServiceImpl service;
 
     @BeforeEach
@@ -75,7 +82,9 @@ class PurchaseSuggestionServiceImplTest {
                 forecastSiteResolver,
                 Clock.fixed(Instant.parse("2026-09-07T00:00:00Z"), ZoneOffset.UTC),
                 locationScopeService,
-                vendorCopyReader);
+                vendorCopyReader,
+                vendorFeedMappingService,
+                orderAttentionService);
     }
 
     private static PurchaseSuggestion suggestion() {

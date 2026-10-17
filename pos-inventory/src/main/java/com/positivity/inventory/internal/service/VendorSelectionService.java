@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.inventory.internal.entity.DistributorNormalizedInventory;
 import com.positivity.inventory.internal.entity.NormalizedAvailability;
+import com.positivity.inventory.internal.enums.FeedVendorType;
 import com.positivity.inventory.internal.enums.SuggestedVendorType;
 import com.positivity.inventory.internal.repository.DistributorNormalizedInventoryRepository;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
@@ -10,8 +11,10 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -53,9 +56,11 @@ public class VendorSelectionService {
 
     /** Runner-up entries recorded in the selection reason (keeps the column bounded). */
     private static final int MAX_RUNNERS_UP_IN_REASON = 3;
+    private static final int MAX_SKIPPED_IN_REASON = 3;
 
     private final NormalizedAvailabilityRepository normalizedAvailabilityRepository;
     private final DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository;
+    private final VendorFeedMappingService vendorFeedMappingService;
 
     /**
      * One unified vendor candidate from either normalized feed.
@@ -66,13 +71,29 @@ public class VendorSelectionService {
      */
     public record VendorCandidate(
             @NonNull SuggestedVendorType sourceType,
-            @NonNull UUID vendorRefId,
+            @NonNull String feedVendorRef,
+            @NonNull UUID vendorId,
+            @NonNull String vendorNumber,
+            @NonNull String vendorDisplayName,
             int availableQty,
             @Nullable Integer leadTimeDays,
             @Nullable Long unitCostMinor,
             @Nullable String unitCostCurrency,
             @Nullable Integer minOrderQty,
             @Nullable Integer packSize) {}
+
+    /** A feed row before the mapping decides whether it may be bought from (CAP:550 S36, #2525). */
+    private record FeedCandidate(
+            @NonNull SuggestedVendorType sourceType,
+            @NonNull String feedVendorRef,
+            int availableQty,
+            @Nullable Integer leadTimeDays,
+            @Nullable Long unitCostMinor,
+            @Nullable String unitCostCurrency,
+            @Nullable Integer minOrderQty,
+            @Nullable Integer packSize) {}
+
+    private record Screened(@NonNull List<VendorCandidate> eligible, @NonNull List<String> skipped) {}
 
     /**
      * Selection outcome: the chosen candidate ({@code null} when the SKU has no usable feed
@@ -88,19 +109,87 @@ public class VendorSelectionService {
      * empty candidate set yields a {@code null} chosen vendor with an explanatory reason.
      */
     public @NonNull VendorSelection selectVendor(@Nullable UUID productId, long neededQuantity) {
-        List<VendorCandidate> candidates = productId == null ? List.of() : candidatesFor(productId);
-        if (candidates.isEmpty()) {
+        List<FeedCandidate> feedCandidates = productId == null ? List.of() : feedCandidatesFor(productId);
+        if (feedCandidates.isEmpty()) {
             String reason = productId == null
                     ? "no vendor candidates: SKU is not a catalog product UUID, so no normalized feed rows apply"
                     : "no vendor candidates: no normalized manufacturer or distributor feed rows for product "
                             + productId;
             return new VendorSelection(null, reason);
         }
-
+        // CAP:550 S36 (#2525): only a feed vendor mapped to an ACTIVE pos-supplier vendor may be bought from.
+        Screened screened = screen(feedCandidates);
+        if (screened.eligible().isEmpty()) {
+            return new VendorSelection(
+                    null,
+                    "no eligible vendor: no feed vendor is mapped to an active pos-supplier vendor; "
+                            + skippedSummary(screened.skipped()));
+        }
         List<VendorCandidate> ranked =
-                candidates.stream().sorted(rankingFor(neededQuantity)).toList();
+                screened.eligible().stream().sorted(rankingFor(neededQuantity)).toList();
         VendorCandidate chosen = ranked.getFirst();
-        return new VendorSelection(chosen, buildReason(ranked, neededQuantity));
+        String reason = buildReason(ranked, neededQuantity);
+        if (!screened.skipped().isEmpty()) {
+            reason = reason + "; " + skippedSummary(screened.skipped());
+        }
+        return new VendorSelection(chosen, reason);
+    }
+
+    private Screened screen(List<FeedCandidate> feedCandidates) {
+        Map<SuggestedVendorType, Map<String, VendorFeedMappingService.ResolvedFeedVendor>> resolved =
+                new EnumMap<>(SuggestedVendorType.class);
+        for (SuggestedVendorType type : SuggestedVendorType.values()) {
+            List<String> refs = feedCandidates.stream()
+                    .filter(c -> c.sourceType() == type)
+                    .map(FeedCandidate::feedVendorRef)
+                    .toList();
+            resolved.put(
+                    type,
+                    refs.isEmpty() ? Map.of() : vendorFeedMappingService.resolveAll(FeedVendorType.of(type), refs));
+        }
+        List<VendorCandidate> eligible = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
+        for (FeedCandidate c : feedCandidates) {
+            VendorFeedMappingService.ResolvedFeedVendor vendor =
+                    resolved.get(c.sourceType()).get(normalizedRef(c.sourceType(), c.feedVendorRef()));
+            if (vendor == null) {
+                skipped.add("skipped " + c.sourceType() + " " + c.feedVendorRef() + ": no vendor mapping");
+                continue;
+            }
+            if (!vendor.isActive()) {
+                skipped.add("skipped " + c.sourceType() + " " + c.feedVendorRef() + ": vendor "
+                        + vendor.vendorNumber() + " inactive");
+                continue;
+            }
+            eligible.add(new VendorCandidate(
+                    c.sourceType(),
+                    c.feedVendorRef(),
+                    vendor.vendorId(),
+                    vendor.vendorNumber(),
+                    vendor.displayName(),
+                    c.availableQty(),
+                    c.leadTimeDays(),
+                    c.unitCostMinor(),
+                    c.unitCostCurrency(),
+                    c.minOrderQty(),
+                    c.packSize()));
+        }
+        return new Screened(eligible, skipped);
+    }
+
+    /** The key the mapping service answers under: trimmed, and lower-case for a manufacturer UUID. */
+    private static String normalizedRef(SuggestedVendorType type, String feedVendorRef) {
+        String trimmed = feedVendorRef.trim();
+        return type == SuggestedVendorType.MANUFACTURER ? trimmed.toLowerCase(Locale.ROOT) : trimmed;
+    }
+
+    private static String skippedSummary(List<String> skipped) {
+        if (skipped.isEmpty()) {
+            return "";
+        }
+        int shown = Math.min(skipped.size(), MAX_SKIPPED_IN_REASON);
+        String text = String.join("; ", skipped.subList(0, shown));
+        return skipped.size() > shown ? text + "; +" + (skipped.size() - shown) + " more" : text;
     }
 
     /**
@@ -108,8 +197,8 @@ public class VendorSelectionService {
      * manufacturers keep their newest {@code asOf} snapshot, distributors their freshest
      * {@code updatedAt} row (distributor rows are upserted in place).
      */
-    private List<VendorCandidate> candidatesFor(UUID productId) {
-        List<VendorCandidate> candidates = new ArrayList<>();
+    private List<FeedCandidate> feedCandidatesFor(UUID productId) {
+        List<FeedCandidate> candidates = new ArrayList<>();
 
         // Latest snapshot per manufacturer: rows arrive newest-first, keep the first seen.
         Map<UUID, NormalizedAvailability> latestPerManufacturer = new LinkedHashMap<>();
@@ -118,9 +207,9 @@ public class VendorSelectionService {
         }
         latestPerManufacturer
                 .values()
-                .forEach(row -> candidates.add(new VendorCandidate(
+                .forEach(row -> candidates.add(new FeedCandidate(
                         SuggestedVendorType.MANUFACTURER,
-                        row.getManufacturerId(),
+                        row.getManufacturerId().toString(),
                         row.getAvailableQty() != null ? row.getAvailableQty() : 0,
                         maxLeadDays(row.getLeadTimeDaysMax(), row.getLeadTimeDaysMin()),
                         toMinorUnits(row.getUnitPriceAmount()),
@@ -129,18 +218,14 @@ public class VendorSelectionService {
                         row.getPackSize())));
 
         // Freshest row per distributor; non-UUID distributor ids cannot be PO vendors.
-        Map<UUID, DistributorNormalizedInventory> freshestPerDistributor = new LinkedHashMap<>();
+        // CAP:550 S36 (#2525): the mapping key is the feed's own text, so a non-UUID distributor id is eligible.
+        Map<String, DistributorNormalizedInventory> freshestPerDistributor = new LinkedHashMap<>();
         for (DistributorNormalizedInventory row : distributorNormalizedInventoryRepository.findByProductId(productId)) {
-            UUID distributorUuid = parseUuid(row.getDistributorId());
-            if (distributorUuid == null) {
-                log.debug(
-                        "Vendor selection skip (non-UUID distributor id cannot be a PO vendor):"
-                                + " distributorId={} productId={}",
-                        row.getDistributorId(),
-                        productId);
+            String distributorRef = row.getDistributorId() == null ? null : row.getDistributorId().trim();
+            if (distributorRef == null || distributorRef.isEmpty()) {
                 continue;
             }
-            freshestPerDistributor.merge(distributorUuid, row, (existing, candidate) -> {
+            freshestPerDistributor.merge(distributorRef, row, (existing, candidate) -> {
                 Instant existingAt = existing.getUpdatedAt();
                 Instant candidateAt = candidate.getUpdatedAt();
                 if (existingAt == null) {
@@ -149,16 +234,15 @@ public class VendorSelectionService {
                 return candidateAt != null && candidateAt.isAfter(existingAt) ? candidate : existing;
             });
         }
-        freshestPerDistributor.forEach((distributorUuid, row) -> candidates.add(new VendorCandidate(
+        freshestPerDistributor.forEach((distributorRef, row) -> candidates.add(new FeedCandidate(
                 SuggestedVendorType.DISTRIBUTOR,
-                distributorUuid,
+                distributorRef,
                 row.getQuantityAvailable() != null ? row.getQuantityAvailable() : 0,
                 maxLeadDays(row.getLeadTimeDaysMax(), row.getLeadTimeDaysMin()),
                 null,
                 null,
                 null,
                 null)));
-
         return candidates;
     }
 
@@ -169,7 +253,7 @@ public class VendorSelectionService {
                         candidate -> candidate.leadTimeDays() != null ? candidate.leadTimeDays() : Integer.MAX_VALUE)
                 .thenComparingLong(
                         candidate -> candidate.unitCostMinor() != null ? candidate.unitCostMinor() : Long.MAX_VALUE)
-                .thenComparing(VendorCandidate::vendorRefId);
+                .thenComparing(VendorCandidate::feedVendorRef);
     }
 
     /** Explainable ranked-inputs record, e.g. {@code "MANUFACTURER 0196…: avail 40>=12, lead 5d, …; beat …"}. */
@@ -196,8 +280,10 @@ public class VendorSelectionService {
         StringBuilder text = new StringBuilder()
                 .append(candidate.sourceType())
                 .append(' ')
-                .append(candidate.vendorRefId())
-                .append(": avail ")
+                .append(candidate.feedVendorRef())
+                .append(" (vendor ")
+                .append(candidate.vendorNumber())
+                .append("): avail ")
                 .append(candidate.availableQty())
                 .append(comparator)
                 .append(neededQuantity)
@@ -232,16 +318,5 @@ public class VendorSelectionService {
                 .movePointRight(2)
                 .setScale(0, RoundingMode.HALF_UP)
                 .longValueExact();
-    }
-
-    private static @Nullable UUID parseUuid(@Nullable String value) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 }

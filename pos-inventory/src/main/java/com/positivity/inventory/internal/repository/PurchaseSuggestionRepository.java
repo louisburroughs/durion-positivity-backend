@@ -73,4 +73,7 @@ public interface PurchaseSuggestionRepository extends JpaRepository<PurchaseSugg
                                    WHERE s.siteId IN :locationIds)
             """)
     List<PurchaseSuggestion> findWithinLocations(@Param("locationIds") Collection<UUID> locationIds);
+
+    /** CAP:550 S36 (#2525): every suggestion in one status, for the post-scan order-attention gauge. */
+    List<PurchaseSuggestion> findByStatus(PurchaseSuggestionStatus status);
 }

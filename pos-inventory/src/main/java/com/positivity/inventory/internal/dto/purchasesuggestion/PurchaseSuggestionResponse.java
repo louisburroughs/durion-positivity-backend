@@ -147,6 +147,22 @@ public class PurchaseSuggestionResponse {
             requiredMode = NOT_REQUIRED)
     private UUID convertedPurchaseOrderId;
 
+    @Schema(
+            description = "CAP:550 S36: the requested order's status as pos-inventory's copy of pos-order shows it"
+                    + " (DRAFT, APPROVED, ...); null until the order's fact arrives or when not converted",
+            nullable = true,
+            example = "DRAFT")
+    private String orderStatus;
+
+    @Schema(
+            description = "CAP:550 S36: computed on read for a CONVERTED suggestion; ORDER_VENDOR_INACTIVE or"
+                    + " ORDER_VENDOR_NOT_IN_COPY when the open order's vendor would be refused at approval or"
+                    + " transmission, ORDER_NOT_PLACED when no order has appeared within the placement grace;"
+                    + " null otherwise",
+            nullable = true,
+            example = "ORDER_NOT_PLACED")
+    private String orderAttention;
+
     @Schema(description = "Creation timestamp", example = "2026-07-23T09:30:00Z", requiredMode = REQUIRED)
     private Instant createdAt;
 

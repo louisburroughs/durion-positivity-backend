@@ -21,7 +21,11 @@ public interface PurchaseSuggestionService {
     /** Lists suggestions, optionally filtered by status, SKU, and/or destination location. */
     @NonNull
     Page<PurchaseSuggestionResponse> listPurchaseSuggestions(
-            @Nullable String status, @Nullable String itemSKU, @Nullable UUID locationId, @NonNull Pageable pageable);
+            @Nullable String status,
+            @Nullable String itemSKU,
+            @Nullable UUID locationId,
+            @Nullable String orderAttention,
+            @NonNull Pageable pageable);
 
     @NonNull
     PurchaseSuggestionResponse getPurchaseSuggestion(@NonNull UUID suggestionId);

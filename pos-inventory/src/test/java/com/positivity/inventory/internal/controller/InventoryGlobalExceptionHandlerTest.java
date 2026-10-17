@@ -329,6 +329,10 @@ class InventoryGlobalExceptionHandlerTest {
                     Named.of("handlePurchaseSuggestionConversion", (HandlerInvocation)
                             () -> handler.handlePurchaseSuggestionConversion(
                                     PurchaseSuggestionConversionException.vendorMismatch())),
+                    Named.of("handlePurchaseOrderRequestUnavailable", (HandlerInvocation)
+                            () -> handler.handlePurchaseOrderRequestUnavailable(
+                                    new com.positivity.inventory.internal.exception
+                                            .PurchaseOrderRequestUnavailableException())),
                     Named.of("handlePurchaseSuggestionState", (HandlerInvocation)
                             () -> handler.handlePurchaseSuggestionState(new PurchaseSuggestionStateException(
                                     UUID.randomUUID(), PurchaseSuggestionStatus.CONVERTED, "accept"))),

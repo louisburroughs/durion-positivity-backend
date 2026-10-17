@@ -66,6 +66,9 @@ public interface VendorFeedMappingService {
     @NonNull
     Optional<ResolvedFeedVendor> resolve(@NonNull FeedVendorType feedType, @NonNull String feedVendorRef);
 
+    /** Whether a mapping row exists for the feed vendor, whatever the copy holds (to tell unmapped from missing). */
+    boolean isMapped(@NonNull FeedVendorType feedType, @NonNull String feedVendorRef);
+
     /** {@link #resolve} for many feed vendors of one feed; keyed by the normalized feed vendor ref, unresolved omitted. */
     @NonNull
     Map<String, ResolvedFeedVendor> resolveAll(

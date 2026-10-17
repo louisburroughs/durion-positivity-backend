@@ -275,6 +275,13 @@ public class VendorFeedMappingServiceImpl implements VendorFeedMappingService {
     }
 
     @Override
+    public boolean isMapped(@NonNull FeedVendorType feedType, @NonNull String feedVendorRef) {
+        String trimmed = feedVendorRef.trim();
+        String key = feedType == FeedVendorType.MANUFACTURER ? trimmed.toLowerCase(java.util.Locale.ROOT) : trimmed;
+        return mappings.findByFeedTypeAndFeedVendorRef(feedType, key).isPresent();
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public @NonNull Optional<ResolvedFeedVendor> resolve(
             @NonNull FeedVendorType feedType, @NonNull String feedVendorRef) {

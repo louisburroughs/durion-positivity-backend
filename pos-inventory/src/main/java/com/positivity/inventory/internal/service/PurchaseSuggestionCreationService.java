@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -125,8 +126,11 @@ public class PurchaseSuggestionCreationService {
             return false;
         }
         int previousQuantity = suggestion.getSuggestedQuantity() != null ? suggestion.getSuggestedQuantity() : 0;
+        UUID previousVendorId = suggestion.getVendorId();
         populate(suggestion, policy, rawNeed, fallbackLeadTimeDays);
-        if (suggestion.getSuggestedQuantity() == previousQuantity) {
+        // CAP:550 S36 (#2525): a changed vendor counts as a refresh, not only a changed quantity.
+        if (suggestion.getSuggestedQuantity() == previousQuantity
+                && Objects.equals(previousVendorId, suggestion.getVendorId())) {
             return false;
         }
         purchaseSuggestionRepository.save(suggestion);
@@ -185,7 +189,8 @@ public class PurchaseSuggestionCreationService {
                 chosen != null ? chosen.minOrderQty() : null,
                 chosen != null ? chosen.packSize() : null));
         suggestion.setSuggestedVendorType(chosen != null ? chosen.sourceType() : null);
-        suggestion.setFeedVendorRef(chosen != null ? chosen.vendorRefId().toString() : null);
+        suggestion.setFeedVendorRef(chosen != null ? chosen.feedVendorRef() : null);
+        suggestion.setVendorId(chosen != null ? chosen.vendorId() : null);
         suggestion.setUnitCostMinor(chosen != null ? chosen.unitCostMinor() : null);
         suggestion.setUnitCostCurrency(chosen != null ? chosen.unitCostCurrency() : null);
         suggestion.setVendorPackSize(chosen != null ? chosen.packSize() : null);

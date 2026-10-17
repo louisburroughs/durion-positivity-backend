@@ -31,6 +31,7 @@ import com.positivity.inventory.internal.exception.OverReceiptNotPermittedExcept
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
+import com.positivity.inventory.internal.exception.PurchaseOrderRequestUnavailableException;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
@@ -500,6 +501,12 @@ public class InventoryGlobalExceptionHandler {
         // already-consumed serial
         // (double-issue) is a deterministic 422.
         return build(HttpStatus.valueOf(422), SerialNotAvailableException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(PurchaseOrderRequestUnavailableException.class)
+    public ResponseEntity<ApiError> handlePurchaseOrderRequestUnavailable(PurchaseOrderRequestUnavailableException ex) {
+        // CAP:550 S36 (#2525): no outbox writer, so the request cannot be queued; the conversion rolled back.
+        return build(HttpStatus.valueOf(422), PurchaseOrderRequestUnavailableException.CODE, ex.getMessage());
     }
 
     @ExceptionHandler(PurchaseSuggestionConversionException.class)

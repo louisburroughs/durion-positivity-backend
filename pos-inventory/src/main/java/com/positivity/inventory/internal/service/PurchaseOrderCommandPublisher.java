@@ -4,6 +4,7 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.order.PurchaseOrderRequestedV1;
 import com.positivity.inventory.internal.config.OutboxEventWriter;
+import com.positivity.inventory.internal.exception.PurchaseOrderRequestUnavailableException;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.time.Clock;
 import java.time.Instant;
@@ -41,7 +42,9 @@ public class PurchaseOrderCommandPublisher {
     public void request(@NonNull PurchaseOrderRequestedV1 command) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
         if (writer == null) {
-            return;
+            // CAP:550 S36 (#2525): never a silent no-op. Without the outbox the request would be lost while the
+            // suggestions were still marked CONVERTED; the caller rolls back instead.
+            throw new PurchaseOrderRequestUnavailableException();
         }
 
         writer.publish(

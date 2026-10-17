@@ -590,6 +590,29 @@ pos-supplier's, so a mapping joins them.
 - **Permission.** `inventory:vendor_feed_mapping:manage` changes mappings and is granted to `ADMIN`; reads need
   `inventory:replenishment:manage`.
 
+### Selection, conversion and order attention
+
+- A feed vendor is a purchase candidate only when its feed id maps to a vendor that is in the copy and `ACTIVE`;
+  the others are skipped and named in the suggestion's `selectionReason` (at most three, then `+n more`). The
+  non-UUID distributor filter is gone: the mapping key is the feed's own text. With no eligible candidate an
+  explicit PURCHASE policy gets a vendor-less suggestion, an EITHER policy a `BACKSTOCK_UNAVAILABLE` task, an
+  emergency purchase a vendor-less suggestion.
+- Creation, refresh and emergency purchase store `purchase_suggestion.vendor_id` from the winner's mapping; a
+  changed vendor counts as a refresh. Responses carry `feedVendorRef`, `vendorId`, `vendorNumber`,
+  `vendorDisplayName`, `vendorStatus`.
+- Conversion resolves every suggestion again through the current mapping and copy before anything is written:
+  422 `PURCHASE_SUGGESTION_MISSING_VENDOR` (no feed vendor), `PURCHASE_SUGGESTION_VENDOR_UNMAPPED`, `VENDOR_NOT_FOUND`
+  (mapped, not in the copy), `VENDOR_INACTIVE`, `PURCHASE_SUGGESTION_VENDOR_MISMATCH` (two resolved vendor ids; two
+  feeds of one vendor make one order). `PurchaseOrderRequestedV1.vendorId` is the resolved pos-supplier vendor id;
+  each suggestion stores `vendor_id` and `converted_at`. Without an outbox writer the publisher throws and the
+  conversion answers 422 `PURCHASE_ORDER_REQUEST_UNAVAILABLE`, rolling back the marks.
+- `orderStatus` and `orderAttention` are computed on read for a CONVERTED suggestion from `ext_purchase_order` and
+  the vendor copy, never stored: `ORDER_VENDOR_INACTIVE` (order DRAFT/APPROVED/PARTIALLY_RECEIVED, vendor INACTIVE),
+  `ORDER_VENDOR_NOT_IN_COPY` (same statuses, vendor absent), `ORDER_NOT_PLACED` (no order row
+  `pos.inventory.purchase-suggestion.order-placement-grace`, default `PT1H`, after `converted_at`), else null. The
+  list takes `?orderAttention=`. Netting is unchanged. After each scheduled scan the gauge
+  `inventory.purchase_suggestion.order_attention{reason}` is set and a non-zero count is WARN-logged.
+
 ## Decimal quantities, gated by the product's declaration (ADR-0055, #1414)
 
 The ledger and everything derived from it carry `numeric(19,4)` / `BigDecimal` quantities:
@@ -801,6 +824,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `PURCHASE_SUGGESTION_NOT_ACCEPTED` | 422 | Only an ACCEPTED purchase suggestion can be converted |
 | `PURCHASE_SUGGESTION_VENDOR_MISMATCH` | 422 | The suggestions being converted name different vendors |
 | `PURCHASE_SUGGESTION_MISSING_VENDOR` | 422 | The suggestion names no vendor to order from |
+| `PURCHASE_SUGGESTION_VENDOR_UNMAPPED` | 422 | The suggestion's feed vendor has no mapping to a pos-supplier vendor; map it under `/v1/inventory/vendor-feed-mappings` and convert again (CAP:550 S36, #2525). |
+| `PURCHASE_ORDER_REQUEST_UNAVAILABLE` | 422 | No outbox writer is wired, so the purchase-order request could not be queued; nothing is marked CONVERTED (CAP:550 S36, #2525). |
 | `PURCHASE_SUGGESTION_MISSING_UNIT_COST` | 422 | The suggestion carries no unit cost |
 | `PURCHASE_SUGGESTION_SITE_MISMATCH` | 422 | The suggestions being converted belong to different sites |
 | `PURCHASE_SUGGESTION_CURRENCY_MISMATCH` | 422 | The suggestions being converted are priced in different currencies |

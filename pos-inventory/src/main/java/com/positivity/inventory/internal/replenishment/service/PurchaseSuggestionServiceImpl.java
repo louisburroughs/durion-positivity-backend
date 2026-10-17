@@ -8,6 +8,10 @@ import com.positivity.inventory.internal.dto.purchasesuggestion.PurchaseSuggesti
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
 import com.positivity.inventory.internal.entity.ExtSupplierVendorReplica;
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
+import com.positivity.inventory.internal.enums.FeedVendorType;
+import com.positivity.inventory.internal.enums.OrderAttention;
+import com.positivity.inventory.internal.enums.SuggestedVendorType;
+import com.positivity.inventory.internal.service.VendorFeedMappingService;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
@@ -79,13 +83,21 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
     private final Clock clock;
     private final LocationScopeService locationScopeService;
     private final VendorCopyReader vendorCopyReader;
+    private final VendorFeedMappingService vendorFeedMappingService;
+    private final PurchaseSuggestionOrderAttentionService orderAttentionService;
 
     @Override
     @Transactional(readOnly = true)
     public @NonNull Page<PurchaseSuggestionResponse> listPurchaseSuggestions(
-            @Nullable String status, @Nullable String itemSKU, @Nullable UUID locationId, @NonNull Pageable pageable) {
+            @Nullable String status,
+            @Nullable String itemSKU,
+            @Nullable UUID locationId,
+            @Nullable String orderAttention,
+            @NonNull Pageable pageable) {
         PurchaseSuggestionStatus statusFilter =
                 status != null ? PurchaseSuggestionStatus.valueOf(status.toUpperCase(Locale.ROOT)) : null;
+        OrderAttention attentionFilter =
+                orderAttention != null ? OrderAttention.valueOf(orderAttention.toUpperCase(Locale.ROOT)) : null;
         // ADR-0061 §3 (#1872): a named location is gated; none narrows a scoped caller to their reach.
         Optional<Set<UUID>> reach =
                 locationScopeService.narrowTo(locationId, InventoryPermissionRegistry.INVENTORY_VIEW);
@@ -110,8 +122,14 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 .map(PurchaseSuggestion::getVendorId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet()));
+        // CAP:550 S36 (#2525): order status and attention are derived on read, never stored.
+        Map<UUID, PurchaseSuggestionOrderAttentionService.Assessment> assessments =
+                orderAttentionService.assess(matching);
         List<PurchaseSuggestionResponse> filtered = matching.stream()
-                .map(suggestion -> toResponse(suggestion, vendors.get(suggestion.getVendorId())))
+                .filter(suggestion -> attentionFilter == null
+                        || assessmentOf(assessments, suggestion).attention() == attentionFilter)
+                .map(suggestion -> toResponse(
+                        suggestion, vendors.get(suggestion.getVendorId()), assessmentOf(assessments, suggestion)))
                 .toList();
         if (pageable.isUnpaged()) {
             return new PageImpl<>(filtered);
@@ -128,7 +146,16 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
         // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
         // loaded suggestion's destination — after the 404, so ids cannot be probed.
         locationScopeService.require(suggestion.getLocationId(), InventoryPermissionRegistry.INVENTORY_VIEW);
-        return toResponse(suggestion, vendorOf(suggestion));
+        return toResponse(
+                suggestion,
+                vendorOf(suggestion),
+                assessmentOf(orderAttentionService.assess(List.of(suggestion)), suggestion));
+    }
+
+    private static PurchaseSuggestionOrderAttentionService.Assessment assessmentOf(
+            Map<UUID, PurchaseSuggestionOrderAttentionService.Assessment> assessments, PurchaseSuggestion suggestion) {
+        return assessments.getOrDefault(
+                suggestion.getSuggestionId(), PurchaseSuggestionOrderAttentionService.Assessment.NONE);
     }
 
     @Override
@@ -180,7 +207,9 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
         List<PurchaseSuggestion> suggestions = loadAllOrThrow(request.getSuggestionIds());
         validateConvertible(suggestions);
 
-        UUID vendorId = UUID.fromString(suggestions.getFirst().getFeedVendorRef());
+        // CAP:550 S36 (#2525, PROPOSED 7): the vendor is resolved again, now, through the current mapping and the
+        // vendor copy; a refusal leaves the suggestions ACCEPTED with nothing written or queued.
+        UUID vendorId = resolveSingleVendor(suggestions);
         UUID shipToSite = resolveSingleShipToSite(suggestions);
         // validateConvertible has proven every suggestion carries this same ISO 4217 currency
         // (ADR-0067 DF-5); the canonical upper-case code is what pos-order accepts.
@@ -220,9 +249,12 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
         // Marked converted in the same transaction as the request. A suggestion that stayed
         // SUGGESTED after the order was asked for would be picked up by the next replenishment
         // scan and ordered a second time.
+        Instant convertedAt = Instant.now(clock);
         for (PurchaseSuggestion suggestion : suggestions) {
             suggestion.setStatus(PurchaseSuggestionStatus.CONVERTED);
             suggestion.setConvertedPurchaseOrderId(purchaseOrderId);
+            suggestion.setVendorId(vendorId);
+            suggestion.setConvertedAt(convertedAt);
         }
         purchaseSuggestionRepository.saveAll(suggestions);
         log.info(
@@ -243,6 +275,36 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                         .map(PurchaseSuggestion::getSuggestionId)
                         .toList())
                 .build();
+    }
+
+    /**
+     * Every suggestion's feed vendor through the mapping and the copy: unmapped, missing or inactive vendors are
+     * refused by name, and two feeds of one vendor make one order (the mismatch compares vendor ids, not feed ids).
+     */
+    private UUID resolveSingleVendor(List<PurchaseSuggestion> suggestions) {
+        UUID resolved = null;
+        for (PurchaseSuggestion suggestion : suggestions) {
+            SuggestedVendorType type = suggestion.getSuggestedVendorType();
+            String ref = suggestion.getFeedVendorRef();
+            VendorFeedMappingService.ResolvedFeedVendor vendor = vendorFeedMappingService
+                    .resolve(FeedVendorType.of(type), ref)
+                    .orElse(null);
+            if (vendor == null) {
+                throw vendorFeedMappingService.isMapped(FeedVendorType.of(type), ref)
+                        ? PurchaseSuggestionConversionException.vendorNotFound(suggestion.getSuggestionId(), ref)
+                        : PurchaseSuggestionConversionException.vendorUnmapped(
+                                suggestion.getSuggestionId(), type.name(), ref);
+            }
+            if (!vendor.isActive()) {
+                throw PurchaseSuggestionConversionException.vendorInactive(
+                        suggestion.getSuggestionId(), vendor.vendorNumber());
+            }
+            if (resolved != null && !resolved.equals(vendor.vendorId())) {
+                throw PurchaseSuggestionConversionException.vendorMismatch();
+            }
+            resolved = vendor.vendorId();
+        }
+        return Objects.requireNonNull(resolved, "a convert request names at least one suggestion");
     }
 
     private List<PurchaseSuggestion> loadAllOrThrow(List<UUID> suggestionIds) {
@@ -295,13 +357,6 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 throw PurchaseSuggestionConversionException.invalidCurrency(
                         suggestion.getSuggestionId(), suggestion.getUnitCostCurrency());
             }
-        }
-        long distinctVendors = suggestions.stream()
-                .map(suggestion -> suggestion.getSuggestedVendorType() + ":" + suggestion.getFeedVendorRef())
-                .distinct()
-                .count();
-        if (distinctVendors > 1) {
-            throw PurchaseSuggestionConversionException.vendorMismatch();
         }
         long distinctCurrencies = suggestions.stream()
                 .map(suggestion -> canonicalCurrency(suggestion.getUnitCostCurrency()))
@@ -399,6 +454,13 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
 
     private PurchaseSuggestionResponse toResponse(
             PurchaseSuggestion suggestion, @Nullable ExtSupplierVendorReplica vendor) {
+        return toResponse(suggestion, vendor, PurchaseSuggestionOrderAttentionService.Assessment.NONE);
+    }
+
+    private PurchaseSuggestionResponse toResponse(
+            PurchaseSuggestion suggestion,
+            @Nullable ExtSupplierVendorReplica vendor,
+            @NonNull PurchaseSuggestionOrderAttentionService.Assessment assessment) {
         return PurchaseSuggestionResponse.builder()
                 .suggestionId(suggestion.getSuggestionId())
                 .policyId(suggestion.getPolicyId())
@@ -426,6 +488,8 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 .status(suggestion.getStatus() != null ? suggestion.getStatus().name() : null)
                 .dismissalReason(suggestion.getDismissalReason())
                 .convertedPurchaseOrderId(suggestion.getConvertedPurchaseOrderId())
+                .orderStatus(assessment.orderStatus())
+                .orderAttention(assessment.attention() != null ? assessment.attention().name() : null)
                 .createdAt(suggestion.getCreatedAt())
                 .updatedAt(suggestion.getUpdatedAt())
                 .build();
