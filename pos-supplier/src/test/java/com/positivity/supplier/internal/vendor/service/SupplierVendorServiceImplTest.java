@@ -992,8 +992,9 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             assertThat(stored.get(0).path("scheme").stringValue()).isEqualTo("GST_HST");
             assertThat(stored.get(0).path("region").isNull()).isTrue();
             assertThat(stored.get(1).path("region").stringValue()).isEqualTo("QC");
-            org.mockito.Mockito.verify(schemeClient, org.mockito.Mockito.times(1))
-                    .fetch(null);
+            // One read per request that carries a number: two creates above, two reads (the client's own cache is
+            // mocked away here; TaxRegistrationSchemeClientTest covers it).
+            org.mockito.Mockito.verify(schemeClient, org.mockito.Mockito.times(2)).fetch(null);
         }
 
         @Test

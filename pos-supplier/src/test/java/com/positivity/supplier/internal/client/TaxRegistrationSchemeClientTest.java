@@ -57,11 +57,17 @@ class TaxRegistrationSchemeClientTest {
         logs = new ListAppender<>();
         logs.start();
         logger.addAppender(logs);
+        // The test logging configuration may silence this package; the WARN lines are what this test is about.
+        levelBefore = logger.getLevel();
+        logger.setLevel(ch.qos.logback.classic.Level.WARN);
     }
+
+    private ch.qos.logback.classic.Level levelBefore;
 
     @AfterEach
     void tearDown() {
         logger.detachAppender(logs);
+        logger.setLevel(levelBefore);
     }
 
     @Test
