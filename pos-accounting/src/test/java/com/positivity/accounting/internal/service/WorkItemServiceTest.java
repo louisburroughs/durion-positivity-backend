@@ -1248,7 +1248,8 @@ class WorkItemServiceTest {
 
         assertThat(page.items()).hasSize(2);
         assertThat(page.countsByArea()).containsEntry(WorkItemArea.BILLS, 6);
-        org.mockito.Mockito.verify(approvalPreview, org.mockito.Mockito.times(2)).preview(any());
+        org.mockito.Mockito.verify(approvalPreview, org.mockito.Mockito.times(2))
+                .preview(any());
         org.mockito.Mockito.verify(vendorCopies, org.mockito.Mockito.times(1)).creatorsFirstBillVendors(any(), any());
     }
 

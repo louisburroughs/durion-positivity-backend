@@ -12,13 +12,13 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -284,8 +284,7 @@ public class SupplierVendorCopies {
      * and none of whose bills was ever approved. One read of the vendor copies, and one more per vendor the actor
      * created.
      */
-    public @NonNull Set<UUID> creatorsFirstBillVendors(
-            @NonNull Collection<UUID> vendorIds, @Nullable String actor) {
+    public @NonNull Set<UUID> creatorsFirstBillVendors(@NonNull Collection<UUID> vendorIds, @Nullable String actor) {
         Set<UUID> first = new HashSet<>();
         if (actor == null || vendorIds.isEmpty()) {
             return first;
