@@ -412,7 +412,12 @@ public class AccountingExceptionHandler {
     @ExceptionHandler(HeldEventNotReleasableException.class)
     public ResponseEntity<ApiError> handleHeldEventNotReleasable(
             HeldEventNotReleasableException ex, HttpServletRequest request) {
-        return build(HttpStatus.CONFLICT, HeldEventNotReleasableException.CODE, ex.getMessage(), ex.getNextAction(), request);
+        return build(
+                HttpStatus.CONFLICT,
+                HeldEventNotReleasableException.CODE,
+                ex.getMessage(),
+                ex.getNextAction(),
+                request);
     }
 
     @ExceptionHandler(EventNotRetryableException.class)
@@ -918,7 +923,15 @@ public class AccountingExceptionHandler {
         HttpHeaders headers = new HttpHeaders();
         headers.add(X_CORRELATION_ID, correlationId);
         ApiError error = new ApiError(
-                code, message, status.value(), Instant.now(clock).toString(), correlationId, null, null, nextAction, null);
+                code,
+                message,
+                status.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                null,
+                null,
+                nextAction,
+                null);
         return new ResponseEntity<>(error, headers, status);
     }
 

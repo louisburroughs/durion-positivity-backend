@@ -195,7 +195,8 @@ class FailedAccountingEventRetryJobTest {
     }
 
     @Test
-    @DisplayName("a held Kafka row no route can release is skipped untouched: no failure recorded, no history row (#2620)")
+    @DisplayName(
+            "a held Kafka row no route can release is skipped untouched: no failure recorded, no history row (#2620)")
     void notReleasable_skippedWithoutRecording() {
         stubCandidates(EVENT_ID);
         AccountingEvent held = failed(1);
