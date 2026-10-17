@@ -164,6 +164,28 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
     }
 
     @Test
+    @DisplayName("#2651: a sub-minor-unit limit answers 422 AMOUNT_PRECISION_EXCEEDS_CURRENCY naming the field")
+    void precisionRefusal() throws Exception {
+        when(sessionPolicyService.update(any()))
+                .thenThrow(new com.positivity.order.internal.exception.CashMovementTaxRefusedException(
+                        com.positivity.order.internal.exception.CashMovementTaxRefusedException.Code
+                                .AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                        "An amount has more decimals than USD allows; nothing is rounded",
+                        java.util.List.of(new com.positivity.shared.error.ApiError.FieldError(
+                                "pettyExpense.cashierLimit", "has more decimals than USD allows"))));
+
+        mockMvc.perform(withGatewayAuth(
+                        put("/v1/orders/session-policy")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(BODY),
+                        MANAGE))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("AMOUNT_PRECISION_EXCEEDS_CURRENCY"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("pettyExpense.cashierLimit"))
+                .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
     @DisplayName("AC6: a field rule answers 400 VALIDATION_ERROR; a lost race 409 SESSION_POLICY_CONFLICT")
     void validationAndConflict() throws Exception {
         when(sessionPolicyService.update(any()))

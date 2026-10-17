@@ -226,12 +226,9 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
         assertThat(records(tenant, session))
                 .allSatisfy(record -> assertThat(record.get("journal_entry_id")).isNotNull());
 
-        // Past the posting keys' 24 hours (expired, not yet cleaned up), a re-emit under a fresh envelope id still
-        // posts nothing twice: the entries' deterministic source events are the backstop, and no key is re-registered.
-        new JdbcTemplate(ownerDataSource())
-                .update(
-                        "UPDATE idempotency_keys SET expires_at = now() - interval '1 day' WHERE tenant_id = ?",
-                        tenant);
+        // Posting keys never expire (#2595). Belt and braces: with the key rows gone, a re-emit under a fresh envelope
+        // id still posts nothing twice, the entries' deterministic source events stop it, and no key is re-registered.
+        new JdbcTemplate(ownerDataSource()).update("DELETE FROM idempotency_keys WHERE tenant_id = ?", tenant);
         asTenant(tenant, () -> listener.onOrderEvent(envelope(UUID.randomUUID().toString(), fact)));
         assertThat(entryCount(tenant)).isEqualTo(2);
         assertThat(records(tenant, session))

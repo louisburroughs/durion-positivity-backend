@@ -86,8 +86,10 @@ public class SessionPolicyController {
                     Emits an ORDER_SESSION_POLICY_UPDATE event when a setting changes, and nothing otherwise.
                     Returns 200 with the policy and its history, 400 VALIDATION_ERROR for a field rule or a \
                     missing or non-ISO currencyCode, 409 SESSION_POLICY_CONFLICT when the version read is not the \
-                    current one or another change won a race (read again and retry), and 422 \
-                    CURRENCY_NOT_SUPPORTED for a currency other than the functional currency.
+                    current one or another change won a race (read again and retry), 422 \
+                    CURRENCY_NOT_SUPPORTED for a currency other than the functional currency, and 422 \
+                    AMOUNT_PRECISION_EXCEEDS_CURRENCY when a limit or the tolerance has more decimals than the \
+                    currency allows (fieldErrors names each; nothing is rounded, ADR-0067 PC-6).
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "200", description = "The policy after the change.")
@@ -106,7 +108,9 @@ public class SessionPolicyController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "CURRENCY_NOT_SUPPORTED: the request states a currency other than the functional currency.",
+            description = "CURRENCY_NOT_SUPPORTED: the request states a currency other than the functional currency;"
+                    + " or AMOUNT_PRECISION_EXCEEDS_CURRENCY: a limit or the tolerance has more decimals than the"
+                    + " currency allows (fieldErrors names each; nothing is rounded).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PutMapping
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_POLICY_MANAGE + "')")

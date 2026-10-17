@@ -4,11 +4,17 @@ import com.positivity.domainevents.DomainEventEnvelope;
 import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.entity.VendorRemitTo;
+import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -35,6 +41,7 @@ public class VendorFactPublisher {
     static final String SOURCE = "pos-supplier";
 
     private final SupplierOutboxEventWriter outboxEventWriter;
+    private final SupplierProfileRepository profiles;
 
     /**
      * Queues the vendor's current state.
@@ -45,6 +52,49 @@ public class VendorFactPublisher {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(@NonNull SupplierVendorEntity vendor, @NonNull Instant occurredAt, @Nullable String actor) {
+        publish(
+                vendor,
+                occurredAt,
+                actor,
+                VendorPurchasingProfile.designated(profiles.findByVendorIdOrderBySupplierRefAsc(vendor.getVendorId())));
+    }
+
+    /**
+     * Queues one page of vendors' current state (a replay): the purchasing channels are read in one query for the
+     * page, not one per vendor.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publishAll(
+            @NonNull List<SupplierVendorEntity> vendors, @NonNull Instant occurredAt, @Nullable String actor) {
+        if (vendors.isEmpty()) {
+            return;
+        }
+        Map<UUID, List<SupplierProfileEntity>> profilesByVendor =
+                profiles
+                        .findByVendorIdIn(vendors.stream()
+                                .map(SupplierVendorEntity::getVendorId)
+                                .toList())
+                        .stream()
+                        .collect(Collectors.groupingBy(SupplierProfileEntity::getVendorId));
+        for (SupplierVendorEntity vendor : vendors) {
+            publish(
+                    vendor,
+                    occurredAt,
+                    actor,
+                    VendorPurchasingProfile.designated(profilesByVendor.getOrDefault(vendor.getVendorId(), List.of())));
+        }
+    }
+
+    /**
+     * Queues the vendor's current state with a purchasing channel the caller already resolved (#2712): the
+     * designation listener compares it before republishing, so it is not read twice.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publish(
+            @NonNull SupplierVendorEntity vendor,
+            @NonNull Instant occurredAt,
+            @Nullable String actor,
+            @Nullable String purchaseOrderSupplierRef) {
         Objects.requireNonNull(vendor.getVersion(), "vendor must be flushed before its fact is queued");
         outboxEventWriter.publish(
                 DomainTopics.events("supplier"),
@@ -60,11 +110,15 @@ public class VendorFactPublisher {
                         null,
                         null,
                         actor,
-                        toFact(vendor, occurredAt)));
+                        toFact(vendor, occurredAt, purchaseOrderSupplierRef)));
     }
 
+    /** The fact with the vendor's purchasing channel (#2712), null when it has none. */
     @NonNull
-    static SupplierVendorUpdatedV1 toFact(@NonNull SupplierVendorEntity vendor, @NonNull Instant occurredAt) {
+    static SupplierVendorUpdatedV1 toFact(
+            @NonNull SupplierVendorEntity vendor,
+            @NonNull Instant occurredAt,
+            @Nullable String purchaseOrderSupplierRef) {
         return new SupplierVendorUpdatedV1(
                 vendor.getVendorId(),
                 vendor.getVendorNumber(),
@@ -88,7 +142,8 @@ public class VendorFactPublisher {
                 vendor.getRemitToApprovedBy(),
                 vendor.getCreatedBy(),
                 vendor.getCreatedAt(),
-                occurredAt);
+                occurredAt,
+                purchaseOrderSupplierRef);
     }
 
     private static SupplierVendorUpdatedV1.@Nullable RemitTo toFactRemitTo(@Nullable VendorRemitTo remitTo) {

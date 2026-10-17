@@ -302,6 +302,7 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                                 .content(body),
                         CASH_MOVEMENT))
                 .andExpect(status().isServiceUnavailable())
+                .andExpect(header().string("Retry-After", "7"))
                 .andExpect(jsonPath("$.code").value("CASH_MOVEMENT_APPROVAL_UNAVAILABLE"));
     }
 

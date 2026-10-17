@@ -3,6 +3,7 @@ package com.positivity.order.internal.service;
 import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.SessionPolicy;
 import com.positivity.order.internal.entity.SessionPolicyChange;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.SessionPolicyConflictException;
 import com.positivity.order.internal.exception.SessionPolicyValidationException;
@@ -12,8 +13,8 @@ import com.positivity.order.internal.service.model.SessionPolicyChangeView;
 import com.positivity.order.internal.service.model.SessionPolicyView;
 import com.positivity.order.internal.service.model.UpdateSessionPolicyCommand;
 import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.shared.error.ApiError;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -55,8 +56,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SessionPolicyServiceImpl implements SessionPolicyService {
 
-    static final BigDecimal DEFAULT_PETTY_EXPENSE_LIMIT = scale(new BigDecimal("50.00"));
-    static final BigDecimal DEFAULT_OVER_SHORT_TOLERANCE = scale(new BigDecimal("5.00"));
+    static final BigDecimal DEFAULT_PETTY_EXPENSE_LIMIT = new BigDecimal("50.00");
+    static final BigDecimal DEFAULT_OVER_SHORT_TOLERANCE = new BigDecimal("5.00");
 
     static final int MIN_JUSTIFICATION_LENGTH = 10;
     static final int MAX_JUSTIFICATION_LENGTH = 1000;
@@ -122,6 +123,10 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
             throw new CurrencyNotSupportedException("The drawer policy is stated in " + functionalCurrency.code()
                     + ", the functional currency; " + command.currencyCode().trim() + " is not supported");
         }
+        // After the currency check, so a wrong currency is answered as such and the amounts are judged against the
+        // currency they will be stored in (#2651).
+        String currency = functionalCurrency.code();
+        requireRepresentable(command, currency);
         SessionPolicy stored =
                 sessionPolicyRepository.findFirstByOrderByCreatedAtAsc().orElse(null);
         Long storedVersion = stored == null ? null : stored.getVersion();
@@ -132,17 +137,17 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         SessionPolicyView before = stored == null ? defaults() : toView(stored);
 
         boolean pettyAllowed = command.pettyExpenseAllowed();
-        BigDecimal pettyLimit = scaleOrNull(command.pettyExpenseLimit());
+        BigDecimal pettyLimit = atExponentOrNull(command.pettyExpenseLimit(), currency);
         boolean codAllowed = command.vendorCodAllowed();
-        BigDecimal codLimit = scaleOrNull(command.vendorCodLimit());
-        BigDecimal tolerance = scale(command.overShortTolerance());
+        BigDecimal codLimit = atExponentOrNull(command.vendorCodLimit(), currency);
+        BigDecimal tolerance = DrawerAmounts.atExponent(command.overShortTolerance(), currency);
 
         List<String[]> diffs = new ArrayList<>();
         diff(diffs, PETTY_EXPENSE_ALLOWED, before.pettyExpenseAllowed(), pettyAllowed);
-        diff(diffs, PETTY_EXPENSE_LIMIT, before.pettyExpenseLimit(), pettyLimit);
+        diff(diffs, PETTY_EXPENSE_LIMIT, before.pettyExpenseLimit(), pettyLimit, currency);
         diff(diffs, VENDOR_COD_ALLOWED, before.vendorCodAllowed(), codAllowed);
-        diff(diffs, VENDOR_COD_LIMIT, before.vendorCodLimit(), codLimit);
-        diff(diffs, OVER_SHORT_TOLERANCE, before.overShortTolerance(), tolerance);
+        diff(diffs, VENDOR_COD_LIMIT, before.vendorCodLimit(), codLimit, currency);
+        diff(diffs, OVER_SHORT_TOLERANCE, before.overShortTolerance(), tolerance, currency);
         if (diffs.isEmpty()) {
             // A PUT that changes nothing writes nothing and emits nothing (§4.6, review l6).
             return before;
@@ -223,6 +228,30 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         return justification;
     }
 
+    /**
+     * ADR-0067 PC-6 (#2651): a limit or tolerance finer than the currency's minor unit is refused with one 422 {@code
+     * AMOUNT_PRECISION_EXCEEDS_CURRENCY} naming every offending field; nothing is rounded.
+     */
+    private static void requireRepresentable(UpdateSessionPolicyCommand command, String currency) {
+        List<ApiError.FieldError> errors = new ArrayList<>();
+        representable(errors, "pettyExpense.cashierLimit", command.pettyExpenseLimit(), currency);
+        representable(errors, "vendorCod.cashierLimit", command.vendorCodLimit(), currency);
+        representable(errors, "overShortTolerance", command.overShortTolerance(), currency);
+        if (!errors.isEmpty()) {
+            throw new CashMovementTaxRefusedException(
+                    CashMovementTaxRefusedException.Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                    "An amount has more decimals than " + currency + " allows; nothing is rounded",
+                    errors);
+        }
+    }
+
+    private static void representable(
+            List<ApiError.FieldError> errors, String field, @Nullable BigDecimal value, String currency) {
+        if (value != null && !DrawerAmounts.representable(value, currency)) {
+            errors.add(new ApiError.FieldError(field, "has more decimals than " + currency + " allows"));
+        }
+    }
+
     private static void requireNotNegative(String field, @Nullable BigDecimal value) {
         if (value != null && value.signum() < 0) {
             throw new SessionPolicyValidationException(field, field + " must not be negative");
@@ -236,15 +265,29 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
     }
 
     private static void diff(
-            List<String[]> changes, String setting, @Nullable BigDecimal before, @Nullable BigDecimal after) {
+            List<String[]> changes,
+            String setting,
+            @Nullable BigDecimal before,
+            @Nullable BigDecimal after,
+            String currency) {
         boolean same = before == null ? after == null : after != null && before.compareTo(after) == 0;
         if (!same) {
-            changes.add(new String[] {setting, display(before), display(after)});
+            changes.add(new String[] {setting, display(before, currency), display(after, currency)});
         }
     }
 
-    private static @Nullable String display(@Nullable BigDecimal value) {
-        return value == null ? null : value.setScale(2, RoundingMode.HALF_UP).toPlainString();
+    /**
+     * The audit string at the currency's exponent (#2651): {@code 500} JPY, {@code 5.000} KWD, never rounded. A stored
+     * value finer than the exponent (written before this rule, or under another functional currency) is shown as it
+     * is, so the correcting PUT is never refused for the sake of its own audit line.
+     */
+    private static @Nullable String display(@Nullable BigDecimal value, String currency) {
+        if (value == null) {
+            return null;
+        }
+        BigDecimal stripped = value.stripTrailingZeros();
+        int exponent = DrawerAmounts.exponent(currency);
+        return (stripped.scale() < exponent ? stripped.setScale(exponent) : stripped).toPlainString();
     }
 
     private static SessionPolicyView toView(SessionPolicy policy) {
@@ -258,11 +301,7 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
                 Objects.requireNonNull(policy.getCurrencyCode()));
     }
 
-    private static @Nullable BigDecimal scaleOrNull(@Nullable BigDecimal value) {
-        return value == null ? null : scale(value);
-    }
-
-    private static BigDecimal scale(BigDecimal value) {
-        return value.setScale(4, RoundingMode.HALF_UP);
+    private static @Nullable BigDecimal atExponentOrNull(@Nullable BigDecimal value, String currency) {
+        return value == null ? null : DrawerAmounts.atExponent(value, currency);
     }
 }

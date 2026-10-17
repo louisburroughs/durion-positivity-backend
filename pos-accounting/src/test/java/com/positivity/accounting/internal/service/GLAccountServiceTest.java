@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,9 +13,11 @@ import com.positivity.accounting.internal.dto.GLAccountListResponse;
 import com.positivity.accounting.internal.dto.GLAccountResponse;
 import com.positivity.accounting.internal.dto.GLAccountUpdateRequest;
 import com.positivity.accounting.internal.entity.GLAccount;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.AccountSubtype;
 import com.positivity.accounting.internal.enums.AccountType;
 import com.positivity.accounting.internal.enums.GLAccountStatus;
+import com.positivity.accounting.internal.exception.AccountHasUnpostedPaymentsException;
 import com.positivity.accounting.internal.exception.AccountNotInactiveException;
 import com.positivity.accounting.internal.exception.AccountNotZeroBalanceException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
@@ -22,6 +25,7 @@ import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.UnsupportedSortPropertyException;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import java.math.BigDecimal;
@@ -73,6 +77,9 @@ class GLAccountServiceTest {
 
     @Mock
     private JournalEntryLineRepository journalEntryLineRepository;
+
+    @Mock
+    private APPaymentRepository apPaymentRepository;
 
     @InjectMocks
     private GLAccountServiceImpl service;
@@ -357,7 +364,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("deactivates when balance is zero")
         void success() {
-            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
             when(glAccountRepository.save(any(GLAccount.class))).thenReturn(testAccount);
 
@@ -369,7 +376,7 @@ class GLAccountServiceTest {
         @Test
         @DisplayName("throws AccountNotZeroBalanceException when balance is non-zero")
         void nonZeroBalance() {
-            when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
             when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(new BigDecimal("500.00"));
 
             assertThatThrownBy(() -> service.deactivateGLAccount(testAccountId))
@@ -678,6 +685,53 @@ class GLAccountServiceTest {
     }
 
     @Nested
+    @DisplayName("#2645: a bank account with unposted AP payments is not deactivated")
+    class UnpostedPayments {
+
+        @Test
+        @DisplayName("refused with 409 ACCOUNT_HAS_UNPOSTED_PAYMENTS while a payment naming it has not posted")
+        void refusedWhilePaymentsAreUnposted() {
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
+            when(apPaymentRepository.countByBankAccountIdAndStatusIn(
+                            testAccountId, GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES))
+                    .thenReturn(2L);
+
+            assertThatThrownBy(() -> service.deactivateGLAccount(testAccountId))
+                    .isInstanceOf(AccountHasUnpostedPaymentsException.class)
+                    .hasMessageContaining("2 AP payment(s)");
+            assertThat(testAccount.getDeactivationDate()).isNull();
+            verify(glAccountRepository, never()).save(any(GLAccount.class));
+        }
+
+        @Test
+        @DisplayName("proceeds once every payment naming it has posted")
+        void proceedsOncePosted() {
+            when(glAccountRepository.lockById(testAccountId)).thenReturn(Optional.of(testAccount));
+            when(journalEntryLineRepository.getAccountBalance(testAccountId)).thenReturn(BigDecimal.ZERO);
+            when(apPaymentRepository.countByBankAccountIdAndStatusIn(
+                            testAccountId, GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES))
+                    .thenReturn(0L);
+            when(glAccountRepository.save(any(GLAccount.class))).thenAnswer(saved -> saved.getArgument(0));
+
+            service.deactivateGLAccount(testAccountId);
+
+            assertThat(testAccount.getDeactivationDate()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("every APPaymentStatus but the two terminal ones counts as unposted, new constants included")
+        void unpostedStates() {
+            for (APPaymentStatus status : APPaymentStatus.values()) {
+                boolean terminal = status == APPaymentStatus.GATEWAY_FAILED || status == APPaymentStatus.GL_POSTED;
+                assertThat(GLAccountServiceImpl.UNPOSTED_PAYMENT_STATES.contains(status))
+                        .as(status.name())
+                        .isEqualTo(!terminal);
+            }
+        }
+    }
+
+    @Nested
     @DisplayName("#2558: activation stamps and posting dates share the tenant's calendar")
     class TenantCalendarStamps {
 
@@ -691,6 +745,10 @@ class GLAccountServiceTest {
             org.springframework.test.util.ReflectionTestUtils.setField(
                     service, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, at10Chicago));
             when(glAccountRepository.findById(testAccountId)).thenReturn(Optional.of(testAccount));
+            // Only the deactivate case locks; the activate case reads.
+            org.mockito.Mockito.lenient()
+                    .when(glAccountRepository.lockById(testAccountId))
+                    .thenReturn(Optional.of(testAccount));
             when(glAccountRepository.save(any(GLAccount.class))).thenAnswer(saved -> saved.getArgument(0));
         }
 

@@ -69,17 +69,6 @@ class SupplierExchangeAuditControllerWebMvcTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-08-11T12:00:00Z"), ZoneOffset.UTC);
         }
-
-        @Bean
-        org.springframework.boot.web.servlet.FilterRegistrationBean<
-                        com.positivity.security.common.GatewayAuthoritiesFilter>
-                gatewayAuthoritiesFilterRegistration(
-                        com.positivity.security.common.GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration =
-                    new org.springframework.boot.web.servlet.FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
-        }
     }
 
     private static final String BASE = "/v1/supplier/admin/audit";

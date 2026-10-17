@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -59,16 +58,6 @@ class PurchaseTaxRulesControllerTest {
         @Bean
         PurchaseTaxRules purchaseTaxRules() {
             return new PurchaseTaxRules(PROPERTIES, CLOCK);
-        }
-
-        /** Same as {@code TaxEvidenceControllerTest}: run the gateway filter only inside the security chain. */
-        @Bean
-        FilterRegistrationBean<com.positivity.security.common.GatewayAuthoritiesFilter>
-                gatewayAuthoritiesFilterRegistration(
-                        com.positivity.security.common.GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration = new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
         }
     }
 

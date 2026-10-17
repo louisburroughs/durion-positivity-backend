@@ -5,6 +5,9 @@
 spring:
   datasource:
     hikari:
+      # ADR-0072 (#2650): no pgjdbc "Failing row contains" detail in driver messages; guarded by PgjdbcServerErrorDetailTest.
+      data-source-properties:
+        logServerErrorDetail: false
       # Transitional tenant binding (ADR-0062): every scoped table defaults tenant_id from this
       # session setting and hides rows without it. Replaced by TenantAwareDataSource in plan WS1.
       connection-init-sql: "SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', false)"

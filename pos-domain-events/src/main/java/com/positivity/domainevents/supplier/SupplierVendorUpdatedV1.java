@@ -64,6 +64,10 @@ import org.jspecify.annotations.Nullable;
  * @param createdBy principal who created the vendor
  * @param createdAt when the vendor was created
  * @param occurredAt when the change this fact reports was committed (or, for a replay, re-sent)
+ * @param purchaseOrderSupplierRef the alias of the vendor's designated purchasing profile in pos-supplier (its one
+ *     enabled, non-sandbox transmission profile), the {@code supplierRef} a purchase order is sent through; null when
+ *     the vendor has no such profile, or more than one and none designated (#2682 ruling, #2712). INTERNAL under
+ *     ADR-0072: a configuration alias, never a person's identifier
  */
 public record SupplierVendorUpdatedV1(
         @NonNull UUID vendorId,
@@ -83,7 +87,8 @@ public record SupplierVendorUpdatedV1(
         @Nullable String remitToApprovedBy,
         @NonNull String createdBy,
         @NonNull Instant createdAt,
-        @NonNull Instant occurredAt) {
+        @NonNull Instant occurredAt,
+        @Nullable String purchaseOrderSupplierRef) {
 
     /** Event type of this payload on {@code supplier.events.v1}. */
     public static final String EVENT_TYPE = "supplier.vendor.updated";

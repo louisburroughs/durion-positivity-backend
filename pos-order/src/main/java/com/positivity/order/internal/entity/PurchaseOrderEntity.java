@@ -134,12 +134,15 @@ public class PurchaseOrderEntity extends TenantScopedEntity {
     // ── Transmission to the vendor (CAP-320 #1330) ───────────────────────────
 
     /**
-     * The vendor as pos-supplier knows it: its profile alias, chosen when the order is raised.
+     * The purchasing channel the order is sent through: pos-supplier's designated transmission profile alias for the
+     * vendor, stamped from pos-order's vendor copy ({@code ext_supplier_vendor.purchase_order_supplier_ref}) at
+     * create, vendor-changing revise, approve and, until the first send, transmit (#2713, Order ruling on #2682).
+     * Never a buyer's field: which channel reaches a vendor is integration configuration.
      *
-     * <p>{@code vendorId} cannot serve. It holds a manufacturer or distributor id from
-     * pos-inventory's normalized feeds, which bears no relationship to a supplier profile. Who to
-     * send to is therefore recorded as an ordering decision rather than inferred from something
-     * that does not mean what it would need to mean. An order without one is not transmittable.
+     * <p>Since S24 {@code vendorId} is the pos-supplier vendor id (a requested order may still carry a feed id until
+     * its buyer revises it), but the alias is still what pos-supplier resolves a command by, and the copy is the
+     * only place pos-order may read it (ADR-0044 R1). After the first send the stamp is frozen, so a revision
+     * reaches the channel the original did. An order without one answers 422 {@code SUPPLIER_REF_MISSING}.
      */
     @Column(name = "supplier_ref", length = 100)
     private String supplierRef;

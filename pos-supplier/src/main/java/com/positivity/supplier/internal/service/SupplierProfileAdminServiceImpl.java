@@ -31,6 +31,8 @@ import com.positivity.supplier.internal.service.model.SupplierAuthType;
 import com.positivity.supplier.internal.service.model.VendorProfileRequest;
 import com.positivity.supplier.internal.service.model.VendorProfileView;
 import com.positivity.supplier.internal.spi.SupplierAuthConfigChanged;
+import com.positivity.supplier.internal.spi.VendorProfilesChanged;
+import com.positivity.supplier.internal.spi.VendorProfilesChanging;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -99,7 +101,12 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         SupplierProfileEntity profile = new SupplierProfileEntity();
         applyProfile(profile, request);
         profile.setSourceOfTruth(com.positivity.supplier.internal.enums.ProfileSourceOfTruth.ADMIN);
-        return toProfileView(profileRepository.save(profile), vendor);
+        // #2712: a new enabled non-sandbox profile may become, or unseat, the vendor's purchasing channel.
+        java.util.Set<UUID> touched = java.util.Set.of(request.vendorId());
+        eventPublisher.publishEvent(new VendorProfilesChanging(touched));
+        VendorProfileView view = toProfileView(profileRepository.save(profile), vendor);
+        eventPublisher.publishEvent(new VendorProfilesChanged(touched));
+        return view;
     }
 
     @Override
@@ -115,8 +122,16 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         if (!vendor.getVendorId().equals(profile.getVendorId())) {
             requireActive(vendor, "a profile can only be re-pointed to an active vendor");
         }
+        java.util.Set<UUID> touchedVendors = new java.util.HashSet<>();
+        touchedVendors.add(profile.getVendorId());
+        touchedVendors.add(request.vendorId());
+        // #2712: enabling, disabling or re-pointing may move the channel of the old vendor, the new one or both. The
+        // snapshot is taken BEFORE the entity is touched: the snapshot's query would auto-flush a dirty entity.
+        eventPublisher.publishEvent(new VendorProfilesChanging(touchedVendors));
         applyProfile(profile, request);
-        return toProfileView(profileRepository.save(profile), vendor);
+        VendorProfileView view = toProfileView(profileRepository.save(profile), vendor);
+        eventPublisher.publishEvent(new VendorProfilesChanged(touchedVendors));
+        return view;
     }
 
     @Override
@@ -132,7 +147,11 @@ public class SupplierProfileAdminServiceImpl implements SupplierProfileAdminServ
         bindingRepository.deleteByVendorProfileId(vendorProfileId);
         authConfigRepository.deleteByVendorProfileId(vendorProfileId);
         accountRepository.deleteByVendorProfileId(vendorProfileId);
+        // #2712: deleting the vendor's purchasing profile takes its channel away (or hands it to the one left).
+        java.util.Set<UUID> touched = java.util.Set.of(profile.getVendorId());
+        eventPublisher.publishEvent(new VendorProfilesChanging(touched));
         profileRepository.delete(profile);
+        eventPublisher.publishEvent(new VendorProfilesChanged(touched));
         for (UUID authConfigId : deletedAuthConfigIds) {
             eventPublisher.publishEvent(
                     new SupplierAuthConfigChanged(authConfigId, SupplierAuthConfigChanged.Change.DELETED));

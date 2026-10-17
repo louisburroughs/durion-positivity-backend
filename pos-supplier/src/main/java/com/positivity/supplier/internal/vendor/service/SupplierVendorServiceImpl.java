@@ -448,10 +448,7 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
                 : vendorRepository.findByVendorIdGreaterThanOrderByVendorIdAsc(afterVendorId, window);
         boolean complete = found.size() <= pageSize;
         List<SupplierVendorEntity> page = complete ? found : found.subList(0, pageSize);
-        String actor = currentActor();
-        for (SupplierVendorEntity vendor : page) {
-            factPublisher.publish(vendor, startedAt, actor);
-        }
+        factPublisher.publishAll(page, startedAt, currentActor());
         UUID next = complete || page.isEmpty() ? null : page.getLast().getVendorId();
         log.info(
                 "Vendor fact replay after={} limit={} emitted={} complete={}",

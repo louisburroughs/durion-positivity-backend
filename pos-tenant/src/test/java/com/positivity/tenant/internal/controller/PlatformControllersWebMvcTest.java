@@ -11,7 +11,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.security.common.GatewayAuthoritiesFilter;
 import com.positivity.tenant.internal.config.SecurityConfig;
 import com.positivity.tenant.internal.dto.AccountContactResponse;
 import com.positivity.tenant.internal.dto.AccountResponse;
@@ -32,7 +31,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -58,19 +56,6 @@ class PlatformControllersWebMvcTest {
         @Bean
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-09-10T12:00:00Z"), ZoneOffset.UTC);
-        }
-
-        /**
-         * MockMvc registers every Filter bean directly, which would run GatewayAuthoritiesFilter
-         * before the security chain and mark it already-filtered; disable that so it runs inside
-         * gatewaySecurityFilterChain as in production.
-         */
-        @Bean
-        FilterRegistrationBean<GatewayAuthoritiesFilter> gatewayAuthoritiesFilterRegistration(
-                GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration = new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
         }
     }
 

@@ -417,11 +417,14 @@ public class RegisterSessionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description = "The credentials could not be checked right now (CASH_MOVEMENT_APPROVAL_UNAVAILABLE).",
+            description = "The credentials could not be checked right now (CASH_MOVEMENT_APPROVAL_UNAVAILABLE);"
+                    + " Retry-After says when to try again.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "CURRENCY_NOT_SUPPORTED: the amount is in a currency other than the functional currency.",
+            description = "CURRENCY_NOT_SUPPORTED: the amount is in a currency other than the drawer's; or"
+                    + " AMOUNT_PRECISION_EXCEEDS_CURRENCY: the amount has more decimals than the drawer's currency"
+                    + " allows (fieldErrors names amount; nothing is rounded, ADR-0067 PC-6).",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping("/{sessionId}/cash-movement-approvals")
     @PreAuthorize("hasAuthority('" + OrderPermissions.ORDER_SESSION_CASH_MOVEMENT + "')")
@@ -555,8 +558,10 @@ public class RegisterSessionController {
                     Required inputs: countedCash (zero or greater) in the body and sessionId (UUID) as a path \
                     parameter.
                     Emits an ORDER_SESSION_BEGIN_CLOSE event.
-                    Returns 200 with the CLOSING session, 404 when the session does not exist, and 409 when the \
-                    session is already closed or an order on the session is still awaiting payment.
+                    Returns 200 with the CLOSING session, 404 when the session does not exist, 409 when the \
+                    session is already closed or an order on the session is still awaiting payment, and 422 \
+                    AMOUNT_PRECISION_EXCEEDS_CURRENCY when countedCash has more decimals than the drawer's \
+                    currency allows (nothing is rounded, ADR-0067 PC-6).
                     """,
             tags = {"Register Sessions"})
     @PostMapping("/{sessionId}/begin-close")

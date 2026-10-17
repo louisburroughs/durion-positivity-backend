@@ -65,18 +65,6 @@ class SupplierVendorControllerWebMvcTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-10-05T12:00:00Z"), ZoneOffset.UTC);
         }
-
-        /** See {@code SupplierAdminControllersWebMvcTest.FixedClockConfig}: the filter runs only in the chain. */
-        @Bean
-        org.springframework.boot.web.servlet.FilterRegistrationBean<
-                        com.positivity.security.common.GatewayAuthoritiesFilter>
-                gatewayAuthoritiesFilterRegistration(
-                        com.positivity.security.common.GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration =
-                    new org.springframework.boot.web.servlet.FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
-        }
     }
 
     private static final String BASE = "/v1/supplier/vendors";

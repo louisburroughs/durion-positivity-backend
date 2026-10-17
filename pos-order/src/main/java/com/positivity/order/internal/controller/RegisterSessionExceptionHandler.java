@@ -41,12 +41,26 @@ public class RegisterSessionExceptionHandler {
 
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private static final long DEFAULT_RETRY_AFTER_SECONDS = 5;
+    /**
+     * {@code Retry-After} of 503 {@code CASH_MOVEMENT_APPROVAL_UNAVAILABLE} (#2651): the security client's connect
+     * (PT2S) and read (PT5S) timeouts bound the wait already spent, so a retry sooner than their sum lands in the
+     * same outage.
+     */
+    static final String STEP_UP_RETRY_AFTER_PROPERTY = "pos.security-service.retry-after-seconds";
+
+    static final long DEFAULT_STEP_UP_RETRY_AFTER_SECONDS = 7;
     private final Clock clock;
     private final long taxCheckRetryAfterSeconds;
+    private final long stepUpRetryAfterSeconds;
 
-    /** A handler whose 503 {@code TAX_CHECK_UNAVAILABLE} carries the default {@code Retry-After} of 5 seconds. */
+    /** A handler whose 503s carry the default {@code Retry-After} values. */
     public RegisterSessionExceptionHandler(Clock clock) {
-        this(clock, DEFAULT_RETRY_AFTER_SECONDS);
+        this(clock, DEFAULT_RETRY_AFTER_SECONDS, DEFAULT_STEP_UP_RETRY_AFTER_SECONDS);
+    }
+
+    /** A handler with the tax-check {@code Retry-After} given and the step-up one at its default. */
+    public RegisterSessionExceptionHandler(Clock clock, long taxCheckRetryAfterSeconds) {
+        this(clock, taxCheckRetryAfterSeconds, DEFAULT_STEP_UP_RETRY_AFTER_SECONDS);
     }
 
     /**
@@ -58,9 +72,12 @@ public class RegisterSessionExceptionHandler {
     public RegisterSessionExceptionHandler(
             Clock clock,
             @Value("${" + TaxCheckSettings.RETRY_AFTER_PROPERTY + ":" + DEFAULT_RETRY_AFTER_SECONDS + "}")
-                    long taxCheckRetryAfterSeconds) {
+                    long taxCheckRetryAfterSeconds,
+            @Value("${" + STEP_UP_RETRY_AFTER_PROPERTY + ":" + DEFAULT_STEP_UP_RETRY_AFTER_SECONDS + "}")
+                    long stepUpRetryAfterSeconds) {
         this.clock = clock;
         this.taxCheckRetryAfterSeconds = taxCheckRetryAfterSeconds;
+        this.stepUpRetryAfterSeconds = stepUpRetryAfterSeconds;
     }
 
     @ExceptionHandler(RegisterSessionNotFoundException.class)
@@ -267,13 +284,18 @@ public class RegisterSessionExceptionHandler {
                         correlationId));
     }
 
-    /** The step-up check could not be made (CAP:550 S16, #2512): 503, not a refusal. */
+    /**
+     * The step-up check could not be made (CAP:550 S16, #2512): 503, not a refusal, with {@code Retry-After} (ADR-0017
+     * §1, #2651) from {@value #STEP_UP_RETRY_AFTER_PROPERTY}, by default the sum of the security client's connect and
+     * read timeouts.
+     */
     @ExceptionHandler(StepUpUnavailableException.class)
     public ResponseEntity<ApiError> handleStepUpUnavailable(StepUpUnavailableException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         log.warn("Cash movement approval check unavailable: correlationId={}", correlationId, ex);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .header(X_CORRELATION_ID, correlationId)
+                .header(HttpHeaders.RETRY_AFTER, Long.toString(stepUpRetryAfterSeconds))
                 .body(ApiError.of(
                         "CASH_MOVEMENT_APPROVAL_UNAVAILABLE",
                         ex.getMessage(),

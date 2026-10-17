@@ -525,7 +525,16 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         if (salesOrderRepository.existsBySessionIdAndStatus(sessionId, SalesOrderStatus.PENDING_PAYMENT)) {
             throw new SessionCloseBlockedException(sessionId);
         }
-        session.setCountedCash(scale(countedCash));
+        // ADR-0067 PC-6 (#2651): a count finer than the drawer currency's minor unit is refused, never rounded.
+        String currencyCode = session.getCurrencyCode();
+        if (!DrawerAmounts.representable(countedCash, currencyCode)) {
+            throw new CashMovementTaxRefusedException(
+                    CashMovementTaxRefusedException.Code.AMOUNT_PRECISION_EXCEEDS_CURRENCY,
+                    "countedCash has more decimals than the drawer's currency allows; nothing is rounded",
+                    List.of(new ApiError.FieldError(
+                            "countedCash", "has more decimals than " + currencyCode + " allows")));
+        }
+        session.setCountedCash(DrawerAmounts.atExponent(countedCash, currencyCode));
         session.setStatus(RegisterSessionStatus.CLOSING);
         session.setClosingStartedAt(Instant.now(clock));
         return toSummary(registerSessionRepository.save(session));

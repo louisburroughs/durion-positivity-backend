@@ -18,6 +18,7 @@ import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
@@ -131,6 +132,27 @@ class CashMovementApprovalServiceTest {
         details.put(GatewaySecurityConstants.DETAIL_LOCATION_SCOPE, scope);
         token.setDetails(details);
         SecurityContextHolder.getContext().setAuthentication(token);
+    }
+
+    @Test
+    @DisplayName("#2651 (ADR-0067 PC-6): an amount finer than the drawer currency's minor unit is refused, not rounded")
+    void amountFinerThanTheMinorUnitIsRefused() {
+        session.setCurrencyCode("CAD");
+        assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
+                        SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", new BigDecimal("30.005"), "CAD", null, null)))
+                .isInstanceOfSatisfying(CashMovementTaxRefusedException.class, e -> {
+                    assertThat(e.code())
+                            .isEqualTo(
+                                    com.positivity.order.internal.exception.CashMovementTaxRefusedException.Code
+                                            .AMOUNT_PRECISION_EXCEEDS_CURRENCY);
+                    assertThat(e.fieldErrors()).extracting(f -> f.field()).containsExactly("amount");
+                });
+
+        session.setCurrencyCode("JPY");
+        assertThatThrownBy(() -> service.approve(new CashMovementApprovalCommand(
+                        SESSION_ID, "manager", "s3cret", "PETTY_EXPENSE", new BigDecimal("30.5"), "JPY", null, null)))
+                .isInstanceOf(CashMovementTaxRefusedException.class);
+        verify(stepUp, never()).verify(any(), any(), any(), any());
     }
 
     private static CashMovementApprovalCommand command(String username, String amount) {

@@ -207,13 +207,28 @@ pos-supplier (ADR-0044 R1): it reads its own copy of the vendor master.
   `POST /{poId}/revisions` takes an optional `vendorId`: it changes the vendor of a `DRAFT` order only (another
   vendor on an order past `DRAFT` is 409 `PURCHASE_ORDER_INVALID_STATE`), passes the same guard, and an absent
   `vendorId` keeps the vendor.
+- **Purchasing channel (#2713, Order ruling on #2682).** The copy also holds `purchase_order_supplier_ref` (V13), the
+  alias of the vendor's designated transmission profile in pos-supplier (`supplier.vendor.updated.
+  purchaseOrderSupplierRef`, #2712: its one enabled, non-sandbox profile; null for none or several). pos-order stamps
+  it on the order's `supplierRef` at create, at a vendor-changing revise (the new vendor's channel, or none), at
+  approve and, while nothing has reached the vendor (`NOT_TRANSMITTED`, or `NOT_DISPATCHED` after a vendor that was
+  not set up refused the first send, #2492), at transmit, so a vendor that gains or moves its channel before a send
+  reaches it is sent through the channel it has now; once a send reached the vendor the stamp is frozen (a revision
+  reaches the channel the original did). At approve and transmit a vendor without a channel keeps the stamp the order
+  had. A blank alias on the fact is no channel. Transmit of an order without one is **422
+  `SUPPLIER_REF_MISSING`** naming the vendor, with `referenceId` = the vendor id, a `nextAction` for the buyer and a
+  `supportAction` for the administrator; the copy holds the vendor, so this is a fact, not replication lag. The
+  vendor reads and the purchase-order read serve `transmittable` (a boolean, never the alias) so a screen predicts
+  the refusal before Send; the purchase-order read answers what transmit would find, so while nothing was sent it
+  also reflects a channel the vendor gained since.
 - **Reads for the purchase-order screens (#2680).** `GET /v1/orders/purchase-order-vendors`
   (`listPurchaseOrderVendors`; `status`, `q` on vendor number or display name, `page`/`size`/`sort` on
   `vendorNumber`, `displayName`, `status` or `vendorId`, default `displayName,asc`, `vendorId` tie-breaker; any other
   sort is 400 `PURCHASE_ORDER_BAD_REQUEST`; a `status` outside the enum or a `q` over 255 characters is the
   platform's 400 `VALIDATION_ERROR`) and `GET /v1/orders/purchase-order-vendors/{vendorId}` (`getPurchaseOrderVendor`)
   serve the copy under `order:purchase_order:view`, which every purchase-order persona holds; the item is exactly
-  `vendorId`, `vendorNumber`, `displayName`, `status`, so inventory staff see no remit-to or tax-registration data
+  `vendorId`, `vendorNumber`, `displayName`, `status`, `transmittable` (#2713), so inventory staff see no remit-to or
+  tax-registration data
   (ADR-0044 R3). An `INACTIVE` vendor reads as such (200); an id the copy does not hold is **503
   `VENDOR_REPLICATION_PENDING`**, never 404. A vendor listed `ACTIVE` here is one the guard will accept.
 - **Requested orders.** An order requested on `order.commands.v1` (pos-inventory's purchase suggestions) is placed in
@@ -311,7 +326,10 @@ token unspent, so the register may resend the same `requestId` with a corrected 
 - **Precision (ADR-0067 PC-6).** The movement's `amount` and each stated amount must fit the drawer currency's minor
   unit (`DrawerAmounts`: trailing zeros do not count); otherwise one 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY` names
   `amount` and each `statedTaxes[i].amount`. Nothing is rounded: S16's silent `setScale(4, HALF_UP)` on the movement's
-  amount is gone, and `40.000` CAD is recorded as `40.00`. pos-order's other rounding sites are #2651.
+  amount is gone, and `40.000` CAD is recorded as `40.00`. The same rule, through the same helper, covers the
+  approval request's `amount`, `countedCash` at begin-close and the session policy's limits and tolerance (#2651):
+  each is refused with 422 `AMOUNT_PRECISION_EXCEEDS_CURRENCY` and `fieldErrors` naming it, never rounded, and the
+  policy's audit strings are written at the currency's exponent (`500` JPY, `5.000` KWD).
 - **Offered regimes (amendment A1).** From local replicas only (`DrawerStatedTax`): the session has a location; the
   category is `taxRecoverable` in the category copy; the regime's registration is in effect on the movement's date in
   `ext_tax_registration`; its `jurisdictionCode` is the session location's country or region (`ext_location`); and the
@@ -500,7 +518,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_PRICE_OVERRIDE_INVALID` | 422 | Price override failed business validation |
 | `ORDER_INVALID_CUSTOMER` | 422 | The customer referenced by the order is not valid for it |
 | `REGISTER_FLOAT_LOCATION_MISMATCH` | 422 | `POST /v1/orders/sessions` at a location other than the one the register's configured float is held at (#2573: no register moves during an open session); `fieldErrors` name `terminalId`, `requestedLocationId` and, only when the caller's scope covers it, `floatLocationId`. No session is opened |
-| `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | 422 | A cash movement's `amount` or a stated tax amount has more decimals than the drawer's currency allows; `fieldErrors` name each, nothing is rounded (CAP:550 S32d, ADR-0067 PC-6) |
+| `AMOUNT_PRECISION_EXCEEDS_CURRENCY` | 422 | A cash movement's `amount` or a stated tax amount, an approval request's `amount`, `countedCash` at begin-close, or a session-policy limit or tolerance has more decimals than the currency allows; `fieldErrors` name each, nothing is rounded (CAP:550 S32d, #2651, ADR-0067 PC-6) |
 | `TAX_REGIME_NOT_OFFERED` | 422 | A stated tax regime the session does not offer for the category, location, currency and date; `fieldErrors[statedTaxes[i].regime]` (CAP:550 S32d) |
 | `TAX_AMOUNT_IMPLAUSIBLE` | 422 | A stated tax amount, or their sum, at or above the movement's amount, or above pos-tax's plausible maximum (relayed with pos-tax's `fieldErrors`) (CAP:550 S32d) |
 | `SUPPLIER_REGISTRATION_NOT_ACCEPTED` | 422 | A supplier's registration number for a country that names no supplier regime; never recorded unchecked (CAP:550 S32d) |
@@ -520,7 +538,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `RETURN_UNPROCESSABLE` | 422 | A structurally valid return that a domain rule refuses: a refund method needing a customer the return lacks, no invoice to refund against, or insufficient settled original tender |
 | `UOM_CONVERSION_UNDEFINED` | 422 | A purchase-order line names a `uomCode` with no conversion row for the product |
 | `VENDOR_INACTIVE` | 422 | The purchase order's vendor is inactive and takes no new purchase order (create, approve, a vendor-changing revision, transmit); or a drawer cash-on-delivery movement names an inactive vendor (#2576) |
-| `SUPPLIER_REF_MISSING` | 422 | The purchase order cannot be transmitted: no supplier reference |
+| `SUPPLIER_REF_MISSING` | 422 | The purchase order cannot be transmitted: its vendor has no purchasing channel (no designated transmission profile in pos-supplier, #2713). `referenceId` = the vendor id, `nextAction` / `supportAction` say what the buyer and the administrator do next |
 | `PURCHASE_ORDER_NOT_APPROVED` | 422 | The purchase order cannot be transmitted: not approved |
 | `TRANSMISSION_IN_FLIGHT` | 422 | A transmission of this purchase order is already in flight (ADR-0052) |
 | `TRANSMISSION_AWAITING_REVIEW` | 422 | A prior transmission attempt is awaiting review |
@@ -532,7 +550,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
 | `TAX_CHECK_UNAVAILABLE` | 503 | A petty expense carried the supplier's number and pos-tax could not check it (unreachable, timed out, failed, or disagreed with pos-order's replicas); `Retry-After` is set (`pos.order.tax-check.retry-after-seconds`); nothing recorded (CAP:550 S32d) |
-| `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`) |
+| `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`); `Retry-After` says when to try again (ADR-0017 §1, #2651; `pos.security-service.retry-after-seconds`, default 7 = the client's connect + read timeouts) |
 
 ## Configuration
 

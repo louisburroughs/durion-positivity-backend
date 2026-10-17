@@ -31,8 +31,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  *
  * The published fact is keyed by {@code (vendorProfileId, productId)}, pos-catalog's canonical
  * identity for a vendor. {@code PurchaseOrderEntity} carries only {@code supplierRef} — the
- * descriptive alias — never the vendor profile id, and ADR-0044 R1 forbids resolving one from the
- * other synchronously across the domain wall. This replica is therefore keyed the way
+ * descriptive alias, stamped from the vendor copy's purchasing channel since #2713 — never the vendor
+ * profile id, and ADR-0044 R1 forbids resolving one from the other synchronously across the domain
+ * wall. This replica is therefore keyed the way
  * {@code PurchaseOrderTransmissionService} already looks vendors up everywhere else in this module:
  * by {@code supplierRef}. {@code vendorProfileId} is kept alongside for traceability only.
  */

@@ -25,6 +25,7 @@ import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrderStatus;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.RegisterFloatLocationMismatchException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
@@ -494,6 +495,24 @@ class RegisterSessionServiceImplTest {
                         null,
                         null)))
                 .isInstanceOf(RegisterSessionConflictException.class);
+    }
+
+    @Test
+    @DisplayName(
+            "#2651 (ADR-0067 PC-6): a countedCash finer than the drawer currency's minor unit is refused, not rounded")
+    void beginClose_refusesSubMinorUnitCount() {
+        UUID id = UUID.randomUUID();
+        RegisterSession session = openSession(id);
+        when(registerSessionRepository.findById(id)).thenReturn(Optional.of(session));
+
+        assertThatThrownBy(() -> service.beginClose(id, new BigDecimal("100.005")))
+                .isInstanceOfSatisfying(
+                        CashMovementTaxRefusedException.class,
+                        e -> assertThat(e.fieldErrors())
+                                .extracting(f -> f.field())
+                                .containsExactly("countedCash"));
+        assertThat(session.getCountedCash()).isNull();
+        assertThat(session.getStatus()).isEqualTo(RegisterSessionStatus.OPEN);
     }
 
     @Test

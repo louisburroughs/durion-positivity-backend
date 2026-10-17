@@ -88,7 +88,7 @@ class EventIngestionServiceEventReferenceTest {
             });
         });
 
-        when(idempotencyService.isKeyProcessed(anyString())).thenReturn(false);
+        when(idempotencyService.isKeyActive(anyString())).thenReturn(false);
     }
 
     @Test

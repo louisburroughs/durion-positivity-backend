@@ -109,6 +109,15 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
   2 or later. It carries every vendor field plus
   `remitToChangedAt`, `remitToRequestedBy`, `remitToApprovedBy` (security-context principal names),
   `createdBy`, `createdAt`, `occurredAt`. Consumers apply it under `ReplicaVersionGuard`: skip only when they hold a newer version; an equal version (a replay) re-applies. A no-op update publishes nothing.
+  - **`purchaseOrderSupplierRef`** (#2682 ruling, #2712; schema version unchanged, additive): the alias
+    (`supplierRef`) of the vendor's designated purchasing profile, the one enabled non-sandbox profile that
+    names the vendor; `null` when the vendor has none, or several (no designation yet). Creating, updating,
+    deleting or bootstrapping a profile so that a vendor's designation changes republishes that vendor's fact
+    at a higher `aggregateVersion` (`VendorPurchasingProfile`); a profile change that leaves the designation
+    as it was publishes nothing. INTERNAL under ADR-0072: a configuration alias, never a person's identifier.
+    pos-order copies it to `ext_supplier_vendor` and stamps purchase orders (#2713). The `facts/replay`
+    endpoint carries it (facts are rebuilt at the vendor's current state); the outbox window replay re-queues
+    rows as they were published, so rows queued before this change still lack it.
 - **Replay (ADR-0044 §4).** `POST /v1/supplier/vendors/facts/replay` re-emits one page (limit clamped to
   1–1000, default 200) of the caller's tenant's vendors at their current version. The
   `supplier.outbox.replay-requested` command on `supplier.commands.v1`

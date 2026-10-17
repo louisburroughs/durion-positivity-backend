@@ -28,6 +28,8 @@ import com.positivity.supplier.internal.service.AuthReferenceRules;
 import com.positivity.supplier.internal.service.SecretSchemeRegistry;
 import com.positivity.supplier.internal.service.model.AuthConfigRequest;
 import com.positivity.supplier.internal.service.model.SupplierAuthType;
+import com.positivity.supplier.internal.spi.VendorProfilesChanged;
+import com.positivity.supplier.internal.spi.VendorProfilesChanging;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.TenantIterator;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -48,6 +50,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -114,6 +117,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private final TenantIterator tenantIterator;
     private final PlatformTransactionManager transactionManager;
     private final MeterRegistry meterRegistry;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Reconciles the YAML profiles into every active tenant (ADR-0062 §3): the profile tables are
@@ -178,6 +182,11 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             vendorUnresolved(spec, profile);
             return;
         }
+        // #2712: snapshot the designation of the vendor the profile had and the one it gets, before any mutation
+        // (the snapshot's query would auto-flush a dirty entity).
+        java.util.Set<UUID> touched = new java.util.HashSet<>(vendorIdsOf(profile));
+        touched.add(vendor.get().getVendorId());
+        eventPublisher.publishEvent(new VendorProfilesChanging(touched));
         profile.setVendorId(vendor.get().getVendorId());
         profile.setSupplierRef(spec.key());
         profile.setDisplayName(spec.displayName());
@@ -200,7 +209,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             profile.setRetryMaxAttempts(null);
             profile.setRetryBackoff(null);
         }
+        // #2712: a YAML profile that appears, re-points, enables or disables may move the vendor's purchasing channel.
         profile = profileRepository.save(profile);
+        eventPublisher.publishEvent(new VendorProfilesChanged(touched));
         UUID vendorProfileId = profile.getVendorProfileId();
         reconcileAuthConfigs(vendorProfileId, spec);
         reconcileAccounts(vendorProfileId, spec);
@@ -331,8 +342,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                 .counter(VENDOR_UNRESOLVED_METRIC, "profile", spec.key(), "tenant", tenant)
                 .increment();
         if (profile.getVendorProfileId() != null && profile.isEnabled()) {
+            eventPublisher.publishEvent(new VendorProfilesChanging(vendorIdsOf(profile)));
             profile.setEnabled(false);
             profileRepository.save(profile);
+            eventPublisher.publishEvent(new VendorProfilesChanged(vendorIdsOf(profile)));
         }
     }
 
@@ -343,8 +356,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private void disableRemovedYamlProfiles(@NonNull Set<String> yamlKeys) {
         for (SupplierProfileEntity profile : profileRepository.findBySourceOfTruth(ProfileSourceOfTruth.YAML)) {
             if (!yamlKeys.contains(profile.getSupplierRef()) && profile.isEnabled()) {
+                eventPublisher.publishEvent(new VendorProfilesChanging(vendorIdsOf(profile)));
                 profile.setEnabled(false);
                 profileRepository.save(profile);
+                eventPublisher.publishEvent(new VendorProfilesChanged(vendorIdsOf(profile)));
             }
         }
     }
@@ -637,5 +652,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private static SupplierConfigurationException invalid(@NonNull String message) {
         return new SupplierConfigurationException(
                 SupplierConfigurationException.YAML_BOOTSTRAP_INVALID, "Supplier YAML bootstrap rejected: " + message);
+    }
+
+    private static java.util.Set<UUID> vendorIdsOf(SupplierProfileEntity profile) {
+        return profile.getVendorId() == null ? java.util.Set.of() : java.util.Set.of(profile.getVendorId());
     }
 }

@@ -13,6 +13,7 @@ import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.SessionPolicy;
 import com.positivity.order.internal.entity.SessionPolicyChange;
 import com.positivity.order.internal.entity.SessionPolicyType;
+import com.positivity.order.internal.exception.CashMovementTaxRefusedException;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.SessionPolicyConflictException;
 import com.positivity.order.internal.exception.SessionPolicyValidationException;
@@ -226,6 +227,34 @@ class SessionPolicyServiceImplTest {
                     assertThat(e.getMessage()).contains("justification");
                 });
         verify(writer, never()).write(any(), any());
+    }
+
+    @Test
+    @DisplayName(
+            "#2651 (ADR-0067 PC-6): a limit or tolerance finer than the currency's minor unit is refused, not rounded")
+    void subMinorUnitAmountsAreRefused() {
+        assertThatThrownBy(() -> service.update(put(null, true, "50.005", false, null, "5.00", JUSTIFICATION)))
+                .isInstanceOfSatisfying(
+                        CashMovementTaxRefusedException.class,
+                        e -> assertThat(e.fieldErrors())
+                                .extracting(f -> f.field())
+                                .containsExactly("pettyExpense.cashierLimit"));
+        assertThatThrownBy(() -> service.update(put(null, true, "50.00", false, null, "5.005", JUSTIFICATION)))
+                .isInstanceOfSatisfying(
+                        CashMovementTaxRefusedException.class,
+                        e -> assertThat(e.fieldErrors())
+                                .extracting(f -> f.field())
+                                .containsExactly("overShortTolerance"));
+        // Every offending field in one refusal.
+        assertThatThrownBy(() -> service.update(put(null, true, "50.005", false, null, "5.005", JUSTIFICATION)))
+                .isInstanceOfSatisfying(
+                        CashMovementTaxRefusedException.class,
+                        e -> assertThat(e.fieldErrors())
+                                .extracting(f -> f.field())
+                                .containsExactly("pettyExpense.cashierLimit", "overShortTolerance"));
+        // A wrong currency is answered as such, before any precision judgement.
+        assertThatThrownBy(() -> service.update(put(null, "JPY", true, "50.50", false, null, "5.00", JUSTIFICATION)))
+                .isInstanceOf(CurrencyNotSupportedException.class);
     }
 
     @Test

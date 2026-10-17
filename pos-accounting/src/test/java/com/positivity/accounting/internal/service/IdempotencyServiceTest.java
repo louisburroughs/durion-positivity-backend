@@ -7,39 +7,29 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.IdempotencyKey;
 import com.positivity.accounting.internal.repository.IdempotencyKeyRepository;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * Unit tests for IdempotencyService
- *
- * Tests idempotency key management including registration,
- * validation, and cleanup of expired keys.
+ * Unit tests for IdempotencyService: registration and the presence check. Posting keys never expire (#2595).
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("IdempotencyService Unit Tests")
 class IdempotencyServiceTest {
-    private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2024-01-01T00:00:00Z"), ZoneOffset.UTC);
 
-    @Spy
-    private Clock clock = TEST_CLOCK;
+    private static final java.time.Clock TEST_CLOCK =
+            java.time.Clock.fixed(Instant.parse("2026-10-17T12:00:00Z"), java.time.ZoneOffset.UTC);
 
     @Mock
     private IdempotencyKeyRepository repository;
 
-    @InjectMocks
     private IdempotencyServiceImpl service;
 
     private String testKeyValue;
@@ -47,147 +37,86 @@ class IdempotencyServiceTest {
 
     @BeforeEach
     void setUp() {
+        service = new IdempotencyServiceImpl(repository, TEST_CLOCK);
         testKeyValue = "test-key-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
         testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
 
-    // ===== IS KEY PROCESSED TESTS =====
-
     @Test
-    @DisplayName("isKeyProcessed - returns true for existing non-expired key")
-    void isKeyProcessed_existingNotExpired_returnsTrue() {
-        // Arrange
-        Instant futureExpiry = Instant.now(TEST_CLOCK).plus(1, ChronoUnit.HOURS);
-        IdempotencyKey key = new IdempotencyKey(testKeyValue, testInvoiceId, futureExpiry);
+    @DisplayName("isKeyProcessed - a registered key is processed")
+    void isKeyProcessed_registered_returnsTrue() {
+        IdempotencyKey key = new IdempotencyKey(testKeyValue, testInvoiceId);
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
 
-        // Act
-        boolean result = service.isKeyProcessed(testKeyValue);
-
-        // Assert
-        assertThat(result).isTrue();
+        assertThat(service.isKeyProcessed(testKeyValue)).isTrue();
         verify(repository).findByKeyValue(testKeyValue);
     }
 
     @Test
-    @DisplayName("isKeyProcessed - returns false for expired key")
-    void isKeyProcessed_expired_returnsFalse() {
-        // Arrange
-        Instant pastExpiry = Instant.now(TEST_CLOCK).minus(1, ChronoUnit.HOURS);
-        IdempotencyKey key = new IdempotencyKey(testKeyValue, testInvoiceId, pastExpiry);
-        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(key));
+    @DisplayName("#2595: a key registered with an expiry before V28, long past, is still processed")
+    void isKeyProcessed_legacyExpiredKey_stillProcessed() {
+        IdempotencyKey legacy = new IdempotencyKey(testKeyValue, testInvoiceId);
+        legacy.setExpiresAt(Instant.parse("2024-01-01T00:00:00Z"));
+        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(legacy));
 
-        // Act
-        boolean result = service.isKeyProcessed(testKeyValue);
-
-        // Assert
-        assertThat(result).isFalse();
-        verify(repository).findByKeyValue(testKeyValue);
+        assertThat(service.isKeyProcessed(testKeyValue))
+                .as("a redelivery under a fresh eventId days later posts nothing twice")
+                .isTrue();
     }
 
     @Test
     @DisplayName("isKeyProcessed - returns false for non-existent key")
     void isKeyProcessed_notFound_returnsFalse() {
-        // Arrange
         when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.empty());
 
-        // Act
-        boolean result = service.isKeyProcessed(testKeyValue);
-
-        // Assert
-        assertThat(result).isFalse();
+        assertThat(service.isKeyProcessed(testKeyValue)).isFalse();
         verify(repository).findByKeyValue(testKeyValue);
     }
 
-    // ===== REGISTER KEY TESTS =====
+    @Test
+    @DisplayName("REST window: a windowed key is active inside its window and inactive after it (#2207)")
+    void windowedKeyExpires() {
+        IdempotencyKey inside = new IdempotencyKey(testKeyValue, testInvoiceId);
+        inside.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(60));
+        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(inside));
+        assertThat(service.isKeyActive(testKeyValue)).isTrue();
+
+        IdempotencyKey past = new IdempotencyKey(testKeyValue, testInvoiceId);
+        past.setExpiresAt(Instant.now(TEST_CLOCK).minusSeconds(1));
+        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(past));
+        assertThat(service.isKeyActive(testKeyValue)).isFalse();
+        assertThat(service.isKeyProcessed(testKeyValue))
+                .as("a posting key's presence check ignores any expiry")
+                .isTrue();
+    }
 
     @Test
-    @DisplayName("registerKey - saves new key with 24-hour expiration")
-    void registerKey_success() {
-        // Arrange
-        when(repository.saveAndFlush(any(IdempotencyKey.class))).thenAnswer(invocation -> invocation.getArgument(0));
+    @DisplayName("registerKey with a window stores its end (#2207)")
+    void registerKey_withWindow_storesExpiry() {
+        when(repository.saveAndFlush(any(IdempotencyKey.class))).thenAnswer(invocation -> {
+            IdempotencyKey saved = invocation.getArgument(0);
+            assertThat(saved.getExpiresAt()).isEqualTo(Instant.now(TEST_CLOCK).plus(java.time.Duration.ofHours(24)));
+            return saved;
+        });
 
-        // Act
-        service.registerKey(testKeyValue, testInvoiceId);
+        service.registerKey(testKeyValue, testInvoiceId, java.time.Duration.ofHours(24));
 
-        // Assert
         verify(repository).saveAndFlush(any(IdempotencyKey.class));
     }
 
     @Test
-    @DisplayName("registerKey - sets expiration to 24 hours in future")
-    void registerKey_setsCorrectExpiration() {
-        // Arrange
-        Instant beforeCall = Instant.now(TEST_CLOCK);
+    @DisplayName("registerKey - saves the key without an expiry (#2595)")
+    void registerKey_storesNoExpiry() {
         when(repository.saveAndFlush(any(IdempotencyKey.class))).thenAnswer(invocation -> {
             IdempotencyKey saved = invocation.getArgument(0);
-            Instant expectedExpiry = beforeCall.plus(24, ChronoUnit.HOURS);
-
-            // Allow 1 second tolerance for test execution time
-            assertThat(saved.getExpiresAt())
-                    .isBetween(expectedExpiry.minus(1, ChronoUnit.SECONDS), expectedExpiry.plus(1, ChronoUnit.SECONDS));
+            assertThat(saved.getExpiresAt()).isNull();
             assertThat(saved.getKeyValue()).isEqualTo(testKeyValue);
             assertThat(saved.getInvoiceId()).isEqualTo(testInvoiceId);
             return saved;
         });
 
-        // Act
         service.registerKey(testKeyValue, testInvoiceId);
 
-        // Assert
         verify(repository).saveAndFlush(any(IdempotencyKey.class));
-    }
-
-    // ===== CLEANUP TESTS =====
-
-    @Test
-    @DisplayName("cleanupExpiredKeys - deletes expired keys and returns count")
-    void cleanupExpiredKeys_success() {
-        // Arrange
-        int deletedCount = 5;
-        when(repository.deleteExpiredKeys(any(Instant.class))).thenReturn(deletedCount);
-
-        // Act
-        int result = service.cleanupExpiredKeys();
-
-        // Assert
-        assertThat(result).isEqualTo(deletedCount);
-        verify(repository).deleteExpiredKeys(any(Instant.class));
-    }
-
-    @Test
-    @DisplayName("cleanupExpiredKeys - returns zero when no expired keys")
-    void cleanupExpiredKeys_noExpiredKeys_returnsZero() {
-        // Arrange
-        when(repository.deleteExpiredKeys(any(Instant.class))).thenReturn(0);
-
-        // Act
-        int result = service.cleanupExpiredKeys();
-
-        // Assert
-        assertThat(result).isZero();
-        verify(repository).deleteExpiredKeys(any(Instant.class));
-    }
-
-    @Test
-    @DisplayName("cleanupExpiredKeys - passes current time to repository")
-    void cleanupExpiredKeys_passesCurrentTime() {
-        // Arrange
-        Instant beforeCall = Instant.now(TEST_CLOCK);
-        when(repository.deleteExpiredKeys(any(Instant.class))).thenAnswer(invocation -> {
-            Instant passedTime = invocation.getArgument(0);
-            // Allow 1 second tolerance
-            assertThat(passedTime)
-                    .isBetween(
-                            beforeCall.minus(1, ChronoUnit.SECONDS),
-                            Instant.now(TEST_CLOCK).plus(1, ChronoUnit.SECONDS));
-            return 0;
-        });
-
-        // Act
-        service.cleanupExpiredKeys();
-
-        // Assert
-        verify(repository).deleteExpiredKeys(any(Instant.class));
     }
 }
