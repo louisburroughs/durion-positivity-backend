@@ -54,9 +54,7 @@ class PurchaseSuggestionLifecycleTest {
      */
     @org.junit.jupiter.api.BeforeEach
     void publisherIsInertHere() {
-        org.mockito.Mockito.doNothing()
-                .when(purchaseOrderCommandPublisher)
-                .request(org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.doNothing().when(purchaseOrderCommandPublisher).request(org.mockito.ArgumentMatchers.any());
     }
 
     @Autowired

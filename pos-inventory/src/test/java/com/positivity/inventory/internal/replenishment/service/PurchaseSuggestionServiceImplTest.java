@@ -106,7 +106,8 @@ class PurchaseSuggestionServiceImplTest {
                 .thenReturn(Optional.of(Set.of(SITE)));
         when(purchaseSuggestionRepository.findWithinLocations(Set.of(SITE))).thenReturn(List.of(suggestion()));
 
-        Page<PurchaseSuggestionResponse> page = service.listPurchaseSuggestions(null, null, null, null, Pageable.unpaged());
+        Page<PurchaseSuggestionResponse> page =
+                service.listPurchaseSuggestions(null, null, null, null, Pageable.unpaged());
 
         assertThat(page.getContent())
                 .extracting(PurchaseSuggestionResponse::getSuggestionId)
@@ -130,7 +131,8 @@ class PurchaseSuggestionServiceImplTest {
     void list_filter_isGatedThenFiltered() {
         when(purchaseSuggestionRepository.findAll()).thenReturn(List.of(suggestion()));
 
-        Page<PurchaseSuggestionResponse> page = service.listPurchaseSuggestions(null, null, SITE, null, Pageable.unpaged());
+        Page<PurchaseSuggestionResponse> page =
+                service.listPurchaseSuggestions(null, null, SITE, null, Pageable.unpaged());
 
         assertThat(page.getContent()).hasSize(1);
         verify(locationScopeService).narrowTo(SITE, InventoryPermissionRegistry.INVENTORY_VIEW);
