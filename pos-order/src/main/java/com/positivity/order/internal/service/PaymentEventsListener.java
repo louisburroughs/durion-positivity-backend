@@ -169,6 +169,10 @@ public class PaymentEventsListener {
                 .paymentIntentId(uuid(payload, "paymentIntentId"))
                 .methodType(payload.path("methodType").stringValue(OTHER))
                 .amount(money(payload, "amount"))
+                // ADR-0067 A8 (#2662): additive on a CASH fact, absent before A8 and on other methods.
+                .settledAmount(optionalMoney(payload, "settledAmount"))
+                .cashRoundingAmount(optionalMoney(payload, "cashRoundingAmount"))
+                .cashIncrement(optionalMoney(payload, "cashIncrement"))
                 .currencyCode(payload.path("currencyCode").stringValue(null))
                 .reference(payload.path("gatewayReference").stringValue(null))
                 .occurredAt(instant(payload, "settledAt"))
@@ -253,6 +257,11 @@ public class PaymentEventsListener {
     private static UUID uuid(JsonNode payload, String field) {
         String value = payload.path(field).stringValue(null);
         return value == null || value.isBlank() ? null : UUID.fromString(value);
+    }
+
+    private static BigDecimal optionalMoney(JsonNode payload, String field) {
+        JsonNode node = payload.path(field);
+        return node.isMissingNode() || node.isNull() ? null : node.decimalValue();
     }
 
     private static BigDecimal money(JsonNode payload, String field) {

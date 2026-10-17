@@ -30,4 +30,17 @@ public interface InvoicingPort {
      * the invoice cancelled would leave a live financial document behind.
      */
     void cancelInvoice(@NonNull UUID invoiceId);
+
+    /**
+     * Records a register cash tender on the order's invoice (ADR-0067 A8, #2662): pos-invoice creates the CASH
+     * intent CAPTURED, checks the rounding triple and publishes the settled fact. Idempotent on the command's key.
+     *
+     * @throws com.positivity.order.internal.exception.CartIdempotencyConflictException the key was used with another
+     *     payload
+     * @throws com.positivity.order.internal.exception.OrderConflictException pos-invoice refused the tender (its
+     *     balance or its view of the triple disagrees with the register's)
+     * @throws com.positivity.order.internal.exception.InvoicingUnavailableException pos-invoice unreachable or failing
+     */
+    @NonNull
+    CashPaymentRef recordCashPayment(@NonNull UUID invoiceId, @NonNull RecordCashPaymentCommand command);
 }
