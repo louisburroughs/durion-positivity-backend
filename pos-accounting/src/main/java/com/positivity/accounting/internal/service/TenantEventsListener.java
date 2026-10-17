@@ -21,13 +21,13 @@ import tools.jackson.databind.ObjectMapper;
  * mapping defaults, statement lines and policy defaults (#2526; ADR-0062 §7), modeled on
  * pos-location's and pos-security-service's {@code TenantEventsListener}.
  *
- * <p>{@code tenant.created} provisions and then stores the tenant's locale in the {@code ext_tenant} replica (#2618);
+ * <p>{@code tenant.created} stores the tenant's locale in the {@code ext_tenant} replica (#2618) and then provisions;
  * the other projection facts ({@code tenant.updated} and the status changes) store the locale when they carry one,
  * guarded by {@code aggregateVersion}, with the eventId recorded in the same transaction as the upsert. A fact
  * without a locale, and {@code tenant.provisioned}, are skipped without a {@code processed_events} row. Each write
- * runs bound to the fact's tenant in its own transaction, after provisioning, never nested in it. A failure of the
- * locale write after provisioning propagates and retries; the retry skips provisioning (eventId recorded) at the
- * fast check, so a later fact carrying the locale is what repairs it, and until then readers see {@code en-US}.
+ * runs bound to the fact's tenant in its own transaction, never nested in provisioning. The locale write comes first
+ * because provisioning records the eventId: a failure anywhere redelivers the fact, the version-guarded upsert
+ * repeats harmlessly, and provisioning runs once. Readers of a tenant with no row see {@code en-US}.
  *
  * <p>The group reads from the earliest offset, so facts retained from before this consumer existed are processed
  * once.
@@ -104,15 +104,17 @@ public class TenantEventsListener {
             TenantContext.runAs(tenantId, () -> localeWriter.apply(projection.get()));
             return;
         }
+        // The locale first, in its own transaction under the tenant's own binding (#2618): a version-guarded
+        // upsert that a redelivery repeats harmlessly. Provisioning records the eventId, so a locale write after
+        // it could never be retried once provisioning had committed; before it, a failed provisioning redelivers
+        // both.
+        TenantContext.runAs(tenantId, () -> localeWriter.apply(projection.get()));
         // Read the platform template before binding the new tenant (sequential, not nested), so the
         // provisioning transaction below runs entirely under the new tenant's own binding.
         AccountingTemplate snapshot = templateReader.snapshot();
         // No catch: every failure propagates, so the container error handler retries with backoff
         // and routes to {topic}.dlq (ADR-0044 §4).
         TenantContext.runAs(tenantId, () -> provisioner.provision(tenantId, eventId, snapshot));
-        // Its own transaction under its own binding, after provisioning and never nested in it. The eventId is
-        // already recorded by provisioning, so the write is a plain version-guarded upsert.
-        TenantContext.runAs(tenantId, () -> localeWriter.apply(projection.get()));
     }
 
     private static boolean carriesLocale(JsonNode root) {

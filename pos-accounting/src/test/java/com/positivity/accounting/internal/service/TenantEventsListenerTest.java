@@ -164,9 +164,9 @@ class TenantEventsListenerTest {
         listener.onTenantEvent(createdWithLocale(EVENT_ID, NEW_TENANT.toString(), "fr-CA"));
 
         InOrder order = inOrder(provisioner, localeWriter);
-        order.verify(provisioner).provision(NEW_TENANT, EVENT_ID, SNAPSHOT);
         ArgumentCaptor<TenantProjectionEvent> fact = ArgumentCaptor.forClass(TenantProjectionEvent.class);
         order.verify(localeWriter).apply(fact.capture());
+        order.verify(provisioner).provision(NEW_TENANT, EVENT_ID, SNAPSHOT);
         assertThat(fact.getValue().tenantId()).isEqualTo(NEW_TENANT);
         assertThat(fact.getValue().locale()).isEqualTo("fr-CA");
         assertThat(boundAtLocale).containsExactly(Optional.of(NEW_TENANT));
