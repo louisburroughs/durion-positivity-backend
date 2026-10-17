@@ -821,7 +821,8 @@ class VendorBillReaderTest {
         VendorBill bill = postedBill(billId, "1000.00", "50.00", "1050.00");
         when(readTaxes.findByVendorBillIdOrderByTaxType(billId)).thenReturn(List.of(statedTax(billId, "GST", "50.00")));
         when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId))
-                .thenReturn(List.of(recovery(billId, "GST", "GST_HST", "50.00", "50.00", "TAX_RECOVERABLE_GST_HST", null)));
+                .thenReturn(
+                        List.of(recovery(billId, "GST", "GST_HST", "50.00", "50.00", "TAX_RECOVERABLE_GST_HST", null)));
         when(readResolver.findGLAccount(
                         VendorBillPostingService.POSTING_CATEGORY,
                         "TAX_RECOVERABLE_GST_HST",
@@ -838,7 +839,9 @@ class VendorBillReaderTest {
                         VendorBillReview.InputTaxRecovery::accountName)
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("GST", new BigDecimal("50.00"), null, null));
         org.mockito.Mockito.verify(readResolver, org.mockito.Mockito.never())
-                .resolveGLAccount(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                .resolveGLAccount(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
                         org.mockito.ArgumentMatchers.any());
     }
 
