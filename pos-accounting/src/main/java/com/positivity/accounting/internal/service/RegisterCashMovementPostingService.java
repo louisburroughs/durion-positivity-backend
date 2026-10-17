@@ -1,14 +1,14 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.repository.APPaymentRepository;
-import com.positivity.accounting.internal.enums.PaymentMethod;
-import com.positivity.accounting.internal.enums.APPaymentStatus;
-import com.positivity.accounting.internal.entity.ExtSupplierVendor;
-import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.RegisterCashMovementTaxRecovery;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
+import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.RegisterSessionContractViolationException;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.RegisterCashMovementTaxRecoveryRepository;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
@@ -99,6 +99,7 @@ public class RegisterCashMovementPostingService {
     static final String ACCOUNTS_PAYABLE_KEY = "ACCOUNTS_PAYABLE";
     /** The {@code paymentRef} of a cash-on-delivery payment: the movement names it, so a replay cannot mint two. */
     static final String COD_PAYMENT_REF_PREFIX = "COD-";
+
     static final String IDEMPOTENCY_KEY_PREFIX = "REGISTER_CASH_MOVEMENT_GL_POSTING:";
     static final String SOURCE_EVENT_NAMESPACE = "REGISTER_CASH_MOVEMENT:";
 
@@ -433,7 +434,8 @@ public class RegisterCashMovementPostingService {
         } else if (!Movement.OUT.equals(movement.direction())) {
             problem = "direction " + movement.direction() + " (" + (cod ? "a vendor payout" : "a petty expense")
                     + " is OUT)";
-        } else if (!cod && (movement.categoryCode() == null || movement.categoryCode().isBlank())) {
+        } else if (!cod
+                && (movement.categoryCode() == null || movement.categoryCode().isBlank())) {
             problem = "no categoryCode";
         } else if (cod && movement.vendorId() == null) {
             problem = "no vendorId";
@@ -441,9 +443,9 @@ public class RegisterCashMovementPostingService {
             problem = "amount " + movement.amount() + " (must be positive)";
         }
         if (problem != null) {
-            throw new RegisterSessionContractViolationException((cod ? "Vendor cash-on-delivery movement "
-                            : "Petty-expense movement ")
-                    + movement.movementId() + " of session " + fact.sessionId() + " cannot post: " + problem);
+            throw new RegisterSessionContractViolationException(
+                    (cod ? "Vendor cash-on-delivery movement " : "Petty-expense movement ") + movement.movementId()
+                            + " of session " + fact.sessionId() + " cannot post: " + problem);
         }
         return movement;
     }
@@ -465,9 +467,10 @@ public class RegisterCashMovementPostingService {
                 .find(movement.vendorId())
                 .map(ExtSupplierVendor::getDisplayName)
                 .orElse(null);
-        String description = "Drawer cash on delivery to vendor " + (vendorName != null ? vendorName : movement.vendorId())
-                + " " + movement.amount().toPlainString() + " " + movement.currencyCode() + ", register "
-                + fact.terminalId() + ", session closed " + fact.closedAt();
+        String description =
+                "Drawer cash on delivery to vendor " + (vendorName != null ? vendorName : movement.vendorId())
+                        + " " + movement.amount().toPlainString() + " " + movement.currencyCode() + ", register "
+                        + fact.terminalId() + ", session closed " + fact.closedAt();
         String lineLabel = abbreviate("Drawer cash on delivery, register " + fact.terminalId());
         UUID posted = glPostingService.postRegisterCashMovement(
                 toSourceEventId(movement.movementId()),
@@ -494,8 +497,8 @@ public class RegisterCashMovementPostingService {
         payment.setGlPostedAt(Instant.now(clock));
         payment.setRegisterSessionId(fact.sessionId());
         payment.setCashMovementId(movement.movementId());
-        payment.setMemo(abbreviate("Cash on delivery paid from register " + fact.terminalId() + " by "
-                + movement.clerkId()));
+        payment.setMemo(
+                abbreviate("Cash on delivery paid from register " + fact.terminalId() + " by " + movement.clerkId()));
         payment.setCreatedBy(movement.clerkId());
         payment.setCreatedAt(Instant.now(clock));
         apPaymentRepository.save(payment);

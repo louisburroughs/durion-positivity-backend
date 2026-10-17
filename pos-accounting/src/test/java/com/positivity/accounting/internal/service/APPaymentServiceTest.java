@@ -182,7 +182,8 @@ class APPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("allocating a CASH payment applies the bill, reduces what is unapplied, records the request, posts nothing")
+    @DisplayName(
+            "allocating a CASH payment applies the bill, reduces what is unapplied, records the request, posts nothing")
     void allocateCashPaymentAppliesTheBill() {
         UUID paymentId = UUID.randomUUID();
         UUID billId = UUID.randomUUID();
@@ -195,17 +196,20 @@ class APPaymentServiceTest {
         when(allocationRequests.findById(requestId)).thenReturn(Optional.empty());
         when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        APPaymentResponse response = service.allocateCashPayment(paymentId, allocate(requestId, billId, "100.00"), "clerk");
+        APPaymentResponse response =
+                service.allocateCashPayment(paymentId, allocate(requestId, billId, "100.00"), "clerk");
 
         assertThat(response.getUnappliedAmount()).isEqualByComparingTo("45.00");
         verify(payGuard).check(eq(List.of(bill)), eq("clerk"), eq("COD-" + paymentId));
         verify(allocationRepository).saveAll(any());
-        verify(allocationRequests).save(any(com.positivity.accounting.internal.entity.APPaymentAllocationRequest.class));
+        verify(allocationRequests)
+                .save(any(com.positivity.accounting.internal.entity.APPaymentAllocationRequest.class));
         org.mockito.Mockito.verifyNoInteractions(outboxService, postingService);
     }
 
     @Test
-    @DisplayName("a replay of the same requestId and lines answers the payment; another body is 409 IDEMPOTENCY_CONFLICT")
+    @DisplayName(
+            "a replay of the same requestId and lines answers the payment; another body is 409 IDEMPOTENCY_CONFLICT")
     void allocateCashPaymentIsIdempotentOnRequestId() {
         UUID paymentId = UUID.randomUUID();
         UUID billId = UUID.randomUUID();
@@ -228,12 +232,14 @@ class APPaymentServiceTest {
         verify(allocationRepository, never()).saveAll(any());
 
         assertThatThrownBy(() -> service.allocateCashPayment(paymentId, allocate(requestId, billId, "99.00"), "clerk"))
-                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(VendorBillException.Code.IDEMPOTENCY_CONFLICT));
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.IDEMPOTENCY_CONFLICT));
     }
 
     @Test
-    @DisplayName("not a CASH payment, or nothing unapplied: 422 AP_PAYMENT_NOT_ALLOCATABLE; over the unapplied amount: 400")
+    @DisplayName(
+            "not a CASH payment, or nothing unapplied: 422 AP_PAYMENT_NOT_ALLOCATABLE; over the unapplied amount: 400")
     void allocateCashPaymentRefusals() {
         UUID billId = UUID.randomUUID();
         UUID achId = UUID.randomUUID();
@@ -242,21 +248,25 @@ class APPaymentServiceTest {
         when(paymentRepository.lockById(achId)).thenReturn(Optional.of(ach));
         when(allocationRequests.findById(any())).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.allocateCashPayment(achId, allocate(UUID.randomUUID(), billId, "10.00"), "c"))
-                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE));
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE));
 
         UUID spentId = UUID.randomUUID();
         when(paymentRepository.lockById(spentId)).thenReturn(Optional.of(cashPayment(spentId, "0.00")));
-        assertThatThrownBy(() -> service.allocateCashPayment(spentId, allocate(UUID.randomUUID(), billId, "10.00"), "c"))
-                .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE));
+        assertThatThrownBy(
+                        () -> service.allocateCashPayment(spentId, allocate(UUID.randomUUID(), billId, "10.00"), "c"))
+                .isInstanceOfSatisfying(
+                        VendorBillException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE));
 
         UUID paymentId = UUID.randomUUID();
         when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(cashPayment(paymentId, "45.00")));
         VendorBill bill = approvedBill(billId, "100.00");
         when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
         when(billRepository.findById(billId)).thenReturn(Optional.of(bill));
-        assertThatThrownBy(() -> service.allocateCashPayment(paymentId, allocate(UUID.randomUUID(), billId, "100.00"), "c"))
+        assertThatThrownBy(() ->
+                        service.allocateCashPayment(paymentId, allocate(UUID.randomUUID(), billId, "100.00"), "c"))
                 .isInstanceOf(InvalidBillAllocationException.class)
                 .hasMessageContaining("exceeds the payment's unapplied amount");
     }

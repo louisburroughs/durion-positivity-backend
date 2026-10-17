@@ -1,15 +1,13 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.exception.VendorBillException;
-import com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository;
-import com.positivity.accounting.internal.entity.APPaymentAllocationRequest;
-import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingEvent;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
+import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
+import com.positivity.accounting.internal.entity.APPaymentAllocationRequest;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
@@ -19,10 +17,12 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.InvalidBillAllocationException;
 import com.positivity.accounting.internal.exception.PaymentGatewayException;
+import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.payment.GatewayPaymentRequest;
 import com.positivity.accounting.internal.payment.GatewayPaymentResponse;
 import com.positivity.accounting.internal.payment.PaymentGatewayProvider;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
+import com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
@@ -360,7 +360,8 @@ public class APPaymentServiceImpl implements APPaymentService {
         APPaymentAllocationRequest earlier =
                 allocationRequests.findById(request.getRequestId()).orElse(null);
         if (earlier != null) {
-            if (!earlier.getPaymentId().equals(paymentId) || !earlier.getRequestHash().equals(hash)) {
+            if (!earlier.getPaymentId().equals(paymentId)
+                    || !earlier.getRequestHash().equals(hash)) {
                 throw new VendorBillException(
                         VendorBillException.Code.IDEMPOTENCY_CONFLICT,
                         "requestId " + request.getRequestId() + " was already used with a different payload");
@@ -382,11 +383,7 @@ public class APPaymentServiceImpl implements APPaymentService {
         }
         // The same plan as the pay command's explicit allocations: bills locked in id order, each APPROVED and the
         // vendor's, zero lines ignored; the total bounded by what is still unapplied (not the gross).
-        ExecuteAPPaymentRequest asPlan = ExecuteAPPaymentRequest.builder()
-                .vendorId(payment.getVendorId())
-                .allocations(request.getAllocations())
-                .build();
-        List<PlannedAllocation> plan = explicitPlan(asPlan);
+        List<PlannedAllocation> plan = explicitPlan(payment.getVendorId(), request.getAllocations());
         BigDecimal total = plan.stream().map(PlannedAllocation::appliedAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (total.signum() <= 0) {
             throw new InvalidBillAllocationException("The allocations apply nothing");
@@ -398,16 +395,17 @@ public class APPaymentServiceImpl implements APPaymentService {
         for (PlannedAllocation planned : plan) {
             BigDecimal open = calculateOpenAmount(planned.bill().getVendorBillId());
             if (planned.appliedAmount().compareTo(open) > 0) {
-                throw new InvalidBillAllocationException("Allocation " + planned.appliedAmount().toPlainString()
-                        + " to bill " + planned.bill().getVendorBillId() + " exceeds its open amount "
-                        + open.toPlainString());
+                throw new InvalidBillAllocationException(
+                        "Allocation " + planned.appliedAmount().toPlainString()
+                                + " to bill " + planned.bill().getVendorBillId() + " exceeds its open amount "
+                                + open.toPlainString());
             }
         }
         // Approver ≠ payer on every allocation, cash on delivery included (AW6.2, §4.9).
         payGuard.check(plan.stream().map(PlannedAllocation::bill).toList(), currentUser, payment.getPaymentRef());
         appendAllocations(payment, plan);
-        allocationRequests.save(new APPaymentAllocationRequest(
-                request.getRequestId(), paymentId, hash, Instant.now(clock)));
+        allocationRequests.save(
+                new APPaymentAllocationRequest(request.getRequestId(), paymentId, hash, Instant.now(clock)));
         log.info(
                 "CASH AP payment allocated | paymentId={} | bills={} | total={} | unappliedAfter={}",
                 paymentId,
@@ -418,7 +416,8 @@ public class APPaymentServiceImpl implements APPaymentService {
     }
 
     private static String allocationHash(UUID paymentId, AllocateAPPaymentRequest request) {
-        RegisterFloatServiceImpl.Hash hash = new RegisterFloatServiceImpl.Hash().field("ALLOCATE").field(paymentId);
+        RegisterFloatServiceImpl.Hash hash =
+                new RegisterFloatServiceImpl.Hash().field("ALLOCATE").field(paymentId);
         for (ExecuteAPPaymentRequest.AllocationLineRequest line : request.getAllocations()) {
             hash.field(line.getVendorBillId()).field(line.getAppliedAmount());
         }
@@ -475,22 +474,27 @@ public class APPaymentServiceImpl implements APPaymentService {
     }
 
     private @NonNull List<PlannedAllocation> explicitPlan(@NonNull ExecuteAPPaymentRequest request) {
+        return explicitPlan(request.getVendorId(), request.getAllocations());
+    }
+
+    private @NonNull List<PlannedAllocation> explicitPlan(
+            @NonNull UUID vendorId, @NonNull List<ExecuteAPPaymentRequest.AllocationLineRequest> lines) {
         List<PlannedAllocation> allocations = new ArrayList<>();
         // Every bill locked in id order before any status is read (#2509 review, A3): a void or another payment of
         // the same bills waits, and the status read here is the one the allocation commits against.
         Map<UUID, VendorBill> locked = billRepository
-                .lockByVendorBillIdIn(request.getAllocations().stream()
+                .lockByVendorBillIdIn(lines.stream()
                         .map(ExecuteAPPaymentRequest.AllocationLineRequest::getVendorBillId)
                         .distinct()
                         .toList())
                 .stream()
                 .collect(Collectors.toMap(VendorBill::getVendorBillId, Function.identity()));
 
-        for (ExecuteAPPaymentRequest.AllocationLineRequest allocationLine : request.getAllocations()) {
+        for (ExecuteAPPaymentRequest.AllocationLineRequest allocationLine : lines) {
             VendorBill bill = validateBillForAllocation(
                     allocationLine.getVendorBillId(),
                     locked.get(allocationLine.getVendorBillId()),
-                    request.getVendorId());
+                    vendorId);
             if (allocationLine.getAppliedAmount().signum() != 0) {
                 // A line of 0.00 pays nothing: it is no allocation and blocks nothing (#2622 review LOW-3).
                 allocations.add(new PlannedAllocation(bill, allocationLine.getAppliedAmount()));

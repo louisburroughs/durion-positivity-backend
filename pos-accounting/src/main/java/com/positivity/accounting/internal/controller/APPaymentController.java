@@ -1,8 +1,8 @@
 package com.positivity.accounting.internal.controller;
 
-import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest;
 import com.positivity.accounting.internal.dto.APPaymentResponse;
+import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ApPayFromAccountListResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
@@ -296,8 +296,7 @@ public class APPaymentController {
     @Operation(
             operationId = "allocateApPayment",
             summary = "Allocate a cash-on-delivery AP payment to the vendor's approved bills",
-            description =
-                    """
+            description = """
                     Use when a vendor paid cash on delivery from a register drawer (an AP payment with method CASH, \
                     created at session close, CAP:550 S17) and the vendor's bill has since been approved: apply the \
                     payment's unapplied amount to one or more of that vendor's APPROVED bills.

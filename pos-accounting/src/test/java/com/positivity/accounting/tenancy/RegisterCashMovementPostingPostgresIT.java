@@ -360,7 +360,8 @@ class RegisterCashMovementPostingPostgresIT extends PostgresTenancyTestBase {
         assertThat(payment.get("register_session_id")).isEqualTo(session);
         assertThat(payment.get("gl_journal_entry_id")).isNotNull();
         assertThat(payment.get("bank_account_id")).isNull();
-        // Its entry is the close entry: no AP_PAYMENT:<id> posting exists or ever will (APPaymentPostingService skips CASH).
+        // Its entry is the close entry: no AP_PAYMENT:<id> posting exists or ever will (APPaymentPostingService skips
+        // CASH).
         assertThat(new JdbcTemplate(ownerDataSource())
                         .queryForObject(
                                 "SELECT count(*) FROM journal_entry WHERE tenant_id = ? AND source_event_type = 'AP_PAYMENT'",

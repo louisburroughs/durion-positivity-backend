@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.positivity.accounting.internal.service.SupplierVendorCopies;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.RegisterCashMovementTaxRecovery;
@@ -356,8 +355,7 @@ class RegisterCashMovementPostingServiceTest {
         when(vendorCopies.find(vendor)).thenReturn(java.util.Optional.of(copy));
 
         FactPostingOutcome outcome = service.postMovements(
-                fact(movement(COD, "VENDOR_COD", "OUT", "145.00", "USD", null, vendor, null, null)),
-                ENVELOPE_EVENT_ID);
+                fact(movement(COD, "VENDOR_COD", "OUT", "145.00", "USD", null, vendor, null, null)), ENVELOPE_EVENT_ID);
 
         assertThat(outcome).isEqualTo(FactPostingOutcome.posted(entry));
         verify(glPostingService)
