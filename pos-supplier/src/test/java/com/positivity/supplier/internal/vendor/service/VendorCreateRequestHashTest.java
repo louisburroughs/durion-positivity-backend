@@ -42,7 +42,8 @@ class VendorCreateRequestHashTest {
         String absent = VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), null));
         String withOne = VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), one));
         assertThat(withOne).isNotEqualTo(absent);
-        assertThat(VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), two))).isNotEqualTo(withOne);
+        assertThat(VendorCreateRequestHash.of(request("ACME", "Acme", List.of(), two)))
+                .isNotEqualTo(withOne);
     }
 
     @Test
