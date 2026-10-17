@@ -516,4 +516,56 @@ class GLMappingResolverTest {
         mapping.setDimensions(dimensions != null ? new HashMap<>(dimensions) : null);
         return mapping;
     }
+
+    @Nested
+    @DisplayName("findGLAccount by category/key name (#2677): the read's non-throwing twin")
+    class FindByName {
+
+        @Test
+        @DisplayName("answers the category default mapping's account, like resolveGLAccount")
+        void answersTheMappedAccount() {
+            UUID glAccountId = UUID.fromString("00000000-0000-0000-0000-000000001250");
+            PostingCategory category = new PostingCategory();
+            category.setPostingCategoryId(postingCategoryId);
+            category.setCategoryName("VENDOR_BILL");
+            when(postingCategoryRepository.findByCategoryName("VENDOR_BILL")).thenReturn(Optional.of(category));
+            MappingKey key = new MappingKey();
+            key.setMappingKeyId(mappingKeyId);
+            when(mappingKeyRepository.findByPostingCategory_PostingCategoryIdAndKeyName(
+                            postingCategoryId, "TAX_RECOVERABLE_GST_HST"))
+                    .thenReturn(Optional.of(key));
+            when(mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate))
+                    .thenReturn(Optional.of(createMapping(glAccountId, null)));
+
+            assertThat(resolver.findGLAccount("VENDOR_BILL", "TAX_RECOVERABLE_GST_HST", transactionDate))
+                    .contains(glAccountId);
+        }
+
+        @Test
+        @DisplayName("an unconfigured category is empty, not an exception")
+        void unconfiguredCategoryIsEmpty() {
+            when(postingCategoryRepository.findByCategoryName("VENDOR_BILL")).thenReturn(Optional.empty());
+
+            assertThat(resolver.findGLAccount("VENDOR_BILL", "TAX_RECOVERABLE_GST_HST", transactionDate))
+                    .isEmpty();
+        }
+
+        @Test
+        @DisplayName("a key with no mapping effective on the date is empty, not an exception")
+        void noEffectiveMappingIsEmpty() {
+            PostingCategory category = new PostingCategory();
+            category.setPostingCategoryId(postingCategoryId);
+            when(postingCategoryRepository.findByCategoryName("VENDOR_BILL")).thenReturn(Optional.of(category));
+            MappingKey key = new MappingKey();
+            key.setMappingKeyId(mappingKeyId);
+            when(mappingKeyRepository.findByPostingCategory_PostingCategoryIdAndKeyName(
+                            postingCategoryId, "TAX_RECOVERABLE_GST_HST"))
+                    .thenReturn(Optional.of(key));
+            when(mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate))
+                    .thenReturn(Optional.empty());
+
+            assertThat(resolver.findGLAccount("VENDOR_BILL", "TAX_RECOVERABLE_GST_HST", transactionDate))
+                    .isEmpty();
+        }
+    }
 }

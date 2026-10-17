@@ -153,6 +153,29 @@ public class GLMappingResolverImpl implements GLMappingResolver {
     }
 
     /**
+     * {@inheritDoc}
+     *
+     * <p>The name-based path has no dimensional context, so the only mapping that can answer is the category default
+     * ({@link GLMappingRepository#findEffectiveMapping}); this is that step alone, with every miss an empty result
+     * and nothing thrown or logged at WARN (the read is not a posting that failed).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UUID> findGLAccount(
+            String postingCategoryName, String mappingKeyName, LocalDateTime transactionDate) {
+        return postingCategoryRepository
+                .findByCategoryName(postingCategoryName)
+                .flatMap(category -> {
+                    UUID categoryId = category.getPostingCategoryId();
+                    return mappingKeyRepository
+                            .findByPostingCategory_PostingCategoryIdAndKeyName(categoryId, mappingKeyName)
+                            .flatMap(key -> mappingRepository.findEffectiveMapping(
+                                    categoryId, key.getMappingKeyId(), transactionDate));
+                })
+                .map(GLMapping::getGlAccountId);
+    }
+
+    /**
      * Attempt resolution with exact dimensional matching.
      * All dimensions in the mapping must exactly equal the provided context.
      * Among matches, the mapping with the most dimensions wins (most specific).

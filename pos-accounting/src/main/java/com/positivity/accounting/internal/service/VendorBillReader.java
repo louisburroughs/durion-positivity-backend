@@ -874,15 +874,17 @@ public class VendorBillReader {
                 .toList();
     }
 
+    /**
+     * The account the recovery key maps to on the posting date, or empty when the key was remapped away since: the
+     * read still shows the amount, without an account. A non-throwing lookup on purpose (#2677): this runs inside the
+     * reader's transaction, and inside every decision command's, and a {@code GLMappingNotConfiguredException}
+     * leaving the resolver's proxy would mark that transaction rollback-only even when caught here, turning the read
+     * into a 500 and dropping the decision's writes at commit.
+     */
     private Optional<GLAccount> recoveryAccount(String mappingKey, LocalDate postingDate) {
-        try {
-            UUID accountId = glMappingResolver.resolveGLAccount(
-                    VendorBillPostingService.POSTING_CATEGORY, mappingKey, postingDate.atStartOfDay());
-            return glAccounts.findById(accountId);
-        } catch (RuntimeException unmapped) {
-            // The key was remapped away since: the read still shows the amount, without an account.
-            return Optional.empty();
-        }
+        return glMappingResolver
+                .findGLAccount(VendorBillPostingService.POSTING_CATEGORY, mappingKey, postingDate.atStartOfDay())
+                .flatMap(glAccounts::findById);
     }
 
     private VendorBillReview.Posting posting(VendorBillGlPosting posting) {
