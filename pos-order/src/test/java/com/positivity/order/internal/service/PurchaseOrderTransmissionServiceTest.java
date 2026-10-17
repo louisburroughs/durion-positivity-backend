@@ -177,7 +177,7 @@ class PurchaseOrderTransmissionServiceTest {
                 .lines(new ArrayList<>(List.of(line)))
                 .build();
         line.setPurchaseOrder(po);
-        when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(po));
+        when(purchaseOrderRepository.findByIdForUpdate(PO_ID)).thenReturn(Optional.of(po));
         return po;
     }
 

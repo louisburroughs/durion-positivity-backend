@@ -5,12 +5,14 @@ import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableExce
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.exception.PurchaseOrderVendorException;
+import com.positivity.order.internal.exception.PurchaseOrderVersionConflictException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -95,6 +97,41 @@ public class PurchaseOrderExceptionHandler {
     public ResponseEntity<ApiError> handleInvalidState(
             PurchaseOrderStateConflictException ex, HttpServletRequest request) {
         return respond(HttpStatus.CONFLICT, "PURCHASE_ORDER_INVALID_STATE", ex.getMessage(), request);
+    }
+
+    /**
+     * A revise or approve built on a stale version of the order (#2681): 409 {@code PURCHASE_ORDER_VERSION_CONFLICT},
+     * its own code because the remedy (re-read, re-apply) differs from a lifecycle refusal's.
+     */
+    @ExceptionHandler(PurchaseOrderVersionConflictException.class)
+    public ResponseEntity<ApiError> handleVersionConflict(
+            PurchaseOrderVersionConflictException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        // ADR-0017 §3: the versions travel structured, not only in prose. referenceId is the order; the one HARD
+        // conflict names the current version in its code's resource, so a client can reload or retry on it.
+        ApiError.Conflict conflict = new ApiError.Conflict(
+                "HARD",
+                "PURCHASE_ORDER_VERSION_CONFLICT",
+                "Built on version " + ex.getExpectedVersionNumber() + "; the order is at version "
+                        + ex.getCurrentVersionNumber(),
+                false,
+                "versionNumber: " + ex.getCurrentVersionNumber());
+        ApiError body = new ApiError(
+                "PURCHASE_ORDER_VERSION_CONFLICT",
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                null,
+                ex.getPurchaseOrderId().toString(),
+                "Re-read the purchase order (versionNumber " + ex.getCurrentVersionNumber()
+                        + ") and apply the change to it",
+                null,
+                List.of(conflict),
+                null);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(body);
     }
 
     /**

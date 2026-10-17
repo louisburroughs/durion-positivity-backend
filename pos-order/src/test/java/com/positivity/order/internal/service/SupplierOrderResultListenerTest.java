@@ -81,7 +81,7 @@ class SupplierOrderResultListenerTest {
                 .transmissionState(TransmissionState.REQUESTED)
                 .transmissionCount(1)
                 .build();
-        when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
+        when(purchaseOrderRepository.findByIdForUpdate(PO_ID)).thenReturn(Optional.of(order));
     }
 
     private static String confirmed(String eventId, String observedAt) {
@@ -392,7 +392,7 @@ class SupplierOrderResultListenerTest {
     @Test
     @DisplayName("a result for an unknown order is skipped rather than stalling the partition")
     void unknownOrderIsSkipped() {
-        when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.empty());
+        when(purchaseOrderRepository.findByIdForUpdate(PO_ID)).thenReturn(Optional.empty());
 
         listener.onSupplierEvent(confirmed("evt-10", "2026-08-16T11:00:00Z"));
 

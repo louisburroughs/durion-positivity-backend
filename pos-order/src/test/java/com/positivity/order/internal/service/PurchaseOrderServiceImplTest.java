@@ -5,12 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRequest;
+import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.entity.ExtSupplierVendor;
@@ -21,6 +23,7 @@ import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.exception.PurchaseOrderVendorException;
+import com.positivity.order.internal.exception.PurchaseOrderVersionConflictException;
 import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
@@ -235,6 +238,7 @@ class PurchaseOrderServiceImplTest {
     void revisionBumpsVersionAndReplacesLines() {
         when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.DRAFT)));
         RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+        request.setExpectedVersionNumber(1);
         request.setRevisionReason("vendor changed the price");
         request.setLines(List.of(lineRequest("4", 6_000L)));
 
@@ -288,6 +292,8 @@ class PurchaseOrderServiceImplTest {
         service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR);
 
         RevisePurchaseOrderRequest revise = new RevisePurchaseOrderRequest();
+
+        revise.setExpectedVersionNumber(1);
         revise.setLines(List.of(lineRequest("1", 100L)));
         when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.DRAFT)));
         service.revisePurchaseOrder(PO_ID, revise, ACTOR);
@@ -373,6 +379,7 @@ class PurchaseOrderServiceImplTest {
 
         private RevisePurchaseOrderRequest revision() {
             RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setExpectedVersionNumber(1);
             request.setRevisionReason("vendor changed the price");
             request.setLines(List.of(lineRequest("4", 6_000L)));
             return request;
@@ -532,6 +539,7 @@ class PurchaseOrderServiceImplTest {
             when(vendorRepository.findById(otherVendor))
                     .thenReturn(Optional.of(vendor(otherVendor, ExtSupplierVendor.Status.ACTIVE)));
             RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setExpectedVersionNumber(1);
             request.setRevisionReason("vendor set up in the master");
             request.setVendorId(otherVendor);
             request.setLines(List.of(lineRequest("4", 6_000L)));
@@ -550,6 +558,7 @@ class PurchaseOrderServiceImplTest {
             PurchaseOrderEntity draft = existingOrder(PurchaseOrderStatus.DRAFT);
             when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
             RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setExpectedVersionNumber(1);
             request.setVendorId(otherVendor);
             request.setLines(List.of(lineRequest("4", 6_000L)));
 
@@ -575,6 +584,7 @@ class PurchaseOrderServiceImplTest {
             when(purchaseOrderRepository.findById(PO_ID))
                     .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.APPROVED)));
             RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setExpectedVersionNumber(1);
             request.setVendorId(otherVendor);
             request.setLines(List.of(lineRequest("4", 6_000L)));
 
@@ -604,6 +614,194 @@ class PurchaseOrderServiceImplTest {
                             com.positivity.web.common.ReplicationPendingException.class,
                             e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
             assertThat(persisted.getValue().getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT);
+        }
+    }
+
+    @Nested
+    @DisplayName("expected version on revise and approve, and lines that round-trip (#2681)")
+    class VersionGuard {
+
+        private RevisePurchaseOrderRequest revisionBuiltOn(int version) {
+            RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setExpectedVersionNumber(version);
+            request.setRevisionReason("vendor changed the price");
+            request.setLines(List.of(lineRequest("4", 6_000L)));
+            return request;
+        }
+
+        @Test
+        @DisplayName("a revise built on a stale version is refused: 409 code, no save, no fact")
+        void staleReviseIsRefused() {
+            PurchaseOrderEntity order = existingOrder(PurchaseOrderStatus.DRAFT);
+            order.setVersionNumber(3);
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
+
+            assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, revisionBuiltOn(2), ACTOR))
+                    .isInstanceOfSatisfying(PurchaseOrderVersionConflictException.class, e -> {
+                        assertThat(e.getExpectedVersionNumber()).isEqualTo(2);
+                        assertThat(e.getCurrentVersionNumber()).isEqualTo(3);
+                        assertThat(e.getMessage())
+                                .contains("0000001A")
+                                .contains("version 3")
+                                .contains("version 2");
+                    });
+            assertThat(order.getVersionNumber()).isEqualTo(3);
+            assertThat(order.getLines())
+                    .singleElement()
+                    .satisfies(line -> assertThat(line.getQuantityDecimal()).isEqualByComparingTo(BigDecimal.TEN));
+            verify(purchaseOrderRepository, never()).save(any());
+            verify(purchaseOrderFactPublisher, never()).publish(any(), any());
+        }
+
+        @Test
+        @DisplayName("the version is checked under the row lock, before the state gate")
+        void versionIsCheckedUnderTheLock() {
+            PurchaseOrderEntity order = existingOrder(PurchaseOrderStatus.CLOSED);
+            order.setVersionNumber(2);
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
+
+            assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, revisionBuiltOn(1), ACTOR))
+                    .isInstanceOf(PurchaseOrderVersionConflictException.class);
+            verify(purchaseOrderRepository).findByIdForUpdate(PO_ID);
+        }
+
+        @Test
+        @DisplayName("a revise without expectedVersionNumber is a 400, not a silent overwrite")
+        void missingExpectedVersionIsRefused() {
+            when(purchaseOrderRepository.findById(PO_ID))
+                    .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.DRAFT)));
+            RevisePurchaseOrderRequest request = revisionBuiltOn(1);
+            request.setExpectedVersionNumber(null);
+
+            assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, request, ACTOR))
+                    .isInstanceOf(PurchaseOrderRequestValidationException.class)
+                    .hasMessageContaining("expectedVersionNumber");
+            verify(purchaseOrderRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an approve built on a stale version is refused the same way; without a version it approves")
+        void approveHonoursExpectedVersionWhenGiven() {
+            PurchaseOrderEntity order = existingOrder(PurchaseOrderStatus.DRAFT);
+            order.setVersionNumber(2);
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
+            ApprovePurchaseOrderRequest stale = new ApprovePurchaseOrderRequest();
+            stale.setExpectedVersionNumber(1);
+
+            assertThatThrownBy(() -> service.approvePurchaseOrder(PO_ID, stale, ACTOR))
+                    .isInstanceOf(PurchaseOrderVersionConflictException.class);
+            assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.DRAFT);
+            verify(purchaseOrderFactPublisher, never()).publish(any(), any());
+
+            ApprovePurchaseOrderRequest current = new ApprovePurchaseOrderRequest();
+            current.setExpectedVersionNumber(2);
+            assertThat(service.approvePurchaseOrder(PO_ID, current, ACTOR).getStatus())
+                    .isEqualTo(PurchaseOrderStatus.APPROVED);
+
+            PurchaseOrderEntity another = existingOrder(PurchaseOrderStatus.DRAFT);
+            another.setVersionNumber(7);
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(another));
+            assertThat(service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR)
+                            .getStatus())
+                    .isEqualTo(PurchaseOrderStatus.APPROVED);
+            verify(purchaseOrderRepository, times(3)).findByIdForUpdate(PO_ID);
+        }
+
+        @Test
+        @DisplayName("the line read carries taxCodeId and glAccountId, and read -> revise keeps every line field")
+        void linesRoundTrip() {
+            PurchaseOrderEntity order = existingOrder(PurchaseOrderStatus.DRAFT);
+            PurchaseOrderLineEntity stored = order.getLines().getFirst();
+            stored.setTaxCodeId("TAX-STD");
+            stored.setGlAccountId("5000");
+            stored.setTaxMinor(5_000L); // the service's default rate on 50_000, so a re-save recomputes the same
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
+
+            PurchaseOrderResponse read = service.getPurchaseOrder(PO_ID);
+            PurchaseOrderLineResponse line = read.getLines().getFirst();
+            assertThat(line.getTaxCodeId()).isEqualTo("TAX-STD");
+            assertThat(line.getGlAccountId()).isEqualTo("5000");
+
+            PurchaseOrderLineRequest echoed = new PurchaseOrderLineRequest();
+            echoed.setLineNumber(line.getLineNumber());
+            echoed.setSkuId(line.getSkuId());
+            echoed.setDescription(line.getDescription());
+            echoed.setQuantity(line.getQuantityDecimal());
+            echoed.setUnitCostMinor(line.getUnitCostMinor());
+            echoed.setTaxCodeId(line.getTaxCodeId());
+            echoed.setGlAccountId(line.getGlAccountId());
+            echoed.setDocumentUom(line.getDocumentUom());
+            echoed.setDocumentQuantity(line.getDocumentQuantity());
+            RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+            request.setExpectedVersionNumber(read.getVersionNumber());
+            request.setRevisionReason("re-saved from the screen, nothing changed");
+            request.setLines(List.of(echoed));
+
+            PurchaseOrderResponse revised = service.revisePurchaseOrder(PO_ID, request, ACTOR);
+
+            assertThat(revised.getVersionNumber()).isEqualTo(2);
+            assertThat(revised.getLines()).singleElement().satisfies(after -> {
+                assertThat(after.getSkuId()).isEqualTo(line.getSkuId());
+                assertThat(after.getTaxCodeId()).isEqualTo("TAX-STD");
+                assertThat(after.getGlAccountId()).isEqualTo("5000");
+                assertThat(after.getQuantityDecimal()).isEqualByComparingTo(line.getQuantityDecimal());
+                assertThat(after.getUnitCostMinor()).isEqualTo(line.getUnitCostMinor());
+                assertThat(after.getLineTotalMinor()).isEqualTo(line.getLineTotalMinor());
+                assertThat(after.getTaxMinor()).isEqualTo(line.getTaxMinor());
+                assertThat(after.getDocumentUom()).isEqualTo(line.getDocumentUom());
+                assertThat(after.getDocumentQuantity()).isEqualTo(line.getDocumentQuantity());
+            });
+        }
+
+        @Test
+        @DisplayName("an expectedVersionNumber below 1 is a 400, not a 409 against 'version 0'")
+        void nonPositiveExpectedVersionIsRefused() {
+            when(purchaseOrderRepository.findById(PO_ID))
+                    .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.DRAFT)));
+
+            assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, revisionBuiltOn(0), ACTOR))
+                    .isInstanceOf(PurchaseOrderRequestValidationException.class);
+        }
+
+        @Test
+        @DisplayName("cancel reads the order under the row lock, like every other header writer")
+        void cancelLocksTheRow() {
+            when(purchaseOrderRepository.findById(PO_ID))
+                    .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.DRAFT)));
+
+            service.cancelPurchaseOrder(PO_ID, ACTOR);
+
+            verify(purchaseOrderRepository).findByIdForUpdate(PO_ID);
+        }
+
+        @Test
+        @DisplayName("a blank requestedBy clears the requester")
+        void blankRequesterClears() {
+            PurchaseOrderEntity order = existingOrder(PurchaseOrderStatus.DRAFT);
+            order.setRequestedBy("tech-maria");
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
+            RevisePurchaseOrderRequest cleared = revisionBuiltOn(1);
+            cleared.setRequestedBy("   ");
+
+            assertThat(service.revisePurchaseOrder(PO_ID, cleared, ACTOR).getRequestedBy())
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("a revision keeps the order's requester unless it names a new one")
+        void requesterIsKeptUnlessCorrected() {
+            PurchaseOrderEntity order = existingOrder(PurchaseOrderStatus.DRAFT);
+            order.setRequestedBy("tech-maria");
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
+
+            assertThat(service.revisePurchaseOrder(PO_ID, revisionBuiltOn(1), ACTOR)
+                            .getRequestedBy())
+                    .isEqualTo("tech-maria");
+
+            RevisePurchaseOrderRequest corrected = revisionBuiltOn(2);
+            corrected.setRequestedBy("tech-jonas");
+            assertThat(service.revisePurchaseOrder(PO_ID, corrected, ACTOR).getRequestedBy())
+                    .isEqualTo("tech-jonas");
         }
     }
 }

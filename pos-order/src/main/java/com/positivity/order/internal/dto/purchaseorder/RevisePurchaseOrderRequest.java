@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -22,6 +23,17 @@ import lombok.NoArgsConstructor;
         description =
                 "Request to revise an existing purchase order, replacing its lines and recording a revision reason")
 public class RevisePurchaseOrderRequest {
+
+    @Schema(
+            description = "The versionNumber of the order this revision was built on, as the last read returned it."
+                    + " The revise is applied only if the order is still at that version; otherwise 409"
+                    + " PURCHASE_ORDER_VERSION_CONFLICT and nothing changes (#2681)",
+            example = "1",
+            minimum = "1",
+            requiredMode = REQUIRED)
+    @NotNull
+    @Min(1)
+    private Integer expectedVersionNumber;
 
     @Schema(description = "Date the revised purchase order is issued", example = "2026-01-20", requiredMode = REQUIRED)
     @NotNull
@@ -46,7 +58,9 @@ public class RevisePurchaseOrderRequest {
     private UUID shipToLocationId;
 
     @Schema(
-            description = "Identifier or name of the person who requested the revision",
+            description = "The order's requester: the person the goods are for, as on create. Not the reviser, who is"
+                    + " the authenticated caller. Omitted keeps the order's current requester, blank clears it, a value"
+                    + " corrects it",
             example = "user-jdoe",
             requiredMode = NOT_REQUIRED)
     private String requestedBy;

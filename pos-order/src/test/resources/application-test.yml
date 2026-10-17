@@ -3,7 +3,8 @@ spring:
     user:
       password: test-password
   datasource:
-    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    # LOCK_TIMEOUT: a row lock waits for the holder's whole transaction (the #2681 concurrency test), not H2's 2 s.
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;LOCK_TIMEOUT=30000
     driver-class-name: org.h2.Driver
     username: sa
     password: 

@@ -25,6 +25,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.DynamicUpdate;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
@@ -47,6 +48,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
  */
 @Entity
 @Table(name = "purchase_order")
+// Only changed columns are written (#2681): with every writer holding the row lock this is belt and braces, but it
+// keeps a status-only write from ever carrying a stale header back to the row.
+@DynamicUpdate
 @Getter
 @Setter
 @Builder

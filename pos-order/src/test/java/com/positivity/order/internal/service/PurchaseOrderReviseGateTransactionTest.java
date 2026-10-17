@@ -72,6 +72,7 @@ class PurchaseOrderReviseGateTransactionTest {
 
     private InventoryEventsListener listener;
     private TransactionTemplate transaction;
+    private final List<UUID> created = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -88,8 +89,11 @@ class PurchaseOrderReviseGateTransactionTest {
         transaction = new TransactionTemplate(transactionManager);
     }
 
+    /** Committed orders are removed again: the shared H2 database is also counted by transactional tests (#2681). */
     @AfterEach
     void tearDown() {
+        transaction.executeWithoutResult(_ -> created.forEach(purchaseOrderRepository::deleteById));
+        created.clear();
         TenantContext.clear();
     }
 
@@ -101,7 +105,9 @@ class PurchaseOrderReviseGateTransactionTest {
         listener.onInventoryEvent(receipt(orderId, lineId, "4"));
         assertThat(onlyLine(orderId).open()).isEqualByComparingTo("6");
 
-        assertThatThrownBy(() -> purchaseOrderService.revisePurchaseOrder(orderId, revision(), "buyer"))
+        // Built on the version the receipt left (a receipt increments it), so the gate, not the version check, answers.
+        assertThatThrownBy(() -> purchaseOrderService.revisePurchaseOrder(
+                        orderId, revision(snapshot(orderId).version()), "buyer"))
                 .isInstanceOf(PurchaseOrderStateConflictException.class);
 
         Snapshot refused = snapshot(orderId);
@@ -121,7 +127,7 @@ class PurchaseOrderReviseGateTransactionTest {
     void approvedWithNothingReceived_isRevised() {
         UUID orderId = approvedOrder();
 
-        PurchaseOrderResponse revised = purchaseOrderService.revisePurchaseOrder(orderId, revision(), "buyer");
+        PurchaseOrderResponse revised = purchaseOrderService.revisePurchaseOrder(orderId, revision(1), "buyer");
 
         assertThat(revised.getStatus()).isEqualTo(PurchaseOrderStatus.APPROVED);
         assertThat(revised.getVersionNumber()).isEqualTo(2);
@@ -156,10 +162,12 @@ class PurchaseOrderReviseGateTransactionTest {
                         .taxMinor(0L)
                         .purchaseOrder(order)
                         .build());
-        return transaction.execute(_ -> purchaseOrderRepository.save(order).getPurchaseOrderId());
+        UUID id = transaction.execute(_ -> purchaseOrderRepository.save(order).getPurchaseOrderId());
+        created.add(id);
+        return id;
     }
 
-    private static RevisePurchaseOrderRequest revision() {
+    private static RevisePurchaseOrderRequest revision(int builtOnVersion) {
         PurchaseOrderLineRequest line = new PurchaseOrderLineRequest();
         line.setLineNumber(1);
         line.setSkuId(SKU_ID);
@@ -167,6 +175,7 @@ class PurchaseOrderReviseGateTransactionTest {
         line.setQuantity(new BigDecimal("4"));
         line.setUnitCostMinor(1_200L);
         RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+        request.setExpectedVersionNumber(builtOnVersion);
         request.setRevisionReason("vendor changed the price");
         request.setPoDate(LocalDate.of(2026, 10, 11));
         request.setLines(List.of(line));

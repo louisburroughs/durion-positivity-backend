@@ -430,6 +430,29 @@ until those exist, they cannot be changed. Still open:
 - Whether revising an `APPROVED` order should send it back to `DRAFT` for re-approval is a policy question that is not
   decided yet. Today it stays `APPROVED`.
 
+## Purchase order revise safety (#2681)
+
+A revision replaces the header and every line, so a committing revise must be built on the version it replaces:
+
+- **Expected version.** `POST /{poId}/revisions` requires `expectedVersionNumber`, the `versionNumber` the last read
+  returned. It is compared with the stored version under the order's row lock (`findByIdForUpdate`) and incremented
+  in the same transaction, so two revisions built on the same version cannot both commit: the second waits for the
+  lock, reads the new version and is refused with **409 `PURCHASE_ORDER_VERSION_CONFLICT`**, having changed nothing
+  and published no fact. `POST /{poId}/approve` takes an optional `expectedVersionNumber` with the same check, and
+  now reads the order under the same lock, so a person approves the content they read and an approval and a
+  revision take turns.
+- **Lines round-trip.** `PurchaseOrderLineResponse` returns `taxCodeId` and `glAccountId` alongside `skuId`,
+  `documentUom` and `documentQuantity`, so a client that reads, edits and revises an order's lines keeps them. A
+  dropped `taxCodeId` would have zeroed the line's tax; a dropped `glAccountId` only surfaced at posting.
+- **`requestedBy`.** The order's requester (the person the goods are for), as on create: a revision keeps it when
+  the field is omitted, clears it when it is blank, and corrects it when it names someone. The reviser is the
+  authenticated actor, recorded as `updatedBy` and on the `ORDER_PURCHASE_ORDER_REVISE` event; it is never written
+  to `requestedBy`.
+- **Every header writer locks.** Revise, approve, cancel, transmit and the supplier-result and goods-receipt
+  consumers all read the order through `findByIdForUpdate`, and the entity is `@DynamicUpdate`, so no path writes a
+  stale header (and a stale `versionNumber`) back over a committed revision. The 409 carries the order as
+  `referenceId`, the current version in `conflicts[0].affectedResource` (`versionNumber: N`) and a `nextAction`.
+
 ## Error codes
 
 Every non-2xx response carries the platform `ApiError` envelope. Field semantics, payload examples,
@@ -470,6 +493,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_CONFLICT` | 409 | The order was modified concurrently; retry with fresh state |
 | `ORDER_VOID_BLOCKED` | 409 | A void was requested on an order that already has settled payments; use cancellation so the money is reversed |
 | `PURCHASE_ORDER_INVALID_STATE` | 409 | The purchase order's status does not allow the operation, including a revise of an order that is not `DRAFT` or `APPROVED`, or has goods received on any line (#2632) |
+| `PURCHASE_ORDER_VERSION_CONFLICT` | 409 | A revise, or an approve that sends one, whose `expectedVersionNumber` is not the order's current `versionNumber`; nothing changes and no fact is published. Re-read the order and apply the change to the current version (#2681) |
 | `REGISTER_SESSION_CONFLICT` | 409 | A second open on a terminal that already has an OPEN session, a cash movement or close against a non-OPEN session, or a confirm-close before begin-close |
 | `SESSION_CLOSE_BLOCKED` | 409 | The register session cannot close while one or more of its orders are still in PENDING_PAYMENT |
 | `RETURN_INVALID_STATE` | 409 | The return order's status does not allow the operation |

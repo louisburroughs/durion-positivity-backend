@@ -276,11 +276,14 @@ public class PurchaseOrderController {
                     Preconditions: the purchase order must exist and be in DRAFT status, and its vendor must be ACTIVE \
                     in pos-order's vendor copy; an order requested by pos-inventory may name another vendor and is \
                     revised to a valid one first.
-                    Required inputs: poId (UUIDv7) path parameter and a JSON body where approvalNotes is optional, \
-                    so an empty object is acceptable.
+                    Required inputs: poId (UUIDv7) path parameter and a JSON body where approvalNotes and \
+                    expectedVersionNumber are optional, so an empty object is acceptable; send expectedVersionNumber \
+                    (the versionNumber the approver read) so the approval applies only to the content they saw.
                     Emits an ORDER_PURCHASE_ORDER_APPROVE event; the order becomes eligible for ASNs, goods \
                     receipts and receiving sessions.
-                    Returns 404 when the purchase order does not exist, 409 when it is not in DRAFT status, 422 \
+                    Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_INVALID_STATE when it is \
+                    not in DRAFT status, 409 PURCHASE_ORDER_VERSION_CONFLICT when expectedVersionNumber is not the \
+                    order's current versionNumber (nothing changes; re-read and approve again), 422 \
                     VENDOR_INACTIVE when its vendor is inactive, and 503 VENDOR_REPLICATION_PENDING with Retry-After \
                     when its vendor has not reached the copy yet.
                     """,
@@ -368,13 +371,19 @@ public class PurchaseOrderController {
                     on any line (every line's open quantity still equals its ordered quantity), because a revision \
                     replaces every line with new line ids; from PARTIALLY_RECEIVED on, and on CLOSED or CANCELLED \
                     orders, revise is refused and nothing changes.
-                    Required inputs: poId (UUIDv7) path parameter plus poDate, revisionReason and the full \
-                    replacement lines list, because every line is replaced rather than merged; paymentTermsId, \
-                    expectedDeliveryDate, shipToLocationId, requestedBy and comment overwrite the stored values \
-                    even when omitted, while an optional vendorId changes the vendor of a DRAFT order only.
+                    Required inputs: poId (UUIDv7) path parameter plus expectedVersionNumber (the versionNumber \
+                    the last read returned; the revise applies only if the order is still at that version), poDate, \
+                    revisionReason and the full replacement lines list, because every line is replaced rather than \
+                    merged; each line's taxCodeId and glAccountId are returned by getPurchaseOrder, so a read, \
+                    edited and revised line keeps them. paymentTermsId, expectedDeliveryDate, shipToLocationId and \
+                    comment overwrite the stored values even when omitted; requestedBy is the order's requester \
+                    (not the reviser, who is the caller): omitted keeps it, blank clears it, a value corrects it; an \
+                    optional vendorId changes the vendor of a DRAFT order only.
                     Emits an ORDER_PURCHASE_ORDER_REVISE event carrying the field-level delta and the \
                     revision reason.
-                    Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_INVALID_STATE when the \
+                    Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_VERSION_CONFLICT when \
+                    expectedVersionNumber is not the order's current versionNumber (nothing changes, no fact is \
+                    published; re-read the order and revise again), 409 PURCHASE_ORDER_INVALID_STATE when the \
                     order is not DRAFT or APPROVED or has received goods on any line, or when vendorId changes the \
                     vendor of an order past DRAFT, 422 VENDOR_INACTIVE for an inactive new vendor or when a line's \
                     documentUom has no conversion path to the product's base UoM, and 503 \
@@ -431,7 +440,8 @@ public class PurchaseOrderController {
                                             mediaType = "application/json",
                                             schema = @Schema(implementation = RevisePurchaseOrderRequest.class),
                                             examples = @ExampleObject(name = "Quantity increase", value = """
-                                                                    {"poDate":"2026-08-20",
+                                                                    {"expectedVersionNumber":1,
+                                                                     "poDate":"2026-08-20",
                                                                      "paymentTermsId":"NET30",
                                                                      "expectedDeliveryDate":"2026-09-03",
                                                                      "revisionReason":"Vendor confirmed availability of larger quantity",
