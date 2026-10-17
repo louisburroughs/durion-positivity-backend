@@ -2,6 +2,12 @@ spring:
   datasource:
     url: jdbc:postgresql://${POS_MCP_DB_HOST}:${POS_MCP_DB_PORT:5432}/${POS_MCP_DB_NAME:pos_mcp}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      data-source-properties:
+        # ADR-0072 (CAP:550 #2650): pgjdbc otherwise appends the server's DETAIL ("Failing row contains (...)") to
+        # every SQLException message, which Hibernate logs at ERROR before Spring translates it: a refused row would
+        # put its column values in a log line and in the exception a DLQ carries.
+        logServerErrorDetail: false
     username: ${POS_MCP_DB_USER:pos_mcp}
     password: ${POS_MCP_DB_PASSWORD}
   flyway:

@@ -26,6 +26,12 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME:}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+    hikari:
+      data-source-properties:
+        # ADR-0072 (CAP:550 #2650): pgjdbc otherwise appends the server's DETAIL ("Failing row contains (...)") to
+        # every SQLException message, which Hibernate logs at ERROR before Spring translates it: a refused row would
+        # put its column values in a log line and in the exception a DLQ carries.
+        logServerErrorDetail: false
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:

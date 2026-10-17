@@ -5,6 +5,11 @@
 spring:
   datasource:
     hikari:
+      # ADR-0072 (CAP:550 #2650): pgjdbc otherwise appends the server's DETAIL ("Failing row contains (...)") to
+      # every SQLException message, which Hibernate logs at ERROR before Spring translates it: a refused row would
+      # put its column values in a log line and in the exception a DLQ carries.
+      data-source-properties:
+        logServerErrorDetail: false
       # Transitional tenant binding (ADR-0062): every scoped table defaults tenant_id from this
       # session setting and hides rows without it. Replaced by TenantAwareDataSource in plan WS1.
       connection-init-sql: "SELECT set_config('app.current_tenant', '01900000-0000-7000-8000-000000000001', false)"
