@@ -293,11 +293,11 @@ class DomainWallsTest {
 
     @Test
     void internalClientsShouldOnlyTargetUtilityModules() throws IOException {
-        Path repoRoot = repoRoot();
+        Path repoRoot = RepoLayout.repoRoot();
         Map<String, Set<String>> violations = new TreeMap<>();
 
         try (Stream<Path> modules = Files.list(repoRoot)) {
-            for (Path module : modules.filter(DomainWallsTest::isPosModule).toList()) {
+            for (Path module : modules.filter(RepoLayout::isPosModule).toList()) {
                 String originModule = module.getFileName().toString();
                 Set<String> scopedExceptions = SCOPED_MODULE_EXCEPTIONS.getOrDefault(originModule, Set.of());
                 Map<String, Set<String>> fileExceptions = SCOPED_FILE_EXCEPTIONS.getOrDefault(originModule, Map.of());
@@ -312,7 +312,7 @@ class DomainWallsTest {
                             || UTILITY_MODULES.contains(target)
                             || scopedExceptions.contains(target)
                             || allowedForThisFile.contains(target)
-                            || !isPosModule(repoRoot.resolve(target)));
+                            || !RepoLayout.isPosModule(repoRoot.resolve(target)));
                     if (!targets.isEmpty()) {
                         violations
                                 .computeIfAbsent(originModule, k -> new TreeSet<>())
@@ -388,23 +388,5 @@ class DomainWallsTest {
             }
         }
         return targets;
-    }
-
-    private static boolean isPosModule(Path dir) {
-        return Files.isDirectory(dir)
-                && dir.getFileName().toString().startsWith("pos-")
-                && Files.exists(dir.resolve("pom.xml"));
-    }
-
-    private static Path repoRoot() {
-        Path dir = Path.of("").toAbsolutePath();
-        while (dir != null) {
-            if (Files.isDirectory(dir.resolve("pos-archunit")) && Files.exists(dir.resolve("pom.xml"))) {
-                return dir;
-            }
-            dir = dir.getParent();
-        }
-        throw new IllegalStateException("repository root with pos-archunit not found above "
-                + Path.of("").toAbsolutePath());
     }
 }

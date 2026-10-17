@@ -10,9 +10,7 @@ spring:
     name: pos-customer-pg-test
   datasource:
     hikari:
-      # ADR-0072 (CAP:550 #2650): pgjdbc otherwise appends the server's DETAIL ("Failing row contains (...)") to
-      # every SQLException message, which Hibernate logs at ERROR before Spring translates it: a refused row would
-      # put its column values in a log line and in the exception a DLQ carries.
+      # ADR-0072 (#2650): no pgjdbc "Failing row contains" detail in driver messages; guarded by PgjdbcServerErrorDetailTest.
       data-source-properties:
         logServerErrorDetail: false
       # Every Spring context this JVM caches keeps its pool for the whole run, and the module has
