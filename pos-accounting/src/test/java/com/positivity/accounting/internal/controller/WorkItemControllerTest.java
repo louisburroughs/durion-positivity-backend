@@ -12,7 +12,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.AutomaticWorkItem;
 import com.positivity.accounting.internal.dto.AutomaticWorkItemsResponse;
 import com.positivity.accounting.internal.dto.WorkItem;
@@ -38,23 +37,18 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * The work-item reads of #2515 through the production security chain: 200, the 400 codes, AC 12 (403 on both reads for
  * a caller holding none of the item permissions) and the annotations the event registry and the tools rely on.
  */
 @DisplayName("WorkItemController (#2515)")
-class WorkItemControllerTest extends BaseIntegrationTest {
+class WorkItemControllerTest extends CashWorkspaceControllerTestBase {
 
     private static final String LIST = "/v1/accounting/work-items";
     private static final String AUTOMATIC = "/v1/accounting/work-items/automatic";
 
-    @MockitoBean
-    private WorkItemService service;
 
-    @MockitoBean
-    private WorkItemAutomaticService automaticService;
 
     private static WorkItemsResponse page() {
         UUID billId = UUID.fromString("0198a000-0000-7000-8000-000000000001");
@@ -98,7 +92,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("200 with the page, the counts and the item's actions and preview")
     void list() throws Exception {
-        when(service.list(isNull(), isNull(), isNull())).thenReturn(page());
+        when(workItemService.list(isNull(), isNull(), isNull())).thenReturn(page());
 
         mockMvc.perform(withAuth(get(LIST), "accounting:ap:approve"))
                 .andExpect(status().isOk())
@@ -118,7 +112,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("area, cursor and limit reach the service")
     void parameters() throws Exception {
-        when(service.list(eq(WorkItemArea.BANK), eq("abc.def"), eq(10))).thenReturn(page());
+        when(workItemService.list(eq(WorkItemArea.BANK), eq("abc.def"), eq(10))).thenReturn(page());
 
         mockMvc.perform(withAuth(
                         get(LIST)
@@ -128,13 +122,13 @@ class WorkItemControllerTest extends BaseIntegrationTest {
                         "accounting:reconciliation:approve"))
                 .andExpect(status().isOk());
 
-        verify(service).list(WorkItemArea.BANK, "abc.def", 10);
+        verify(workItemService).list(WorkItemArea.BANK, "abc.def", 10);
     }
 
     @Test
     @DisplayName("400 VALIDATION_ERROR on the limit field")
     void limitOutOfRange() throws Exception {
-        when(service.list(any(), any(), eq(201)))
+        when(workItemService.list(any(), any(), eq(201)))
                 .thenThrow(InvalidRequestParameterException.forField("limit", "must be from 1 to 200"));
 
         mockMvc.perform(withAuth(get(LIST).param("limit", "201"), "accounting:ap:pay"))
@@ -146,7 +140,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("400 WORK_ITEMS_CURSOR_INVALID for a cursor the service refuses")
     void cursorInvalid() throws Exception {
-        when(service.list(any(), eq("tampered"), any()))
+        when(workItemService.list(any(), eq("tampered"), any()))
                 .thenThrow(new WorkItemsCursorInvalidException("The cursor is not valid for this list"));
 
         mockMvc.perform(withAuth(get(LIST).param("cursor", "tampered"), "accounting:ap:pay"))
@@ -162,7 +156,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
                 .andExpect(jsonPath("$.fieldErrors[0].field").value("area"));
 
-        verify(service, never()).list(any(), any(), any());
+        verify(workItemService, never()).list(any(), any(), any());
     }
 
     @Test
@@ -171,13 +165,13 @@ class WorkItemControllerTest extends BaseIntegrationTest {
         mockMvc.perform(withAuth(get(LIST), "accounting:coa:view")).andExpect(status().isForbidden());
         mockMvc.perform(withAuth(get(LIST), "accounting:ap:view")).andExpect(status().isForbidden());
 
-        verify(service, never()).list(any(), any(), anyInt());
+        verify(workItemService, never()).list(any(), any(), anyInt());
     }
 
     @Test
     @DisplayName("every item permission opens the list")
     void eachItemPermissionOpensTheList() throws Exception {
-        when(service.list(isNull(), isNull(), isNull())).thenReturn(page());
+        when(workItemService.list(isNull(), isNull(), isNull())).thenReturn(page());
 
         for (String permission : List.of(
                 "accounting:ap:approve",
@@ -196,7 +190,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("each permission an automatic kind needs opens the automatic list; the list-only ones do not")
     void automaticPermissions() throws Exception {
-        when(automaticService.list(isNull(), isNull(), isNull())).thenReturn(automaticPage());
+        when(workItemAutomaticService.list(isNull(), isNull(), isNull())).thenReturn(automaticPage());
 
         for (String permission : List.of(
                 "accounting:payment:apply",
@@ -212,7 +206,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("200 on the automatic list; since, cursor and limit reach the service")
     void automatic() throws Exception {
-        when(automaticService.list(eq("2026-10-15"), eq("c.m"), eq(5))).thenReturn(automaticPage());
+        when(workItemAutomaticService.list(eq("2026-10-15"), eq("c.m"), eq(5))).thenReturn(automaticPage());
 
         mockMvc.perform(withAuth(
                         get(AUTOMATIC)
@@ -230,9 +224,9 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("400 VALIDATION_ERROR on the since field and WORK_ITEMS_CURSOR_INVALID on the automatic list")
     void automaticBadRequests() throws Exception {
-        when(automaticService.list(eq("2026-01-01"), any(), any()))
+        when(workItemAutomaticService.list(eq("2026-01-01"), any(), any()))
                 .thenThrow(InvalidRequestParameterException.forField("since", "must not be more than 31 days back"));
-        when(automaticService.list(any(), eq("tampered"), any()))
+        when(workItemAutomaticService.list(any(), eq("tampered"), any()))
                 .thenThrow(new WorkItemsCursorInvalidException("The cursor is not valid for this list"));
 
         mockMvc.perform(withAuth(get(AUTOMATIC).param("since", "2026-01-01"), "accounting:payment:apply"))
@@ -249,7 +243,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     void automaticForbidden() throws Exception {
         mockMvc.perform(withAuth(get(AUTOMATIC), "accounting:coa:view")).andExpect(status().isForbidden());
 
-        verify(automaticService, never()).list(any(), any(), any());
+        verify(workItemAutomaticService, never()).list(any(), any(), any());
     }
 
     @Test
