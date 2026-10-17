@@ -159,8 +159,8 @@ class TenantEventsListenerTest {
     }
 
     @Test
-    @DisplayName("tenant.created stores the locale after provisioning, bound to the new tenant")
-    void createdStoresTheLocaleAfterProvisioning() {
+    @DisplayName("tenant.created stores the locale before provisioning, bound to the new tenant")
+    void createdStoresTheLocaleBeforeProvisioning() {
         listener.onTenantEvent(createdWithLocale(EVENT_ID, NEW_TENANT.toString(), "fr-CA"));
 
         InOrder order = inOrder(provisioner, localeWriter);
