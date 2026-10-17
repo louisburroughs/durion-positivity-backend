@@ -58,6 +58,11 @@ import org.jspecify.annotations.Nullable;
  *                             the fact
  * @param occurredAt           when this state was reached
  * @param lines                the order's lines; empty only for an order that has none
+ * @param paymentTermsId       the order's payment terms as the owner holds them ({@code NET30},
+ *                             {@code DUE_ON_RECEIPT}, ...); null when the order carries none, and
+ *                             null on every schema-1 fact (CAP:550 S19, #2515). Accounting reads it
+ *                             to estimate a due date for a bill that has none; the value is the
+ *                             owner's text and may not parse, so a consumer must tolerate that
  */
 public record PurchaseOrderUpdatedV1(
         @NonNull UUID purchaseOrderId,
@@ -70,13 +75,17 @@ public record PurchaseOrderUpdatedV1(
         @Nullable Long grandTotalMinor,
         @Nullable Long openBalanceMinor,
         @NonNull Instant occurredAt,
-        @NonNull List<PurchaseOrderLine> lines) {
+        @NonNull List<PurchaseOrderLine> lines,
+        @Nullable String paymentTermsId) {
 
     /** Event type of this payload on {@code order.events.v1}. */
     public static final String EVENT_TYPE = "purchaseorder.updated";
 
-    /** Payload schema version; additive changes only within v1 (ADR-0044 §3). */
-    public static final int SCHEMA_VERSION = 1;
+    /**
+     * Payload schema version; additive changes only within v1 (ADR-0044 §3). Version 2 adds the trailing
+     * {@code paymentTermsId} (#2515); a version-1 payload reads it as null.
+     */
+    public static final int SCHEMA_VERSION = 2;
 
     /**
      * Statuses whose outstanding quantities count as incoming supply.
@@ -96,6 +105,34 @@ public record PurchaseOrderUpdatedV1(
         Objects.requireNonNull(occurredAt, "occurredAt must not be null");
         Objects.requireNonNull(lines, "lines must not be null");
         lines = List.copyOf(lines);
+    }
+
+    /** The schema-1 shape, without payment terms: {@link #paymentTermsId} is null. */
+    public PurchaseOrderUpdatedV1(
+            @NonNull UUID purchaseOrderId,
+            @NonNull String poNumber,
+            @NonNull UUID vendorId,
+            @NonNull String status,
+            @Nullable UUID shipToLocationId,
+            @Nullable LocalDate expectedDeliveryDate,
+            @Nullable String currency,
+            @Nullable Long grandTotalMinor,
+            @Nullable Long openBalanceMinor,
+            @NonNull Instant occurredAt,
+            @NonNull List<PurchaseOrderLine> lines) {
+        this(
+                purchaseOrderId,
+                poNumber,
+                vendorId,
+                status,
+                shipToLocationId,
+                expectedDeliveryDate,
+                currency,
+                grandTotalMinor,
+                openBalanceMinor,
+                occurredAt,
+                lines,
+                null);
     }
 
     /** Whether this order's outstanding quantities should be counted as incoming supply. */
