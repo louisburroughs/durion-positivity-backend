@@ -213,12 +213,14 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
         requireNotNegative("overShortTolerance", command.overShortTolerance());
         if (command.pettyExpenseAllowed() && command.pettyExpenseLimit() == null) {
             throw new SessionPolicyValidationException(
-                    "pettyExpense.cashierLimit", "pettyExpense.cashierLimit is required while petty expenses are allowed");
+                    "pettyExpense.cashierLimit",
+                    "pettyExpense.cashierLimit is required while petty expenses are allowed");
         }
         if (command.vendorCodAllowed()) {
             if (command.vendorCodLimit() == null) {
                 throw new SessionPolicyValidationException(
-                        "vendorCod.cashierLimit", "vendorCod.cashierLimit is required to switch vendor cash on delivery on");
+                        "vendorCod.cashierLimit",
+                        "vendorCod.cashierLimit is required to switch vendor cash on delivery on");
             }
             if (!VENDOR_COD_AVAILABLE) {
                 throw new SessionPolicyValidationException(
