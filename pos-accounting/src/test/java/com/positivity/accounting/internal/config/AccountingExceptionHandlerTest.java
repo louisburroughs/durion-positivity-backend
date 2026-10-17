@@ -174,8 +174,8 @@ class AccountingExceptionHandlerTest {
                     Named.of("handleInvalidRequestParameter", (HandlerInvocation)
                             request -> handler.handleInvalidRequestParameter(
                                     new InvalidRequestParameterException("bad parameter"), request)),
-                    Named.of("handleWorkItemsCursorInvalid", (HandlerInvocation) request ->
-                            handler.handleWorkItemsCursorInvalid(
+                    Named.of("handleWorkItemsCursorInvalid", (HandlerInvocation)
+                            request -> handler.handleWorkItemsCursorInvalid(
                                     new com.positivity.accounting.internal.exception.WorkItemsCursorInvalidException(
                                             "bad cursor"),
                                     request)),
