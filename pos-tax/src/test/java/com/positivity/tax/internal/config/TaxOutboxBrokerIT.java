@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.DisplayName;
@@ -79,6 +78,9 @@ class TaxOutboxBrokerIT {
     @Autowired
     private Clock clock;
 
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     @Test
     @DisplayName("publish, consume with the tenant header, replay through the commands topic, consume the re-send")
     void outboxRoundTripsThroughTheBroker() throws Exception {
@@ -90,7 +92,9 @@ class TaxOutboxBrokerIT {
         // One fact on the outbox, stamped with the bound tenant.
         TenantContext.bind(tenant);
         try {
-            outboxWriter.publish(
+            // The writer joins the caller's transaction (MANDATORY), as a service method's would.
+            new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+                    .executeWithoutResult(_ -> outboxWriter.publish(
                     EVENTS_TOPIC,
                     new DomainEventEnvelope<>(
                             eventId,
@@ -103,7 +107,7 @@ class TaxOutboxBrokerIT {
                             null,
                             null,
                             "broker-it",
-                            Map.of("hello", "broker")));
+                            Map.of("hello", "broker"))));
         } finally {
             TenantContext.clear();
         }
@@ -128,13 +132,17 @@ class TaxOutboxBrokerIT {
             assertThat(envelope.path("eventType").stringValue(null)).isEqualTo("tax.broker.it");
             assertThat(envelope.path("tenantId").stringValue(null)).isEqualTo(tenant.toString());
             OutboxEvent row = outboxEvents.findAll().stream()
-                    .filter(e -> EVENTS_TOPIC.equals(e.getTopic()) && aggregate.toString().equals(e.getRecordKey()))
+                    .filter(e -> EVENTS_TOPIC.equals(e.getTopic())
+                            && aggregate.toString().equals(e.getRecordKey()))
                     .findFirst()
                     .orElseThrow();
-            assertThat(row.getPublishedAt()).as("marked published only after the broker acknowledged").isNotNull();
+            assertThat(row.getPublishedAt())
+                    .as("marked published only after the broker acknowledged")
+                    .isNotNull();
 
             // A replay command goes through the commands topic and comes back off the broker to the listener.
-            String command = """
+            String command =
+                    """
                     {"commandType":"tax.outbox.replay-requested","payload":{"since":"%s","until":"%s"}}
                     """.formatted(before.minusSeconds(1), Instant.now(clock).plusSeconds(1));
             template.send(TenantKafkaHeaders.record(COMMANDS_TOPIC, aggregate.toString(), command, tenant))
@@ -168,12 +176,18 @@ class TaxOutboxBrokerIT {
 
     private static KafkaConsumer<String, String> consumer(String group) {
         return new KafkaConsumer<>(Map.of(
-                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, TaxKafkaContainer.bootstrapServers(),
-                ConsumerConfig.GROUP_ID_CONFIG, group,
-                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
-                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
-                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class));
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
+                TaxKafkaContainer.bootstrapServers(),
+                ConsumerConfig.GROUP_ID_CONFIG,
+                group,
+                ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+                "earliest",
+                ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG,
+                "false",
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class));
     }
 
     /** The first record whose envelope carries {@code eventId}, within a minute; other tests' records are skipped. */
@@ -183,7 +197,8 @@ class TaxOutboxBrokerIT {
         while (Instant.now().isBefore(deadline)) {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
             for (ConsumerRecord<String, String> record : records) {
-                if (eventId.equals(objectMapper.readTree(record.value()).path("eventId").stringValue(null))) {
+                if (eventId.equals(
+                        objectMapper.readTree(record.value()).path("eventId").stringValue(null))) {
                     return record;
                 }
             }
