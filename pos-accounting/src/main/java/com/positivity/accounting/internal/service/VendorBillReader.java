@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -857,11 +858,13 @@ public class VendorBillReader {
         if (rows.isEmpty() || posting == null) {
             return null;
         }
+        Map<String, Optional<GLAccount>> accountsByKey = new HashMap<>();
         return rows.stream()
                 .map(row -> {
                     Optional<GLAccount> account = row.getMappingKey() == null
                             ? Optional.empty()
-                            : recoveryAccount(row.getMappingKey(), posting.getPostingDate());
+                            : accountsByKey.computeIfAbsent(
+                                    row.getMappingKey(), key -> recoveryAccount(key, posting.getPostingDate()));
                     return new VendorBillReview.InputTaxRecovery(
                             row.getTaxType(),
                             row.getRegime(),
@@ -874,15 +877,17 @@ public class VendorBillReader {
                 .toList();
     }
 
+    /**
+     * The account the recovery key maps to on the posting date, or empty when the key was remapped away since: the
+     * read still shows the amount, without an account. A non-throwing lookup on purpose (#2677): this runs inside the
+     * reader's transaction, and inside every decision command's, and a {@code GLMappingNotConfiguredException}
+     * leaving the resolver's proxy would mark that transaction rollback-only even when caught here, turning the read
+     * into a 500 and dropping the decision's writes at commit.
+     */
     private Optional<GLAccount> recoveryAccount(String mappingKey, LocalDate postingDate) {
-        try {
-            UUID accountId = glMappingResolver.resolveGLAccount(
-                    VendorBillPostingService.POSTING_CATEGORY, mappingKey, postingDate.atStartOfDay());
-            return glAccounts.findById(accountId);
-        } catch (RuntimeException unmapped) {
-            // The key was remapped away since: the read still shows the amount, without an account.
-            return Optional.empty();
-        }
+        return glMappingResolver
+                .findGLAccount(VendorBillPostingService.POSTING_CATEGORY, mappingKey, postingDate.atStartOfDay())
+                .flatMap(glAccounts::findById);
     }
 
     private VendorBillReview.Posting posting(VendorBillGlPosting posting) {
