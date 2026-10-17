@@ -12,6 +12,8 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -282,14 +284,15 @@ public class SupplierVendorCopies {
      * and none of whose bills was ever approved. One read of the vendor copies, and one more per vendor the actor
      * created.
      */
-    public @NonNull java.util.Set<UUID> creatorsFirstBillVendors(
+    public @NonNull Set<UUID> creatorsFirstBillVendors(
             @NonNull Collection<UUID> vendorIds, @Nullable String actor) {
-        java.util.Set<UUID> first = new java.util.HashSet<>();
+        Set<UUID> first = new HashSet<>();
         if (actor == null || vendorIds.isEmpty()) {
             return first;
         }
         for (ExtSupplierVendor vendor : vendors.findAllById(vendorIds)) {
-            if (actor.equals(vendor.getCreatedBy()) && !bills.existsByVendorIdAndApprovedAtIsNotNull(vendor.getVendorId())) {
+            if (actor.equals(vendor.getCreatedBy())
+                    && !bills.existsByVendorIdAndApprovedAtIsNotNull(vendor.getVendorId())) {
                 first.add(vendor.getVendorId());
             }
         }

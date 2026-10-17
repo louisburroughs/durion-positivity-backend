@@ -255,8 +255,7 @@ class WorkItemControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("operation ids and the ACCOUNTING_WORK_ITEMS_* events")
     void annotations() throws Exception {
-        Method list =
-                WorkItemController.class.getMethod("listWorkItems", String.class, String.class, Integer.class);
+        Method list = WorkItemController.class.getMethod("listWorkItems", String.class, String.class, Integer.class);
         Method automatic =
                 WorkItemController.class.getMethod("listAutomaticWorkItems", String.class, String.class, Integer.class);
 

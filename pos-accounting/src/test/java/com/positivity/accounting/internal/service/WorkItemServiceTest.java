@@ -1181,8 +1181,7 @@ class WorkItemServiceTest {
     void payBlockedByApHold() {
         OpenBill held = approvedBill("HELD-1", TODAY.plusDays(1), "100.00", "pat");
         approvedBill("FREE-1", TODAY.plusDays(2), "100.00", "someone");
-        when(vendorCopies.heldVendors(any()))
-                .thenReturn(Map.of(held.bill().getVendorId(), "confidential"));
+        when(vendorCopies.heldVendors(any())).thenReturn(Map.of(held.bill().getVendorId(), "confidential"));
 
         signIn("pat", PAYER);
         List<WorkItem> items = list().items();
@@ -1191,7 +1190,9 @@ class WorkItemServiceTest {
             assertThat(pay.allowed()).isFalse();
             assertThat(pay.blockedReason()).isEqualTo("VENDOR_ON_AP_HOLD");
         });
-        assertThat(items.getLast().actions()).singleElement().satisfies(pay -> assertThat(pay.allowed()).isTrue());
+        assertThat(items.getLast().actions())
+                .singleElement()
+                .satisfies(pay -> assertThat(pay.allowed()).isTrue());
     }
 
     @Test
@@ -1216,7 +1217,8 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("the retry preview of a hard-locked payment maps its accounts on today, the date the deferred entry posts")
+    @DisplayName(
+            "the retry preview of a hard-locked payment maps its accounts on today, the date the deferred entry posts")
     void hardLockedPreviewDate() {
         APPayment payment = failedPayment(LocalDate.of(2026, 8, 20));
         when(periodGate.isHardLocked(payment.getPaymentDate())).thenReturn(true);
@@ -1247,7 +1249,8 @@ class WorkItemServiceTest {
 
         assertThat(page.items()).hasSize(2);
         assertThat(page.countsByArea()).containsEntry(WorkItemArea.BILLS, 6);
-        org.mockito.Mockito.verify(approvalPreview, org.mockito.Mockito.times(2)).preview(any());
+        org.mockito.Mockito.verify(approvalPreview, org.mockito.Mockito.times(2))
+                .preview(any());
         org.mockito.Mockito.verify(evidence, org.mockito.Mockito.times(1)).findByVendorBillIdIn(any());
         org.mockito.Mockito.verify(billLines, org.mockito.Mockito.times(1)).findByVendorBill_VendorBillIdIn(any());
         org.mockito.Mockito.verify(vendorCopies, org.mockito.Mockito.times(1)).creatorsFirstBillVendors(any(), any());
@@ -1261,11 +1264,14 @@ class WorkItemServiceTest {
         com.positivity.accounting.internal.entity.VendorBillMatchEvidence row =
                 mock(com.positivity.accounting.internal.entity.VendorBillMatchEvidence.class);
         when(row.getVendorBillId()).thenReturn(bill.getVendorBillId());
-        when(row.getSource()).thenReturn(com.positivity.accounting.internal.entity.VendorBillMatchEvidence.Source.CANDIDATE_SELECTION);
+        when(row.getSource())
+                .thenReturn(
+                        com.positivity.accounting.internal.entity.VendorBillMatchEvidence.Source.CANDIDATE_SELECTION);
         when(row.getRecordedAt()).thenReturn(NOW);
         when(row.getMatchEvidenceId()).thenReturn(UUID.randomUUID());
         when(evidence.findByVendorBillIdIn(any())).thenReturn(List.of(row));
-        com.positivity.accounting.internal.entity.VendorBillLine line = mock(com.positivity.accounting.internal.entity.VendorBillLine.class);
+        com.positivity.accounting.internal.entity.VendorBillLine line =
+                mock(com.positivity.accounting.internal.entity.VendorBillLine.class);
         when(line.getVendorBill()).thenReturn(bill);
         when(line.getLineNumber()).thenReturn(1);
         when(line.getBilledQuantity()).thenReturn(BigDecimal.ONE);

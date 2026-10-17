@@ -271,5 +271,6 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
 
     /** Which of the given source events already have an entry (#2515, S19: told apart by the key they were posted under). */
     @Query("SELECT je.sourceEventId FROM JournalEntry je WHERE je.sourceEventId IN :ids")
-    List<UUID> findSourceEventIdsIn(@org.springframework.data.repository.query.Param("ids") java.util.Collection<UUID> ids);
+    List<UUID> findSourceEventIdsIn(
+            @org.springframework.data.repository.query.Param("ids") java.util.Collection<UUID> ids);
 }

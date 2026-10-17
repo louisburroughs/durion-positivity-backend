@@ -149,7 +149,10 @@ public class WorkItemAutomaticServiceImpl implements WorkItemAutomaticService {
                     WorkItems.references(
                             "settlement", line.getSettlementId(),
                             "paymentReference", line.getPaymentReference(),
-                            "lineType", line.getLineType() == null ? null : line.getLineType().name()),
+                            "lineType",
+                                    line.getLineType() == null
+                                            ? null
+                                            : line.getLineType().name()),
                     line.getNetAmount(),
                     STATUS_MATCHED,
                     List.of(),

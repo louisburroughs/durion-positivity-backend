@@ -147,8 +147,9 @@ public class CashWorkItemSource {
      * covers are read again, and the deposit read is asked once per item on the page.
      */
     public @NonNull Map<String, WorkItem> complete(@NonNull List<WorkItem> page) {
-        List<WorkItem> pending =
-                page.stream().filter(item -> item.type() == WorkItemType.CASH_TO_DEPOSIT).toList();
+        List<WorkItem> pending = page.stream()
+                .filter(item -> item.type() == WorkItemType.CASH_TO_DEPOSIT)
+                .toList();
         if (pending.isEmpty() || !WorkItems.has(AccountingPermissions.DEPOSIT_CREATE)) {
             return Map.of();
         }

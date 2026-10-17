@@ -128,7 +128,8 @@ public class BillWorkItemSource {
     }
 
     /** The item type of a review bill for this caller; null when the caller may not act on it. */
-    private static @Nullable WorkItemType typeOf(VendorBill bill, boolean hasCandidates, ApApprovalPolicy.Settings settings) {
+    private static @Nullable WorkItemType typeOf(
+            VendorBill bill, boolean hasCandidates, ApApprovalPolicy.Settings settings) {
         if (bill.getStatus() == VendorBillStatus.AWAITING_APPROVAL) {
             boolean mayApprove = VendorBillDecisions.mayTake(VendorBillAction.APPROVE)
                     && VendorBillDecisions.mayDecideTier(settings.tier(bill.getTotalAmount()));
@@ -201,7 +202,8 @@ public class BillWorkItemSource {
                     ? VendorBillReader.REASON_INVOICE_NOT_MATCHED
                     : item.reasonCode();
             boolean canApprove = item.type() == WorkItemType.BILL_AWAITING_APPROVAL
-                    && actions.stream().anyMatch(action -> VendorBillAction.APPROVE.name().equals(action.action()));
+                    && actions.stream()
+                            .anyMatch(action -> VendorBillAction.APPROVE.name().equals(action.action()));
             List<WorkItemPostingLine> preview = canApprove ? approvalPreview.preview(bill) : List.of();
             completed.put(item.itemId(), item.completed(reason, actions, preview));
         }
@@ -266,7 +268,10 @@ public class BillWorkItemSource {
         ApApprovalPolicy.Settings settings = policy.settings();
         String caller = VendorBillDecisions.callerOrNull();
         Set<UUID> held = vendorCopies
-                .heldVendors(due.stream().map(open -> open.bill().getVendorId()).distinct().toList())
+                .heldVendors(due.stream()
+                        .map(open -> open.bill().getVendorId())
+                        .distinct()
+                        .toList())
                 .keySet();
         List<WorkItem> items = new ArrayList<>();
         for (OpenBill open : due) {
@@ -288,7 +293,10 @@ public class BillWorkItemSource {
                             "purchaseOrderNumber", bill.getPurchaseOrderNumber(),
                             "dueDate", dueDate.toString(),
                             "estimated", Boolean.toString(open.estimated()),
-                            "termsSource", open.estimate() == null ? null : open.estimate().termsSource().name()),
+                            "termsSource",
+                                    open.estimate() == null
+                                            ? null
+                                            : open.estimate().termsSource().name()),
                     dueDate.isBefore(today) ? "OVERDUE" : "DUE_SOON",
                     open.openAmount(),
                     bill.getStatus().name(),
@@ -313,7 +321,10 @@ public class BillWorkItemSource {
                 "vendor", bill.getVendorName(),
                 "billNumber", bill.getBillNumber(),
                 "purchaseOrderNumber", bill.getPurchaseOrderNumber(),
-                "billDate", bill.getBillDate() == null ? null : bill.getBillDate().toLocalDate().toString());
+                "billDate",
+                        bill.getBillDate() == null
+                                ? null
+                                : bill.getBillDate().toLocalDate().toString());
     }
 
     /** When the bill started waiting: its submission for an approval, else its arrival; its bill date as a last resort. */
@@ -324,6 +335,8 @@ public class BillWorkItemSource {
         if (at != null) {
             return zoneResolver.postingDate(at);
         }
-        return bill.getBillDate() == null ? zoneResolver.today() : bill.getBillDate().toLocalDate();
+        return bill.getBillDate() == null
+                ? zoneResolver.today()
+                : bill.getBillDate().toLocalDate();
     }
 }

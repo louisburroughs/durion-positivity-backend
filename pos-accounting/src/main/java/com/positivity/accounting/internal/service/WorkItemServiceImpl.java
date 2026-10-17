@@ -4,8 +4,8 @@ import com.positivity.accounting.internal.dto.WorkItem;
 import com.positivity.accounting.internal.dto.WorkItemsResponse;
 import com.positivity.accounting.internal.enums.WorkItemArea;
 import com.positivity.accounting.internal.enums.WorkItemType;
-import io.micrometer.core.instrument.Gauge;
 import com.positivity.tenancy.TenantContext;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
@@ -113,7 +113,9 @@ public class WorkItemServiceImpl implements WorkItemService {
         completed.putAll(bills.complete(page));
         completed.putAll(payments.complete(page));
         completed.putAll(cash.complete(page));
-        return page.stream().map(item -> completed.getOrDefault(item.itemId(), item)).toList();
+        return page.stream()
+                .map(item -> completed.getOrDefault(item.itemId(), item))
+                .toList();
     }
 
     /** Sets the tenant's gauges, registering them the first time the tenant is read. */

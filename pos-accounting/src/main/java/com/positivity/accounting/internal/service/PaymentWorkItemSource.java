@@ -146,7 +146,8 @@ public class PaymentWorkItemSource {
     }
 
     private List<WorkItem> paymentsNotPosted() {
-        List<APPayment> failed = apPayments.findByStatusOrderByPaymentDateAscPaymentIdAsc(APPaymentStatus.GL_POST_FAILED);
+        List<APPayment> failed =
+                apPayments.findByStatusOrderByPaymentDateAscPaymentIdAsc(APPaymentStatus.GL_POST_FAILED);
         if (failed.isEmpty()) {
             return List.of();
         }
@@ -168,7 +169,10 @@ public class PaymentWorkItemSource {
                     WorkItems.references(
                             "vendor", payment.getVendorName(),
                             "paymentReference", payment.getPaymentRef(),
-                            "paymentMethod", payment.getPaymentMethod() == null ? null : payment.getPaymentMethod().name(),
+                            "paymentMethod",
+                                    payment.getPaymentMethod() == null
+                                            ? null
+                                            : payment.getPaymentMethod().name(),
                             "paymentDate", date.toString()),
                     payment.getGlPostError() == null || payment.getGlPostError().isBlank()
                             ? REASON_POST_FAILED
@@ -196,15 +200,15 @@ public class PaymentWorkItemSource {
         }
         Map<UUID, APPayment> payments = new HashMap<>();
         apPayments
-                .findAllById(pending.stream().map(item -> item.routing().get("paymentId")).toList())
+                .findAllById(pending.stream()
+                        .map(item -> item.routing().get("paymentId"))
+                        .toList())
                 .forEach(payment -> payments.put(payment.getPaymentId(), payment));
         Map<String, WorkItem> completed = new HashMap<>();
         for (WorkItem item : pending) {
             APPayment payment = payments.get(item.routing().get("paymentId"));
             if (payment != null) {
-                completed.put(
-                        item.itemId(),
-                        item.completed(item.reasonCode(), item.actions(), retryPreview(payment)));
+                completed.put(item.itemId(), item.completed(item.reasonCode(), item.actions(), retryPreview(payment)));
             }
         }
         return completed;
@@ -215,7 +219,9 @@ public class PaymentWorkItemSource {
      * date, or today when that date is hard-locked and the retry defers past it; empty when an account cannot be named.
      */
     private List<WorkItemPostingLine> retryPreview(APPayment payment) {
-        if (payment.getBankAccountId() == null || payment.getGrossAmount() == null || payment.getPaymentDate() == null) {
+        if (payment.getBankAccountId() == null
+                || payment.getGrossAmount() == null
+                || payment.getPaymentDate() == null) {
             return List.of();
         }
         LocalDate date =
@@ -224,7 +230,8 @@ public class PaymentWorkItemSource {
         BigDecimal fee = payment.getFeeAmount() == null ? BigDecimal.ZERO : payment.getFeeAmount();
         Optional<GLAccount> payable = account(APPaymentPreGatewayChecks.ACCOUNTS_PAYABLE_KEY, date);
         Optional<GLAccount> bank = glAccounts.findById(payment.getBankAccountId());
-        Optional<GLAccount> fees = fee.signum() > 0 ? account(APPaymentPreGatewayChecks.PAYMENT_FEES_KEY, date) : Optional.empty();
+        Optional<GLAccount> fees =
+                fee.signum() > 0 ? account(APPaymentPreGatewayChecks.PAYMENT_FEES_KEY, date) : Optional.empty();
         if (payable.isEmpty() || bank.isEmpty() || (fee.signum() > 0 && fees.isEmpty())) {
             return List.of();
         }
