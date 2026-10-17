@@ -429,7 +429,7 @@ class RegisterSessionCashMovementTest {
             when(vendorCopies.findById(unknown)).thenReturn(java.util.Optional.empty());
 
             service.recordCashMovement(cod(active, "40.00"));
-            verify(movements).save(any(CashMovement.class));
+            verify(movements).saveAndFlush(any(CashMovement.class));
 
             assertThatThrownBy(() -> service.recordCashMovement(cod(inactive, "40.00")))
                     .isInstanceOf(com.positivity.order.internal.exception.PurchaseOrderVendorException.class);

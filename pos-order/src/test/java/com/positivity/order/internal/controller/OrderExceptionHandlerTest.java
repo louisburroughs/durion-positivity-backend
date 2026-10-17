@@ -740,7 +740,10 @@ class OrderExceptionHandlerTest {
                                 request -> handler.handleTaxCheckUnavailable(
                                         new com.positivity.order.internal.exception.TaxCheckUnavailableException(
                                                 "down"),
-                                        request)));
+                                        request)),
+                        Named.of("handleVendor", (HandlerInvocation) request -> handler.handleVendor(
+                                com.positivity.order.internal.exception.PurchaseOrderVendorException.inactive("V-1"),
+                                request)));
             }
 
             @ParameterizedTest

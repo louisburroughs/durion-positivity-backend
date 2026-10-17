@@ -266,11 +266,6 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         // row lock, before the token is used), then lock and record. A refusal before the record leaves the token
         // unspent, so the register may resend the same requestId with a corrected payload.
         ValidMovement shaped = validate(command);
-        if (shaped.reason() == CashMovementReason.VENDOR_COD) {
-            // #2576 (#2512 PROPOSED 8): the vendor paid must be in pos-order's vendor copy and active: 422
-            // VENDOR_INACTIVE, or 503 VENDOR_REPLICATION_PENDING while the copy does not hold it yet (S24).
-            vendorGuard.requireActive(Objects.requireNonNull(shaped.vendorId()));
-        }
         // ADR-0061: 404 first, then the caller's reach at the drawer's location — a scoped cashier
         // cannot record (or replay) a movement on another shop's drawer.
         RegisterSession drawer = require(command.sessionId());
@@ -298,6 +293,12 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         if (!policy.allowed(type)) {
             // Never retroactive: recorded movements of the type stand and are carried on the close fact.
             throw refused(Refusal.TYPE_NOT_ALLOWED, reason + " movements are switched off in the drawer policy");
+        }
+        if (reason == CashMovementReason.VENDOR_COD) {
+            // #2576 (#2512 PROPOSED 8): the vendor paid must be in pos-order's vendor copy and active: 422
+            // VENDOR_INACTIVE, or 503 VENDOR_REPLICATION_PENDING while the copy does not hold it yet (S24).
+            // After the policy switch: a type switched off is refused without reading the copy.
+            vendorGuard.requireActive(Objects.requireNonNull(movement.vendorId()));
         }
         Instant occurredAt = Instant.now(clock);
         LocalDate movementDate = DrawerStatedTax.movementDate(occurredAt);
