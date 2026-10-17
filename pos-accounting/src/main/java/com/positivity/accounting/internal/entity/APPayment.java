@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.accounting.internal.enums.APPaymentSettlementStatus;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.shared.id.UUIDv7Id;
@@ -181,6 +182,38 @@ public class APPayment extends TenantScopedEntity {
 
     @Column(name = "voided_by", length = 50)
     private String voidedBy;
+
+    /** Whether the gateway settled the charge (#2642); null for CASH and pre-field rows. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "settlement_status", length = 20)
+    private APPaymentSettlementStatus settlementStatus;
+
+    /** When the settlement job last re-read the gateway for this payment. */
+    @Column(name = "settlement_checked_at")
+    private Instant settlementCheckedAt;
+
+    @Column(name = "settled_at")
+    private Instant settledAt;
+
+    /** When the return was recorded (the job's detection or the operator's command). */
+    @Column(name = "returned_at")
+    private Instant returnedAt;
+
+    /** The date the mirror entry is posted on (the failure date, else the detection date; #2642 ruling 2). */
+    @Column(name = "return_date")
+    private LocalDate returnDate;
+
+    /** {@code RETURN_DATE} or {@code DETECTION_DATE}: which rule dated the mirror entry. */
+    @Column(name = "return_date_rule", length = 40)
+    private String returnDateRule;
+
+    /** The gateway's own code for the failed charge (an ACH return code, a decline code); never free text. */
+    @Column(name = "return_failure_code", length = 64)
+    private String returnFailureCode;
+
+    /** The mirror entry: the journal-entry reversal of the payment's entry. */
+    @Column(name = "return_journal_entry_id")
+    private UUID returnJournalEntryId;
 
     public APPayment(UUID paymentId) {
         this.paymentId = paymentId;

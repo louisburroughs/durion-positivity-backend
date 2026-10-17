@@ -53,6 +53,12 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
      */
     Optional<APPayment> findByPaymentRef(String paymentRef);
 
+    /** The payment whose own entry is {@code journalEntryId} (#2642: the reversal reaction). */
+    Optional<APPayment> findByGlJournalEntry_JournalEntryId(UUID journalEntryId);
+
+    /** The payment whose return's mirror entry is {@code journalEntryId} (#2642). */
+    Optional<APPayment> findByReturnJournalEntryId(UUID journalEntryId);
+
     /**
      * Find payments in one of the given statuses whose payment date falls in the inclusive
      * range. Used by the vendor-spend analytics endpoint (Wave 2 E8, issue #1596) to sum settled

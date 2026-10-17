@@ -94,6 +94,12 @@ public class VendorBillException extends RuntimeException {
         AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED(HttpStatus.UNPROCESSABLE_CONTENT),
         /** The payment is not a {@code CASH} payment, or nothing of it is unapplied (S17, #2513). */
         AP_PAYMENT_NOT_ALLOCATABLE(HttpStatus.UNPROCESSABLE_CONTENT),
+        /** #2642: record-return on a payment whose charge never moved money (or a CASH payment). */
+        AP_PAYMENT_NOT_RETURNABLE(HttpStatus.CONFLICT),
+        /** #2642: the payment's return is already recorded (RETURN_PENDING or RETURNED). */
+        AP_PAYMENT_ALREADY_RETURNED(HttpStatus.CONFLICT),
+        /** #2642: a manual reversal of an AP payment's entry or of its return's mirror; only the return reverses it. */
+        AP_PAYMENT_ENTRY_NOT_REVERSIBLE(HttpStatus.CONFLICT),
         /** The allocation command's {@code requestId} was used before with another body (S17, #2513). */
         /**
          * A new bill or AP payment names an {@code INACTIVE} vendor (CAP:550 S24, #2517; AW23): an inactive vendor takes

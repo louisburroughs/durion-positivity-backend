@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.APPaymentResponse;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
+import com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.APPaymentAllocation;
@@ -14,6 +15,7 @@ import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.entity.VendorBill;
+import com.positivity.accounting.internal.enums.APPaymentSettlementStatus;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
@@ -83,6 +85,7 @@ public class APPaymentServiceImpl implements APPaymentService {
     private final SupplierVendorCopies vendorCopies;
     private final APPaymentAllocationRequestRepository allocationRequests;
     private final AccountingAuditLogRepository auditLogs;
+    private final APPaymentReturnService returns;
 
     /** One allocation of the plan: the bill, locked, and the amount applied to it. */
     record PlannedAllocation(
@@ -223,8 +226,21 @@ public class APPaymentServiceImpl implements APPaymentService {
 
             // Map gateway status to payment status
             switch (gatewayResponse.getStatus()) {
-                case SUCCEEDED, AUTHORIZED -> payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
-                case PENDING -> payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
+                case SUCCEEDED -> {
+                    payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+                    // #2642: settled on acceptance; never re-read.
+                    payment.setSettlementStatus(APPaymentSettlementStatus.SETTLED);
+                    payment.setSettledAt(Instant.now(clock));
+                }
+                case AUTHORIZED -> {
+                    payment.setStatus(APPaymentStatus.GATEWAY_SUCCEEDED);
+                    payment.setSettlementStatus(APPaymentSettlementStatus.IN_FLIGHT);
+                }
+                case PENDING -> {
+                    payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
+                    // #2642: an ACH in flight; the settlement job re-reads it until it settles or returns.
+                    payment.setSettlementStatus(APPaymentSettlementStatus.IN_FLIGHT);
+                }
                 case DECLINED, FAILED -> {
                     payment.setStatus(APPaymentStatus.GATEWAY_FAILED);
                     payment.setGatewayResponse("Gateway declined: "
@@ -719,6 +735,8 @@ public class APPaymentServiceImpl implements APPaymentService {
             payment.setGatewayResponse("Reconciled by operator: CHARGED");
             payment.setUnappliedAmount(payment.getGrossAmount());
             payment.setStatus(APPaymentStatus.GL_POST_PENDING);
+            // #2642: the operator attests the charge, not its settlement; the settlement job re-reads it.
+            payment.setSettlementStatus(APPaymentSettlementStatus.IN_FLIGHT);
         }
         APPayment saved = paymentRepository.save(payment);
         if (saved.getStatus() == APPaymentStatus.GL_POST_PENDING) {
@@ -743,6 +761,12 @@ public class APPaymentServiceImpl implements APPaymentService {
         return toResponse(saved);
     }
 
+    @Override
+    public @NonNull APPaymentResponse recordReturn(
+            @NonNull UUID paymentId, @NonNull RecordAPPaymentReturnRequest request, @NonNull String currentUser) {
+        return toResponse(returns.recordReturn(paymentId, request, currentUser));
+    }
+
     /** The remedy for a payment that is not a GATEWAY_PENDING orphan (#2729 ruling 2). */
     private static @NonNull String notVoidableRemedy(@NonNull APPayment payment) {
         return switch (payment.getStatus()) {
@@ -756,6 +780,8 @@ public class APPaymentServiceImpl implements APPaymentService {
                 "The charge moved money: a return is #2642 (mirror entry, reopened allocations)";
             case VOIDED -> "Already voided; nothing to do";
             case GATEWAY_FAILED -> "The gateway declined it; nothing moved and nothing to void";
+            case RETURN_PENDING -> "The charge was returned; its mirror entry is owed: retryApPaymentGlPosting";
+            case RETURNED -> "The charge was returned and recorded; pay the bills again with a new paymentRef";
             default -> "Nothing to reconcile";
         };
     }
@@ -836,6 +862,14 @@ public class APPaymentServiceImpl implements APPaymentService {
                 .voidReason(payment.getVoidReason())
                 .voidedAt(payment.getVoidedAt())
                 .voidedBy(payment.getVoidedBy())
+                .settlementStatus(payment.getSettlementStatus())
+                .settlementCheckedAt(payment.getSettlementCheckedAt())
+                .settledAt(payment.getSettledAt())
+                .returnedAt(payment.getReturnedAt())
+                .returnDate(payment.getReturnDate())
+                .returnDateRule(payment.getReturnDateRule())
+                .returnFailureCode(payment.getReturnFailureCode())
+                .returnJournalEntryId(payment.getReturnJournalEntryId())
                 .memo(payment.getMemo())
                 .allocations(allocations.stream()
                         .map(a -> APPaymentResponse.AllocationLineResponse.builder()
@@ -843,6 +877,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                                 .vendorBillId(a.getVendorBillId())
                                 .appliedAmount(a.getAppliedAmount())
                                 .allocationSequence(a.getAllocationSequence())
+                                .reopenedAt(a.getReopenedAt())
                                 .build())
                         .toList())
                 .createdAt(payment.getCreatedAt())

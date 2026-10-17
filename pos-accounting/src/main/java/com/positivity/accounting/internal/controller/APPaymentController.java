@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ApPayFromAccountListResponse;
 import com.positivity.accounting.internal.dto.ExecuteAPPaymentRequest;
 import com.positivity.accounting.internal.dto.ReconcileAPPaymentGatewayRequest;
+import com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest;
 import com.positivity.accounting.internal.dto.VendorBillSummaryResponse;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.APPaymentService;
@@ -363,6 +364,81 @@ public class APPaymentController {
             @Valid @RequestBody @NonNull ReconcileAPPaymentGatewayRequest request) {
         String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
         return ResponseEntity.ok(apPaymentService.reconcileGateway(paymentId, request, currentUser));
+    }
+
+    @PostMapping("/payments/{paymentId}/record-return")
+    @EmitEvent(id = "ACCOUNTING_AP_PAYMENT_RECORD_RETURN", apiVersion = "1")
+    @Operation(
+            operationId = "recordApPaymentReturn",
+            summary = "Record a returned AP payment charge: reverse its entry, reopen its allocations",
+            description = """
+                The bank or the processor sent back a charge that had moved money (#2642, AW42 applied to a \
+                payment): a bank statement shows the return, or a processor notice names it, and the settlement \
+                job could not read it from the gateway. In one transaction the payment's allocations are reopened \
+                (kept as history; each bill's open amount is restored and the bills are payable again), \
+                unappliedAmount becomes zero, and the mirror entry, the reversal of the payment's own entry (Dr the \
+                bank gross + fee / Cr 2000 / Cr the fee account), is posted on the return date when that period is \
+                open, else on today's business date (returnDateRule RETURN_DATE or DETECTION_DATE). The payment \
+                ends RETURNED; it ends RETURN_PENDING when its original posting is still pending or failed (the \
+                mirror follows the original) or when today's period is CLOSED without an override (glPostError \
+                PERIOD_CLOSED; retryApPaymentGlPosting once the period is reopened).
+                Use this tool for a late return of a settled charge, or for a gateway this service cannot re-read; \
+                do not use it for a GATEWAY_PENDING orphan (reconcileApPaymentGateway) or to cancel a payment that \
+                never moved money. The payment is never re-sent: pay the bills again with a new paymentRef.
+                Preconditions: the payment is GL_POST_PENDING, GL_POSTED or GL_POST_FAILED and not CASH; the return \
+                is what the bank or the processor reported. The gateway's current answer is recorded with the \
+                attestation but never refuses the command (a bank can return what the processor shows as settled).
+                Required inputs: paymentId; requestId (the caller's idempotency key) and justification (10-1000 \
+                characters); optional returnDate (not after today; today when omitted), failureCode (a code such \
+                as R01, never free text) and overrideJustification (accounting:period:override) for a CLOSED \
+                detection date.
+                Emits ACCOUNTING_AP_PAYMENT_RECORD_RETURN and writes audit rows AP_PAYMENT_RETURN (the reopened \
+                bills and amounts, the gateway's answer) and AP_PAYMENT_RETURN_GL_POSTING (the mirror).
+                Returns 200 with the payment (RETURNED or RETURN_PENDING), 400 VALIDATION_ERROR (a missing \
+                field, a return date after today), 404 NOT_FOUND, 409 AP_PAYMENT_NOT_RETURNABLE when the charge \
+                never moved money or the payment is CASH (nextAction names the remedy), 409 \
+                AP_PAYMENT_ALREADY_RETURNED, 409 IDEMPOTENCY_CONFLICT (the requestId was used with another body), \
+                409 LOCK_TIMEOUT, 422 PERIOD_CLOSED (today's period is CLOSED and no override) or \
+                PERIOD_HARD_LOCKED.
+                """,
+            tags = {"AP Payments"})
+    @ApiResponse(responseCode = "200", description = "Returned: RETURNED, or RETURN_PENDING while the mirror is owed")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: requestId or justification missing, failureCode not a code, returnDate"
+                    + " after today",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "FORBIDDEN without accounting:ap:pay",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "NOT_FOUND: no such AP payment",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "AP_PAYMENT_NOT_RETURNABLE: the charge never moved money, or a CASH payment (nextAction names"
+                    + " the remedy); AP_PAYMENT_ALREADY_RETURNED; IDEMPOTENCY_CONFLICT: the requestId was used with"
+                    + " another body; LOCK_TIMEOUT: another request holds the payment",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "PERIOD_CLOSED: the detection date's period is CLOSED and the caller gave no override;"
+                    + " PERIOD_HARD_LOCKED",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @SecurityRequirement(
+            name = "bearerAuth",
+            scopes = {"accounting:ap:pay"})
+    @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
+    public @NonNull ResponseEntity<APPaymentResponse> recordApPaymentReturn(
+            @PathVariable
+                    @Parameter(description = "Payment UUID", example = "01936e5c-7890-7a3d-8b6e-2b3456789012")
+                    @NonNull
+                    UUID paymentId,
+            @Valid @RequestBody @NonNull RecordAPPaymentReturnRequest request) {
+        String currentUser = SecurityContextHelper.getCurrentUsernameOrDefault("system");
+        return ResponseEntity.ok(apPaymentService.recordReturn(paymentId, request, currentUser));
     }
 
     @PostMapping("/payments/{paymentId}/allocations")

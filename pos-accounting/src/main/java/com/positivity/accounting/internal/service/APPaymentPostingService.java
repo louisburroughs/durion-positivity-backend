@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.JournalEntry;
+import com.positivity.accounting.internal.enums.APPaymentSettlementStatus;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.JournalEntryStatus;
 import com.positivity.accounting.internal.enums.PaymentMethod;
@@ -94,6 +95,14 @@ public class APPaymentPostingService {
     /** {@code posting_date_rule} of an entry dated the retry's business date because the payment date is hard-locked. */
     public static final String DEFERRED_PAST_HARD_LOCK = "DEFERRED_PAST_HARD_LOCK";
 
+    /** {@code returnDateRule}: the mirror entry is dated on the return (failure) date, whose period was open. */
+    public static final String RETURN_DATE = "RETURN_DATE";
+
+    /** {@code returnDateRule}: the return date's period was closed, so the mirror is dated on the detection date. */
+    public static final String DETECTION_DATE = "DETECTION_DATE";
+
+    private static final String SYSTEM = "system";
+
     /**
      * The retry caller's leave to date the entry past a hard lock (#2729, AW42): who gave it and why. Recorded on the
      * {@code AP_PAYMENT_GL_POSTING_DEFERRED} audit row, written inside the posting transaction.
@@ -112,7 +121,11 @@ public class APPaymentPostingService {
         lockTimeout.apply();
         APPayment payment = payments.lockById(paymentId)
                 .orElseThrow(() -> new IllegalStateException("AP payment " + paymentId + " not found for posting"));
-        if (payment.getStatus() != APPaymentStatus.GL_POST_PENDING) {
+        // A RETURN_PENDING payment whose original never posted (#2642) posts the original here too; its mirror
+        // follows in the same transaction.
+        boolean originalPending = payment.getStatus() == APPaymentStatus.GL_POST_PENDING
+                || (payment.getStatus() == APPaymentStatus.RETURN_PENDING && payment.getGlJournalEntryId() == null);
+        if (!originalPending) {
             log.info(
                     "AP payment not pending posting, nothing posted | paymentId={} | status={}",
                     paymentId,
@@ -155,7 +168,9 @@ public class APPaymentPostingService {
         boolean failedOutbox = payment.getStatus() == APPaymentStatus.GL_POST_PENDING
                 && outbox.countByAggregateIdAndStatus(paymentId, EventOutbox.OutboxStatus.FAILED) > 0
                 && outbox.countByAggregateIdAndStatus(paymentId, EventOutbox.OutboxStatus.PENDING) == 0;
-        if (payment.getStatus() != APPaymentStatus.GL_POST_FAILED && !failedOutbox) {
+        // #2642: a RETURN_PENDING payment owes its original (never posted) or its mirror (refused by a period).
+        boolean returnOwed = payment.getStatus() == APPaymentStatus.RETURN_PENDING;
+        if (payment.getStatus() != APPaymentStatus.GL_POST_FAILED && !failedOutbox && !returnOwed) {
             String remedy =
                     switch (payment.getStatus()) {
                         case GATEWAY_PENDING -> "; reconcile it with the gateway first (reconcileApPaymentGateway)";
@@ -168,7 +183,82 @@ public class APPaymentPostingService {
                             + "; only a payment whose posting failed (GL_POST_FAILED, or GL_POST_PENDING with its"
                             + " outbox row FAILED) can be posted again" + remedy);
         }
+        if (returnOwed && payment.getGlJournalEntryId() != null) {
+            // The original is posted; only the mirror is owed (its first attempt fell in a closed period).
+            return postReturn(payment, null, overrideJustification, deferral == null ? SYSTEM : deferral.user());
+        }
         return post(payment, overrideJustification, false, deferral);
+    }
+
+    /**
+     * Posts the mirror of a returned payment (#2642, AW42): the journal-entry reversal of the payment's own entry (Dr
+     * the bank gross + fee / Cr 2000 / Cr the fee account), dated on the return date when that period is open, else on
+     * today's business date ({@link #RETURN_DATE} / {@link #DETECTION_DATE}); never into a closed period without the
+     * caller's override, never before the hard lock. The payment ends {@code RETURNED}; an audit row {@code
+     * AP_PAYMENT_RETURN_GL_POSTING} is written in the same transaction.
+     *
+     * @param requestedReturnDate the date the bank or processor returned the charge; null keeps the date the return
+     *                            recorded, else today
+     * @param callerOverride      the caller's closed-period justification (null for the outbox or the settlement job)
+     * @return the mirror entry's id
+     */
+    @Transactional
+    public @NonNull UUID postReturn(
+            @NonNull APPayment payment,
+            @Nullable LocalDate requestedReturnDate,
+            @Nullable String callerOverride,
+            @NonNull String actor) {
+        UUID paymentId = payment.getPaymentId();
+        UUID original = payment.getGlJournalEntryId();
+        if (original == null) {
+            throw new IllegalStateException(
+                    "AP payment " + paymentId + " has no entry to reverse; the return's mirror follows the original");
+        }
+        if (payment.getReturnJournalEntryId() != null) {
+            return payment.getReturnJournalEntryId();
+        }
+        LocalDate today = zoneResolver.today();
+        LocalDate candidate = requestedReturnDate != null
+                ? requestedReturnDate
+                : payment.getReturnDate() != null ? payment.getReturnDate() : today;
+        boolean onReturnDate = !periodGate.isPostingBlocked(candidate);
+        LocalDate date = onReturnDate ? candidate : today;
+        String reason = "Returned AP payment " + payment.getPaymentRef()
+                + (payment.getReturnFailureCode() == null ? "" : " (" + payment.getReturnFailureCode() + ")");
+        JournalEntryResponse mirror = APPaymentReversalReaction.underReturn(
+                paymentId, () -> journalEntryService.reverseJournalEntry(original, reason, date, callerOverride));
+        payment.setReturnJournalEntryId(mirror.getJournalEntryId());
+        payment.setReturnDate(date);
+        payment.setReturnDateRule(onReturnDate ? RETURN_DATE : DETECTION_DATE);
+        payment.setSettlementStatus(APPaymentSettlementStatus.RETURNED);
+        if (payment.getReturnedAt() == null) {
+            payment.setReturnedAt(Instant.now(clock));
+        }
+        payment.setGlPostError(null);
+        payment.setStatus(APPaymentStatus.RETURNED);
+        payments.save(payment);
+        AccountingAuditLog row = new AccountingAuditLog();
+        row.setEntityType("AP_PAYMENT");
+        row.setEntityId(paymentId);
+        row.setOperation("AP_PAYMENT_RETURN_GL_POSTING");
+        row.setUserId(actor);
+        row.setOldValue("journalEntryId=" + original);
+        row.setNewValue("returnJournalEntryId=" + mirror.getJournalEntryId() + ";returnDate=" + date + ";rule="
+                + payment.getReturnDateRule());
+        auditLogs.save(row);
+        log.info(
+                "AP payment return posted | paymentId={} | returnDate={} | rule={} | returnJournalEntryId={}",
+                paymentId,
+                date,
+                payment.getReturnDateRule(),
+                mirror.getJournalEntryId());
+        return mirror.getJournalEntryId();
+    }
+
+    /** Whether a recorded return still owes its mirror entry (#2642). */
+    static boolean returnOwed(@NonNull APPayment payment) {
+        return payment.getSettlementStatus() == APPaymentSettlementStatus.RETURNED
+                && payment.getReturnJournalEntryId() == null;
     }
 
     /**
@@ -205,7 +295,20 @@ public class APPaymentPostingService {
         return post(payment, callerOverride, applyRecordedOverride, null);
     }
 
+    /** The original posting, then the mirror when a return was recorded before the original posted (#2642). */
     private UUID post(
+            APPayment payment,
+            @Nullable String callerOverride,
+            boolean applyRecordedOverride,
+            @Nullable Deferral deferral) {
+        UUID entryId = postOriginal(payment, callerOverride, applyRecordedOverride, deferral);
+        if (returnOwed(payment)) {
+            postReturn(payment, null, callerOverride, deferral == null ? SYSTEM : deferral.user());
+        }
+        return entryId;
+    }
+
+    private UUID postOriginal(
             APPayment payment,
             @Nullable String callerOverride,
             boolean applyRecordedOverride,

@@ -25,8 +25,8 @@ public class APPaymentFailurePersistenceService {
     private static final Logger log = LoggerFactory.getLogger(APPaymentFailurePersistenceService.class);
 
     /** The statuses a refused posting may move to {@code GL_POST_FAILED}: never a payment already posted. */
-    private static final Set<APPaymentStatus> REFUSABLE =
-            EnumSet.of(APPaymentStatus.GL_POST_PENDING, APPaymentStatus.GL_POST_FAILED);
+    private static final Set<APPaymentStatus> REFUSABLE = EnumSet.of(
+            APPaymentStatus.GL_POST_PENDING, APPaymentStatus.GL_POST_FAILED, APPaymentStatus.RETURN_PENDING);
 
     private final APPaymentRepository paymentRepository;
 
@@ -75,7 +75,11 @@ public class APPaymentFailurePersistenceService {
                 .lockById(paymentId)
                 .filter(payment -> REFUSABLE.contains(payment.getStatus()))
                 .ifPresent(payment -> {
-                    payment.setStatus(APPaymentStatus.GL_POST_FAILED);
+                    // A RETURN_PENDING payment (#2642) keeps that status: the refusal is the mirror's or the
+                    // original's, and glPostError names the remedy either way.
+                    if (payment.getStatus() != APPaymentStatus.RETURN_PENDING) {
+                        payment.setStatus(APPaymentStatus.GL_POST_FAILED);
+                    }
                     payment.setGlPostError(code);
                     paymentRepository.save(payment);
                     log.warn("AP payment posting refused | paymentId={} | code={}", paymentId, code);

@@ -1447,7 +1447,48 @@ remedy where no money moved, and a dated posting where it did:
 - A charge that moved money and must be undone is a returned payment (mirror entry, reopened allocations, a return
   status): #2642, not here. There is no write-off concept for AP payments.
 - `ACCOUNT_HAS_UNPOSTED_PAYMENTS` (#2645) no longer counts `VOIDED` payments and its message names the remedy per
-  state. The automatic `GATEWAY_PENDING` reconciler belongs to #2642; the "stuck past N hours" line of Needs attention
+  state.
+
+**Settlement and returns (#2642, Accounting ruling of 2026-10-17; AW42 applied to a payment).** S42 posts a payment
+on the day the gateway accepts the instruction, a `PENDING` ACH included. Whether the charge then settled is a fact of
+its own: `settlementStatus` (`IN_FLIGHT` after a `PENDING`/`AUTHORIZED` acceptance or a `CHARGED` reconcile, `SETTLED`
+after a `SUCCEEDED` answer, `RETURNED`; null on `CASH` and on rows older than V32), with `settlementCheckedAt`,
+`settledAt`, `returnedAt`. The gateway port gained `findByReference(paymentRef)` (Stripe: `metadata.payment_ref`, charge
+search) and `failureCode`; a deterministic `local` provider (`payment.gateway.provider: local`, the `dev` default)
+answers by `paymentRef` suffix (`-PENDING`, `-RETURN`, `-DECLINE`). The scheduled re-read of in-flight charges and of
+`GATEWAY_PENDING` orphans, and the in-flight read, are the second half of #2642.
+- **A returned charge** (the bank or the processor sent back money that had moved) is recorded by
+  `POST /v1/accounting/ap/payments/{paymentId}/record-return` `{requestId, returnDate?, failureCode?, justification,
+  overrideJustification?}` (`accounting:ap:pay`, event `ACCOUNTING_AP_PAYMENT_RECORD_RETURN`, approval-grade;
+  `recordApPaymentReturn`), idempotent on `requestId` (`ap_payment_return_request`; another body is 409
+  `IDEMPOTENCY_CONFLICT`). In one transaction: the allocations are reopened (`ap_payment_allocation.reopened_at`; kept
+  as history, excluded from every allocated sum, so each bill's open amount is restored, a bill part-paid by other
+  payments included; bills stay `APPROVED`), `unappliedAmount` becomes zero, the mirror entry (the journal-entry
+  reversal of `AP_PAYMENT:<paymentId>`: Dr the bank gross + fee / Cr 2000 / Cr 6030; **the fee leg reverses with the
+  entry**, a fee the processor keeps is a statement fact booked by bank reconciliation's `BANK_FEE` adjustment) is
+  posted, and audit rows `AP_PAYMENT_RETURN` (the reopened `vendorBillId:amount` list, the gateway's current answer)
+  and `AP_PAYMENT_RETURN_GL_POSTING` are written. The payment ends `RETURNED` (terminal; its bank account may be
+  deactivated).
+- **Dating (`returnDateRule`).** The mirror is dated on the return date when that period is open (`RETURN_DATE`), else
+  on today's business date (`DETECTION_DATE`), never back into a CLOSED or hard-locked period. Today's period CLOSED
+  without `overrideJustification` (`accounting:period:override`) is 422 `PERIOD_CLOSED`.
+- **`RETURN_PENDING`.** A return recorded while the original posting is `GL_POST_PENDING` or `GL_POST_FAILED` reopens
+  the allocations at once (2000 is not debited yet) and the posting service posts the mirror right after the original,
+  in the same transaction (both bank lines exist for the statement's debit and return credit). A mirror refused by a
+  period leaves the payment `RETURN_PENDING` with `glPostError`; `gl-posting-retry` (with `deferPastHardLock` where the
+  original's date is hard-locked) posts what is owed. `RETURN_PENDING` counts as unposted for
+  `ACCOUNT_HAS_UNPOSTED_PAYMENTS`.
+- **Refusals.** 409 `AP_PAYMENT_NOT_RETURNABLE` with `nextAction` for `INITIATED`, `GATEWAY_FAILED`, `VOIDED` (nothing
+  moved), `GATEWAY_PENDING` (reconcile first) and `CASH` (a drawer payout is corrected by a drawer movement); 409
+  `AP_PAYMENT_ALREADY_RETURNED` for `RETURNED` / `RETURN_PENDING`; 400 `VALIDATION_ERROR` for a `returnDate` after
+  today. The gateway's current answer is recorded but never refuses the command: a bank can return what the processor
+  shows as settled.
+- **Only the return reverses the entry.** A manual reversal of a payment's entry, or of its mirror, is 409
+  `AP_PAYMENT_ENTRY_NOT_REVERSIBLE` (`APPaymentReversalReaction`, the vendor-bill pattern); the whole reversal rolls
+  back. A `RETURNED` payment is never re-sent: the bills are paid again by a new pay command with a new `paymentRef`
+  (the old one is spent at the gateway). Out of scope: partial returns, a fee-recovery entry, AR chargebacks, a webhook
+  ingress.
+ The automatic `GATEWAY_PENDING` reconciler belongs to #2642; the "stuck past N hours" line of Needs attention
   is S19's (#2515).
 
 **Bounded waits (#2627).** Every gateway call carries `payment.gateway.connect-timeout` (default 5 s) and
@@ -1902,6 +1943,9 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED` | 422 | `gl-posting-retry` with `deferPastHardLock` and no justification (#2729) |
 | `AP_PAYMENT_GATEWAY_OUTCOME_REQUIRED` | 422 | `reconcile-gateway` with `CHARGED` and no gateway transaction id (#2729) |
 | `AP_PAYMENT_NOT_VOIDABLE` | 409 | `reconcile-gateway` on a payment that is not a `GATEWAY_PENDING` orphan; `nextAction` names the remedy (#2729) |
+| `AP_PAYMENT_NOT_RETURNABLE` | 409 | `record-return` on a payment whose charge never moved money (`INITIATED`, `GATEWAY_PENDING`, `GATEWAY_FAILED`, `VOIDED`) or on a `CASH` payment; `nextAction` names the remedy (#2642) |
+| `AP_PAYMENT_ALREADY_RETURNED` | 409 | `record-return` on a payment already `RETURNED` or `RETURN_PENDING` (#2642) |
+| `AP_PAYMENT_ENTRY_NOT_REVERSIBLE` | 409 | A manual journal-entry reversal of an AP payment's entry (record the return instead) or of its return's mirror (never reversed; pay again with a new `paymentRef`) (#2642) |
 | `AP_PAYMENT_NOT_ALLOCATABLE` | 422 | `POST /ap/payments/{id}/allocations` of a payment with nothing unapplied; only a drawer cash-on-delivery (`CASH`) payment or a gateway orphan reconciled `CHARGED` carries an unapplied amount (S17, #2513; #2729) |
 | `IDEMPOTENCY_CONFLICT` | 409 | A `requestId` of `POST /ap/payments/{id}/allocations` was used before with another body (S17, #2513); the cash-setup commands answer the same code for theirs |
 | `LOCK_TIMEOUT` | 409 | A row lock waited beyond `accounting.ap.lock-timeout` on the AP pay command, its retry or a vendor-bill decision: another request is working on these bills (a neutral message on other paths); the transaction rolled back, retry (#2627) |
