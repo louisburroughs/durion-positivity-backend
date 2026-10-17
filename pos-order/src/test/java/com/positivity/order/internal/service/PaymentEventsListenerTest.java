@@ -9,8 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.domainevents.order.OrderCompletedV1;
+import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;

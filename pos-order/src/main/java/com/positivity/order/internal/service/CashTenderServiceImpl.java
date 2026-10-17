@@ -196,8 +196,7 @@ public class CashTenderServiceImpl implements CashTenderService {
     private CashTenderResponse replay(SalesOrder order, OrderPaymentRecord record, CashTenderRequest request) {
         BigDecimal applied = record.getAmount();
         BigDecimal cash = record.cashAmount();
-        BigDecimal rounding =
-                record.getCashRoundingAmount() == null ? BigDecimal.ZERO : record.getCashRoundingAmount();
+        BigDecimal rounding = record.getCashRoundingAmount() == null ? BigDecimal.ZERO : record.getCashRoundingAmount();
         BigDecimal tendered = request.getCashTendered() == null ? cash : request.getCashTendered();
         BigDecimal balance = order.getBalanceDue() == null ? BigDecimal.ZERO : order.getBalanceDue();
         log.info(
