@@ -56,7 +56,7 @@ public class TaxClient {
 
     /** pos-tax's 422 codes a caller must answer deterministically (#2644, ADR-0017). */
     private static final java.util.regex.Pattern ERROR_CODE =
-            java.util.regex.Pattern.compile("\"code\"\s*:\s*\"([A-Z_]+)\"");
+            java.util.regex.Pattern.compile("\"code\"\\s*:\\s*\"([A-Z_]+)\"");
 
     static @Nullable String errorCodeOf(@Nullable String body) {
         if (body == null) {
