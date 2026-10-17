@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -303,6 +304,7 @@ class PurchaseOrderTransmissionServiceTest {
         assertThat(po.getSupplierRef()).isEqualTo("acme-parts");
 
         // A revision of a confirmed order is re-sent through the channel the original went to, not a moved one.
+        clearInvocations(outboxEventWriter);
         PurchaseOrderEntity confirmed = order(PurchaseOrderStatus.APPROVED, TransmissionState.CONFIRMED);
         confirmed.setSupplierRef("acme-parts");
         confirmed.setTransmissionCount(1);
@@ -314,7 +316,8 @@ class PurchaseOrderTransmissionServiceTest {
 
         service.requestTransmission(PO_ID, ACTOR);
 
-        assertThat(confirmed.getSupplierRef()).as("the stamp is frozen after a send reached the vendor")
+        assertThat(confirmed.getSupplierRef())
+                .as("the stamp is frozen after a send reached the vendor")
                 .isEqualTo("acme-parts");
         assertThat(published().intentType()).isEqualTo(SupplierOrderRequestedV1.IntentType.REVISION);
     }
