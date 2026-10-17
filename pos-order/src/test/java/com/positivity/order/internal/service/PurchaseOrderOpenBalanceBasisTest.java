@@ -196,6 +196,7 @@ class PurchaseOrderOpenBalanceBasisTest {
     void reviseResetsToTheNewSubtotal() {
         service.createPurchaseOrder(tenTaxedLines(), "buyer");
         RevisePurchaseOrderRequest revision = new RevisePurchaseOrderRequest();
+        revision.setExpectedVersionNumber(1);
         revision.setRevisionReason("vendor raised the price");
         revision.setPoDate(LocalDate.of(2026, 10, 11));
         revision.setLines(List.of(taxedLine(1, "4", 12_500L)));
