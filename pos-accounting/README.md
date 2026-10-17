@@ -86,6 +86,8 @@ Every display value is resolved from data accounting already holds — its own r
 - `GET /v1/accounting/payment-applications/automatic?since=&page=&size=` — "Matched automatically": the payment applications nobody made by hand (`source` `PAYMENT_SETTLED` or `INVOICE_PAYMENT`) at or after `since` (required ISO-8601 instant, at most 31 days back), newest first (`size` 1-100, default 50). Each row carries `paymentApplicationId` / `paymentId` / `invoiceId` for commands and links, `appliedAt`, `appliedAmount`, `invoiceNumber`, `customerDisplayName`, `customerReference` (null when unresolved, never a UUID), `creditCreatedAmount` (the credit the same request kept, else null), `reversed` / `reversedAt`, and `actions` = `["UNDO"]` while it stands and the caller holds `accounting:payment:reverse` (undo is `reversePaymentApplication`). `totalElements` counts reversed ones too (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW`, CAP:550 S2, #2503)
 - `GET /v1/accounting/customers/{customerId}/open-invoices?page=&size=` — the customer's open invoices (`FINALIZED` / `POSTED` with a derived balance above 0.00) in `OLDEST_FIRST` order, with `balanceDue` net of applications, customer credits, posted credit memos and deposits, `arStatus`, `overdue` / `daysOverdue` (due date, else document date) and `workorderId` for a link only; `size` 1-200, default 100; an unknown customer gets 200 with no rows. `summary` totals every open invoice and equals the customer's aged-receivables total today (except for the CASH walk-in account, which aged receivables leaves out; its open sales are in the unpaid walk-in sales read, #2508) (permission `accounting:payment:apply`, event `ACCOUNTING_CUSTOMER_OPEN_INVOICES_VIEW`, #2502)
 - `GET /v1/accounting/unpaid-walk-in-sales` — unpaid walk-in sales (see [Unpaid walk-in sales](#unpaid-walk-in-sales-cap550-s11-2508)): the CASH house account's `balance`, its `openInvoices` oldest sale first, the day-end `needsAttention` item and `unappliedPayments` (permission `reporting:view:financial-statements`, event `ACCOUNTING_UNPAID_WALK_IN_SALES_VIEW`, CAP:550 S11, #2508)
+- `GET /v1/accounting/cash-position` — your cash (see [Cash position and outlook](#cash-position-and-outlook-2515)): `total` = in the bank + waiting to be deposited + kept in drawers, each component with its accounts, `needsAttention[]`, `unpaidWalkInSales` and `asOf` (permission `reporting:view:financial-statements`, plus `accounting:reconciliation:view` for the statement fields; event `ACCOUNTING_CASH_POSITION_GET`)
+- `GET /v1/accounting/cash-outlook?days=30` — the projected daily balance over `days` (1-90, default 30; any other value → 400 `VALIDATION_ERROR` on `days`) from approved bills and open invoices, with `lowPoint`, `billsLane` and the cushion check (permission `reporting:view:financial-statements`, event `ACCOUNTING_CASH_OUTLOOK_GET`)
 - `GET /v1/accounting/settlements/{settlementId}/lines` — list settlement lines, optional `unmatchedOnly` filter (permission `accounting:reconciliation:view`, event `ACCOUNTING_SETTLEMENT_LINES_LIST`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/match` — manually match an unmatched line to a receivable payment (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_MATCH`, story F1c)
 - `POST /v1/accounting/settlements/lines/{lineId}/write-off` — write off a small unmatched line with mandatory reason (permission `accounting:reconciliation:adjust`, event `ACCOUNTING_SETTLEMENT_LINE_WRITE_OFF`, story F1c)
@@ -464,6 +466,71 @@ The purchase-order copy `ext_order_purchase_order` (V36: `purchase_order_id`, `p
 `OrderEventsListener` from `purchaseorder.updated` facts on `order.events.v1` (`PurchaseOrderReplica`, version-guarded,
 equal versions apply). `paymentTermsId` arrives with schema 2 of the fact; a schema-1 fact stores null and a row fills
 with the order's next fact. No backfill.
+
+### Cash position and outlook (#2515)
+
+Two computed reads under `reporting:view:financial-statements`; nothing is stored or posted (no table, no migration).
+Every amount is in the functional currency (`LedgerCurrency`, ADR-0067) at its minor unit.
+
+**Cash position**: `GET /v1/accounting/cash-position`. `CashAccounts` is the one place the account roles are decided, by
+GL mapping key and account subtype, never by account number:
+
+| Component | Accounts | Notes |
+| --- | --- | --- |
+| `inTheBank` | the active reconcilable `BANK_CASH` accounts, one row each (code, name, books balance) | a bank account whose profile is in another currency is left out and counted in `excludedForeignCurrencyAccounts` |
+| `waitingToBeDeposited` | the accounts behind the mapping keys `UNDEPOSITED_FUNDS` (1090) and `CASH_CLEARING` (1095), shown and netted | |
+| `keptInDrawers` | the active `CASH_ON_HAND` accounts (1080) | |
+
+`total` = in the bank + waiting to be deposited + kept in drawers. Settlement suspense (`SETTLEMENT_SUSPENSE`, 2350) is
+never a component. A balance is debits minus credits over `POSTED` and `REVERSED` entries (the rule of
+`JournalEntryLineRepository.getAccountBalance`), summed for all the request's accounts in one query. A role with no
+account has no rows and a zero.
+
+With `accounting:reconciliation:view` each bank row adds `statementClosingBalance` and `statementEndDate` (the latest
+`COMMITTED` statement), `reconciledThrough`, `depositsInTransit` and `outstandingChecks` (open items: `count` and the
+signed `amount`, a check negative) and `unmatchedBankLineCount` (unmatched lines and unreviewed possible duplicates since
+the baseline, as the bank-accounts list counts them), through `BankPositionFacts` in the reconciliation read model.
+They sit beside the books balance and are never in `total`. Without that permission the fields are absent.
+
+`asOf` is the ledger read instant. `eventFedAsOf` is the newest replica update of a CASH-party invoice (the fact the
+unpaid walk-in balance rests on; null when there is none) and `lagging` is true when it is older than
+`pos.accounting.cash-position.fact-lag` (default `PT15M`).
+
+`needsAttention[]` holds `{code, reason, amount, count, since}`, in this order, each only when it applies:
+
+| Code | When | Figures |
+| --- | --- | --- |
+| `SETTLEMENT_SUSPENSE_NOT_ZERO` | 2350 is not zero | `amount` = the credit balance as a positive figure |
+| `UNDEPOSITED_CASH_AGED` | an `UNDEPOSITED` session is more than `UNDEPOSITED_CASH_AGED_DAYS` days past its business date (its close date in the accounting time zone) | `amount` = their bank drops, `count`, `since` = the oldest business date; the aged sessions that do not balance (drops differ from expected cash plus clearing net) are a second item with `reason` `UNBALANCED` |
+| `CLEARING_RESIDUAL_NOT_ZERO` | 1095 is not zero and no session is `UNDEPOSITED` | `amount` = the 1095 balance, debit positive |
+| `VENDOR_COD_UNAPPLIED_AGED` | a `CASH` AP payment, not voided or returned, in the functional currency, has `unappliedAmount` above 0 and a `paymentDate` more than `VENDOR_COD_UNAPPLIED_AGED_DAYS` days old | `amount` = the unapplied money, `count`, `since` = the oldest payment date |
+| `BELOW_SAFETY_CUSHION` | the 30-day outlook's low point is strictly below the cushion | `amount` = the low point, `since` = its day |
+
+`unpaidWalkInSales` is `{balance, invoiceCount, houseAccountKnown}` from `UnpaidWalkInSalesService.read()` (in process),
+present when the balance is not zero or the CASH account is not yet known. `CashAttentionSources` is where the
+undeposited-session query (`undepositedSessions()`, `agedUndepositedSessions(today, days)`) and the vendor-COD query
+(`agedUnappliedVendorCod(today, days)`) live, for the work-items read to reuse.
+
+**Cash outlook**: `GET /v1/accounting/cash-outlook?days=30` (`days` 1 to 90, else `400 VALIDATION_ERROR` on `days`).
+`projection` is always true. It starts from in the bank + waiting to be deposited, never drawers or the float, and counts
+committed items only, per day from today on the tenant accounting date (`points[]`, days + 1 of them, each with the
+day's `moneyIn`, `moneyOut` and the `estimatedMoneyOut` part of it):
+
+- money in: finalized or posted invoices with an open balance (`InvoiceBalanceCalculator`), the CASH walk-in account
+  excluded, on `dueDate`, else the finalization day plus the customer's terms (`NET<n>`, `Net 30`, `NET_30`; due on
+  receipt, no terms and unparsable terms fall due on the finalization day). An invoice already past due is not in the
+  line and is `overdueIn {amount, count}`; one due beyond the horizon is in neither.
+- money out: the open amount (total minus live allocations, as aged payables computes it) of each `APPROVED` bill on its
+  real due date, else its estimate (`EstimatedDueDateService`, flagged by `estimatedMoneyOut`, never stored); a bill
+  already past due counts on the first day. `OpenVendorBills` is the one rule for what is open and when it falls due.
+- `possibleOut`: open amounts of `AWAITING_APPROVAL`, `PENDING_RECEIPT_MATCH` and `MATCH_EXCEPTION` bills, not in the
+  line. `CURRENCY_HOLD`, `VOIDED`, `REJECTED`, `PAID` and foreign-currency bills are out entirely. A negative bill (credit
+  note) is `vendorCredits` (positive figure), not in the line.
+- `billsLane` over `APPROVED` open bills, not limited to the horizon: `overdue` (real due date before today),
+  `dueIn7Days` (today through today + 7), `dueLater`, and `dueDateEstimated` for bills with no real due date, each
+  `{amount, count}`, plus `total`. `estimatedDueDates {count, amount}` is the same estimated figure.
+- `lowPoint {date, balance}` is the lowest day, the first of equals; `safetyCushion` is null while unset and
+  `belowCushion` is true only when `lowPoint.balance` is strictly less than the cushion (a cushion of `0` is real).
 
 ### Bank reconciliation close readiness and policy (#2305)
 
