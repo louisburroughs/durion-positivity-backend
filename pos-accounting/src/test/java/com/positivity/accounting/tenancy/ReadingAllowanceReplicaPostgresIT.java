@@ -126,9 +126,9 @@ class ReadingAllowanceReplicaPostgresIT extends PostgresTenancyTestBase {
         asTenant(
                 PlatformTenant.ID, () -> listener.onTenantEvent("""
                         {"eventId":"%s","eventType":"tenant.reading-allowance.changed","aggregateVersion":%d,
-                         "payload":{"tenantId":"%s","tierCode":"%s",
+                         "aggregateId":"%s","payload":{"tenantId":"%s","tierCode":"%s",
                                     "monthlyAllowance":{"amount":%s,"currencyCode":"USD"},
                                     "effectiveAt":"2026-10-17T00:00:00Z"}}
-                        """.formatted(eventId, version, tenant, tier, amount)));
+                        """.formatted(eventId, version, tenant, tenant, tier, amount)));
     }
 }

@@ -22,8 +22,11 @@ import org.springframework.stereotype.Component;
  *
  * <p>Called by {@link TenantServiceImpl} after {@code saveAndFlush}, so the entity's {@code
  * @Version} already reflects the mutation and the envelope's {@code aggregateVersion} strictly
- * increases per committed change. When the Kafka rails are off (broker-less dev/test profiles)
- * the writer bean is absent and every method is a no-op.
+ * increases per committed change of the tenant row. One exception: {@link #readingAllowanceChanged}
+ * (#2619) is also emitted when a tier is repriced, which changes no tenant row, so two allowance
+ * facts may carry the same version; a replica of that fact applies an equal version (older only is
+ * ignored). When the Kafka rails are off (broker-less dev/test profiles) the writer bean is absent
+ * and every method is a no-op.
  */
 @Slf4j
 @Component

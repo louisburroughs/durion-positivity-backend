@@ -28,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReadingTierServiceImpl implements ReadingTierService {
 
+    private static final String CODE_CONSTRAINT = "uq_reading_tier_code";
+
     private final ReadingTierRepository tiers;
     private final TenantRepository tenants;
     private final TenantFactPublisher factPublisher;
@@ -57,7 +59,10 @@ public class ReadingTierServiceImpl implements ReadingTierService {
         try {
             saved = tiers.saveAndFlush(tier);
         } catch (DataIntegrityViolationException e) {
-            throw new ReadingTierExistsException("Reading tier already exists: " + request.getCode());
+            if (TenantServiceImpl.isConstraintViolation(e, CODE_CONSTRAINT)) {
+                throw new ReadingTierExistsException("Reading tier already exists: " + request.getCode());
+            }
+            throw e;
         }
         log.info(
                 "Created reading tier code={} allowance={} {}",
@@ -91,6 +96,10 @@ public class ReadingTierServiceImpl implements ReadingTierService {
             }
         }
         if (request.getActive() != null && request.getActive() != tier.isActive()) {
+            if (!request.getActive() && ReadingTierEntity.STANDARD.equals(tier.getCode())) {
+                throw new ReadingTierInUseException("Reading tier STANDARD is the default every new tenant starts on"
+                        + " and stays active; reprice it instead");
+            }
             if (!request.getActive()
                     && tenants.existsByReadingTierCodeAndStatusNot(tier.getCode(), TenantStatus.DECOMMISSIONED)) {
                 throw new ReadingTierInUseException("Reading tier " + tier.getCode()
@@ -119,10 +128,11 @@ public class ReadingTierServiceImpl implements ReadingTierService {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public @NonNull ReadingTierEntity requireAssignable(@Nullable String requestedCode) {
         String code = requestedCode == null || requestedCode.isBlank() ? ReadingTierEntity.STANDARD : requestedCode;
-        ReadingTierEntity tier = tiers.findByCode(code)
+        // Locked for the caller's transaction: the assignment and a reprice of the same tier serialise.
+        ReadingTierEntity tier = tiers.lockByCode(code)
                 .orElseThrow(() -> new ReadingTierNotAssignableException("Reading tier does not exist: " + code));
         if (!tier.isActive()) {
             throw new ReadingTierNotAssignableException("Reading tier is inactive: " + code);
@@ -131,7 +141,7 @@ public class ReadingTierServiceImpl implements ReadingTierService {
     }
 
     private ReadingTierEntity load(String code) {
-        return tiers.findByCode(code)
+        return tiers.lockByCode(code)
                 .orElseThrow(() -> new ResourceNotFoundException("Reading tier not found: " + code));
     }
 

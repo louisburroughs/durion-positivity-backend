@@ -81,6 +81,10 @@ public class PlatformTenantController {
             responseCode = "409",
             description = "Slug or display name already taken",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "READING_TIER_NOT_ASSIGNABLE: the reading tier does not exist or is inactive (#2619)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_CREATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_CREATE + "')")
     @SecurityRequirement(
@@ -172,6 +176,10 @@ public class PlatformTenantController {
     @ApiResponse(
             responseCode = "409",
             description = "Tenant is decommissioned, or the display name is taken",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "READING_TIER_NOT_ASSIGNABLE: the reading tier does not exist or is inactive (#2619)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "TENANT_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.TENANT_UPDATE + "')")

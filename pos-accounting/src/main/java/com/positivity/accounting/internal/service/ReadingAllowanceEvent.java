@@ -54,6 +54,12 @@ public record ReadingAllowanceEvent(
         }
         try {
             UUID tenantId = UUID.fromString(payload.path("tenantId").stringValue(""));
+            // The replica is keyed and bound by this id: it must be the envelope's key, or the fact is not
+            // attributable and is dropped as malformed (the fail-closed property the reader relies on).
+            String aggregateId = root.path("aggregateId").stringValue(null);
+            if (aggregateId == null || !tenantId.equals(UUID.fromString(aggregateId))) {
+                return Optional.empty();
+            }
             BigDecimal amount = amountOf(payload.path("monthlyAllowance").path("amount"));
             Instant effectiveAt = instantOf(payload.path("effectiveAt"));
             if (amount == null || amount.signum() < 0) {

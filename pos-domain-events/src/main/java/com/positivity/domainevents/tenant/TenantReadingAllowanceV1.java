@@ -9,7 +9,8 @@ import org.jspecify.annotations.NonNull;
  * {@code tenant.reading-allowance.changed} v1 (CAP:550 S45, #2619; AW63, AW68): the monthly document-reading allowance
  * a tenant is entitled to, from the reading tier a platform operator assigned it. Keyed by tenant id on {@code
  * tenant.events.v1}; the consumer (pos-accounting) keeps the latest allowance per tenant, guarded by the envelope's
- * {@code aggregateVersion}, and never pays for reading it cannot attribute to an allowance.
+ * {@code aggregateVersion}, and never pays for reading it cannot attribute to an allowance. The version is the tenant
+ * row's: a tier reprice changes no tenant row, so a consumer applies an equal version and ignores an older one only.
  *
  * <p>Emitted when the tenant is created (on {@code STANDARD}, 20.00 USD by default), when its tier is assigned, and
  * for every tenant on a tier whose amount changes. Every amount carries its currency (ADR-0067 PC-3). Not part of the

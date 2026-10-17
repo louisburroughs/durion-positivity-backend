@@ -274,11 +274,11 @@ class TenantEventsListenerTest {
     private static String allowance(String eventId, long version, String amount) {
         String idField = eventId == null ? "" : "\"eventId\":\"" + eventId + "\",";
         return """
-                {%s"eventType":"tenant.reading-allowance.changed","aggregateVersion":%d,
+                {%s"eventType":"tenant.reading-allowance.changed","aggregateVersion":%d,"aggregateId":"%s",
                  "payload":{"tenantId":"%s","tierCode":"STANDARD",
                             "monthlyAllowance":{"amount":%s,"currencyCode":"USD"},
                             "effectiveAt":"2026-10-17T00:00:00Z"}}
-                """.formatted(idField, version, NEW_TENANT, amount);
+                """.formatted(idField, version, NEW_TENANT, NEW_TENANT, amount);
     }
 
     private static String createdWithLocale(String eventId, String tenantId, String locale) {

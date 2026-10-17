@@ -121,16 +121,21 @@ public class PlatformReadingTierController {
             Required inputs: code (path); any of displayName, monthlyAllowance {amount, currencyCode} and active.
             Emits a READING_TIER_UPDATE event.
             Returns 200 with the tier, 400 VALIDATION_ERROR for a malformed field, 404 when the code is unknown \
-            and 409 READING_TIER_IN_USE when a tenant still on the tier blocks its deactivation.
+            and 409 READING_TIER_IN_USE when a tenant still on the tier blocks its deactivation, or when the tier is \
+            STANDARD (the default every new tenant starts on; it is repriced, never deactivated).
             """)
     @ApiResponse(responseCode = "200", description = "Tier changed")
+    @ApiResponse(
+            responseCode = "400",
+            description = "VALIDATION_ERROR: a malformed field",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "404",
             description = "NOT_FOUND: no such tier",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "READING_TIER_IN_USE: a non-decommissioned tenant is on the tier",
+            description = "READING_TIER_IN_USE: a non-decommissioned tenant is on the tier, or the tier is STANDARD",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "READING_TIER_UPDATE", apiVersion = "1")
     @PreAuthorize("hasAuthority('" + TenantPermissions.READING_TIER_MANAGE + "')")
