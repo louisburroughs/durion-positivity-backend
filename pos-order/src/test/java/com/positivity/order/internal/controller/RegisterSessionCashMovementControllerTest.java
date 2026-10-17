@@ -49,6 +49,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, BaseControllerSliceTest.SliceConfig.class})
 class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest {
 
+    private static final UUID VENDOR_ID = UUID.fromString("0199b1c2-0000-7000-8000-000000000042");
     private static final UUID SESSION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
     private static final UUID REQUEST_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c01");
     private static final String CASH_MOVEMENT = "order:session:cash_movement";
@@ -312,6 +313,7 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                                 List.of("categoryCode", "receiptReference", "note"))),
                         List.of(new CashMovementOptions.CategoryOption(
                                 "SHOP_SUPPLIES", "Shop supplies", "rags", List.of())),
+                        List.of(new CashMovementOptions.VendorOption(VENDOR_ID, "V-1001", "Acme Parts")),
                         null));
 
         mockMvc.perform(withGatewayAuth(
@@ -319,6 +321,8 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reasons[0].runningTotal").value(55.0))
                 .andExpect(jsonPath("$.categories[0].code").value("SHOP_SUPPLIES"))
+                .andExpect(jsonPath("$.vendors[0].vendorId").value(VENDOR_ID.toString()))
+                .andExpect(jsonPath("$.vendors[0].displayName").value("Acme Parts"))
                 .andExpect(jsonPath("$.currencyCode").value("USD"));
     }
 
