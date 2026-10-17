@@ -53,6 +53,10 @@ decisions:
     shape: gate
     permission: invoice:payment:process
     reason: no caller-supplied locationId; PaymentServiceImpl.initiatePayment gates on the invoice's location after the existence check and before anything is saved or sent to the gateway, and an idempotent replay is gated the same way. The two conditional elevations (invoice:payment:limit_override above 500.00, invoice:payment:flow_select for AUTH_ONLY) are checked in the body and scoped to the same location when the request needs them (#2393, BILL-DEC-008, BILL-DEC-010).
+  - operation: PaymentController.recordCashPayment
+    shape: gate
+    permission: invoice:payment:process
+    reason: no caller-supplied locationId; PaymentServiceImpl.recordCashPayment gates on the invoice's location after the existence check and before anything is saved or published, and an idempotent replay is gated the same way on the stored intent's invoice. The invoice:payment:limit_override elevation above 500.00 is checked in the body for the same location (#2662, ADR-0067 A8, BILL-DEC-010).
   - operation: PaymentController.capturePayment
     shape: gate
     permission: invoice:payment:capture

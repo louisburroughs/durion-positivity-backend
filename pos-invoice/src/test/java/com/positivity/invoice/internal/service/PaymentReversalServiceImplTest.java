@@ -14,6 +14,7 @@ import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.PaymentMethodType;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.enums.VoidReason;
@@ -158,6 +159,39 @@ class PaymentReversalServiceImplTest {
 
         assertThat(captor.getValue().getStatus()).isEqualTo(PaymentIntentStatus.VOIDED);
         verify(paymentGatewayPort).voidRemainder(any(GatewayVoidRequest.class));
+    }
+
+    /** ADR-0067 A8 (#2662): a cash tender never reached the processor, so the gateway paths refuse it. */
+    @Test
+    void voidPayment_cashTender_isNotReversibleThroughTheGateway() {
+        PaymentIntent pi = authorizedPaymentIntent();
+        pi.setMethodType(PaymentMethodType.CASH);
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.voidPayment(
+                        INVOICE_ID, PAYMENT_INTENT_ID, VoidReason.CUSTOMER_REQUEST, null))
+                .isInstanceOf(InvalidPaymentStateException.class)
+                .hasMessageContaining("cash tender");
+        verifyNoInteractions(paymentGatewayPort);
+    }
+
+    @Test
+    void refundPayment_cashTender_isNotReversibleThroughTheGateway() {
+        PaymentIntent pi = capturedPaymentIntent();
+        pi.setMethodType(PaymentMethodType.CASH);
+        when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
+
+        assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
+                        INVOICE_ID,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(100),
+                        RefundReason.CUSTOMER_RETURN,
+                        null,
+                        null))
+                .isInstanceOf(InvalidPaymentStateException.class)
+                .hasMessageContaining("cash tender");
+        verifyNoInteractions(paymentGatewayPort);
+        verify(refundRecordRepository, never()).save(any());
     }
 
     /**

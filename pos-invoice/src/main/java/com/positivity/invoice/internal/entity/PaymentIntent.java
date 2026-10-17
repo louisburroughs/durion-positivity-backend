@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.entity;
 
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.PaymentMethodType;
 import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
@@ -63,8 +64,26 @@ public class PaymentIntent extends TenantScopedEntity {
      * Tokenised card reference provided by the payment form.
      * No PAN, no CVV. (AC8 — no PAN storage)
      */
-    @Column(name = "payment_token", nullable = false, length = 255)
+    /** Null on a cash tender (ADR-0067 A8, #2662): no gateway, no token. */
+    @Column(name = "payment_token", length = 255)
     private String paymentToken;
+
+    /** CARD (every gateway capture) or CASH (a register tender recorded by pos-order, #2662). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "method_type", nullable = false, length = 20)
+    private PaymentMethodType methodType = PaymentMethodType.CARD;
+
+    /** Cash tender only: the cash actually taken after rounding to the currency's cash increment. */
+    @Column(name = "settled_amount", precision = 15, scale = 2)
+    private BigDecimal settledAmount;
+
+    /** Cash tender only: signed, settledAmount minus the amount applied (capturedAmount). */
+    @Column(name = "cash_rounding_amount", precision = 15, scale = 2)
+    private BigDecimal cashRoundingAmount;
+
+    /** Cash tender only: the increment applied; null when the currency has none. */
+    @Column(name = "cash_increment", precision = 15, scale = 2)
+    private BigDecimal cashIncrement;
 
     @Column(name = "authorized_amount", precision = 15, scale = 2)
     private BigDecimal authorizedAmount;

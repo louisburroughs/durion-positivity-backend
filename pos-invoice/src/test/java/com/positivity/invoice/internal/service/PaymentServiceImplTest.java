@@ -10,15 +10,19 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
+import com.positivity.invoice.internal.config.InvoiceCurrencySource;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.dto.PaymentIntentResponse;
+import com.positivity.invoice.internal.dto.RecordCashPaymentRequest;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.PaymentMethodType;
 import com.positivity.invoice.internal.enums.RefundStatus;
+import com.positivity.invoice.internal.exception.CashRoundingInvalidException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
@@ -56,6 +60,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -116,6 +121,9 @@ class PaymentServiceImplTest {
 
     @Mock
     private com.positivity.invoice.internal.config.PaymentEventPublisher paymentEventPublisher;
+
+    @Mock
+    private InvoiceCurrencySource currencySource;
 
     @InjectMocks
     private PaymentServiceImpl paymentService;
@@ -688,6 +696,261 @@ class PaymentServiceImplTest {
         invoice.setId(id);
         invoice.setPartyId(PARTY_ID);
         return invoice;
+    }
+
+    // -------------------------------------------------------------------------
+    // ADR-0067 A8 — register cash tender with the rounding triple (#2662)
+    // -------------------------------------------------------------------------
+
+    @Nested
+    @DisplayName("cash tender (ADR-0067 A8, #2662)")
+    class CashTender {
+
+        private static final String CASH_KEY = "cash-key-001";
+
+        private RecordCashPaymentRequest cadRequest() {
+            return cashRequest(
+                    new BigDecimal("149.98"),
+                    new BigDecimal("150.00"),
+                    new BigDecimal("0.02"),
+                    new BigDecimal("0.05"),
+                    "CAD");
+        }
+
+        private RecordCashPaymentRequest cashRequest(
+                BigDecimal amount, BigDecimal settled, BigDecimal rounding, BigDecimal increment, String currency) {
+            RecordCashPaymentRequest request = new RecordCashPaymentRequest();
+            request.setIdempotencyKey(CASH_KEY);
+            request.setAmount(amount);
+            request.setSettledAmount(settled);
+            request.setCashRoundingAmount(rounding);
+            request.setCashIncrement(increment);
+            request.setCurrencyCode(currency);
+            request.setSessionId(UUID.fromString("00000000-0000-0000-0000-0000000000c1"));
+            request.setTerminalId("REG-01");
+            return request;
+        }
+
+        @Test
+        void recordsCapturedIntentWithoutTheGatewayAndPublishesSettled() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(currencySource.currencyCode()).thenReturn("CAD");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            when(paymentIntentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            InitiatePaymentResponse response = paymentService.recordCashPayment(INVOICE_ID, cadRequest());
+
+            assertThat(response.getStatus()).isEqualTo(PaymentIntentStatus.CAPTURED);
+            assertThat(response.getMethodType()).isEqualTo(PaymentMethodType.CASH);
+            assertThat(response.getCapturedAmount()).isEqualByComparingTo("149.98");
+            assertThat(response.getSettledAmount()).isEqualByComparingTo("150.00");
+            assertThat(response.getCashRoundingAmount()).isEqualByComparingTo("0.02");
+            assertThat(response.getCashIncrement()).isEqualByComparingTo("0.05");
+            ArgumentCaptor<PaymentIntent> saved = ArgumentCaptor.forClass(PaymentIntent.class);
+            verify(paymentIntentRepository).saveAndFlush(saved.capture());
+            assertThat(saved.getValue().getPaymentToken()).isNull();
+            assertThat(saved.getValue().getMethodType()).isEqualTo(PaymentMethodType.CASH);
+            assertThat(saved.getValue().getAuthorizedAmount()).isEqualByComparingTo("149.98");
+            verify(paymentEventPublisher).publishPaymentSettled(saved.getValue());
+            verifyNoInteractions(gatewayPort);
+        }
+
+        @Test
+        void acceptsAnUnroundedCurrencyWhenTheTripleAgreesExactly() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(currencySource.currencyCode()).thenReturn("USD");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            when(paymentIntentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            var request = cashRequest(
+                    new BigDecimal("149.99"), new BigDecimal("149.99"), new BigDecimal("0.00"), null, "USD");
+
+            InitiatePaymentResponse response = paymentService.recordCashPayment(INVOICE_ID, request);
+
+            assertThat(response.getCashIncrement()).isNull();
+            assertThat(response.getCashRoundingAmount()).isEqualByComparingTo("0.00");
+        }
+
+        @Test
+        void replayWithTheSamePayloadReturnsTheExistingIntentWithoutSaving() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            PaymentIntent existing = new PaymentIntent();
+            existing.setId(PAYMENT_INTENT_ID);
+            existing.setInvoice(invoice(INVOICE_ID));
+            existing.setMethodType(PaymentMethodType.CASH);
+            existing.setStatus(PaymentIntentStatus.CAPTURED);
+            existing.setCapturedAmount(new BigDecimal("149.98"));
+            existing.setSettledAmount(new BigDecimal("150.00"));
+            existing.setCashRoundingAmount(new BigDecimal("0.02"));
+            existing.setCashIncrement(new BigDecimal("0.05"));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.of(existing));
+
+            InitiatePaymentResponse response = paymentService.recordCashPayment(INVOICE_ID, cadRequest());
+
+            assertThat(response.getPaymentIntentId()).isEqualTo(PAYMENT_INTENT_ID);
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(paymentEventPublisher, gatewayPort, currencySource);
+        }
+
+        @Test
+        void replayWithAnotherPayloadIsAnIdempotencyConflict() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            PaymentIntent existing = new PaymentIntent();
+            existing.setInvoice(invoice(INVOICE_ID));
+            existing.setMethodType(PaymentMethodType.CASH);
+            existing.setCapturedAmount(new BigDecimal("149.98"));
+            existing.setSettledAmount(new BigDecimal("150.00"));
+            existing.setCashRoundingAmount(new BigDecimal("0.02"));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.of(existing));
+            var request = cashRequest(
+                    new BigDecimal("149.98"),
+                    new BigDecimal("149.95"),
+                    new BigDecimal("-0.03"),
+                    new BigDecimal("0.05"),
+                    "CAD");
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, request))
+                    .isInstanceOf(PaymentIdempotencyConflictException.class);
+        }
+
+        @Test
+        void replayOfACardKeyIsAnIdempotencyConflict() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            PaymentIntent card = new PaymentIntent();
+            card.setInvoice(invoice(INVOICE_ID));
+            card.setMethodType(PaymentMethodType.CARD);
+            card.setCapturedAmount(new BigDecimal("149.98"));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.of(card));
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(PaymentIdempotencyConflictException.class);
+        }
+
+        @Test
+        void rejectsATenderInAnotherCurrencyThanTheInvoice() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(currencySource.currencyCode()).thenReturn("USD");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(CashRoundingInvalidException.class)
+                    .hasMessageContaining("CAD");
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(paymentEventPublisher);
+        }
+
+        @Test
+        void rejectsATripleThatDoesNotFitTheIncrement() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(currencySource.currencyCode()).thenReturn("CAD");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            var request = cashRequest(
+                    new BigDecimal("149.98"),
+                    new BigDecimal("149.95"),
+                    new BigDecimal("-0.03"),
+                    new BigDecimal("0.05"),
+                    "CAD");
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, request))
+                    .isInstanceOf(CashRoundingInvalidException.class);
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(paymentEventPublisher);
+        }
+
+        @Test
+        void refusesAnInvoiceWithoutACustomerBeforeRecordingAnything() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            Invoice partyLess = invoice(INVOICE_ID);
+            partyLess.setPartyId(null);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(partyLess));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(InvoicePartyRequiredException.class);
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(paymentEventPublisher, currencySource);
+        }
+
+        @Test
+        void replayWithAnotherIncrementIsAnIdempotencyConflict() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            PaymentIntent existing = new PaymentIntent();
+            existing.setInvoice(invoice(INVOICE_ID));
+            existing.setMethodType(PaymentMethodType.CASH);
+            existing.setCapturedAmount(new BigDecimal("149.98"));
+            existing.setSettledAmount(new BigDecimal("150.00"));
+            existing.setCashRoundingAmount(new BigDecimal("0.02"));
+            existing.setCashIncrement(new BigDecimal("0.10"));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.of(existing));
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(PaymentIdempotencyConflictException.class);
+        }
+
+        @Test
+        void aboveTheLimitNeedsTheOverrideAuthority() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            var request = cashRequest(
+                    new BigDecimal("600.00"), new BigDecimal("600.00"), new BigDecimal("0.00"), null, "USD");
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, request))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(paymentEventPublisher, currencySource);
+        }
+
+        @Test
+        void aboveTheLimitWithTheOverrideRecords() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
+            when(currencySource.currencyCode()).thenReturn("USD");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            when(paymentIntentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            var request = cashRequest(
+                    new BigDecimal("600.00"), new BigDecimal("600.00"), new BigDecimal("0.00"), null, "USD");
+
+            assertThat(paymentService.recordCashPayment(INVOICE_ID, request).getCapturedAmount())
+                    .isEqualByComparingTo("600.00");
+        }
+
+        @Test
+        void aConcurrentFirstTimeRequestWithTheSameKeyIsAConflictNotAFailure() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(currencySource.currencyCode()).thenReturn("CAD");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            when(paymentIntentRepository.saveAndFlush(any()))
+                    .thenThrow(new DataIntegrityViolationException("uq_payment_intent_idempotency_key"));
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(PaymentIdempotencyConflictException.class);
+            verifyNoInteractions(paymentEventPublisher);
+        }
+
+        @Test
+        void requiresTheProcessAuthority() {
+            withAuthorities(InvoicePermissions.VIEW);
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(AccessDeniedException.class);
+            verifyNoInteractions(paymentIntentRepository, invoiceRepository);
+        }
+
+        @Test
+        void unknownInvoiceIsNotFound() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.empty());
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(InvoiceNotFoundException.class);
+        }
     }
 
     // -------------------------------------------------------------------------

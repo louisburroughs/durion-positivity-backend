@@ -3,6 +3,7 @@ package com.positivity.invoice.internal.controller;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,8 +12,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
+import com.positivity.invoice.internal.dto.RecordCashPaymentRequest;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.PaymentMethodType;
+import com.positivity.invoice.internal.exception.CashRoundingInvalidException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
 import com.positivity.invoice.internal.exception.PaymentIdempotencyConflictException;
@@ -152,6 +156,72 @@ class PaymentControllerTest {
                         .content("""
                                 {"paymentFlow":"SALE_CAPTURE","amount":100.00,"idempotencyKey":"key-001","paymentToken":"tok_test"}
                                 """))
+                .andExpect(status().isConflict());
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /v1/invoices/{invoiceId}/payments/cash — record cash tender (#2662)
+    // -------------------------------------------------------------------------
+
+    private static final String CASH_BODY = """
+            {"idempotencyKey":"cash-001","amount":149.98,"settledAmount":150.00,
+             "cashRoundingAmount":0.02,"cashIncrement":0.05,"currencyCode":"CAD"}
+            """;
+
+    @Test
+    void recordCashPayment_returns201_withTheRoundingFields() throws Exception {
+        InitiatePaymentResponse response = new InitiatePaymentResponse();
+        response.setPaymentIntentId(PAYMENT_INTENT_ID);
+        response.setStatus(PaymentIntentStatus.CAPTURED);
+        response.setMethodType(PaymentMethodType.CASH);
+        response.setCapturedAmount(new BigDecimal("149.98"));
+        response.setSettledAmount(new BigDecimal("150.00"));
+        response.setCashRoundingAmount(new BigDecimal("0.02"));
+        response.setCashIncrement(new BigDecimal("0.05"));
+        when(paymentService.recordCashPayment(eq(INVOICE_ID), any(RecordCashPaymentRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments/cash")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CASH_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.methodType").value("CASH"))
+                .andExpect(jsonPath("$.settledAmount").value(150.00))
+                .andExpect(jsonPath("$.cashRoundingAmount").value(0.02))
+                .andExpect(jsonPath("$.cashIncrement").value(0.05));
+    }
+
+    @Test
+    void recordCashPayment_returns400_whenTheTripleIsMissing() throws Exception {
+        mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments/cash")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"idempotencyKey":"cash-001","amount":149.98,"currencyCode":"CAD"}
+                                """))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(paymentService);
+    }
+
+    @Test
+    void recordCashPayment_returns422_withCashRoundingInvalid() throws Exception {
+        when(paymentService.recordCashPayment(any(), any()))
+                .thenThrow(new CashRoundingInvalidException("settledAmount 149.95 is not amount 149.98 rounded"));
+
+        mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments/cash")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CASH_BODY))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.code").value("CASH_ROUNDING_INVALID"));
+    }
+
+    @Test
+    void recordCashPayment_returns409_whenIdempotencyConflict() throws Exception {
+        when(paymentService.recordCashPayment(any(), any()))
+                .thenThrow(new PaymentIdempotencyConflictException("idempotency conflict"));
+
+        mockMvc.perform(post("/v1/invoices/" + INVOICE_ID + "/payments/cash")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CASH_BODY))
                 .andExpect(status().isConflict());
     }
 

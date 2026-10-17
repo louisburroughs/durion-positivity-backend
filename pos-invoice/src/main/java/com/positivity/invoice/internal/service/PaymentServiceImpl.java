@@ -1,15 +1,19 @@
 package com.positivity.invoice.internal.service;
 
+import com.positivity.invoice.internal.config.InvoiceCurrencySource;
 import com.positivity.invoice.internal.config.PaymentEventPublisher;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.dto.PaymentIntentResponse;
+import com.positivity.invoice.internal.dto.RecordCashPaymentRequest;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.PaymentMethodType;
 import com.positivity.invoice.internal.enums.RefundStatus;
+import com.positivity.invoice.internal.exception.CashRoundingInvalidException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
 import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
@@ -35,6 +39,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,18 +63,21 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentIntentRepository paymentIntentRepository;
     private final RefundRecordRepository refundRecordRepository;
     private final PaymentEventPublisher paymentEventPublisher;
+    private final InvoiceCurrencySource currencySource;
 
     public PaymentServiceImpl(
             @NonNull PaymentGatewayPort gatewayPort,
             @NonNull InvoiceRepository invoiceRepository,
             @NonNull PaymentIntentRepository paymentIntentRepository,
             @NonNull RefundRecordRepository refundRecordRepository,
-            @NonNull PaymentEventPublisher paymentEventPublisher) {
+            @NonNull PaymentEventPublisher paymentEventPublisher,
+            @NonNull InvoiceCurrencySource currencySource) {
         this.gatewayPort = gatewayPort;
         this.invoiceRepository = invoiceRepository;
         this.paymentIntentRepository = paymentIntentRepository;
         this.refundRecordRepository = refundRecordRepository;
         this.paymentEventPublisher = paymentEventPublisher;
+        this.currencySource = currencySource;
     }
 
     @Override
@@ -105,6 +113,100 @@ public class PaymentServiceImpl implements PaymentService {
                     return toResponse(paymentIntent);
                 })
                 .orElseGet(() -> createAndProcessPaymentIntent(invoiceId, request));
+    }
+
+    @Override
+    @NonNull
+    public InitiatePaymentResponse recordCashPayment(
+            @NonNull UUID invoiceId, @NonNull RecordCashPaymentRequest request) {
+        requireAuthority(InvoicePermissions.PAYMENT_PROCESS);
+        return paymentIntentRepository
+                .findByIdempotencyKey(request.getIdempotencyKey())
+                .map(existing -> {
+                    validateCashReplayPayload(existing, invoiceId, request);
+                    requireLocationInReach(InvoicePermissions.PAYMENT_PROCESS, existing.getInvoice());
+                    return toResponse(existing);
+                })
+                .orElseGet(() -> recordCashTender(invoiceId, request));
+    }
+
+    private InitiatePaymentResponse recordCashTender(
+            @NonNull UUID invoiceId, @NonNull RecordCashPaymentRequest request) {
+        Invoice invoice =
+                invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
+        requireLocationInReach(InvoicePermissions.PAYMENT_PROCESS, invoice);
+        requireParty(invoice, "cash tender");
+        // BILL-DEC-010 applies to every tender, not only card: the limit is on the amount applied.
+        if (exceedsPaymentLimit(request.getAmount())
+                && !SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE)) {
+            throw new AccessDeniedException(MISSING_AUTHORITY + InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
+        }
+        // Interim per-module source of the functional currency (ADR-0067 R-2, #2644) until the tenant carries
+        // it (#2583); pos-invoice records and publishes every amount in it, so the drawer's cash must be in it.
+        String currency = currencySource.currencyCode();
+        if (!currency.equals(request.getCurrencyCode())) {
+            throw new CashRoundingInvalidException("currencyCode " + request.getCurrencyCode()
+                    + " is not the functional currency " + currency
+                    + " pos-invoice records in; cash is tendered in the drawer's functional currency");
+        }
+        CashRoundingCheck.verify(
+                request.getAmount(),
+                request.getSettledAmount(),
+                request.getCashRoundingAmount(),
+                request.getCashIncrement());
+
+        PaymentIntent intent = new PaymentIntent();
+        intent.setInvoice(invoice);
+        intent.setIdempotencyKey(request.getIdempotencyKey());
+        intent.setMethodType(PaymentMethodType.CASH);
+        intent.setPaymentFlow(PaymentFlow.SALE_CAPTURE);
+        intent.setPaymentToken(null);
+        intent.setStatus(PaymentIntentStatus.CAPTURED);
+        intent.setAuthorizedAmount(request.getAmount());
+        intent.setCapturedAmount(request.getAmount());
+        intent.setVoidedRemainderAmount(BigDecimal.ZERO);
+        intent.setSettledAmount(request.getSettledAmount());
+        intent.setCashRoundingAmount(request.getCashRoundingAmount());
+        intent.setCashIncrement(request.getCashIncrement());
+        // A cash tender has no processor: the register's idempotency key is the reference, so the settled fact's
+        // gatewayReference lets pos-order replay the tender by key once the fact has landed (ADR-0072: no secret).
+        intent.setGatewayProvider("register");
+        intent.setGatewayReference(request.getIdempotencyKey());
+        PaymentIntent saved;
+        try {
+            saved = paymentIntentRepository.saveAndFlush(intent);
+        } catch (DataIntegrityViolationException raced) {
+            // Two first-time requests with the same key: the loser hits UNIQUE(tenant_id, idempotency_key).
+            // 409 rather than 500; the register's retry replays the winner.
+            throw new PaymentIdempotencyConflictException(
+                    "Idempotency key is being recorded by a concurrent request; retry to replay it", raced);
+        }
+        paymentEventPublisher.publishPaymentSettled(saved);
+        log.info(
+                "Cash tender recorded: invoice={} intent={} amount={} settled={} rounding={} increment={} currency={}",
+                invoice.getInvoiceNumber(),
+                saved.getId(),
+                saved.getCapturedAmount(),
+                saved.getSettledAmount(),
+                saved.getCashRoundingAmount(),
+                saved.getCashIncrement(),
+                currency);
+        return toResponse(saved);
+    }
+
+    private static void validateCashReplayPayload(
+            @NonNull PaymentIntent existing, @NonNull UUID invoiceId, @NonNull RecordCashPaymentRequest request) {
+        boolean same = existing.getInvoice() != null
+                && invoiceId.equals(existing.getInvoice().getId())
+                && existing.getMethodType() == PaymentMethodType.CASH
+                && sameAmount(existing.getCapturedAmount(), request.getAmount())
+                && sameAmount(existing.getSettledAmount(), request.getSettledAmount())
+                && sameAmount(existing.getCashRoundingAmount(), request.getCashRoundingAmount())
+                && sameAmount(existing.getCashIncrement(), request.getCashIncrement());
+        if (!same) {
+            throw new PaymentIdempotencyConflictException(
+                    "Idempotency key was already used with a different payment request");
+        }
     }
 
     @Override
@@ -307,7 +409,12 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private static boolean exceedsPaymentLimit(@NonNull InitiatePaymentRequest request) {
+        // Kept literal: pos-mcp-server's InvoicingPaymentsGuideTest mirrors this line against the guide.
         return request.getAmount().compareTo(PAYMENT_LIMIT_THRESHOLD) > 0;
+    }
+
+    private static boolean exceedsPaymentLimit(@NonNull BigDecimal amount) {
+        return amount.compareTo(PAYMENT_LIMIT_THRESHOLD) > 0;
     }
 
     /** ADR-0061 §3 (#2226, #2215): gates a payment read on the invoice's location, mirroring
@@ -375,6 +482,10 @@ public class PaymentServiceImpl implements PaymentService {
         response.setGatewayReference(paymentIntent.getGatewayReference());
         response.setCreatedAt(paymentIntent.getCreatedAt());
         response.setUpdatedAt(paymentIntent.getUpdatedAt());
+        response.setMethodType(paymentIntent.getMethodType());
+        response.setSettledAmount(paymentIntent.getSettledAmount());
+        response.setCashRoundingAmount(paymentIntent.getCashRoundingAmount());
+        response.setCashIncrement(paymentIntent.getCashIncrement());
         return response;
     }
 
@@ -406,8 +517,11 @@ public class PaymentServiceImpl implements PaymentService {
         }
     }
 
-    private boolean sameAmount(BigDecimal left, BigDecimal right) {
-        return left != null && right != null && left.compareTo(right) == 0;
+    private static boolean sameAmount(@Nullable BigDecimal left, @Nullable BigDecimal right) {
+        if (left == null || right == null) {
+            return left == null && right == null;
+        }
+        return left.compareTo(right) == 0;
     }
 
     @NonNull
@@ -420,6 +534,10 @@ public class PaymentServiceImpl implements PaymentService {
         response.setVoidedRemainderAmount(paymentIntent.getVoidedRemainderAmount());
         response.setGatewayProvider(paymentIntent.getGatewayProvider());
         response.setGatewayResponse(paymentIntent.getGatewayResponse());
+        response.setMethodType(paymentIntent.getMethodType());
+        response.setSettledAmount(paymentIntent.getSettledAmount());
+        response.setCashRoundingAmount(paymentIntent.getCashRoundingAmount());
+        response.setCashIncrement(paymentIntent.getCashIncrement());
         return response;
     }
 

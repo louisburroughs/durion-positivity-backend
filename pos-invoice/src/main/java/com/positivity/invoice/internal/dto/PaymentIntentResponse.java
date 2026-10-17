@@ -5,6 +5,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.PaymentMethodType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
@@ -73,6 +74,30 @@ public class PaymentIntentResponse {
 
     @Schema(description = "Gateway provider identifier (e.g., stripe)", example = "stripe", requiredMode = NOT_REQUIRED)
     private String gatewayProvider;
+
+    @Schema(
+            description = "CARD (gateway capture) or CASH (register tender, ADR-0067 A8)",
+            example = "CARD",
+            requiredMode = NOT_REQUIRED)
+    private PaymentMethodType methodType;
+
+    @Schema(
+            description = "Cash tender only: the cash actually taken after rounding to the currency's cash increment",
+            example = "10.00",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal settledAmount;
+
+    @Schema(
+            description = "Cash tender only: signed rounding, settledAmount minus the amount applied",
+            example = "-0.02",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal cashRoundingAmount;
+
+    @Schema(
+            description = "Cash tender only: the increment applied; absent when the currency has none",
+            example = "0.05",
+            requiredMode = NOT_REQUIRED)
+    private BigDecimal cashIncrement;
 
     @Schema(
             description = "Opaque gateway transaction reference",

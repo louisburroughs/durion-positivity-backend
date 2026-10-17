@@ -8,4 +8,8 @@ public class PaymentIdempotencyConflictException extends RuntimeException {
     public PaymentIdempotencyConflictException(String message) {
         super(message);
     }
+
+    public PaymentIdempotencyConflictException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

@@ -42,6 +42,10 @@ Invoice and payment service for the Durion Positivity ETSMS platform. Creates in
 - `POST /v1/invoices/{invoiceId}/payments` — initiate payment (idempotent; `invoice:payment:process`,
   plus `invoice:payment:limit_override` when the amount exceeds 500.00 and
   `invoice:payment:flow_select` to choose `AUTH_ONLY`, #2393)
+- `POST /v1/invoices/{invoiceId}/payments/cash` — record a register cash tender as a CAPTURED intent
+  with the ADR-0067 A8 rounding triple (`settledAmount`, `cashRoundingAmount`, `cashIncrement`); no
+  gateway call, idempotent on `idempotencyKey`, which is also the intent's `gatewayReference` so the
+  settled fact names the register's key (`invoice:payment:process`, #2662)
 - `POST /v1/invoices/{invoiceId}/payments/{paymentId}/capture` — capture an authorized payment
   (`invoice:payment:capture`, #2393)
 - `GET /v1/invoices/{invoiceId}/payments` — list every payment intent raised against an invoice,
@@ -213,6 +217,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `INVOICE_TAX_JURISDICTION_NOT_CONFIGURED` | 422 | pos-tax has no rates for the invoice's destination (#2644) |
 | `CONFLICT` | 409 | General state conflict (e.g. already finalized) |
 | `INVALID_PAYMENT_STATE` | 409 | The payment intent is not in a state that allows the capture, void or refund |
+| `CASH_ROUNDING_INVALID` | 422 | A cash tender's `settledAmount`, `cashRoundingAmount` and `cashIncrement` do not agree (settled must be the amount rounded HALF_UP to the increment, the difference at most half an increment and equal to settled minus amount; exact agreement without an increment), or `currencyCode` is not the functional currency pos-invoice records in (`pos.invoice.functional-currency`, ADR-0067 R-2; #2662). |
 | `PAYMENT_IDEMPOTENCY_CONFLICT` | 409 | A payment idempotency key was reused with a different payload |
 | `REPRINT_LIMIT_EXCEEDED` | 409 | The receipt has already been reprinted the maximum number of times |
 | `PAYMENT_DECLINED` | 422 | Payment gateway declined the transaction |

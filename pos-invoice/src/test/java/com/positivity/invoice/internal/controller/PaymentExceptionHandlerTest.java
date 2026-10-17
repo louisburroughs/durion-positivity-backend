@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.positivity.invoice.internal.exception.CashRoundingInvalidException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoicePartyRequiredException;
 import com.positivity.invoice.internal.exception.PaymentDeclinedException;
@@ -74,7 +75,10 @@ class PaymentExceptionHandlerTest {
                             request -> handler.handleForbidden(new AccessDeniedException("denied"), request)),
                     Named.of("handleInvoicePartyRequired", (HandlerInvocation)
                             request -> handler.handleInvoicePartyRequired(
-                                    new InvoicePartyRequiredException("This invoice has no customer"), request)));
+                                    new InvoicePartyRequiredException("This invoice has no customer"), request)),
+                    Named.of("handleCashRoundingInvalid", (HandlerInvocation)
+                            request -> handler.handleCashRoundingInvalid(
+                                    new CashRoundingInvalidException("settledAmount is not a multiple"), request)));
         }
 
         @ParameterizedTest

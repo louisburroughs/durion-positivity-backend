@@ -6,6 +6,7 @@ import com.positivity.events.EmitEvent;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.dto.PaymentIntentResponse;
+import com.positivity.invoice.internal.dto.RecordCashPaymentRequest;
 import com.positivity.invoice.internal.security.InvoicePermissions;
 import com.positivity.invoice.internal.service.PaymentService;
 import com.positivity.shared.error.ApiError;
@@ -128,6 +129,99 @@ public class PaymentController {
                     @NonNull
                     InitiatePaymentRequest request) {
         return paymentService.initiatePayment(invoiceId, request);
+    }
+
+    /**
+     * Records a register cash tender (ADR-0067 A8, #2662): no gateway, CAPTURED on arrival, with the rounding triple
+     * pos-order computed.
+     */
+    @PostMapping("/{invoiceId}/payments/cash")
+    @PreAuthorize("hasAuthority('" + InvoicePermissions.PAYMENT_PROCESS + "')")
+    @ResponseStatus(HttpStatus.CREATED)
+    @EmitEvent(id = "INVOICE_PAYMENT_CASH_RECORD", apiVersion = "1")
+    @Operation(operationId = "recordCashPayment", summary = "Record Cash Payment on Invoice", description = """
+                    Records a cash tender taken at the register against an invoice as a CAPTURED payment intent \
+                    without calling the payment gateway, keeping the invoice amount and the cash that changed hands \
+                    apart (settledAmount, cashRoundingAmount, cashIncrement).
+                    Use this tool when the register has already rounded the cash to the currency's smallest coin; \
+                    do not use initiatePayment, which takes card tender through the gateway, and do not round here, \
+                    because pos-order owns the cash increment and the HALF_UP rounding at the register.
+                    Preconditions: the invoice must exist and must name a customer (partyId); currencyCode must be \
+                    the functional currency pos-invoice records in; the caller needs the invoice:payment:process \
+                    authority scoped to the invoice's location (ADR-0061) and invoice:payment:limit_override when \
+                    the amount exceeds 500.00.
+                    Required inputs: idempotencyKey, amount (the invoice amount applied), settledAmount (the cash \
+                    taken), cashRoundingAmount (settledAmount minus amount, 0 when no increment applies), currencyCode \
+                    and, when the currency rounds, cashIncrement; sessionId, terminalId and cashierId are optional \
+                    receipt context.
+                    The rounding triple is checked, not trusted: settledAmount must be amount rounded HALF_UP to a \
+                    multiple of cashIncrement, the difference may not exceed half an increment, and without a \
+                    cashIncrement the three must agree exactly.
+                    Emits an INVOICE_PAYMENT_CASH_RECORD event and publishes payment.payment.settled with the three \
+                    additive fields so pos-accounting can post the rounding.
+                    Returns 201 with the intent, 403 when the authority is missing or the location is outside the \
+                    caller's reach, 404 when the invoice does not exist, 409 when the idempotencyKey was already used \
+                    with a different payload or is being recorded concurrently, 422 with INVOICE_PARTY_REQUIRED \
+                    when the invoice has no customer and 422 with CASH_ROUNDING_INVALID when the triple or the \
+                    currency does not hold together.
+                    """)
+    @ApiResponse(responseCode = "201", description = "Cash payment recorded")
+    @ApiResponse(
+            responseCode = "400",
+            description = "Invalid or missing required fields",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description =
+                    "FORBIDDEN when the caller lacks invoice:payment:process; LOCATION_SCOPE_DENIED when the invoice's location is outside the caller's reach (ADR-0061)",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "INVOICE_NOT_FOUND when the invoice does not exist",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description =
+                    "PAYMENT_IDEMPOTENCY_CONFLICT when the idempotencyKey was already used with a different payload",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    @ApiResponse(
+            responseCode = "422",
+            description = "CASH_ROUNDING_INVALID when settledAmount, cashRoundingAmount and cashIncrement do not agree"
+                    + " or currencyCode is not the functional currency; INVOICE_PARTY_REQUIRED when the invoice has no"
+                    + " customer",
+            content = @Content(schema = @Schema(implementation = ApiError.class)))
+    public InitiatePaymentResponse recordCashPayment(
+            @PathVariable @NonNull UUID invoiceId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description =
+                                    "Cash tender details: the invoice amount applied, the rounded cash taken, the signed"
+                                            + " rounding difference, the increment the register rounded to and the"
+                                            + " register context.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = {
+                                                @ExampleObject(name = "CAD tender rounded to the nickel", value = """
+                                                                        {"idempotencyKey":"cash-018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a51",
+                                                                         "amount":149.98,"settledAmount":150.00,
+                                                                         "cashRoundingAmount":0.02,"cashIncrement":0.05,
+                                                                         "currencyCode":"CAD",
+                                                                         "sessionId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a60",
+                                                                         "terminalId":"REG-01",
+                                                                         "cashierId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61"}
+                                                                        """),
+                                                @ExampleObject(name = "USD tender, no rounding", value = """
+                                                                        {"idempotencyKey":"cash-018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a52",
+                                                                         "amount":149.99,"settledAmount":149.99,
+                                                                         "cashRoundingAmount":0.00,"currencyCode":"USD"}
+                                                                        """)
+                                            }))
+                    @Valid
+                    @RequestBody
+                    @NonNull
+                    RecordCashPaymentRequest request) {
+        return paymentService.recordCashPayment(invoiceId, request);
     }
 
     /**
