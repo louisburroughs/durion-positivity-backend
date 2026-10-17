@@ -182,7 +182,12 @@ class PaymentReversalServiceImplTest {
         when(paymentIntentRepository.findById(PAYMENT_INTENT_ID)).thenReturn(Optional.of(pi));
 
         assertThatThrownBy(() -> paymentReversalServiceImpl.refundPayment(
-                        INVOICE_ID, PAYMENT_INTENT_ID, BigDecimal.valueOf(100), RefundReason.CUSTOMER_RETURN, null, null))
+                        INVOICE_ID,
+                        PAYMENT_INTENT_ID,
+                        BigDecimal.valueOf(100),
+                        RefundReason.CUSTOMER_RETURN,
+                        null,
+                        null))
                 .isInstanceOf(InvalidPaymentStateException.class)
                 .hasMessageContaining("cash tender");
         verifyNoInteractions(paymentGatewayPort);
