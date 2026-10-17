@@ -138,15 +138,28 @@ class EstimatedDueDateServiceTest {
     })
     @DisplayName("accepted terms forms")
     void parses(String terms, int days) {
-        assertThat(EstimatedDueDateService.parseDays(terms)).isEqualTo(OptionalInt.of(days));
+        assertThat(CashAndPayablesSettings.termsDays(terms)).isEqualTo(OptionalInt.of(days));
     }
 
     @ParameterizedTest
     @ValueSource(
-            strings = {"", " ", "NET0", "NET121", "NET", "NET-5", "NET_30", "NET  30", "2/10 NET 30", "soon", "30"})
+            strings = {
+                "",
+                " ",
+                "NET0",
+                "NET121",
+                "NET",
+                "NET-5",
+                "NET_30",
+                "NET  30",
+                "2/10 NET 30",
+                "soon",
+                "30",
+                "NET030"
+            })
     @DisplayName("anything else does not parse")
     void doesNotParse(String terms) {
-        assertThat(EstimatedDueDateService.parseDays(terms)).isEmpty();
+        assertThat(CashAndPayablesSettings.termsDays(terms)).isEmpty();
     }
 
     @Test

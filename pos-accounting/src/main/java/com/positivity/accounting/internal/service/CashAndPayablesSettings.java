@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -84,7 +85,9 @@ public class CashAndPayablesSettings {
     public static final int MIN_DELIVERIES_NOT_BILLED_DAYS = 7;
     public static final int MAX_DELIVERIES_NOT_BILLED_DAYS = 120;
 
-    private static final Pattern NET_TERMS = Pattern.compile("NET([1-9][0-9]{0,2})");
+    private static final Pattern NET_TERMS = Pattern.compile("net ?([1-9][0-9]{0,2})", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DUE_ON_RECEIPT_TERMS =
+            Pattern.compile("due[_ ]on[_ ]receipt", Pattern.CASE_INSENSITIVE);
 
     private final AccountingConfigurationRepository configuration;
 
@@ -195,16 +198,39 @@ public class CashAndPayablesSettings {
         return DEFAULT_AP_TERMS;
     }
 
-    /** Whether {@code value} is in the vocabulary: {@code DUE_ON_RECEIPT}, or {@code NET1} to {@code NET120}. */
-    public static boolean isTerms(@Nullable String value) {
+    /**
+     * The one terms grammar: the days a terms text stands for. Trimmed, case-insensitive; {@code NET<n>} with an
+     * optional single space (n from 1 to {@value #MAX_NET_DAYS}, no leading zeros) is n days; {@code DUE_ON_RECEIPT}
+     * and {@code due on receipt} are 0; anything else, or null, is empty.
+     */
+    public static @NonNull OptionalInt termsDays(@Nullable String value) {
         if (value == null) {
+            return OptionalInt.empty();
+        }
+        String text = value.trim();
+        if (DUE_ON_RECEIPT_TERMS.matcher(text).matches()) {
+            return OptionalInt.of(0);
+        }
+        Matcher net = NET_TERMS.matcher(text);
+        if (net.matches()) {
+            int days = Integer.parseInt(net.group(1));
+            if (days <= MAX_NET_DAYS) {
+                return OptionalInt.of(days);
+            }
+        }
+        return OptionalInt.empty();
+    }
+
+    /**
+     * Whether {@code value} is a stored setting in canonical form: {@code DUE_ON_RECEIPT}, or {@code NET1} to {@code
+     * NET120}, upper case, no spaces. It parses through {@link #termsDays}, so the two cannot drift.
+     */
+    public static boolean isTerms(@Nullable String value) {
+        OptionalInt days = termsDays(value);
+        if (days.isEmpty()) {
             return false;
         }
-        if (DUE_ON_RECEIPT.equals(value)) {
-            return true;
-        }
-        Matcher net = NET_TERMS.matcher(value);
-        return net.matches() && Integer.parseInt(net.group(1)) <= MAX_NET_DAYS;
+        return DUE_ON_RECEIPT.equals(value) || ("NET" + days.getAsInt()).equals(value);
     }
 
     static @NonNull Optional<BigDecimal> parseCushion(@Nullable String value) {

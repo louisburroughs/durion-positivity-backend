@@ -320,4 +320,38 @@ class CashSafetyCushionAndAgedThresholdsTest {
         assertThatThrownBy(() -> service.setAgedThresholds(thresholds(6, 20, 40, id)))
                 .isInstanceOf(IdempotencyConflictException.class);
     }
+
+    @Test
+    @DisplayName("a stored out-of-range threshold is rewritten when the default is requested; the audit says old=45")
+    void storedOutOfRangeValueIsRewritten() {
+        AccountingConfiguration bad = new AccountingConfiguration();
+        bad.setConfigId(UUID.randomUUID());
+        bad.setConfigKey("DELIVERIES_NOT_BILLED_DAYS");
+        bad.setConfigValue("45000");
+        rows.put(bad.getConfigKey(), bad);
+        // reads as the default 30, so the tolerant read would call a request for 30 "unchanged"
+        assertThat(service.getAgedThresholds().getDeliveriesNotBilledDays()).isEqualTo(30);
+
+        service.setAgedThresholds(thresholds(3, 14, 30, UUID.randomUUID()));
+
+        assertThat(rows.get("DELIVERIES_NOT_BILLED_DAYS").getConfigValue()).isEqualTo("30");
+        AccountingAuditLog set = audits("AGED_THRESHOLDS_SET").getFirst();
+        assertThat(set.getOldValue()).isEqualTo("DELIVERIES_NOT_BILLED_DAYS=45000");
+        assertThat(set.getNewValue()).startsWith("DELIVERIES_NOT_BILLED_DAYS=30;");
+    }
+
+    @Test
+    @DisplayName("a stored negative cushion (reads as unset) is cleared and audited with its raw old value")
+    void storedNegativeCushionIsCleared() {
+        AccountingConfiguration bad = new AccountingConfiguration();
+        bad.setConfigId(UUID.randomUUID());
+        bad.setConfigKey(CUSHION);
+        bad.setConfigValue("-5");
+        rows.put(CUSHION, bad);
+
+        service.setCashSafetyCushion(cushion(null, "USD", "Clearing a bad stored value", UUID.randomUUID()));
+
+        assertThat(rows).doesNotContainKey(CUSHION);
+        assertThat(audits("CASH_SAFETY_CUSHION_SET").getFirst().getOldValue()).isEqualTo("CASH_SAFETY_CUSHION=-5");
+    }
 }

@@ -421,9 +421,9 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
         AccountingConfiguration row = configurationRepository
                 .findWithLockByConfigKey(CashAndPayablesSettings.CASH_SAFETY_CUSHION)
                 .orElse(null);
-        String oldValue = CashAndPayablesSettings.parseCushion(row != null ? row.getConfigValue() : null)
-                .map(this::scaledAmount)
-                .orElse(null);
+        // The locked raw row decides "unchanged" and is the audited old value: a stored value the tolerant read
+        // treats as unset (negative, unparsable) is still a stored value and must be rewritten or cleared.
+        String oldValue = row != null ? row.getConfigValue() : null;
         if (!Objects.equals(oldValue, newValue)) {
             writeSetting(
                     row,
@@ -486,20 +486,24 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
             return getAgedThresholds();
         }
         String actor = currentActor();
-        CashAndPayablesSettings.Settings current = cashAndPayablesSettings.settings();
-        Map<String, Integer> effective = Map.of(
-                CashAndPayablesSettings.UNDEPOSITED_CASH_AGED_DAYS, current.undepositedCashAgedDays(),
-                CashAndPayablesSettings.VENDOR_COD_UNAPPLIED_AGED_DAYS, current.vendorCodUnappliedAgedDays(),
-                CashAndPayablesSettings.DELIVERIES_NOT_BILLED_DAYS, current.deliveriesNotBilledDays());
+        Map<String, Integer> defaults = Map.of(
+                CashAndPayablesSettings.UNDEPOSITED_CASH_AGED_DAYS,
+                CashAndPayablesSettings.DEFAULT_UNDEPOSITED_CASH_AGED_DAYS,
+                CashAndPayablesSettings.VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                CashAndPayablesSettings.DEFAULT_VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                CashAndPayablesSettings.DELIVERIES_NOT_BILLED_DAYS,
+                CashAndPayablesSettings.DEFAULT_DELIVERIES_NOT_BILLED_DAYS);
         int changed = 0;
         for (Map.Entry<String, Integer> setting : requested.entrySet()) {
-            Integer oldDays = effective.get(setting.getKey());
-            if (oldDays.equals(setting.getValue())) {
-                continue;
-            }
+            // Locked raw row, not the tolerant read: a stored out-of-range value is not the default it reads as.
             AccountingConfiguration row = configurationRepository
                     .findWithLockByConfigKey(setting.getKey())
                     .orElse(null);
+            String newText = Integer.toString(setting.getValue());
+            String oldText = row != null ? row.getConfigValue() : Integer.toString(defaults.get(setting.getKey()));
+            if (oldText.equals(newText)) {
+                continue;
+            }
             writeSetting(
                     row,
                     setting.getKey(),
@@ -507,7 +511,7 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
                     AUDIT_OPERATION_AGED_THRESHOLDS_SET,
                     justification,
                     actor,
-                    Integer.toString(oldDays),
+                    oldText,
                     requestId);
             changed++;
         }

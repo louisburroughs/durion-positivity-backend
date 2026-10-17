@@ -118,6 +118,7 @@ public class AccountingConfigurationController {
             name = "bearerAuth",
             scopes = {"accounting:period:hard_lock"})
     @PreAuthorize("hasAuthority('" + AccountingPermissions.PERIOD_HARD_LOCK + "')")
+    @EmitEvent(id = "ACCOUNTING_CONFIGURATION_CASH_SAFETY_CUSHION_VIEW", apiVersion = "1")
     @Operation(
             operationId = "getCashSafetyCushion",
             summary = "Get Cash Safety Cushion",
@@ -129,7 +130,7 @@ public class AccountingConfigurationController {
                     instead to change or clear it, and do not use it to read cash balances.
                     Preconditions: the caller holds accounting:period:hard_lock.
                     Required inputs: none; there are no parameters and no request body.
-                    Nothing is changed and no event is emitted.
+                    Emits an ACCOUNTING_CONFIGURATION_CASH_SAFETY_CUSHION_VIEW audit event; nothing is changed.
                     Returns 200 with the amount (null when unset) and the functional currency code.
                     """,
             tags = {"Accounting Configuration"})
@@ -220,6 +221,7 @@ public class AccountingConfigurationController {
             name = "bearerAuth",
             scopes = {"accounting:period:hard_lock"})
     @PreAuthorize("hasAuthority('" + AccountingPermissions.PERIOD_HARD_LOCK + "')")
+    @EmitEvent(id = "ACCOUNTING_CONFIGURATION_AGED_THRESHOLDS_VIEW", apiVersion = "1")
     @Operation(
             operationId = "getAgedThresholds",
             summary = "Get Aged Thresholds",
@@ -232,7 +234,7 @@ public class AccountingConfigurationController {
                     instead to change them, and do not use it to list the aged items themselves.
                     Preconditions: the caller holds accounting:period:hard_lock.
                     Required inputs: none; there are no parameters and no request body.
-                    Nothing is changed and no event is emitted.
+                    Emits an ACCOUNTING_CONFIGURATION_AGED_THRESHOLDS_VIEW audit event; nothing is changed.
                     Returns 200 with the three effective values; a value never written reads as its default.
                     """,
             tags = {"Accounting Configuration"})
