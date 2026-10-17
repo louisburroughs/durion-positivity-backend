@@ -86,6 +86,7 @@ public final class JournalEntryMapper {
 
     private static JournalEntryResponse.JournalEntryLineResponse toLineResponse(@NonNull JournalEntryLine line) {
         JournalEntryResponse.JournalEntryLineResponse response = new JournalEntryResponse.JournalEntryLineResponse();
+        response.setLineId(line.getLineId());
         response.setLineNumber(line.getLineNumber());
         response.setGlAccountId(line.getGlAccountId());
         // The line's denormalised columns are stamped when the line is built, so they answer

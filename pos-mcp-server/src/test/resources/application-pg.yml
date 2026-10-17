@@ -13,6 +13,10 @@ spring:
     # until a model is invoked, which these suites never do.
     exclude: org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration
   datasource:
+    hikari:
+      data-source-properties:
+        # ADR-0072 (#2650): no pgjdbc "Failing row contains" detail in driver messages; guarded by PgjdbcServerErrorDetailTest.
+        logServerErrorDetail: false
     # The test profile names the H2 driver; the container URL needs the Postgres one.
     driver-class-name: org.postgresql.Driver
   jpa:

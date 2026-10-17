@@ -113,6 +113,24 @@ class PurchaseOrderExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("#2713: a vendor without a purchasing channel is 422 SUPPLIER_REF_MISSING with the vendor as"
+            + " referenceId and both actions")
+    void noPurchasingChannel() {
+        UUID vendorId = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b99");
+        var response = sut.handleNotTransmittable(
+                PurchaseOrderNotTransmittableException.noPurchasingChannel(vendorId, "V-000123", "Acme Parts"),
+                request);
+
+        assertEnvelope(response, HttpStatus.UNPROCESSABLE_ENTITY, "SUPPLIER_REF_MISSING");
+        ApiError body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.referenceId()).isEqualTo(vendorId.toString());
+        assertThat(body.nextAction()).contains("administrator");
+        assertThat(body.supportAction()).contains("pos-supplier");
+        assertThat(body.message()).contains("V-000123").contains("Acme Parts");
+    }
+
+    @Test
     @DisplayName("maps a lifecycle refusal to 409 PURCHASE_ORDER_INVALID_STATE")
     void invalidState() {
         assertEnvelope(

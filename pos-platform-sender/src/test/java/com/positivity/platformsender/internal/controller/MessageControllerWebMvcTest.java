@@ -17,7 +17,6 @@ import com.positivity.platformsender.internal.exception.SenderUnavailableExcepti
 import com.positivity.platformsender.internal.security.SenderSecretFilter;
 import com.positivity.platformsender.internal.service.MessageSendService;
 import com.positivity.platformsender.internal.service.MessageSendService.SendResult;
-import com.positivity.security.common.GatewayAuthoritiesFilter;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -25,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -57,15 +55,6 @@ class MessageControllerWebMvcTest {
         @Bean
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-10-03T12:00:00Z"), ZoneOffset.UTC);
-        }
-
-        /** Keep GatewayAuthoritiesFilter inside its chain, as pos-tenant's internal-endpoint test does. */
-        @Bean
-        FilterRegistrationBean<GatewayAuthoritiesFilter> gatewayAuthoritiesFilterRegistration(
-                GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration = new FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
         }
     }
 

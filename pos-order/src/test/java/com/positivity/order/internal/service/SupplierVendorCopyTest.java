@@ -3,6 +3,7 @@ package com.positivity.order.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -164,6 +165,23 @@ class SupplierVendorCopyTest {
                         || (event.getThrowableProxy() != null
                                 && String.valueOf(event.getThrowableProxy().getMessage())
                                         .contains(value)));
+    }
+
+    @Test
+    @DisplayName("#2713: the vendor's purchasing channel is copied when the fact carries it, null when it does not")
+    void purchasingChannelIsCopied() {
+        String withChannel = v2Fact("018f0a1b-0000-7000-8000-000000000011", 5L, "ACTIVE")
+                .replace(
+                        "\"occurredAt\":\"2026-10-07T09:00:00Z\"}}",
+                        "\"occurredAt\":\"2026-10-07T09:00:00Z\",\"purchaseOrderSupplierRef\":\"edi-main\"}}");
+        listener.onSupplierEvent(withChannel);
+        assertThat(saved().getPurchaseOrderSupplierRef()).isEqualTo("edi-main");
+
+        clearInvocations(vendorRepository);
+        listener.onSupplierEvent(v2Fact("018f0a1b-0000-7000-8000-000000000012", 6L, "ACTIVE"));
+        assertThat(saved().getPurchaseOrderSupplierRef())
+                .as("an older producer, or no channel: null")
+                .isNull();
     }
 
     @Test

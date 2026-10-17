@@ -89,6 +89,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional
 public class EventIngestionServiceImpl implements EventIngestionService {
+
+    /** The REST submission content-hash dedup window (#2207), served by the idempotency contract as "24h". */
+    static final java.time.Duration REST_DEDUP_WINDOW = java.time.Duration.ofHours(24);
     /** Triggering user recorded for an unaudited retry (no user is supplied on that path). */
     static final String RETRY_TRIGGER = "ACCOUNTING_EVENT_RETRY";
 
@@ -188,7 +191,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
 
         // Idempotency check — reject duplicate events based on content hash
         String contentHash = computeEventHash(mutableEvent);
-        if (idempotencyService.isKeyProcessed(contentHash)) {
+        if (idempotencyService.isKeyActive(contentHash)) {
             throw new DuplicateEventException(
                     "Duplicate event detected for org " + organizationId + " from " + sourceSystem);
         }
@@ -222,9 +225,10 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         // failure (both of which throw earlier) never reaches here and never consumes a number.
         assignEventReference(accountingEvent);
 
-        // Register idempotency key for 24-hour deduplication window with the persisted
-        // event ID
-        idempotencyService.registerKey(contentHash, accountingEvent.getEventId());
+        // Register the content hash for the 24-hour deduplication window (#2207) with the persisted event id. The
+        // window is deliberate for REST submissions: an identical submission after it is a new event, unlike a
+        // Kafka posting key, which never expires (#2595).
+        idempotencyService.registerKey(contentHash, accountingEvent.getEventId(), REST_DEDUP_WINDOW);
 
         AccountingEventResponse response = AccountingEventMapper.toEventResponse(accountingEvent);
 

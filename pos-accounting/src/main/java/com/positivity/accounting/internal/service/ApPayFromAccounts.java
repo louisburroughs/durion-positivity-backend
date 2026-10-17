@@ -66,13 +66,24 @@ public class ApPayFromAccounts {
         return eligible(date, fundingCutoff(date));
     }
 
-    /** Whether a payment executed now on {@code date} may come from {@code glAccountId}. */
+    /**
+     * Whether a payment executed now on {@code date} may come from {@code glAccountId}. An eligible account is then
+     * re-read under its row lock, held for the rest of the payment's transaction (#2645): deactivation takes the same
+     * lock before it counts the account's unposted payments, so neither can slip past the other.
+     */
     public boolean isEligible(@NonNull UUID glAccountId, @NonNull LocalDate date) {
         LocalDateTime cutoff = fundingCutoff(date);
-        return glAccounts
+        boolean eligible = glAccounts
                 .findById(glAccountId)
                 .filter(account -> isEligible(account, date, cutoff))
                 .isPresent();
+        if (!eligible) {
+            return false;
+        }
+        return glAccounts
+                .lockById(glAccountId)
+                .map(locked -> isEligible(locked, date, cutoff))
+                .orElse(true);
     }
 
     /** The one account an omitted {@code bankAccountId} resolves to on {@code date}, or empty with none or several. */

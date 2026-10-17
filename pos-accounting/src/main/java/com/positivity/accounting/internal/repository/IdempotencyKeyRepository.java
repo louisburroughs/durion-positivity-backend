@@ -1,16 +1,13 @@
 package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.IdempotencyKey;
-import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 /**
- * Repository for IdempotencyKey entities.
+ * Repository for IdempotencyKey entities. Keys are never deleted (#2595): a posting key is the durable guard
+ * against a fact redelivered under a fresh envelope id.
  */
 public interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKey, UUID> {
 
@@ -18,11 +15,4 @@ public interface IdempotencyKeyRepository extends JpaRepository<IdempotencyKey, 
      * Find an idempotency key by its value.
      */
     Optional<IdempotencyKey> findByKeyValue(String keyValue);
-
-    /**
-     * Delete expired idempotency keys.
-     */
-    @Modifying
-    @Query("DELETE FROM IdempotencyKey i WHERE i.expiresAt < :now")
-    int deleteExpiredKeys(@Param("now") Instant now);
 }

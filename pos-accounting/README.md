@@ -320,7 +320,8 @@ Posted entries carry a sequential `entryNumber` in the format `JE-{YYYYMM}-{seq}
 - Errors: `JE_ALREADY_REVERSED` (409, includes double-reversal races), `JE_NOT_POSTED` (409),
   `PERIOD_CLOSED` / `PERIOD_HARD_LOCKED` (422, see the period gate below)
 - Register float entries (#2571, AW32): a relocation entry is never reversed (409
-  `FLOAT_RELOCATION_NOT_REVERSIBLE`); a go-live or Change float entry of a register that has moved may
+  `FLOAT_RELOCATION_NOT_REVERSIBLE`), nor is the reversal of a go-live or Change float entry (409
+  `FLOAT_REVERSAL_NOT_REVERSIBLE`, #2607: set the float again instead); a go-live or Change float entry of a register that has moved may
   not be reversed before its latest move (422 `FLOAT_REVERSAL_BEFORE_RELOCATION`), and when its 1080
   line sits at a location the register has left, the reversal also posts, on its own date, the
   reclass that brings the reversed amount to the register's current location (422
@@ -887,7 +888,8 @@ logged, never returned). It posts Dr 1080 {register, to} / Cr 1080 {register, fr
 dated the move; a zero float moves without an entry. New codes: 404 `FLOAT_REGISTER_NOT_FOUND`, 422
 `FLOAT_RELOCATION_SAME_LOCATION`, `FLOAT_RELOCATION_DATE_INVALID`, `FLOAT_AMOUNT_NEGATIVE`,
 `FLOAT_DATE_BEFORE_RELOCATION` (a later go-live or Change float dated before the move),
-`FLOAT_REGISTER_SESSION_OPEN`, 409 `FLOAT_RELOCATION_NOT_REVERSIBLE`, 422
+`FLOAT_REGISTER_SESSION_OPEN`, 409 `FLOAT_RELOCATION_NOT_REVERSIBLE`, 409
+`FLOAT_REVERSAL_NOT_REVERSIBLE` (#2607: a float entry's reversal is never reversed itself), 422
 `FLOAT_REVERSAL_BEFORE_RELOCATION`.
 
 A move may not be dated before any float entry of the register — every go-live, change, relocation
@@ -934,9 +936,9 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   deactivated after its movement was recorded still resolves: its mapping key stays.
 - **Idempotency** — `REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>`, registered with the entry and scoped to the
   tenant: a fact redelivered under a new envelope id posts nothing twice and its record is `PROCESSED /
-  DUPLICATE_IGNORED`. The key expires after 24 hours (`IdempotencyService`); past that, the entry's deterministic
-  `sourceEventId` is the durable backstop, as for inventory revaluations. The over/short has no such backstop: its
-  "posts nothing twice" holds within the posting-key window, pending non-expiring posting keys (#2595). The checks run
+  `DUPLICATE_IGNORED`. Posting keys never expire (#2595, `IdempotencyService`; V28 dropped the 24-hour expiry and
+  nothing deletes a key), so "posts nothing twice" holds for any redelivery, days later included; the entry's
+  deterministic `sourceEventId` remains a second line of defence where one exists. The checks run
   in the over/short's order — idempotency, then currency, then the fact's contract — so a redelivered session already
   posted never writes a hold, and a foreign session with a malformed movement is held rather than sent to the DLQ.
 - **Failures** — a closed period, a missing mapping or a broken contract rolls the whole session back (over/short,
@@ -956,7 +958,7 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   — so the scheduled retry never runs a session through the engine either. It re-runs the session's own posting
   (movements, over/short, undeposited session) from the stored `payload` in a transaction of its own: posted is
   `PROCESSED / NEW` linked to the over/short's entry (else the first movement's); a session whose posting keys are
-  registered, or whose over/short entry is already in the ledger (its key expires after 24 hours, #2595), posts
+  registered, or whose over/short entry is already in the ledger, posts
   nothing and closes `PROCESSED / DUPLICATE_IGNORED`; a refusal is held again (`PERIOD_CLOSED`,
   `ACCOUNTING_TIME_ZONE_UNSET`, `GL_MAPPING_NOT_CONFIGURED`, `CURRENCY_NOT_SUPPORTED`) or stays `FAILED /
   VALIDATION_ERROR`. The undeposited session is written exactly when the session posts and never twice. The stored
@@ -1161,7 +1163,8 @@ differenceClass, differenceAmount, reversalReference}`. The period gate then app
 unless `accounting:period:override` and `overrideJustification`, audited `PERIOD_OVERRIDE_POST`; HARD_LOCKED: 422
 `PERIOD_HARD_LOCKED`). A key with no mapping effective on that date, or one whose account is not active then, is
 one refusal (#2601): 422 `GL_MAPPING_NOT_CONFIGURED`, its message naming the category, the key and the posting date,
-guided with `referenceId` `VENDOR_BILL/<KEY>` and a `nextAction` naming the mapping to set up. Any refusal rolls the
+guided with `referenceId` `VENDOR_BILL/<KEY>` and a `nextAction` naming the mapping to set up. The same refusal
+covers a deactivated posting category or mapping key on every posting path (#2612; see the error-code table). Any refusal rolls the
 approval back (no approval field, no entry) and writes one `VENDOR_BILL_APPROVE_REFUSED` (or
 `..._MATCH_EXCEPTION_RESOLVE_REFUSED`) audit row in a transaction of its own. One `vendor_bill_gl_posting` row per
 bill holds the entry and the durable keys `VENDOR_BILL:<billId>` and `VENDOR_BILL_VOID:<billId>`; the entry's
@@ -1341,7 +1344,13 @@ exists; inactive and foreign-currency accounts are not counted. `netAmount` is g
 outbox event, the entity and the table: the bank pays gross + fee. An idempotent replay compares the resolved bank
 account (an omitted one resolves to the one account active at the start of the stored date; a replay funds nothing,
 so a deactivation since does not change it). The response adds `bankAccountId`
-and `paymentDate`.
+and `paymentDate`. The converse guard (#2645): a bank account with a zero posted balance still cannot be deactivated
+while an AP payment naming it is in any state but `GATEWAY_FAILED` or `GL_POSTED` (409
+`ACCOUNT_HAS_UNPOSTED_PAYMENTS`); once every such payment has posted, deactivation proceeds. The pay command and the
+deactivation take the account's row lock, so neither slips past the other. Three states can never post today (a
+hard-locked `GL_POST_FAILED`, an orphaned `GATEWAY_PENDING`, a `GL_POST_PENDING` whose outbox row is exhausted) and
+keep the account open until #2729 gives such a payment a void path. Deposits post in their own command, so no deposit
+is ever unposted.
 
 **Guard order** (`APPaymentServiceImpl.executePayment`, `APPaymentPreGatewayChecks`). Every refusal comes before the
 gateway is called, charges nothing and saves no payment, so the same `paymentRef` may be sent again; the first refusal
@@ -1869,6 +1878,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `DUPLICATE_ACCOUNT_CODE` | 409 | Chart of accounts code already exists |
 | `AP_BILL_DUPLICATE` | 409 | A live vendor bill (any status except `VOIDED` or `REJECTED`) already has the same vendor, normalised bill number and bill date; `referenceId` is that bill's `vendorBillId` and `nextAction` is `Open the existing bill.` Raised by vendor-bill create and match (#2501) |
 | `ACCOUNT_NOT_ZERO_BALANCE` | 409 | GL account cannot be deactivated because its posted balance is not zero |
+| `ACCOUNT_HAS_UNPOSTED_PAYMENTS` | 409 | GL (bank) account cannot be deactivated while an AP payment naming it is in any state but `GATEWAY_FAILED` or `GL_POSTED` (#2645); wait for the posting or retry the `GL_POST_FAILED` ones first. A payment that can never post (a hard-locked `GL_POST_FAILED`, an orphaned `GATEWAY_PENDING`, an exhausted outbox row) keeps the account open until #2729 gives it a void path |
 | `ACCOUNT_NOT_INACTIVE` | 409 | GL account cannot be archived because it is not currently INACTIVE |
 | `ENTRY_ALREADY_POSTED` | 409 | Posting a journal entry that is already POSTED or REVERSED |
 | `JE_ALREADY_REVERSED` | 409 | Reversing a journal entry that is already REVERSED |
@@ -1892,7 +1902,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ILLEGAL_STATE` | 409 | Any other `IllegalStateException` raised by this module's services |
 | `UNBALANCED_ENTRY` | 422 | Journal entry debits and credits do not balance (or has no lines) |
 | `GL_ACCOUNT_NOT_ACTIVE` | 422 | GL account is not active on the transaction date, or was never activated |
-| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request; an AP payment names the missing `AP_PAYMENT/<key>` as `referenceId` (#2601, #2603) |
+| `GL_MAPPING_NOT_CONFIGURED` | 422 | No GL mapping (posting category/key/effective date) is configured for the request, or the posting category or mapping key is inactive (#2612: a deactivated one resolves nothing on any posting path, whatever the posting date; a petty-expense category's deactivation keeps its key active so earlier movements still post at close); an AP payment names the missing `AP_PAYMENT/<key>` as `referenceId` (#2601, #2603) |
 | `PERIOD_CLOSED` | 422 | The transaction date falls in a closed accounting period |
 | `PERIOD_HARD_LOCKED` | 422 | The transaction date falls in a hard-locked accounting period |
 | `HARD_LOCK_DATE_REGRESSION` | 422 | The requested hard-lock date is earlier than the current one |
@@ -2027,8 +2037,8 @@ ignored without recording its eventId.
   `sourceEventId = nameUUIDFromBytes("INVENTORY_SHRINKAGE:" + scrapId)` /
   `nameUUIDFromBytes("INVENTORY_ADJUSTMENT:" + kind + ":" + adjustmentId)` /
   `nameUUIDFromBytes("INVENTORY_REVALUATION:" + revaluationId)` /
-  `nameUUIDFromBytes("GOODS_RECEIPT_ACCRUAL:" + receiptId)` (source type `GOODS_RECEIPT_ACCRUAL`). A fact whose posting key has expired is still
-  recognised as posted by its `sourceEventId`.
+  `nameUUIDFromBytes("GOODS_RECEIPT_ACCRUAL:" + receiptId)` (source type `GOODS_RECEIPT_ACCRUAL`). Posting keys never
+  expire (#2595); the deterministic `sourceEventId` is a second line of defence, not the only one.
 - **Transaction shape** (ADR-0044 as amended by #2146; `OrderEventsListener` has the same shape) — the listener
   method is not transactional. The posting, posting key, ingestion record and processed mark commit together
   in a `REQUIRES_NEW` transaction. A malformed payload (`replica.payload.rejected`) and an uncosted fact are each

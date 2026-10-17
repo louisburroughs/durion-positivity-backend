@@ -48,4 +48,14 @@ public interface SupplierVendorRepository extends JpaRepository<SupplierVendorEn
     /** The first replay page. */
     @NonNull
     List<SupplierVendorEntity> findAllByOrderByVendorIdAsc(@NonNull Pageable page);
+
+    /**
+     * Raises the vendor's {@code @Version} although no column of the row changed (#2712): a republished fact must
+     * carry a version the consumer has not seen (ADR-0044 §3). The update takes the row lock to the end of the
+     * transaction; the caller refreshes the managed entity afterwards.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(
+            "update SupplierVendorEntity v set v.version = v.version + 1 where v.vendorId = :vendorId")
+    int bumpVersion(@org.springframework.data.repository.query.Param("vendorId") @NonNull UUID vendorId);
 }

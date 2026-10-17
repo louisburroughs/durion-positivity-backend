@@ -239,10 +239,30 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         assertThat(entryCount(tenant)).isEqualTo(entries);
 
         // AC4: correction = reverse and re-run.
-        asTenant(
-                tenant,
-                () -> journalEntries.reverseJournalEntry(
-                        goLive.response().journalEntryId(), "Wrong amount counted", GO_LIVE));
+        UUID goLiveReversal = asTenant(
+                        tenant,
+                        () -> journalEntries.reverseJournalEntry(
+                                goLive.response().journalEntryId(), "Wrong amount counted", GO_LIVE))
+                .getJournalEntryId();
+        assertThat(asTenant(
+                        tenant,
+                        () -> floatRows.findByRegisterId("T-1").orElseThrow().getAmount()))
+                .isEqualByComparingTo("0");
+
+        // #2607: the reversal itself is never reversed; the ledger and the float row are unchanged.
+        int beforeReReversal = entryCount(tenant);
+        assertThatThrownBy(() -> asTenant(
+                        tenant,
+                        () -> journalEntries.reverseJournalEntry(goLiveReversal, "Reversed by mistake", GO_LIVE)))
+                .isInstanceOf(CashSetupException.class)
+                .extracting(e -> ((CashSetupException) e).getCode())
+                .isEqualTo(CashSetupException.Code.FLOAT_REVERSAL_NOT_REVERSIBLE);
+        assertThat(entryCount(tenant)).isEqualTo(beforeReReversal);
+        assertThat(asTenant(
+                        tenant,
+                        () -> journalEntries.getJournalEntry(goLiveReversal).getStatus()))
+                .as("the refused reversal entry is still POSTED, not flipped to REVERSED")
+                .isEqualTo(com.positivity.accounting.internal.enums.JournalEntryStatus.POSTED);
         assertThat(asTenant(
                         tenant,
                         () -> floatRows.findByRegisterId("T-1").orElseThrow().getAmount()))

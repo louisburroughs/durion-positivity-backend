@@ -104,25 +104,6 @@ class WarrantyControllersWebMvcTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-07-15T12:00:00Z"), ZoneOffset.UTC);
         }
-
-        /**
-         * The MockMvc auto-configuration registers every {@code Filter} bean directly, which
-         * would run {@code GatewayAuthoritiesFilter} (a {@code OncePerRequestFilter}) BEFORE
-         * the security chain and mark it already-filtered — the in-chain instance then skips,
-         * and {@code SecurityContextHolderFilter} wipes the authentication, failing every
-         * request with 401. Disable the direct registration so the filter runs exactly where
-         * production runs it: inside {@code gatewaySecurityFilterChain}.
-         */
-        @Bean
-        org.springframework.boot.web.servlet.FilterRegistrationBean<
-                        com.positivity.security.common.GatewayAuthoritiesFilter>
-                gatewayAuthoritiesFilterRegistration(
-                        com.positivity.security.common.GatewayAuthoritiesFilter gatewayAuthoritiesFilter) {
-            var registration =
-                    new org.springframework.boot.web.servlet.FilterRegistrationBean<>(gatewayAuthoritiesFilter);
-            registration.setEnabled(false);
-            return registration;
-        }
     }
 
     private static final UUID CLAIM_ID = UUID.fromString("018f0000-0000-7000-8000-000000000401");

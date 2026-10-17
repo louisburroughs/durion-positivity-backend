@@ -104,6 +104,9 @@ public class SupplierVendorReplica {
         row.setDisplayName(fact.displayName());
         row.setStatus(fact.isActive() ? ExtSupplierVendor.Status.ACTIVE : ExtSupplierVendor.Status.INACTIVE);
         row.setStatusChangedAt(fact.statusChangedAt());
+        // Blank is "no channel": one shape for every reader (#2713).
+        String channel = fact.purchaseOrderSupplierRef();
+        row.setPurchaseOrderSupplierRef(channel == null || channel.isBlank() ? null : channel.trim());
         row.setAggregateVersion(aggregateVersion);
         row.setUpdatedAt(Instant.now(clock));
         try {

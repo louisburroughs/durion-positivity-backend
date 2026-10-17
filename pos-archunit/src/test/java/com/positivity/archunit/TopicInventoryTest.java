@@ -195,7 +195,7 @@ class TopicInventoryTest {
 
     @Test
     void externalTopicAllowlistEntriesHaveContractTests() {
-        Path repoRoot = repoRoot();
+        Path repoRoot = RepoLayout.repoRoot();
         for (Map.Entry<String, ExternalTopic> entry : EXTERNAL_TOPIC_ALLOWLIST.entrySet()) {
             Path contractTest = repoRoot.resolve(entry.getValue().contractTestClass());
             assertThat(Files.isRegularFile(contractTest))
@@ -224,12 +224,12 @@ class TopicInventoryTest {
      */
     @Test
     void everyInternalTopicHasAProducerAndAConsumer() throws IOException {
-        Path repoRoot = repoRoot();
+        Path repoRoot = RepoLayout.repoRoot();
         Map<String, Set<String>> producers = new TreeMap<>();
         Map<String, Set<String>> consumers = new TreeMap<>();
 
         try (Stream<Path> modules = Files.list(repoRoot)) {
-            for (Path module : modules.filter(TopicInventoryTest::isPosModule).toList()) {
+            for (Path module : modules.filter(RepoLayout::isPosModule).toList()) {
                 String moduleName = module.getFileName().toString();
                 for (Path source : mainJavaSources(module)) {
                     if (source.getFileName().toString().equals(EXCLUDED_SOURCE_FILE)) {
@@ -524,23 +524,5 @@ class TopicInventoryTest {
             files.filter(p -> p.toString().endsWith(".java")).forEach(sources::add);
         }
         return sources;
-    }
-
-    private static boolean isPosModule(Path dir) {
-        return Files.isDirectory(dir)
-                && dir.getFileName().toString().startsWith("pos-")
-                && Files.exists(dir.resolve("pom.xml"));
-    }
-
-    private static Path repoRoot() {
-        Path dir = Path.of("").toAbsolutePath();
-        while (dir != null) {
-            if (Files.isDirectory(dir.resolve("pos-archunit")) && Files.exists(dir.resolve("pom.xml"))) {
-                return dir;
-            }
-            dir = dir.getParent();
-        }
-        throw new IllegalStateException("repository root with pos-archunit not found above "
-                + Path.of("").toAbsolutePath());
     }
 }
