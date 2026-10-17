@@ -695,7 +695,8 @@ class GLAccountServiceTest {
                     .thenReturn(2L);
 
             assertThatThrownBy(() -> service.deactivateGLAccount(testAccountId))
-                    .isInstanceOf(com.positivity.accounting.internal.exception.AccountHasUnpostedPaymentsException.class)
+                    .isInstanceOf(
+                            com.positivity.accounting.internal.exception.AccountHasUnpostedPaymentsException.class)
                     .hasMessageContaining("2 AP payment(s)");
             assertThat(testAccount.getDeactivationDate()).isNull();
             verify(glAccountRepository, never()).save(any(GLAccount.class));
