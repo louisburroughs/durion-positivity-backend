@@ -123,6 +123,9 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
     private VendorBillService vendorBills;
 
     @Autowired
+    private com.positivity.accounting.internal.service.JournalEntryService journalEntries;
+
+    @Autowired
     private VendorBillApprovalService approvals;
 
     @Autowired
@@ -647,6 +650,87 @@ class APPaymentPostingPostgresIT extends PostgresTenancyTestBase {
     }
 
     // ---- helpers ------------------------------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("#2642 (AW42): a returned charge reverses the payment's entry on the return date, reopens the allocation"
+            + " (the bill's open amount restored, 2000 = open bills again), ends RETURNED and is never reversed by hand;"
+            + " a second return is 409 AP_PAYMENT_ALREADY_RETURNED")
+    void returnedChargeReversesAndReopens() throws Exception {
+        UUID tenant = tenant();
+        VendorBillResponse paid = approvedBill(tenant, "400.00");
+        APPaymentResponse payment = pay(tenant, request(paid, "412.00", "1.50", "400.00"));
+        deliver(tenant, payment.getPaymentId());
+        APPaymentResponse posted = read(tenant, payment.getPaymentId());
+        assertThat(posted.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
+        assertThat(balance(tenant, "2000")).isEqualByComparingTo("-12.00");
+        assertThat(asTenant(tenant, () -> vendorBills.getBillById(paid.getVendorBillId()).orElseThrow()).getOpenAmount())
+                .isEqualByComparingTo("0.00");
+
+        signIn(CONTROLLER, "accounting:ap:pay");
+        UUID requestId = UUIDv7Generator.generate();
+        com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest returnRequest =
+                com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest.builder()
+                        .requestId(requestId)
+                        .returnDate(today())
+                        .failureCode("R01")
+                        .justification("Bank statement: ACH return R01 (insufficient funds) for the payment")
+                        .build();
+        APPaymentResponse returned;
+        try {
+            returned = asTenant(tenant, () -> payments.recordReturn(payment.getPaymentId(), returnRequest, CONTROLLER));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        assertThat(returned.getStatus()).isEqualTo(APPaymentStatus.RETURNED);
+        assertThat(returned.getReturnDateRule()).isEqualTo("RETURN_DATE");
+        assertThat(returned.getReturnDate()).isEqualTo(today());
+        assertThat(returned.getUnappliedAmount()).isEqualByComparingTo("0");
+        assertThat(returned.getReturnJournalEntryId()).isNotNull();
+        assertThat(returned.getAllocations()).hasSize(1).allSatisfy(a -> assertThat(a.getReopenedAt()).isNotNull());
+        assertThat(lines(tenant, returned.getReturnJournalEntryId()))
+                .containsExactlyInAnyOrder("2000 C412.00", "6030 C1.50", "1000 D413.50");
+        // The allocation no longer counts: the bill is open for 400.00 again and 2000 = open bills − unapplied.
+        assertThat(asTenant(tenant, () -> vendorBills.getBillById(paid.getVendorBillId()).orElseThrow()).getOpenAmount())
+                .isEqualByComparingTo("400.00");
+        assertThat(balance(tenant, "2000")).isEqualByComparingTo("400.00");
+        assertThat(count(tenant, "accounting_audit_log", "operation = 'AP_PAYMENT_RETURN'")).isEqualTo(1);
+        assertThat(count(tenant, "accounting_audit_log", "operation = 'AP_PAYMENT_RETURN_GL_POSTING'"))
+                .isEqualTo(1);
+
+        // Replay: the same requestId answers the payment; a second return is refused.
+        signIn(CONTROLLER, "accounting:ap:pay");
+        try {
+            assertThat(asTenant(tenant, () -> payments.recordReturn(payment.getPaymentId(), returnRequest, CONTROLLER))
+                            .getStatus())
+                    .isEqualTo(APPaymentStatus.RETURNED);
+            com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest again =
+                    com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest.builder()
+                            .requestId(UUIDv7Generator.generate())
+                            .justification("Bank statement: the same return, sent twice by mistake")
+                            .build();
+            assertThatThrownBy(() -> asTenant(
+                            tenant, () -> payments.recordReturn(payment.getPaymentId(), again, CONTROLLER)))
+                    .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
+                            .isEqualTo(VendorBillException.Code.AP_PAYMENT_ALREADY_RETURNED));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        // Only the return reverses the entry: by hand, the payment's entry and its mirror are 409.
+        signIn(CONTROLLER, CONTROLLER_GRANTS);
+        try {
+            for (UUID entry : List.of(posted.getGlJournalEntryId(), returned.getReturnJournalEntryId())) {
+                assertThatThrownBy(() -> asTenant(
+                                tenant, () -> journalEntries.reverseJournalEntry(entry, "by hand", null, null)))
+                        .isInstanceOfSatisfying(VendorBillException.class, e -> assertThat(e.getCode())
+                                .isEqualTo(VendorBillException.Code.AP_PAYMENT_ENTRY_NOT_REVERSIBLE));
+            }
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+        assertThat(count(tenant, "journal_entry", "source_event_type = 'AP_PAYMENT'")).isEqualTo(2);
+    }
 
     private UUID tenant() {
         UUID tenant = tenantWithZone();

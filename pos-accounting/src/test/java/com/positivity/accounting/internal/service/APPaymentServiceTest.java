@@ -114,6 +114,9 @@ class APPaymentServiceTest {
     @Mock
     private com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogs;
 
+    @Mock
+    private APPaymentReturnService returns;
+
     @InjectMocks
     private APPaymentServiceImpl service;
 
@@ -1477,5 +1480,25 @@ class APPaymentServiceTest {
                                 "May is hard-locked after the audit; posting in June".equals(leave.justification())
                                         && "controller.c".equals(leave.user())));
         verify(auditLogs, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("#2642: recordReturn hands the command to the return service and answers the returned payment")
+    void recordReturnDelegates() {
+        UUID paymentId = UUID.randomUUID();
+        APPayment returned = orphan(paymentId);
+        returned.setStatus(APPaymentStatus.RETURNED);
+        returned.setReturnFailureCode("R01");
+        com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest request =
+                com.positivity.accounting.internal.dto.RecordAPPaymentReturnRequest.builder()
+                        .requestId(UUID.randomUUID())
+                        .justification("Bank statement 2026-10-15: ACH return R01")
+                        .build();
+        when(returns.recordReturn(paymentId, request, "ana")).thenReturn(returned);
+
+        APPaymentResponse response = service.recordReturn(paymentId, request, "ana");
+
+        assertThat(response.getStatus()).isEqualTo(APPaymentStatus.RETURNED);
+        assertThat(response.getReturnFailureCode()).isEqualTo("R01");
     }
 }
