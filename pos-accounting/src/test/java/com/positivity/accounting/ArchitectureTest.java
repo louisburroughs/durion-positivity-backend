@@ -13,14 +13,23 @@ import com.tngtech.archunit.core.domain.JavaCall;
 import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
+import com.tngtech.archunit.junit.CacheMode;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.Order;
 
+/**
+ * Runs first ({@code @Order(0)} under {@code junit-platform.properties}) and releases its class import when it is done
+ * ({@code CacheMode.PER_CLASS}): in the CI fork (1.5 GiB) the import of the whole module on top of the cached Spring
+ * contexts of a full run was the last straw (#2752).
+ */
+@Order(0)
 @AnalyzeClasses(
         packages = "com.positivity.accounting",
-        importOptions = {ImportOption.DoNotIncludeTests.class, ImportOption.DoNotIncludeJars.class})
+        importOptions = {ImportOption.DoNotIncludeTests.class, ImportOption.DoNotIncludeJars.class},
+        cacheMode = CacheMode.PER_CLASS)
 public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
