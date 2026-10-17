@@ -108,6 +108,9 @@ class SupplierVendorControllerWebMvcTest {
     @MockitoBean
     private VendorTaxIdRevealService taxIdRevealService;
 
+    @MockitoBean
+    private com.positivity.supplier.internal.client.TaxRegistrationSchemeClient schemeClient;
+
     /** A reveal that reaches the controller answers REVEALED unless a test says otherwise. */
     @org.junit.jupiter.api.BeforeEach
     void revealAnswersByDefault() {
@@ -148,6 +151,11 @@ class SupplierVendorControllerWebMvcTest {
         String change = vendor + "/remit-to-changes/" + CHANGE_ID;
         return Stream.of(
                 Arguments.of("GET", BASE, null, SupplierPermissions.VENDOR_READ),
+                Arguments.of(
+                        "GET",
+                        BASE + "/tax-registration-schemes?countryCode=CA",
+                        null,
+                        SupplierPermissions.VENDOR_READ),
                 Arguments.of("GET", vendor, null, SupplierPermissions.VENDOR_READ),
                 Arguments.of("GET", vendor + "/remit-to-changes", null, SupplierPermissions.VENDOR_READ),
                 Arguments.of("POST", BASE, CREATE, SupplierPermissions.VENDOR_WRITE),
@@ -164,6 +172,42 @@ class SupplierVendorControllerWebMvcTest {
                         REVEAL,
                         SupplierPermissions.VENDOR_TAX_ID_REVEAL),
                 Arguments.of("GET", vendor + "/tax-id-reveals", null, SupplierPermissions.AUDIT_READ));
+    }
+
+    /** #2623 AC 8: the front door relays pos-tax's list unchanged, source included; the literal path is not a vendor id. */
+    @org.junit.jupiter.api.Test
+    void taxRegistrationSchemesAreRelayedUnchanged() throws Exception {
+        when(schemeClient.fetch("CA"))
+                .thenReturn(
+                        com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig
+                                .placeholderVocabulary());
+        mockMvc.perform(authed(
+                        get(BASE + "/tax-registration-schemes").param("countryCode", "CA"),
+                        SupplierPermissions.VENDOR_READ))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.source").value("STUB"))
+                .andExpect(jsonPath("$.schemes[2].scheme").value("QST"))
+                .andExpect(jsonPath("$.schemes[2].regional").value(true))
+                .andExpect(jsonPath("$.schemes[2].regions[0]").value("QC"))
+                .andExpect(jsonPath("$.schemes[3].holderType").value("PERSON"));
+        verifyNoInteractions(vendorService);
+    }
+
+    @org.junit.jupiter.api.Test
+    void taxRegistrationSchemesRefuseAMalformedCountryAndAnswer503WhenPosTaxIsDown() throws Exception {
+        mockMvc.perform(authed(
+                        get(BASE + "/tax-registration-schemes").param("countryCode", "ca"),
+                        SupplierPermissions.VENDOR_READ))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        verifyNoInteractions(schemeClient);
+
+        when(schemeClient.fetch(null))
+                .thenThrow(new com.positivity.supplier.internal.exception.SupplierServiceUnavailableException(
+                        "pos-tax could not be reached"));
+        mockMvc.perform(authed(get(BASE + "/tax-registration-schemes"), SupplierPermissions.VENDOR_READ))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
     }
 
     private static MockHttpServletRequestBuilder request(String method, String path, String body) {

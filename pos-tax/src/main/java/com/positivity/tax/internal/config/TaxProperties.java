@@ -122,6 +122,32 @@ public class TaxProperties {
     private Map<String, PurchaseRules> purchaseRules = new LinkedHashMap<>();
 
     /**
+     * Tax-registration schemes per country (CAP:550 #2623, AW48), keyed by upper-case ISO 3166-1 alpha-2 country
+     * code: the closed vocabulary a vendor's tax registration is filed under. Every row is a placeholder held for
+     * expert advice (OI-4): which schemes exist, which identify a person and which are regional. Codes are unique
+     * across all countries, so a code alone identifies a scheme. Validated at startup by
+     * {@code TaxRegistrationSchemes}. Never {@code null}.
+     */
+    private Map<String, List<RegistrationScheme>> registrationSchemes = new LinkedHashMap<>();
+
+    /**
+     * One tax-registration scheme (CAP:550 #2623).
+     */
+    @Data
+    public static class RegistrationScheme {
+        /** The code, {@code ^[A-Z][A-Z_]{1,15}$}, unique across every country. */
+        private String scheme;
+        /** The wording shown beside the code, 1-100 characters. */
+        private String label;
+        /** {@code BUSINESS} or {@code PERSON}: classification data for later readers, never a protection rule. */
+        private String holderType;
+        /** Whether a registration under the scheme belongs to one region. */
+        private Boolean regional;
+        /** The allowed ISO 3166-2 subdivision codes without the country prefix, {@code ^[A-Z]{1,3}$}; empty unless regional. */
+        private List<String> regions = new ArrayList<>();
+    }
+
+    /**
      * One country's purchase-tax rules (CAP:550 S43). Both values are required; the stub does not date them.
      */
     @Data

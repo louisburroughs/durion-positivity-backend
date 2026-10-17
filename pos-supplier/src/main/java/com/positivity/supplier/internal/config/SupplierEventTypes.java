@@ -173,6 +173,10 @@ public final class SupplierEventTypes {
                 EventTypeRegistration.fastRead("SUPPLIER_VENDOR_GET", "Get a vendor")
                         .build(),
                 EventTypeRegistration.fastRead(
+                                "SUPPLIER_VENDOR_TAX_REGISTRATION_SCHEME_LIST",
+                                "List the tax-registration schemes a vendor may be filed under (#2623)")
+                        .build(),
+                EventTypeRegistration.fastRead(
                                 "SUPPLIER_VENDOR_REMIT_CHANGE_LIST", "List a vendor's remit-to change requests")
                         .build(),
                 EventTypeRegistration.write("SUPPLIER_VENDOR_CREATE", "Create a vendor")
