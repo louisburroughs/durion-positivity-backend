@@ -12,11 +12,13 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -275,6 +277,25 @@ public class SupplierVendorCopies {
                         .filter(vendor -> actor.equals(vendor.getCreatedBy()))
                         .isPresent()
                 && !bills.existsByVendorIdAndApprovedAtIsNotNull(vendorId);
+    }
+
+    /**
+     * {@link #isCreatorsFirstBill} for many vendors at once: those among {@code vendorIds} that {@code actor} created
+     * and none of whose bills was ever approved. One read of the vendor copies, and one more per vendor the actor
+     * created.
+     */
+    public @NonNull Set<UUID> creatorsFirstBillVendors(@NonNull Collection<UUID> vendorIds, @Nullable String actor) {
+        Set<UUID> first = new HashSet<>();
+        if (actor == null || vendorIds.isEmpty()) {
+            return first;
+        }
+        for (ExtSupplierVendor vendor : vendors.findAllById(vendorIds)) {
+            if (actor.equals(vendor.getCreatedBy())
+                    && !bills.existsByVendorIdAndApprovedAtIsNotNull(vendor.getVendorId())) {
+                first.add(vendor.getVendorId());
+            }
+        }
+        return first;
     }
 
     /**

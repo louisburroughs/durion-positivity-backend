@@ -9,13 +9,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.CashOutlookResponse;
 import com.positivity.accounting.internal.dto.CashOutlookResponse.BillsLane;
 import com.positivity.accounting.internal.dto.CashOutlookResponse.Figure;
 import com.positivity.accounting.internal.dto.CashOutlookResponse.Point;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
-import com.positivity.accounting.internal.service.CashOutlookService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import java.lang.reflect.Method;
@@ -26,17 +24,13 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /** The cash outlook read of #2515 through the production security chain: 200, 400 for days, 403, annotations. */
 @DisplayName("CashOutlookController (#2515)")
-class CashOutlookControllerTest extends BaseIntegrationTest {
+class CashOutlookControllerTest extends CashWorkspaceControllerTestBase {
 
     private static final String VIEW = "reporting:view:financial-statements";
     private static final String PATH = "/v1/accounting/cash-outlook";
-
-    @MockitoBean
-    private CashOutlookService service;
 
     private static CashOutlookResponse outlook(int days) {
         Figure none = new Figure(new BigDecimal("0.00"), 0);
@@ -69,7 +63,7 @@ class CashOutlookControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("200 with the projection; days defaults to 30")
     void readsWithTheDefault() throws Exception {
-        when(service.outlook(30)).thenReturn(outlook(30));
+        when(cashOutlookService.outlook(30)).thenReturn(outlook(30));
 
         mockMvc.perform(withAuth(get(PATH), VIEW))
                 .andExpect(status().isOk())
@@ -86,7 +80,7 @@ class CashOutlookControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("200 passes an explicit days through")
     void readsWithDays() throws Exception {
-        when(service.outlook(7)).thenReturn(outlook(7));
+        when(cashOutlookService.outlook(7)).thenReturn(outlook(7));
 
         mockMvc.perform(withAuth(get(PATH).param("days", "7"), VIEW))
                 .andExpect(status().isOk())
@@ -96,7 +90,8 @@ class CashOutlookControllerTest extends BaseIntegrationTest {
     @Test
     @DisplayName("400 VALIDATION_ERROR when days is outside 1 to 90")
     void daysOutOfRange() throws Exception {
-        when(service.outlook(91)).thenThrow(InvalidRequestParameterException.forField("days", "must be from 1 to 90"));
+        when(cashOutlookService.outlook(91))
+                .thenThrow(InvalidRequestParameterException.forField("days", "must be from 1 to 90"));
 
         mockMvc.perform(withAuth(get(PATH).param("days", "91"), VIEW))
                 .andExpect(status().isBadRequest())
@@ -109,7 +104,7 @@ class CashOutlookControllerTest extends BaseIntegrationTest {
     void daysNotANumber() throws Exception {
         mockMvc.perform(withAuth(get(PATH).param("days", "soon"), VIEW)).andExpect(status().isBadRequest());
 
-        verify(service, never()).outlook(anyInt());
+        verify(cashOutlookService, never()).outlook(anyInt());
     }
 
     @Test
@@ -117,7 +112,7 @@ class CashOutlookControllerTest extends BaseIntegrationTest {
     void forbidden() throws Exception {
         mockMvc.perform(withAuth(get(PATH), "accounting:reconciliation:view")).andExpect(status().isForbidden());
 
-        verify(service, never()).outlook(anyInt());
+        verify(cashOutlookService, never()).outlook(anyInt());
     }
 
     @Test

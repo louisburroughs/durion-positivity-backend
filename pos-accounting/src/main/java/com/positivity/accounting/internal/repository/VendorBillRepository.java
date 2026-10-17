@@ -348,4 +348,11 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
     @NonNull
     List<UUID> findVendorIdsWithBillsApprovedAtAnotherRemitTo(
             @Param("vendorIds") @NonNull Collection<UUID> vendorIds, @Param("status") @NonNull VendorBillStatus status);
+
+    /**
+     * The bills approved by an approver of {@code kind} at or after {@code since}, oldest approval first (#2515, S19:
+     * the bills the system approved).
+     */
+    List<VendorBill> findByApprovedByKindAndApprovedAtGreaterThanEqualOrderByApprovedAtAscVendorBillIdAsc(
+            com.positivity.accounting.internal.enums.VendorBillApproverKind kind, java.time.Instant since);
 }

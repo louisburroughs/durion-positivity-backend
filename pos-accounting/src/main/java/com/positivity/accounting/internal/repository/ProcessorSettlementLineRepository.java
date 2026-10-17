@@ -15,4 +15,11 @@ public interface ProcessorSettlementLineRepository extends JpaRepository<Process
             String settlementId, SettlementLineMatchStatus matchStatus);
 
     List<ProcessorSettlementLine> findByMatchStatus(SettlementLineMatchStatus matchStatus);
+
+    /**
+     * The lines in {@code matchStatus} created at or after {@code since} (#2515, S19). The automatic matcher decides a
+     * line as it creates it, so for an automatically matched line the creation time is the match time.
+     */
+    List<ProcessorSettlementLine> findByMatchStatusAndCreatedAtGreaterThanEqual(
+            SettlementLineMatchStatus matchStatus, java.time.Instant since);
 }

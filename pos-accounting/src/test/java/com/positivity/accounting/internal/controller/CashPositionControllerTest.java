@@ -8,13 +8,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.positivity.accounting.BaseIntegrationTest;
 import com.positivity.accounting.internal.dto.CashPositionResponse;
 import com.positivity.accounting.internal.dto.CashPositionResponse.AccountRow;
 import com.positivity.accounting.internal.dto.CashPositionResponse.Component;
 import com.positivity.accounting.internal.dto.CashPositionResponse.NeedsAttention;
 import com.positivity.accounting.internal.enums.CashAttentionCode;
-import com.positivity.accounting.internal.service.CashPositionService;
 import com.positivity.events.EmitEvent;
 import io.swagger.v3.oas.annotations.Operation;
 import java.lang.reflect.Method;
@@ -26,23 +24,19 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /** The cash position read of #2515 through the production security chain: 200, 403, and its annotations. */
 @DisplayName("CashPositionController (#2515)")
-class CashPositionControllerTest extends BaseIntegrationTest {
+class CashPositionControllerTest extends CashWorkspaceControllerTestBase {
 
     private static final String VIEW = "reporting:view:financial-statements";
     private static final String PATH = "/v1/accounting/cash-position";
     private static final UUID BANK = UUID.fromString("019a0000-0000-7000-8000-000000001000");
 
-    @MockitoBean
-    private CashPositionService service;
-
     @Test
     @DisplayName("200 with the total, the components and the needs-attention items")
     void reads() throws Exception {
-        when(service.read())
+        when(cashPositionService.read())
                 .thenReturn(new CashPositionResponse(
                         Instant.parse("2026-10-17T15:00:00Z"),
                         null,
@@ -94,7 +88,7 @@ class CashPositionControllerTest extends BaseIntegrationTest {
     void forbidden() throws Exception {
         mockMvc.perform(withAuth(get(PATH), "accounting:reconciliation:view")).andExpect(status().isForbidden());
 
-        verify(service, never()).read();
+        verify(cashPositionService, never()).read();
     }
 
     @Test

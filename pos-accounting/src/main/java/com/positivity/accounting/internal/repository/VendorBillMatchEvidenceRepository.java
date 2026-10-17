@@ -11,4 +11,7 @@ public interface VendorBillMatchEvidenceRepository extends JpaRepository<VendorB
     /** The bill's latest evidence: what the bill read serves as {@code match}. */
     Optional<VendorBillMatchEvidence> findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(
             UUID vendorBillId);
+
+    /** The evidence rows of any of the given bills (#2515, S19: one read for a page of work items). */
+    java.util.List<VendorBillMatchEvidence> findByVendorBillIdIn(java.util.Collection<UUID> vendorBillIds);
 }

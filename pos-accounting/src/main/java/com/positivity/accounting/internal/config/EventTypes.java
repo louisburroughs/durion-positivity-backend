@@ -839,6 +839,16 @@ public final class EventTypes {
                 EventTypeRegistration.fastRead(
                                 "ACCOUNTING_CASH_OUTLOOK_GET",
                                 "Read the cash outlook: the projected daily balance from approved bills and invoices")
+                        .build(),
+                // WorkItemController — 2 events (CAP:550 S19, #2515)
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_WORK_ITEMS_LIST",
+                                "List the work items the caller may act on: bills, payments, bank and cash")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "ACCOUNTING_WORK_ITEMS_AUTOMATIC_LIST",
+                                "List what the system did automatically: payment applications, settlement matches,"
+                                        + " system-approved bills")
                         .build());
     }
 }

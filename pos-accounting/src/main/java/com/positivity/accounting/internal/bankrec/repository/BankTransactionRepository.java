@@ -121,4 +121,12 @@ public interface BankTransactionRepository
             @NonNull LocalDate from,
             @NonNull LocalDate to,
             @NonNull Collection<BankTransactionStatus> statuses);
+
+    /**
+     * The rows of the given statements in {@code status}, oldest transaction date first (#2515, S19): the unmatched
+     * lines of the reconciliations in progress.
+     */
+    @NonNull
+    List<BankTransaction> findByStatementIdInAndStatusOrderByTransactionDateAscBankTransactionIdAsc(
+            @NonNull Collection<UUID> statementIds, @NonNull BankTransactionStatus status);
 }

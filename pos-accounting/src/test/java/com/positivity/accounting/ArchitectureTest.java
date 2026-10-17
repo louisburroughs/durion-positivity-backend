@@ -14,13 +14,20 @@ import com.tngtech.archunit.core.domain.JavaConstructorCall;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.junit.CacheMode;
 import com.tngtech.archunit.lang.ArchRule;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Runs in a surefire execution of its own (see {@code pom.xml}, {@code archunit-test}), in a fresh fork, and releases
+ * its class import when it is done ({@code CacheMode.PER_CLASS}): after the Spring contexts of a whole run, the import of
+ * the module did not fit what was left of the CI fork's 1.5 GiB (#2752).
+ */
 @AnalyzeClasses(
         packages = "com.positivity.accounting",
-        importOptions = {ImportOption.DoNotIncludeTests.class, ImportOption.DoNotIncludeJars.class})
+        importOptions = {ImportOption.DoNotIncludeTests.class, ImportOption.DoNotIncludeJars.class},
+        cacheMode = CacheMode.PER_CLASS)
 public class ArchitectureTest {
 
     private static final DescribedPredicate<JavaCall<?>> UUID_RANDOM_UUID_CALL =
