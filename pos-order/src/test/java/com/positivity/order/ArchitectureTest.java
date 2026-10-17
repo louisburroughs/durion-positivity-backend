@@ -68,14 +68,15 @@ public class ArchitectureTest {
     @ArchTest
     static final ArchRule purchase_order_vendor_read_should_not_call_other_services = noClasses()
             .that()
-            .haveSimpleNameStartingWith("PurchaseOrderVendor")
+            .belongToAnyOf(
+                    com.positivity.order.internal.controller.PurchaseOrderVendorController.class,
+                    com.positivity.order.internal.service.PurchaseOrderVendorServiceImpl.class)
             .should()
             .dependOnClassesThat()
             .resideInAPackage("..internal.client..")
             .orShould()
             .dependOnClassesThat()
             .haveSimpleNameContaining("RestClient")
-            .allowEmptyShould(true)
             .because("the vendor read serves the copy only; a vendor the copy lacks is 503, not a pos-supplier call");
 
     @ArchTest

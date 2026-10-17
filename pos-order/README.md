@@ -209,8 +209,9 @@ pos-supplier (ADR-0044 R1): it reads its own copy of the vendor master.
   `vendorId` keeps the vendor.
 - **Reads for the purchase-order screens (#2680).** `GET /v1/orders/purchase-order-vendors`
   (`listPurchaseOrderVendors`; `status`, `q` on vendor number or display name, `page`/`size`/`sort` on
-  `vendorNumber`, `displayName` or `status`, default `displayName,asc`, `vendorId` tie-breaker; any other sort is
-  400 `PURCHASE_ORDER_BAD_REQUEST`) and `GET /v1/orders/purchase-order-vendors/{vendorId}` (`getPurchaseOrderVendor`)
+  `vendorNumber`, `displayName`, `status` or `vendorId`, default `displayName,asc`, `vendorId` tie-breaker; any other
+  sort is 400 `PURCHASE_ORDER_BAD_REQUEST`; a `status` outside the enum or a `q` over 255 characters is the
+  platform's 400 `VALIDATION_ERROR`) and `GET /v1/orders/purchase-order-vendors/{vendorId}` (`getPurchaseOrderVendor`)
   serve the copy under `order:purchase_order:view`, which every purchase-order persona holds; the item is exactly
   `vendorId`, `vendorNumber`, `displayName`, `status`, so inventory staff see no remit-to or tax-registration data
   (ADR-0044 R3). An `INACTIVE` vendor reads as such (200); an id the copy does not hold is **503

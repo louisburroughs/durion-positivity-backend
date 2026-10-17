@@ -37,7 +37,8 @@ import org.springframework.web.bind.annotation.RestController;
  * ({@code supplier:vendor:read}, {@code accounting:ap:view}). The copy holds exactly the number, name and status
  * those screens need, so this read widens no one's sight of remit-to or tax-registration data (ADR-0044 R3; OI-5,
  * OI-16). {@link PurchaseOrderExceptionHandler} covers this controller, so 403 is {@code PURCHASE_ORDER_FORBIDDEN}
- * and a bad sort is 400 {@code PURCHASE_ORDER_BAD_REQUEST}.
+ * and a bad sort is 400 {@code PURCHASE_ORDER_BAD_REQUEST}; a filter that does not bind ({@code status} outside the
+ * enum, {@code q} over 255 characters) is the platform's 400 {@code VALIDATION_ERROR} with {@code fieldErrors}.
  */
 @RestController
 @RequestMapping("/v1/orders/purchase-order-vendors")
@@ -64,19 +65,23 @@ public class PurchaseOrderVendorController {
                     DRAFT order whose vendor is not in the ACTIVE list is one approvePurchaseOrder will refuse.
                     Preconditions: none; the copy is fed by supplier.vendor.updated, so a vendor created in \
                     pos-supplier moments ago may not be listed yet.
-                    Required inputs: none; status (ACTIVE or INACTIVE) and q (a case-insensitive substring of the \
-                    vendor number or display name) narrow the result, and page, size and sort (vendorNumber, \
-                    displayName or status; default displayName,asc) control pagination.
+                    Required inputs: none; status (ACTIVE or INACTIVE, upper case) and q (a case-insensitive \
+                    substring of the vendor number or display name, at most 255 characters) narrow the result, and \
+                    page, size and sort (vendorNumber, displayName, status or vendorId; default displayName,asc) \
+                    control pagination.
                     Emits an ORDER_PURCHASE_ORDER_VENDOR_LIST audit event; a read-only projection that never calls \
                     pos-supplier.
                     Returns 200 with an empty page when nothing matches; 400 PURCHASE_ORDER_BAD_REQUEST on a sort \
-                    property outside the three listed.
+                    property outside the four listed, and 400 VALIDATION_ERROR (with fieldErrors) on a status that \
+                    is not ACTIVE or INACTIVE or a q over 255 characters.
                     """,
             tags = {"Purchase Orders"})
     @ApiResponse(responseCode = "200", description = "Vendors returned")
     @ApiResponse(
             responseCode = "400",
-            description = "PURCHASE_ORDER_BAD_REQUEST: a sort property other than vendorNumber, displayName or status",
+            description = "PURCHASE_ORDER_BAD_REQUEST: a sort property other than vendorNumber, displayName, status or"
+                    + " vendorId; VALIDATION_ERROR (fieldErrors): status not ACTIVE or INACTIVE, or q over 255"
+                    + " characters",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",

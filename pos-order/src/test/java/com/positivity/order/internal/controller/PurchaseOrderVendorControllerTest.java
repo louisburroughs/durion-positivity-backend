@@ -131,14 +131,28 @@ class PurchaseOrderVendorControllerTest extends BaseControllerSliceTest {
     void refusedSortAnswers400() throws Exception {
         when(vendorService.listVendors(any(), any()))
                 .thenThrow(new PurchaseOrderRequestValidationException(
-                        "Unsupported sort property 'remitTo'; sort by vendorNumber, displayName or status"));
+                        "Unsupported sort property 'remitTo'; sort by vendorNumber, displayName, status or vendorId"));
 
         mockMvc.perform(withGatewayAuth(get("/v1/orders/purchase-order-vendors").param("sort", "remitTo"), VIEW))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("PURCHASE_ORDER_BAD_REQUEST"))
                 .andExpect(jsonPath("$.message")
-                        .value("Unsupported sort property 'remitTo'; sort by vendorNumber, displayName or status"))
+                        .value("Unsupported sort property 'remitTo'; sort by vendorNumber, displayName, status or vendorId"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
+    }
+
+    @Test
+    @DisplayName("a status outside the enum or an over-long q is the platform's 400 VALIDATION_ERROR with fieldErrors")
+    void unboundFilterAnswersValidationError() throws Exception {
+        mockMvc.perform(withGatewayAuth(get("/v1/orders/purchase-order-vendors").param("status", "active"), VIEW))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("status"));
+        mockMvc.perform(withGatewayAuth(get("/v1/orders/purchase-order-vendors").param("q", "x".repeat(256)), VIEW))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("q"));
+        verifyNoInteractions(vendorService);
     }
 
     @Test

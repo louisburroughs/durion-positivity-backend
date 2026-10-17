@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -29,7 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code VENDOR_REPLICATION_PENDING} on create, and a DRAFT order whose vendor is missing from the ACTIVE list is
  * exactly one approval will refuse. Row-level security scopes every query to the bound tenant (ADR-0062).
  *
- * <p>Sorting is closed to the three listed columns: an unknown property would otherwise surface from Spring Data as a
+ * <p>Sorting is closed to the four response fields: an unknown property would otherwise surface from Spring Data as a
  * {@code PropertyReferenceException} and a correlated 500, which is the caller's mistake, not the server's. Under
  * ADR-0072 the display name and the {@code q} filter are CONFIDENTIAL: this class logs neither.
  */
@@ -39,10 +40,10 @@ public class PurchaseOrderVendorServiceImpl implements PurchaseOrderVendorServic
 
     static final String DEFAULT_SORT_PROPERTY = "displayName";
     static final String TIE_BREAKER_PROPERTY = "vendorId";
-    static final Set<String> SORTABLE_PROPERTIES = Set.of("vendorNumber", DEFAULT_SORT_PROPERTY, "status");
-    static final String PENDING_MESSAGE =
-            "The vendor has not reached this shop's copy of the vendor master yet; retry shortly. If it persists,"
-                    + " check that the vendor is set up in pos-supplier.";
+
+    /** The four response fields, so a client that echoes the page's own sort metadata is never refused. */
+    static final Set<String> SORTABLE_PROPERTIES =
+            Set.of("vendorNumber", DEFAULT_SORT_PROPERTY, "status", TIE_BREAKER_PROPERTY);
 
     private static final char LIKE_ESCAPE = '\\';
 
@@ -62,25 +63,48 @@ public class PurchaseOrderVendorServiceImpl implements PurchaseOrderVendorServic
         return vendors.findById(vendorId)
                 .map(PurchaseOrderVendorServiceImpl::toResponse)
                 .orElseThrow(() -> new ReplicationPendingException(
-                        SupplierVendorGuard.VENDOR_REPLICATION_PENDING, PENDING_MESSAGE, vendorId));
+                        SupplierVendorGuard.VENDOR_REPLICATION_PENDING,
+                        SupplierVendorGuard.VENDOR_REPLICATION_PENDING_MESSAGE,
+                        vendorId));
     }
 
     private static @NonNull Specification<ExtSupplierVendor> specification(
             @NonNull ListPurchaseOrderVendorsRequest filter) {
-        Specification<ExtSupplierVendor> spec = (root, query, cb) -> cb.conjunction();
-        if (filter.getStatus() != null) {
-            ExtSupplierVendor.Status status =
-                    ExtSupplierVendor.Status.valueOf(filter.getStatus().name());
-            spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        return Specification.allOf(statusIs(filter.getStatus()), numberOrNameContains(filter.getQ()));
+    }
+
+    private static @Nullable Specification<ExtSupplierVendor> statusIs(@Nullable PurchaseOrderVendorStatus status) {
+        if (status == null) {
+            return null;
         }
-        String q = filter.getQ() == null ? "" : filter.getQ().trim();
-        if (!q.isEmpty()) {
-            String pattern = "%" + escapeLike(q.toLowerCase(Locale.ROOT)) + "%";
-            spec = spec.and((root, query, cb) -> cb.or(
-                    cb.like(cb.lower(root.get("vendorNumber")), pattern, LIKE_ESCAPE),
-                    cb.like(cb.lower(root.get("displayName")), pattern, LIKE_ESCAPE)));
+        ExtSupplierVendor.Status stored = toEntity(status);
+        return (root, query, cb) -> cb.equal(root.get("status"), stored);
+    }
+
+    private static @Nullable Specification<ExtSupplierVendor> numberOrNameContains(@Nullable String q) {
+        String needle = q == null ? "" : q.trim();
+        if (needle.isEmpty()) {
+            return null;
         }
-        return spec;
+        String pattern = "%" + escapeLike(needle.toLowerCase(Locale.ROOT)) + "%";
+        return (root, query, cb) -> cb.or(
+                cb.like(cb.lower(root.get("vendorNumber")), pattern, LIKE_ESCAPE),
+                cb.like(cb.lower(root.get("displayName")), pattern, LIKE_ESCAPE));
+    }
+
+    /** Explicit in both directions: a value added to one enum and not the other is a compile error, not a 500. */
+    static ExtSupplierVendor.@NonNull Status toEntity(@NonNull PurchaseOrderVendorStatus status) {
+        return switch (status) {
+            case ACTIVE -> ExtSupplierVendor.Status.ACTIVE;
+            case INACTIVE -> ExtSupplierVendor.Status.INACTIVE;
+        };
+    }
+
+    static @NonNull PurchaseOrderVendorStatus toResponse(ExtSupplierVendor.@NonNull Status status) {
+        return switch (status) {
+            case ACTIVE -> PurchaseOrderVendorStatus.ACTIVE;
+            case INACTIVE -> PurchaseOrderVendorStatus.INACTIVE;
+        };
     }
 
     /** A literal match: the caller's {@code %}, {@code _} and {@code \} are characters, not wildcards. */
@@ -103,8 +127,8 @@ public class PurchaseOrderVendorServiceImpl implements PurchaseOrderVendorServic
         List<Sort.Order> orders = new ArrayList<>();
         for (Sort.Order order : pageable.getSort()) {
             if (!SORTABLE_PROPERTIES.contains(order.getProperty())) {
-                throw new PurchaseOrderRequestValidationException("Unsupported sort property '" + order.getProperty()
-                        + "'; sort by vendorNumber, displayName or status");
+                throw new PurchaseOrderRequestValidationException("Unsupported sort property '"
+                        + abbreviate(order.getProperty()) + "'; sort by vendorNumber, displayName, status or vendorId");
             }
             orders.add(order);
         }
@@ -119,11 +143,13 @@ public class PurchaseOrderVendorServiceImpl implements PurchaseOrderVendorServic
                 : Pageable.unpaged(Sort.by(orders));
     }
 
+    /** The caller's sort token, cut to a readable length before it is echoed in the 400. */
+    private static @NonNull String abbreviate(@NonNull String property) {
+        return property.length() <= 64 ? property : property.substring(0, 64) + "…";
+    }
+
     private static @NonNull PurchaseOrderVendorResponse toResponse(@NonNull ExtSupplierVendor vendor) {
         return new PurchaseOrderVendorResponse(
-                vendor.getVendorId(),
-                vendor.getVendorNumber(),
-                vendor.getDisplayName(),
-                PurchaseOrderVendorStatus.valueOf(vendor.getStatus().name()));
+                vendor.getVendorId(), vendor.getVendorNumber(), vendor.getDisplayName(), toResponse(vendor.getStatus()));
     }
 }

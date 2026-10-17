@@ -106,7 +106,9 @@ public class PurchaseOrderExceptionHandler {
     @ExceptionHandler(PurchaseOrderRequestValidationException.class)
     public ResponseEntity<ApiError> handleInvalidRequest(
             PurchaseOrderRequestValidationException ex, HttpServletRequest request) {
-        log.warn("Invalid purchase-order request", ex);
+        // A client error, and since #2680 one that can carry a caller-chosen sort token: DEBUG, no stack trace,
+        // like the platform's own type-mismatch and unreadable-body handlers.
+        log.debug("Invalid purchase-order request: {}", ex.getMessage());
         return respond(HttpStatus.BAD_REQUEST, "PURCHASE_ORDER_BAD_REQUEST", ex.getMessage(), request);
     }
 

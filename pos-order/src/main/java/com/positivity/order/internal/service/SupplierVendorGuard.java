@@ -25,6 +25,11 @@ public class SupplierVendorGuard {
     /** The 503 code of a vendor id the copy does not hold (yet). */
     public static final String VENDOR_REPLICATION_PENDING = "VENDOR_REPLICATION_PENDING";
 
+    /** The one message of that code, on the guard and on the purchase-order vendor reads (#2680). */
+    public static final String VENDOR_REPLICATION_PENDING_MESSAGE =
+            "The vendor has not reached this shop's copy of the vendor master yet; retry shortly. If it persists,"
+                    + " check that the vendor is set up in pos-supplier.";
+
     private final ExtSupplierVendorRepository vendors;
 
     /**
@@ -40,10 +45,7 @@ public class SupplierVendorGuard {
     public @NonNull ExtSupplierVendor requireActive(@NonNull UUID vendorId) {
         ExtSupplierVendor vendor = vendors.findById(vendorId)
                 .orElseThrow(() -> new ReplicationPendingException(
-                        VENDOR_REPLICATION_PENDING,
-                        "The vendor has not reached this shop's copy of the vendor master yet; retry shortly. If it"
-                                + " persists, check that the vendor is set up in pos-supplier.",
-                        vendorId));
+                        VENDOR_REPLICATION_PENDING, VENDOR_REPLICATION_PENDING_MESSAGE, vendorId));
         if (!vendor.isActive()) {
             throw PurchaseOrderVendorException.inactive(vendor.getVendorNumber());
         }

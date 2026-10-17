@@ -82,7 +82,25 @@ class PurchaseOrderVendorServiceImplTest {
         assertThatThrownBy(() -> service.listVendors(filter, pageable))
                 .isInstanceOf(PurchaseOrderRequestValidationException.class)
                 .hasMessageContaining("remitTo")
-                .hasMessageContaining("vendorNumber, displayName or status");
+                .hasMessageContaining("vendorNumber, displayName, status or vendorId");
+    }
+
+    @Test
+    @DisplayName("a caller echoing the page's own vendorId tie-breaker is accepted, and the tie-breaker is not doubled")
+    void echoedTieBreakerIsAccepted() {
+        Pageable sorted = PurchaseOrderVendorServiceImpl.sortedAndTieBroken(
+                PageRequest.of(1, 20, Sort.by(Sort.Order.asc("displayName"), Sort.Order.asc("vendorId"))));
+
+        assertThat(sorted.getSort()).isEqualTo(Sort.by(Sort.Order.asc("displayName"), Sort.Order.asc("vendorId")));
+    }
+
+    @Test
+    @DisplayName("status maps explicitly in both directions")
+    void statusMapsBothWays() {
+        for (PurchaseOrderVendorStatus status : PurchaseOrderVendorStatus.values()) {
+            assertThat(PurchaseOrderVendorServiceImpl.toResponse(PurchaseOrderVendorServiceImpl.toEntity(status)))
+                    .isEqualTo(status);
+        }
     }
 
     @Test
