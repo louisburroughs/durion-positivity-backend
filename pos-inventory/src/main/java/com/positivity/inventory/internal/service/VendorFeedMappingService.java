@@ -43,15 +43,19 @@ public interface VendorFeedMappingService {
         }
     }
 
-    @NonNull Page<VendorFeedMappingResponse> list(
+    @NonNull
+    Page<VendorFeedMappingResponse> list(
             @Nullable FeedVendorType feedType, @Nullable UUID vendorId, @NonNull Pageable pageable);
 
     /** Feed vendors that are unmapped, or mapped to a vendor missing from the copy or INACTIVE. */
-    @NonNull List<UnmappedFeedVendorResponse> listUnmapped(@Nullable FeedVendorType feedType);
+    @NonNull
+    List<UnmappedFeedVendorResponse> listUnmapped(@Nullable FeedVendorType feedType);
 
-    @NonNull VendorFeedMappingResponse create(@NonNull VendorFeedMappingRequest request);
+    @NonNull
+    VendorFeedMappingResponse create(@NonNull VendorFeedMappingRequest request);
 
-    @NonNull VendorFeedMappingResponse update(@NonNull UUID mappingId, @NonNull VendorFeedMappingUpdateRequest request);
+    @NonNull
+    VendorFeedMappingResponse update(@NonNull UUID mappingId, @NonNull VendorFeedMappingUpdateRequest request);
 
     void delete(@NonNull UUID mappingId);
 
@@ -59,9 +63,11 @@ public interface VendorFeedMappingService {
      * The pos-supplier vendor a feed vendor is mapped to: present whenever a mapping exists and the vendor is in the
      * copy (any status), empty when the feed vendor is unmapped or the vendor is missing from the copy.
      */
-    @NonNull Optional<ResolvedFeedVendor> resolve(@NonNull FeedVendorType feedType, @NonNull String feedVendorRef);
+    @NonNull
+    Optional<ResolvedFeedVendor> resolve(@NonNull FeedVendorType feedType, @NonNull String feedVendorRef);
 
     /** {@link #resolve} for many feed vendors of one feed; keyed by the normalized feed vendor ref, unresolved omitted. */
-    @NonNull Map<String, ResolvedFeedVendor> resolveAll(
+    @NonNull
+    Map<String, ResolvedFeedVendor> resolveAll(
             @NonNull FeedVendorType feedType, @NonNull Collection<String> feedVendorRefs);
 }

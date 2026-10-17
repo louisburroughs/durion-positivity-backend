@@ -19,8 +19,8 @@ import com.positivity.inventory.internal.repository.PurchaseSuggestionRepository
 import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LocationScopeService;
-import com.positivity.inventory.internal.service.VendorCopyReader;
 import com.positivity.inventory.internal.service.PurchaseOrderCommandPublisher;
+import com.positivity.inventory.internal.service.VendorCopyReader;
 import com.positivity.security.common.LocationScopeDeniedException;
 import java.time.Clock;
 import java.time.Instant;

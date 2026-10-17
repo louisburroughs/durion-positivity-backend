@@ -276,7 +276,8 @@ class VendorFeedMappingServiceImplTest {
                 .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)));
         when(vendorCopy.find(OTHER_VENDOR_ID)).thenReturn(Optional.of(vendor(OTHER_VENDOR_ID, VendorStatus.ACTIVE)));
 
-        assertThatThrownBy(() -> service.update(MAPPING_ID, new VendorFeedMappingUpdateRequest(OTHER_VENDOR_ID, null, 2L)))
+        assertThatThrownBy(
+                        () -> service.update(MAPPING_ID, new VendorFeedMappingUpdateRequest(OTHER_VENDOR_ID, null, 2L)))
                 .isInstanceOfSatisfying(VendorFeedMappingException.class, e -> {
                     assertThat(e.getErrorCode()).isEqualTo("CONFLICT");
                     assertThat(e.getStatus().value()).isEqualTo(409);
@@ -294,9 +295,11 @@ class VendorFeedMappingServiceImplTest {
         when(mappings.saveAndFlush(any(VendorFeedMapping.class)))
                 .thenThrow(new ObjectOptimisticLockingFailureException(VendorFeedMapping.class, MAPPING_ID));
 
-        assertThatThrownBy(() -> service.update(MAPPING_ID, new VendorFeedMappingUpdateRequest(OTHER_VENDOR_ID, null, 3L)))
+        assertThatThrownBy(
+                        () -> service.update(MAPPING_ID, new VendorFeedMappingUpdateRequest(OTHER_VENDOR_ID, null, 3L)))
                 .isInstanceOfSatisfying(
-                        VendorFeedMappingException.class, e -> assertThat(e.getErrorCode()).isEqualTo("CONFLICT"));
+                        VendorFeedMappingException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo("CONFLICT"));
     }
 
     @Test
@@ -318,9 +321,11 @@ class VendorFeedMappingServiceImplTest {
                 .thenReturn(Optional.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)));
         when(vendorCopy.find(OTHER_VENDOR_ID)).thenReturn(Optional.of(vendor(OTHER_VENDOR_ID, VendorStatus.INACTIVE)));
 
-        assertThatThrownBy(() -> service.update(MAPPING_ID, new VendorFeedMappingUpdateRequest(OTHER_VENDOR_ID, null, 3L)))
+        assertThatThrownBy(
+                        () -> service.update(MAPPING_ID, new VendorFeedMappingUpdateRequest(OTHER_VENDOR_ID, null, 3L)))
                 .isInstanceOfSatisfying(
-                        VendorFeedMappingException.class, e -> assertThat(e.getErrorCode()).isEqualTo("VENDOR_INACTIVE"));
+                        VendorFeedMappingException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo("VENDOR_INACTIVE"));
     }
 
     // ------------------------------------------------------------------ delete
@@ -389,7 +394,8 @@ class VendorFeedMappingServiceImplTest {
                 .thenReturn(Optional.of(mapping(FeedVendorType.MANUFACTURER, MANUFACTURER.toString(), VENDOR_ID)));
         when(vendorCopy.find(VENDOR_ID)).thenReturn(Optional.of(vendor(VENDOR_ID, VendorStatus.ACTIVE)));
 
-        assertThat(service.resolve(FeedVendorType.MANUFACTURER, MANUFACTURER.toString().toUpperCase()))
+        assertThat(service.resolve(
+                        FeedVendorType.MANUFACTURER, MANUFACTURER.toString().toUpperCase()))
                 .isPresent();
     }
 
@@ -400,8 +406,7 @@ class VendorFeedMappingServiceImplTest {
         VendorFeedMapping orphan = mapping(FeedVendorType.DISTRIBUTOR, "D2", OTHER_VENDOR_ID);
         when(mappings.findAllByFeedTypeAndFeedVendorRefIn(eq(FeedVendorType.DISTRIBUTOR), anyCollection()))
                 .thenReturn(List.of(mapped, orphan));
-        when(vendorCopy.byIds(anyCollection()))
-                .thenReturn(Map.of(VENDOR_ID, vendor(VENDOR_ID, VendorStatus.ACTIVE)));
+        when(vendorCopy.byIds(anyCollection())).thenReturn(Map.of(VENDOR_ID, vendor(VENDOR_ID, VendorStatus.ACTIVE)));
 
         Map<String, ResolvedFeedVendor> resolved =
                 service.resolveAll(FeedVendorType.DISTRIBUTOR, List.of("D1", " D2", "D3"));
@@ -427,8 +432,7 @@ class VendorFeedMappingServiceImplTest {
                 new PageImpl<>(List.of(mapping(FeedVendorType.DISTRIBUTOR, "D1", VENDOR_ID)), pageable, 1);
         when(mappings.findAllByFeedTypeAndVendorId(FeedVendorType.DISTRIBUTOR, VENDOR_ID, pageable))
                 .thenReturn(page);
-        when(vendorCopy.byIds(anyCollection()))
-                .thenReturn(Map.of(VENDOR_ID, vendor(VENDOR_ID, VendorStatus.ACTIVE)));
+        when(vendorCopy.byIds(anyCollection())).thenReturn(Map.of(VENDOR_ID, vendor(VENDOR_ID, VendorStatus.ACTIVE)));
 
         Page<VendorFeedMappingResponse> result = service.list(FeedVendorType.DISTRIBUTOR, VENDOR_ID, pageable);
 
@@ -488,8 +492,7 @@ class VendorFeedMappingServiceImplTest {
         when(mappings.findAllByFeedType(FeedVendorType.MANUFACTURER))
                 .thenReturn(List.of(mapping(FeedVendorType.MANUFACTURER, MANUFACTURER.toString(), VENDOR_ID)));
         when(mappings.findAllByFeedType(FeedVendorType.DISTRIBUTOR)).thenReturn(List.of());
-        when(vendorCopy.byIds(anyCollection()))
-                .thenReturn(Map.of(VENDOR_ID, vendor(VENDOR_ID, VendorStatus.ACTIVE)));
+        when(vendorCopy.byIds(anyCollection())).thenReturn(Map.of(VENDOR_ID, vendor(VENDOR_ID, VendorStatus.ACTIVE)));
 
         assertThat(service.listUnmapped(null)).isEmpty();
         assertThat(meterRegistry

@@ -128,16 +128,16 @@ public class VendorFeedMappingServiceImpl implements VendorFeedMappingService {
     }
 
     private List<UnmappedFeedVendorResponse> scan(FeedVendorType type) {
-        List<FeedVendorSummary> feedVendors =
-                type == FeedVendorType.MANUFACTURER
-                        ? manufacturerFeed.summarizeManufacturers()
-                        : distributorFeed.summarizeDistributors();
+        List<FeedVendorSummary> feedVendors = type == FeedVendorType.MANUFACTURER
+                ? manufacturerFeed.summarizeManufacturers()
+                : distributorFeed.summarizeDistributors();
         Map<String, VendorFeedMapping> byRef = new HashMap<>();
         for (VendorFeedMapping mapping : mappings.findAllByFeedType(type)) {
             byRef.put(mapping.getFeedVendorRef(), mapping);
         }
-        Map<UUID, ExtSupplierVendorReplica> vendors = vendorCopy.byIds(
-                byRef.values().stream().map(VendorFeedMapping::getVendorId).collect(java.util.stream.Collectors.toSet()));
+        Map<UUID, ExtSupplierVendorReplica> vendors = vendorCopy.byIds(byRef.values().stream()
+                .map(VendorFeedMapping::getVendorId)
+                .collect(java.util.stream.Collectors.toSet()));
 
         Map<String, UnmappedFeedVendorResponse> found = new HashMap<>();
         for (FeedVendorSummary summary : feedVendors) {
@@ -159,7 +159,8 @@ public class VendorFeedMappingServiceImpl implements VendorFeedMappingService {
                     (a, b) -> {
                         a.setProductCount(a.getProductCount() + b.getProductCount());
                         if (b.getLastReportedAt() != null
-                                && (a.getLastReportedAt() == null || b.getLastReportedAt().isAfter(a.getLastReportedAt()))) {
+                                && (a.getLastReportedAt() == null
+                                        || b.getLastReportedAt().isAfter(a.getLastReportedAt()))) {
                             a.setLastReportedAt(b.getLastReportedAt());
                         }
                         return a;
@@ -369,7 +370,10 @@ public class VendorFeedMappingServiceImpl implements VendorFeedMappingService {
                 .vendorId(mapping.getVendorId())
                 .vendorNumber(vendor != null ? vendor.getVendorNumber() : null)
                 .vendorDisplayName(vendor != null ? vendor.getDisplayName() : null)
-                .vendorStatus(vendor != null && vendor.getStatus() != null ? vendor.getStatus().name() : null)
+                .vendorStatus(
+                        vendor != null && vendor.getStatus() != null
+                                ? vendor.getStatus().name()
+                                : null)
                 .note(mapping.getNote())
                 .version(mapping.getVersion())
                 .createdBy(mapping.getCreatedBy())

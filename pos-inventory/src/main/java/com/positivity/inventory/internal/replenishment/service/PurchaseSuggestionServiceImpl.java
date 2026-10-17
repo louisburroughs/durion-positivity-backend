@@ -413,7 +413,10 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 .vendorId(suggestion.getVendorId())
                 .vendorNumber(vendor != null ? vendor.getVendorNumber() : null)
                 .vendorDisplayName(vendor != null ? vendor.getDisplayName() : null)
-                .vendorStatus(vendor != null && vendor.getStatus() != null ? vendor.getStatus().name() : null)
+                .vendorStatus(
+                        vendor != null && vendor.getStatus() != null
+                                ? vendor.getStatus().name()
+                                : null)
                 .unitCostMinor(suggestion.getUnitCostMinor())
                 .unitCostCurrency(suggestion.getUnitCostCurrency())
                 .vendorPackSize(suggestion.getVendorPackSize())

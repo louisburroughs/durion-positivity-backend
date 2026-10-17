@@ -190,8 +190,7 @@ public class VendorFeedMappingController {
                                     @Content(
                                             mediaType = "application/json",
                                             schema = @Schema(implementation = VendorFeedMappingRequest.class),
-                                            examples =
-                                                    @ExampleObject(name = "Map a manufacturer", value = """
+                                            examples = @ExampleObject(name = "Map a manufacturer", value = """
                                                             {"feedType":"MANUFACTURER",
                                                              "feedVendorRef":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a30",
                                                              "vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a31",
@@ -264,8 +263,7 @@ public class VendorFeedMappingController {
                                     @Content(
                                             mediaType = "application/json",
                                             schema = @Schema(implementation = VendorFeedMappingUpdateRequest.class),
-                                            examples =
-                                                    @ExampleObject(name = "Re-point a mapping", value = """
+                                            examples = @ExampleObject(name = "Re-point a mapping", value = """
                                                             {"vendorId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a32",
                                                              "note":"Moved to the new legal entity",
                                                              "version":0}
@@ -307,8 +305,7 @@ public class VendorFeedMappingController {
             description = "VENDOR_FEED_MAPPING_NOT_FOUND",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Void> deleteVendorFeedMapping(
-            @Parameter(description = "Vendor feed mapping identifier", required = true) @PathVariable
-                    UUID mappingId) {
+            @Parameter(description = "Vendor feed mapping identifier", required = true) @PathVariable UUID mappingId) {
         vendorFeedMappingService.delete(mappingId);
         return ResponseEntity.noContent().build();
     }

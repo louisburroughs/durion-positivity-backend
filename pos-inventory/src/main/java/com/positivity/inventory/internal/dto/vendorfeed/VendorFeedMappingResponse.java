@@ -29,7 +29,9 @@ public class VendorFeedMappingResponse {
     @Schema(description = "The pos-supplier vendor id", example = "01980003-0000-7000-8000-000000000009")
     private UUID vendorId;
 
-    @Schema(description = "The vendor's number; null when the vendor is not in the local copy", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "The vendor's number; null when the vendor is not in the local copy",
+            requiredMode = NOT_REQUIRED)
     private String vendorNumber;
 
     @Schema(

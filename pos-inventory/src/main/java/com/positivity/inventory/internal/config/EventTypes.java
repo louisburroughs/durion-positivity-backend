@@ -247,8 +247,7 @@ public final class EventTypes {
                                 "List feed vendors with no usable pos-supplier vendor mapping")
                         .build(),
                 EventTypeRegistration.write(
-                                "INVENTORY_VENDOR_FEED_MAPPING_CREATE",
-                                "Map a feed vendor to a pos-supplier vendor")
+                                "INVENTORY_VENDOR_FEED_MAPPING_CREATE", "Map a feed vendor to a pos-supplier vendor")
                         .build(),
                 EventTypeRegistration.write(
                                 "INVENTORY_VENDOR_FEED_MAPPING_UPDATE",

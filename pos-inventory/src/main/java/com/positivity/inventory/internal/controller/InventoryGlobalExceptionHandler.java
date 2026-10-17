@@ -55,9 +55,9 @@ import com.positivity.inventory.internal.exception.TransferLocationNotEligibleEx
 import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
 import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
 import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentTypeException;
-import com.positivity.inventory.internal.exception.VendorFeedMappingException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
+import com.positivity.inventory.internal.exception.VendorFeedMappingException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
