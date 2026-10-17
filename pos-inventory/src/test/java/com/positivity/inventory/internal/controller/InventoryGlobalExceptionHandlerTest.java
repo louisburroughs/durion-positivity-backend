@@ -32,7 +32,6 @@ import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionE
 import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
 import com.positivity.inventory.internal.exception.RecountLimitExceededException;
-import com.positivity.inventory.internal.exception.VendorFeedMappingException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
 import com.positivity.inventory.internal.exception.ReturnQuantityExceededException;
 import com.positivity.inventory.internal.exception.RollupExpansionTooLargeException;
@@ -54,6 +53,7 @@ import com.positivity.inventory.internal.exception.TransferQuantityExceededExcep
 import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentTypeException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
+import com.positivity.inventory.internal.exception.VendorFeedMappingException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
