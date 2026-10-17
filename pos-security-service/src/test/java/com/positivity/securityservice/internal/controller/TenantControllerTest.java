@@ -22,10 +22,18 @@ class TenantControllerTest {
 
     @Test
     void answersTheServiceView() {
-        TenantMeResponse view = new TenantMeResponse(TENANT, "acme", "Acme", "ACTIVE");
+        TenantMeResponse view = new TenantMeResponse(TENANT, "acme", "Acme", "ACTIVE", "en-US");
         when(service.currentTenant()).thenReturn(Optional.of(view));
 
         assertThat(controller.me().getBody()).isSameAs(view);
+    }
+
+    @Test
+    void localeIsNullWhenTheReplicaHasNotLearnedIt() {
+        TenantMeResponse view = new TenantMeResponse(TENANT, "acme", "Acme", "ACTIVE", null);
+        when(service.currentTenant()).thenReturn(Optional.of(view));
+
+        assertThat(controller.me().getBody().locale()).isNull();
     }
 
     @Test
