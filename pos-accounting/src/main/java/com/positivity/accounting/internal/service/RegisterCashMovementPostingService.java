@@ -158,6 +158,8 @@ public class RegisterCashMovementPostingService {
             JournalEntryRepository journalEntryRepository,
             PettyExpenseRecoveryDecider recoveryDecider,
             RegisterCashMovementTaxRecoveryRepository taxRecoveries,
+            APPaymentRepository apPaymentRepository,
+            SupplierVendorCopies vendorCopies,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.zoneResolver = zoneResolver;
@@ -169,6 +171,8 @@ public class RegisterCashMovementPostingService {
         this.journalEntryRepository = journalEntryRepository;
         this.recoveryDecider = recoveryDecider;
         this.taxRecoveries = taxRecoveries;
+        this.apPaymentRepository = apPaymentRepository;
+        this.vendorCopies = vendorCopies;
         this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
