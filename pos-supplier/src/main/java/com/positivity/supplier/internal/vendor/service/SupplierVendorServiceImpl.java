@@ -448,10 +448,7 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
                 : vendorRepository.findByVendorIdGreaterThanOrderByVendorIdAsc(afterVendorId, window);
         boolean complete = found.size() <= pageSize;
         List<SupplierVendorEntity> page = complete ? found : found.subList(0, pageSize);
-        String actor = currentActor();
-        for (SupplierVendorEntity vendor : page) {
-            factPublisher.publish(vendor, startedAt, actor);
-        }
+        factPublisher.publishAll(page, startedAt, currentActor());
         UUID next = complete || page.isEmpty() ? null : page.getLast().getVendorId();
         log.info(
                 "Vendor fact replay after={} limit={} emitted={} complete={}",
@@ -517,15 +514,6 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
 
     /** The principal name, the form pos-accounting records for approvers (S24 compares them). */
     @NonNull
-    /** The sign-in name, or null when no principal is bound (a reconciliation at start-up); for #2712's republish. */
-    static @Nullable String currentActorOrNull() {
-        try {
-            return currentActor();
-        } catch (RuntimeException noPrincipal) {
-            return null;
-        }
-    }
-
     private static String currentActor() {
         return SecurityContextHelper.getCurrentUsernameOrDefault("system");
     }

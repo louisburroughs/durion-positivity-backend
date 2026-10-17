@@ -1,4 +1,4 @@
-package com.positivity.supplier.internal.event;
+package com.positivity.supplier.internal.spi;
 
 import java.util.Set;
 import java.util.UUID;

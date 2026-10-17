@@ -1,9 +1,11 @@
 package com.positivity.supplier.internal.vendor.service;
 
+import com.positivity.security.common.SecurityContextHelper;
+import com.positivity.supplier.internal.audit.AuditActorContext;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
-import com.positivity.supplier.internal.event.VendorProfilesChanged;
-import com.positivity.supplier.internal.event.VendorProfilesChanging;
+import com.positivity.supplier.internal.spi.VendorProfilesChanged;
+import com.positivity.supplier.internal.spi.VendorProfilesChanging;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import jakarta.persistence.EntityManager;
@@ -19,6 +21,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -37,7 +40,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * YAML reconciliation), the writer publishes {@link VendorProfilesChanging} before and {@link VendorProfilesChanged}
  * after it: the designation is read at both, and a vendor whose channel moved is republished with a higher {@code
  * aggregateVersion}, as for any vendor change (ADR-0044 §3). A change that leaves every designation alone publishes
- * nothing. Events, not calls, because the vendor slice already depends on the service slice (ArchUnit cycle rule).
+ * nothing. Events (in {@code internal.spi}, beside {@code SupplierAuthConfigChanged}), not calls, because the vendor
+ * slice already depends on the service slice (ArchUnit cycle rule).
  */
 @Component
 @RequiredArgsConstructor
@@ -91,7 +95,7 @@ public class VendorPurchasingProfile {
             Optional<String> before = snapshot.getOrDefault(vendorId, Optional.empty());
             Optional<String> after = purchaseOrderSupplierRef(vendorId);
             if (!Objects.equals(before, after)) {
-                republish(vendorId);
+                republish(vendorId, after.orElse(null));
                 snapshot.put(vendorId, after);
             }
         }
@@ -122,7 +126,7 @@ public class VendorPurchasingProfile {
      * The vendor's current fact again, under a higher {@code aggregateVersion}: the version is forced up although no
      * column of the vendor changed, so consumers' stale-fact guards apply it in order (ADR-0044 §3).
      */
-    private void republish(@NonNull UUID vendorId) {
+    private void republish(@NonNull UUID vendorId, @Nullable String purchaseOrderSupplierRef) {
         Optional<SupplierVendorEntity> vendor = vendors.findById(vendorId);
         if (vendor.isEmpty()) {
             // A YAML profile may name a vendor this tenant does not hold yet; there is nothing to republish.
@@ -130,7 +134,10 @@ public class VendorPurchasingProfile {
         }
         entityManager.lock(vendor.get(), LockModeType.PESSIMISTIC_FORCE_INCREMENT);
         entityManager.flush();
-        factPublisher.publish(vendor.get(), Instant.now(clock), SupplierVendorServiceImpl.currentActorOrNull());
+        // The YAML bootstrap runs under its audit actor, not a principal; an administrator's write under theirs.
+        String actor = AuditActorContext.currentActor()
+                .orElseGet(() -> SecurityContextHelper.getCurrentUsernameOrDefault("system"));
+        factPublisher.publish(vendor.get(), Instant.now(clock), actor, purchaseOrderSupplierRef);
         log.info(
                 "Republished vendor {} after its purchasing profile changed",
                 vendor.get().getVendorNumber());

@@ -101,51 +101,6 @@ public record SupplierVendorUpdatedV1(
      */
     public static final int SCHEMA_VERSION = 2;
 
-    /**
-     * Without a purchasing channel (#2712): the shape before {@code purchaseOrderSupplierRef} was added, additively,
-     * at the same schema version (ADR-0044 §3). A consumer reading an older fact sees null, "no channel known".
-     */
-    public SupplierVendorUpdatedV1(
-            @NonNull UUID vendorId,
-            @NonNull String vendorNumber,
-            @NonNull String legalName,
-            @NonNull String displayName,
-            @NonNull List<TaxRegistration> taxRegistrations,
-            @Nullable RemitTo remitTo,
-            int remitToVersion,
-            @Nullable String defaultPaymentTerms,
-            @Nullable String defaultCurrency,
-            @NonNull Status status,
-            @Nullable Instant statusChangedAt,
-            @Nullable String statusReason,
-            @Nullable Instant remitToChangedAt,
-            @Nullable String remitToRequestedBy,
-            @Nullable String remitToApprovedBy,
-            @NonNull String createdBy,
-            @NonNull Instant createdAt,
-            @NonNull Instant occurredAt) {
-        this(
-                vendorId,
-                vendorNumber,
-                legalName,
-                displayName,
-                taxRegistrations,
-                remitTo,
-                remitToVersion,
-                defaultPaymentTerms,
-                defaultCurrency,
-                status,
-                statusChangedAt,
-                statusReason,
-                remitToChangedAt,
-                remitToRequestedBy,
-                remitToApprovedBy,
-                createdBy,
-                createdAt,
-                occurredAt,
-                null);
-    }
-
     /** Vendor status. A vendor is never deleted, only deactivated. */
     public enum Status {
         ACTIVE,

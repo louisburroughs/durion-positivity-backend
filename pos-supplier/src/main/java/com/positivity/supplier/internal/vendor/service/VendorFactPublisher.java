@@ -9,6 +9,11 @@ import com.positivity.supplier.internal.entity.VendorRemitTo;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import java.time.Instant;
+import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
@@ -47,6 +52,47 @@ public class VendorFactPublisher {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void publish(@NonNull SupplierVendorEntity vendor, @NonNull Instant occurredAt, @Nullable String actor) {
+        publish(
+                vendor,
+                occurredAt,
+                actor,
+                VendorPurchasingProfile.designated(profiles.findByVendorIdOrderBySupplierRefAsc(vendor.getVendorId())));
+    }
+
+    /**
+     * Queues one page of vendors' current state (a replay): the purchasing channels are read in one query for the
+     * page, not one per vendor.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publishAll(
+            @NonNull List<SupplierVendorEntity> vendors, @NonNull Instant occurredAt, @Nullable String actor) {
+        if (vendors.isEmpty()) {
+            return;
+        }
+        Map<UUID, List<SupplierProfileEntity>> profilesByVendor = profiles
+                .findByVendorIdIn(
+                        vendors.stream().map(SupplierVendorEntity::getVendorId).toList())
+                .stream()
+                .collect(Collectors.groupingBy(SupplierProfileEntity::getVendorId));
+        for (SupplierVendorEntity vendor : vendors) {
+            publish(
+                    vendor,
+                    occurredAt,
+                    actor,
+                    VendorPurchasingProfile.designated(profilesByVendor.getOrDefault(vendor.getVendorId(), List.of())));
+        }
+    }
+
+    /**
+     * Queues the vendor's current state with a purchasing channel the caller already resolved (#2712): the
+     * designation listener compares it before republishing, so it is not read twice.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void publish(
+            @NonNull SupplierVendorEntity vendor,
+            @NonNull Instant occurredAt,
+            @Nullable String actor,
+            @Nullable String purchaseOrderSupplierRef) {
         Objects.requireNonNull(vendor.getVersion(), "vendor must be flushed before its fact is queued");
         outboxEventWriter.publish(
                 DomainTopics.events("supplier"),
@@ -62,16 +108,7 @@ public class VendorFactPublisher {
                         null,
                         null,
                         actor,
-                        toFact(
-                                vendor,
-                                occurredAt,
-                                VendorPurchasingProfile.designated(
-                                        profiles.findByVendorIdOrderBySupplierRefAsc(vendor.getVendorId())))));
-    }
-
-    @NonNull
-    static SupplierVendorUpdatedV1 toFact(@NonNull SupplierVendorEntity vendor, @NonNull Instant occurredAt) {
-        return toFact(vendor, occurredAt, null);
+                        toFact(vendor, occurredAt, purchaseOrderSupplierRef)));
     }
 
     /** The fact with the vendor's purchasing channel (#2712), null when it has none. */

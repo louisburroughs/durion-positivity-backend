@@ -53,8 +53,24 @@ import org.springframework.transaction.PlatformTransactionManager;
  * actor {@code system:yaml-bootstrap}, and startup rejection of plaintext-looking secrets and
  * ADMIN collisions.
  */
-@Import({JpaConfig.class, TestClockConfig.class})
+@Import({
+    JpaConfig.class,
+    TestClockConfig.class,
+    com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile.class,
+    com.positivity.supplier.internal.vendor.service.VendorFactPublisher.class,
+    com.positivity.supplier.internal.service.SupplierOutboxEventWriter.class,
+    SupplierYamlBootstrapTest.FactSupportConfig.class
+})
 class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
+
+    /** #2712: a reconcile republishes the vendor fact through the real outbox writer, which needs a mapper. */
+    @org.springframework.boot.test.context.TestConfiguration
+    static class FactSupportConfig {
+        @org.springframework.context.annotation.Bean
+        tools.jackson.databind.ObjectMapper objectMapper() {
+            return tools.jackson.databind.json.JsonMapper.builder().build();
+        }
+    }
 
     private static final UUID LOCATION_A = UUID.fromString("018f0000-0000-7000-8000-0000000000a1");
     private static final UUID LOCATION_B = UUID.fromString("018f0000-0000-7000-8000-0000000000b2");
@@ -79,6 +95,12 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
 
     @Autowired
     private SupplierVendorRepository vendorRepository;
+
+    @Autowired
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    @Autowired
+    private com.positivity.supplier.internal.repository.SupplierOutboxEventRepository outboxRepository;
 
     private SupplierYamlBootstrap bootstrap;
 
@@ -112,9 +134,7 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 tenantIterator,
                 transactionManager,
                 meterRegistry,
-                // #2712: the profile-change events; nothing listens in this slice, the designation is asserted in
-                // SupplierProfileAdminServiceImplTest.
-                event -> {});
+                eventPublisher);
         michelinVendorId = vendor("MICHELIN").getVendorId();
         vendor("CONTI");
     }
@@ -538,7 +558,7 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 // before anything is published. If a credential-invalidation event ever escaped a rejected
                 // mutation that would be a defect, and SupplierProfileAdminServiceImplTest is where it is
                 // caught -- pinning the negative here as well would duplicate that without adding cover.
-                event -> {});
+                eventPublisher);
         assertThatThrownBy(() -> adminService.updateProfile(
                         profileId,
                         new com.positivity.supplier.internal.service.model.VendorProfileRequest(
@@ -786,6 +806,51 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                                 List.of("COMMERCIAL_PRICING"))),
                 new Sandbox(true, "https://sandbox.api.michelin.example"),
                 "MICHELIN");
+    }
+
+    // ── Purchasing channel (#2712) ──────────────────────────────────────────────────
+
+    @Test
+    void reconcileRepublishesTheVendorWhoseChannelMoves() {
+        long facts = vendorFacts();
+        var version = vendorRepository.findById(michelinVendorId).orElseThrow().getVersion();
+
+        // The YAML profile goes live (not sandbox): MICHELIN's one purchasing channel appears.
+        ProfileSpec live = withSandbox(michelinSpec(), new Sandbox(false, null));
+        bootstrap.reconcile(properties(live));
+        assertThat(vendorFacts()).as("the vendor fact is republished").isEqualTo(facts + 1);
+        assertThat(vendorRepository.findById(michelinVendorId).orElseThrow().getVersion())
+                .as("under a higher aggregateVersion")
+                .isGreaterThan(version);
+
+        // Unchanged YAML: no designation moved, nothing republished.
+        bootstrap.reconcile(properties(live));
+        assertThat(vendorFacts()).isEqualTo(facts + 1);
+
+        // Back to sandbox: the channel goes away, republished once more.
+        bootstrap.reconcile(properties(michelinSpec()));
+        assertThat(vendorFacts()).isEqualTo(facts + 2);
+    }
+
+    /** Only the vendor facts: a reconcile queues no other outbox rows today, but the filter keeps it honest. */
+    private long vendorFacts() {
+        return outboxRepository.findAll().stream()
+                .filter(row -> com.positivity.domainevents.supplier.SupplierVendorUpdatedV1.EVENT_TYPE.equals(
+                        row.getEventType()))
+                .count();
+    }
+
+    private static ProfileSpec withSandbox(ProfileSpec base, Sandbox sandbox) {
+        return new ProfileSpec(
+                base.key(),
+                base.displayName(),
+                base.enabled(),
+                base.protocolDefaults(),
+                base.accounts(),
+                base.auth(),
+                base.bindings(),
+                sandbox,
+                base.vendorNumber());
     }
 
     // ── Vendor binding (#2516, ADR-0050 amendment) ──────────────────────────────────

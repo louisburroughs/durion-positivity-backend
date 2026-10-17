@@ -25,4 +25,7 @@ public interface SupplierProfileRepository extends JpaRepository<SupplierProfile
     /** The profiles of one vendor, ordered by {@code supplierRef} (#2516 profile list filter). */
     @NonNull
     List<SupplierProfileEntity> findByVendorIdOrderBySupplierRefAsc(@NonNull UUID vendorId);
+
+    /** The profiles of a page of vendors in one query (#2712 replay): a vendor without profiles has no rows. */
+    List<SupplierProfileEntity> findByVendorIdIn(@NonNull java.util.Collection<UUID> vendorIds);
 }
