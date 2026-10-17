@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.vendor.service.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -17,6 +18,9 @@ import org.jspecify.annotations.Nullable;
  * @param remitTo the remit-to address; omit when not yet known
  * @param defaultPaymentTerms {@code DUE_ON_RECEIPT} or {@code NET<n>}, n 1–120
  * @param defaultCurrency ISO 4217 code, upper case
+ * @param requestId an idempotency key the client mints (UUID, #2678); optional. A retry with the same key and
+ *     the same payload answers the original 201 body; the same key with another payload is 409
+ *     {@code IDEMPOTENCY_CONFLICT}
  */
 @Schema(description = "Creates a vendor. vendorNumber is allocated when omitted and never changes afterwards.")
 public record VendorCreateRequest(
@@ -44,7 +48,37 @@ public record VendorCreateRequest(
         String defaultPaymentTerms,
 
         @Schema(description = "ISO 4217 currency code, upper case.", example = "USD") @NonNull
-        String defaultCurrency) {
+        String defaultCurrency,
+
+        @Schema(
+                description = "Idempotency key the client mints (UUID). Reuse it only for an identical payload: a"
+                        + " retry after a timeout or 5xx then answers the original 201 body instead of creating a"
+                        + " second vendor; the same key with another payload is 409 IDEMPOTENCY_CONFLICT. Omit for"
+                        + " no idempotency.",
+                example = "019a0000-0000-7000-8000-000000000101",
+                requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+        @Nullable
+        UUID requestId) {
+
+    /** Without an idempotency key. */
+    public VendorCreateRequest(
+            @Nullable String vendorNumber,
+            @NonNull String legalName,
+            @NonNull String displayName,
+            @Nullable List<TaxRegistrationDto> taxRegistrations,
+            @Nullable RemitToDto remitTo,
+            @NonNull String defaultPaymentTerms,
+            @NonNull String defaultCurrency) {
+        this(
+                vendorNumber,
+                legalName,
+                displayName,
+                taxRegistrations,
+                remitTo,
+                defaultPaymentTerms,
+                defaultCurrency,
+                null);
+    }
 
     public VendorCreateRequest {
         if (vendorNumber != null) {

@@ -41,7 +41,7 @@ connection profile belongs to exactly one vendor. No endpoint deletes a vendor.
 | --- | --- | --- | --- |
 | GET | `/v1/supplier/vendors?q=&status=&page=&size=` | `supplier:vendor:read` | 200 |
 | GET | `/v1/supplier/vendors/{vendorId}` | `supplier:vendor:read` | 200, 404 `SUPPLIER_VENDOR_NOT_FOUND` |
-| POST | `/v1/supplier/vendors` | `supplier:vendor:write` | 201, 400 `VALIDATION_ERROR`, 409 `SUPPLIER_VENDOR_NUMBER_TAKEN` |
+| POST | `/v1/supplier/vendors` | `supplier:vendor:write` | 201, 400 `VALIDATION_ERROR`, 409 `SUPPLIER_VENDOR_NUMBER_TAKEN`; optional `requestId` idempotency key (#2678): same key + same payload replays the original 201, same key + another payload (or a concurrent use) is 409 `IDEMPOTENCY_CONFLICT`; keys live in `supplier_vendor_create_request` (V8; own generated key, `requestId` unique per tenant) with the payload hash (length-prefixed canonical form) and the kept body, never the payload |
 | PUT | `/v1/supplier/vendors/{vendorId}` (carries `version`) | `supplier:vendor:write` | 200, 400, 404, 409 `CONFLICT` |
 | POST | `…/{vendorId}/deactivation` · `…/reactivation` `{reason}` | `supplier:vendor:write` | 200, 400, 404, 409 `CONFLICT` |
 | POST | `…/{vendorId}/remit-to-changes` `{remitTo, reason}` | `supplier:vendor:write` | 201, 400, 404, 409 `SUPPLIER_VENDOR_REMIT_CHANGE_PENDING` |

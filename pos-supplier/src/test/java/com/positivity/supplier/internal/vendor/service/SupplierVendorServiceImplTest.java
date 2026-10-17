@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
+import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.internal.config.JpaConfig;
 import com.positivity.supplier.internal.entity.SupplierOutboxEventEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierProfilePersistenceFixtures;
+import com.positivity.supplier.internal.entity.SupplierVendorCreateRequestEntity;
 import com.positivity.supplier.internal.entity.VendorTaxIdCipher;
 import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierForbiddenException;
@@ -16,6 +18,7 @@ import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
 import com.positivity.supplier.internal.repository.SupplierOutboxEventRepository;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
+import com.positivity.supplier.internal.repository.SupplierVendorCreateRequestRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRemitChangeRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
@@ -97,6 +100,9 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
 
     @Autowired
     private SupplierVendorRemitChangeRepository remitChangeRepository;
+
+    @Autowired
+    private SupplierVendorCreateRequestRepository createRequests;
 
     @Autowired
     private SupplierOutboxEventRepository outboxRepository;
@@ -846,6 +852,74 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
     private static final class ApiErrorField {
         static String of(com.positivity.shared.error.ApiError.FieldError error) {
             return error.field();
+        }
+    }
+
+    @Nested
+    @DisplayName("#2678: an idempotency key on create")
+    class CreateIdempotency {
+
+        private VendorCreateRequest keyed(UUID requestId, String displayName) {
+            return new VendorCreateRequest(
+                    null,
+                    "Michelin North America, Inc.",
+                    displayName,
+                    List.of(new TaxRegistrationDto(null, "EIN", "000-00-1234", null)),
+                    null,
+                    "NET30",
+                    "USD",
+                    requestId);
+        }
+
+        @Test
+        @DisplayName("a retry with the same requestId and payload answers the original body and creates nothing")
+        void sameKeySamePayloadReplays() {
+            UUID key = UUIDv7Generator.generate();
+            long vendorsBefore = vendorRepository.count();
+            long factsBefore = outboxRepository.count();
+
+            VendorView first = as("clerk.a", () -> service.createVendor(keyed(key, "Michelin")));
+            VendorView again = as("clerk.a", () -> service.createVendor(keyed(key, "Michelin")));
+
+            assertThat(again).isEqualTo(first);
+            assertThat(vendorRepository.count()).isEqualTo(vendorsBefore + 1);
+            assertThat(outboxRepository.count()).isEqualTo(factsBefore + 1);
+            assertThat(createRequests.findByRequestId(key)).isPresent();
+        }
+
+        @Test
+        @DisplayName("the same requestId with another payload is 409 IDEMPOTENCY_CONFLICT and creates nothing")
+        void sameKeyOtherPayloadIsRefused() {
+            UUID key = UUIDv7Generator.generate();
+            as("clerk.a", () -> service.createVendor(keyed(key, "Michelin")));
+            long vendors = vendorRepository.count();
+
+            assertThatThrownBy(() -> as("clerk.a", () -> service.createVendor(keyed(key, "Michelin Tires"))))
+                    .isInstanceOfSatisfying(
+                            SupplierConflictException.class,
+                            refused -> assertThat(refused.getCode())
+                                    .isEqualTo(SupplierConflictException.IDEMPOTENCY_CONFLICT));
+            assertThat(vendorRepository.count()).isEqualTo(vendors);
+        }
+
+        @Test
+        @DisplayName("without a requestId every create is a new vendor, as before")
+        void noKeyNoIdempotency() {
+            long vendors = vendorRepository.count();
+            as("clerk.a", () -> service.createVendor(create(null, null)));
+            as("clerk.a", () -> service.createVendor(create(null, null)));
+            assertThat(vendorRepository.count()).isEqualTo(vendors + 2);
+        }
+
+        @Test
+        @DisplayName("the key table keeps the hash and the body, never the payload's registration number")
+        void keyRowHoldsNoNumber() {
+            UUID key = UUIDv7Generator.generate();
+            as("clerk.a", () -> service.createVendor(keyed(key, "Michelin")));
+            SupplierVendorCreateRequestEntity row =
+                    createRequests.findByRequestId(key).orElseThrow();
+            assertThat(row.getRequestHash()).hasSize(64);
+            assertThat(row.getResponseJson()).contains("Michelin").doesNotContain("000-00-1234");
         }
     }
 }

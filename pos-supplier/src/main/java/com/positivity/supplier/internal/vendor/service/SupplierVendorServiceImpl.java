@@ -3,6 +3,7 @@ package com.positivity.supplier.internal.vendor.service;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.supplier.internal.entity.SupplierVendorCreateRequestEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorRemitChangeEntity;
 import com.positivity.supplier.internal.entity.VendorRemitTo;
@@ -12,6 +13,7 @@ import com.positivity.supplier.internal.exception.SupplierConflictException;
 import com.positivity.supplier.internal.exception.SupplierForbiddenException;
 import com.positivity.supplier.internal.exception.SupplierNotFoundException;
 import com.positivity.supplier.internal.exception.SupplierValidationException;
+import com.positivity.supplier.internal.repository.SupplierVendorCreateRequestRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRemitChangeRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import com.positivity.supplier.internal.service.model.PagedResponse;
@@ -40,6 +42,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -51,6 +54,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * The vendor master (#2516, ADR-0070 Decision 2, SPEC §4.9 "Vendors (AW23)").
@@ -94,6 +98,8 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
 
     private final SupplierVendorRepository vendorRepository;
     private final SupplierVendorRemitChangeRepository remitChangeRepository;
+    private final SupplierVendorCreateRequestRepository createRequests;
+    private final ObjectMapper objectMapper;
     private final VendorNumberAllocator numberAllocator;
     private final VendorFactPublisher factPublisher;
     private final VendorTaxIdCipher taxIdCipher;
@@ -152,6 +158,12 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
     @NonNull
     public VendorView createVendor(@NonNull VendorCreateRequest request) {
         Objects.requireNonNull(request, "request must not be null");
+        // #2678: a retry after an unknown outcome replays the original body; another payload under the key is refused.
+        Optional<IdempotencyKey> key = IdempotencyKey.of(request);
+        Optional<VendorView> replay = key.flatMap(this::replay);
+        if (replay.isPresent()) {
+            return replay.get();
+        }
         String actor = currentActor();
         Instant now = Instant.now(clock);
         String vendorNumber = request.vendorNumber();
@@ -196,7 +208,67 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         }
         factPublisher.publish(vendor, now, actor);
         log.info("Created vendor {} ({})", vendor.getVendorNumber(), vendor.getVendorId());
-        return toView(vendor);
+        VendorView view = toView(vendor);
+        UUID createdVendorId = vendor.getVendorId();
+        key.ifPresent(k -> remember(k, createdVendorId, view));
+        return view;
+    }
+
+    /** A client's idempotency key with the hash of the payload it came with (#2678). */
+    record IdempotencyKey(UUID requestId, String requestHash) {
+        static Optional<IdempotencyKey> of(VendorCreateRequest request) {
+            return request.requestId() == null
+                    ? Optional.empty()
+                    : Optional.of(new IdempotencyKey(request.requestId(), VendorCreateRequestHash.of(request)));
+        }
+    }
+
+    /**
+     * The body a {@code requestId} already answered, when its payload hash matches (#2678).
+     *
+     * @throws SupplierConflictException {@code IDEMPOTENCY_CONFLICT} when the key was used with another payload
+     */
+    private Optional<VendorView> replay(IdempotencyKey key) {
+        return createRequests.findByRequestId(key.requestId()).map(original -> {
+            if (!original.getRequestHash().equals(key.requestHash())) {
+                throw new SupplierConflictException(
+                        SupplierConflictException.IDEMPOTENCY_CONFLICT,
+                        "requestId " + key.requestId() + " was already used to create a vendor with a different"
+                                + " payload; mint a new requestId for a new vendor");
+            }
+            try {
+                return objectMapper.readValue(original.getResponseJson(), VendorView.class);
+            } catch (RuntimeException unreadable) {
+                throw new IllegalStateException(
+                        "The kept vendor-create response for requestId " + key.requestId() + " is unreadable",
+                        unreadable);
+            }
+        });
+    }
+
+    /**
+     * Keeps the key with its hash and the 201 body, in the create's transaction. The primary key is the backstop
+     * for one requestId racing itself: the loser's insert collides and it answers the conflict, not a second vendor.
+     */
+    private void remember(IdempotencyKey key, UUID vendorId, VendorView view) {
+        try {
+            createRequests.saveAndFlush(SupplierVendorCreateRequestEntity.builder()
+                    .requestId(key.requestId())
+                    .requestHash(key.requestHash())
+                    .vendorId(vendorId)
+                    .responseJson(objectMapper.writeValueAsString(view))
+                    .build());
+        } catch (DataIntegrityViolationException failure) {
+            if (isConstraint(failure, REQUEST_KEY)) {
+                // One requestId racing itself: the winner's row is in; this create rolls back with the vendor.
+                throw new SupplierConflictException(
+                        SupplierConflictException.IDEMPOTENCY_CONFLICT,
+                        "requestId " + key.requestId() + " is being used by a concurrent vendor create; retry the"
+                                + " same request once it has answered");
+            }
+            // Any other integrity failure on the key row is a defect, not a reused key: surface it as one.
+            throw failure;
+        }
     }
 
     @Override
@@ -394,12 +466,19 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
 
     /** The unique key on {@code (tenant_id, vendor_number)} in {@code V3__vendor_master.sql}. */
     static final String VENDOR_NUMBER_KEY = "supplier_vendor_number_key";
+    /** The per-tenant unique on the idempotency key (#2678, V8). */
+    static final String REQUEST_KEY = "uq_svcreate_request";
 
     /** Whether an integrity violation is the vendor-number key — and only that — being hit. */
     static boolean isVendorNumberTaken(@NonNull DataIntegrityViolationException failure) {
+        return isConstraint(failure, VENDOR_NUMBER_KEY);
+    }
+
+    /** Whether the integrity failure is the named constraint and no other (#2678). */
+    static boolean isConstraint(@NonNull DataIntegrityViolationException failure, @NonNull String constraint) {
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause instanceof org.hibernate.exception.ConstraintViolationException violation) {
-                return VENDOR_NUMBER_KEY.equalsIgnoreCase(violation.getConstraintName());
+                return constraint.equalsIgnoreCase(violation.getConstraintName());
             }
         }
         return false;
