@@ -1,13 +1,13 @@
 package com.positivity.tax;
 
 import java.util.Arrays;
-import java.util.concurrent.ExecutionException;
-import org.apache.kafka.common.errors.TopicExistsException;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.kafka.KafkaContainer;
 

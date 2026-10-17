@@ -159,8 +159,10 @@ class TaxOutboxBrokerIT {
             Awaitility.await()
                     .atMost(Duration.ofSeconds(60))
                     .pollInterval(Duration.ofMillis(250))
-                    .untilAsserted(() -> assertThat(
-                                    outboxEvents.findById(row.getId()).orElseThrow().getPublishedAt())
+                    .untilAsserted(() -> assertThat(outboxEvents
+                                    .findById(row.getId())
+                                    .orElseThrow()
+                                    .getPublishedAt())
                             .as("the listener re-queued the window's fact (row unpublished again), same eventId")
                             .isNull());
 
@@ -211,7 +213,9 @@ class TaxOutboxBrokerIT {
         while (Instant.now().isBefore(deadline)) {
             for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofMillis(500))) {
                 if (key.equals(record.key())
-                        && TenantKafkaHeaders.read(record.headers()).filter(tenant::equals).isPresent()) {
+                        && TenantKafkaHeaders.read(record.headers())
+                                .filter(tenant::equals)
+                                .isPresent()) {
                     return record;
                 }
             }
