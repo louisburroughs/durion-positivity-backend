@@ -5,6 +5,7 @@ import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
+import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.entity.VendorRemitTo;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import java.time.Instant;
@@ -35,6 +36,7 @@ public class VendorFactPublisher {
     static final String SOURCE = "pos-supplier";
 
     private final SupplierOutboxEventWriter outboxEventWriter;
+    private final SupplierProfileRepository profiles;
 
     /**
      * Queues the vendor's current state.
@@ -60,11 +62,22 @@ public class VendorFactPublisher {
                         null,
                         null,
                         actor,
-                        toFact(vendor, occurredAt)));
+                        toFact(
+                                vendor,
+                                occurredAt,
+                                VendorPurchasingProfile.designated(
+                                        profiles.findByVendorIdOrderBySupplierRefAsc(vendor.getVendorId())))));
     }
 
     @NonNull
     static SupplierVendorUpdatedV1 toFact(@NonNull SupplierVendorEntity vendor, @NonNull Instant occurredAt) {
+        return toFact(vendor, occurredAt, null);
+    }
+
+    /** The fact with the vendor's purchasing channel (#2712), null when it has none. */
+    @NonNull
+    static SupplierVendorUpdatedV1 toFact(
+            @NonNull SupplierVendorEntity vendor, @NonNull Instant occurredAt, @Nullable String purchaseOrderSupplierRef) {
         return new SupplierVendorUpdatedV1(
                 vendor.getVendorId(),
                 vendor.getVendorNumber(),
@@ -88,7 +101,8 @@ public class VendorFactPublisher {
                 vendor.getRemitToApprovedBy(),
                 vendor.getCreatedBy(),
                 vendor.getCreatedAt(),
-                occurredAt);
+                occurredAt,
+                purchaseOrderSupplierRef);
     }
 
     private static SupplierVendorUpdatedV1.@Nullable RemitTo toFactRemitTo(@Nullable VendorRemitTo remitTo) {

@@ -80,6 +80,12 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
     @Autowired
     private SupplierVendorRepository vendorRepository;
 
+    @Autowired
+    private jakarta.persistence.EntityManager entityManager;
+
+    @Autowired
+    private java.time.Clock clock;
+
     private SupplierYamlBootstrap bootstrap;
 
     private SimpleMeterRegistry meterRegistry;
@@ -111,7 +117,16 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())),
                 tenantIterator,
                 transactionManager,
-                meterRegistry);
+                meterRegistry,
+                // #2712: the designation republishes through the real publisher in SupplierProfileAdminServiceImplTest;
+                // here the fact is beside the point, so it is a mock.
+                new com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile(
+                        profileRepository,
+                        vendorRepository,
+                        org.mockito.Mockito.mock(
+                                com.positivity.supplier.internal.vendor.service.VendorFactPublisher.class),
+                        entityManager,
+                        clock));
         michelinVendorId = vendor("MICHELIN").getVendorId();
         vendor("CONTI");
     }

@@ -64,6 +64,10 @@ import org.jspecify.annotations.Nullable;
  * @param createdBy principal who created the vendor
  * @param createdAt when the vendor was created
  * @param occurredAt when the change this fact reports was committed (or, for a replay, re-sent)
+ * @param purchaseOrderSupplierRef the alias of the vendor's designated purchasing profile in pos-supplier (its one
+ *     enabled, non-sandbox transmission profile), the {@code supplierRef} a purchase order is sent through; null when
+ *     the vendor has no such profile, or more than one and none designated (#2682 ruling, #2712). INTERNAL under
+ *     ADR-0072: a configuration alias, never a person's identifier
  */
 public record SupplierVendorUpdatedV1(
         @NonNull UUID vendorId,
@@ -83,7 +87,8 @@ public record SupplierVendorUpdatedV1(
         @Nullable String remitToApprovedBy,
         @NonNull String createdBy,
         @NonNull Instant createdAt,
-        @NonNull Instant occurredAt) {
+        @NonNull Instant occurredAt,
+        @Nullable String purchaseOrderSupplierRef) {
 
     /** Event type of this payload on {@code supplier.events.v1}. */
     public static final String EVENT_TYPE = "supplier.vendor.updated";
@@ -95,6 +100,51 @@ public record SupplierVendorUpdatedV1(
      * number; consumers apply only version 2 or later.
      */
     public static final int SCHEMA_VERSION = 2;
+
+    /**
+     * Without a purchasing channel (#2712): the shape before {@code purchaseOrderSupplierRef} was added, additively,
+     * at the same schema version (ADR-0044 §3). A consumer reading an older fact sees null, "no channel known".
+     */
+    public SupplierVendorUpdatedV1(
+            @NonNull UUID vendorId,
+            @NonNull String vendorNumber,
+            @NonNull String legalName,
+            @NonNull String displayName,
+            @NonNull List<TaxRegistration> taxRegistrations,
+            @Nullable RemitTo remitTo,
+            int remitToVersion,
+            @Nullable String defaultPaymentTerms,
+            @Nullable String defaultCurrency,
+            @NonNull Status status,
+            @Nullable Instant statusChangedAt,
+            @Nullable String statusReason,
+            @Nullable Instant remitToChangedAt,
+            @Nullable String remitToRequestedBy,
+            @Nullable String remitToApprovedBy,
+            @NonNull String createdBy,
+            @NonNull Instant createdAt,
+            @NonNull Instant occurredAt) {
+        this(
+                vendorId,
+                vendorNumber,
+                legalName,
+                displayName,
+                taxRegistrations,
+                remitTo,
+                remitToVersion,
+                defaultPaymentTerms,
+                defaultCurrency,
+                status,
+                statusChangedAt,
+                statusReason,
+                remitToChangedAt,
+                remitToRequestedBy,
+                remitToApprovedBy,
+                createdBy,
+                createdAt,
+                occurredAt,
+                null);
+    }
 
     /** Vendor status. A vendor is never deleted, only deactivated. */
     public enum Status {

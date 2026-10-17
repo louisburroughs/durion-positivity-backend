@@ -114,6 +114,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private final TenantIterator tenantIterator;
     private final PlatformTransactionManager transactionManager;
     private final MeterRegistry meterRegistry;
+    private final com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile purchasingProfile;
 
     /**
      * Reconciles the YAML profiles into every active tenant (ADR-0062 §3): the profile tables are
@@ -200,7 +201,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             profile.setRetryMaxAttempts(null);
             profile.setRetryBackoff(null);
         }
-        profile = profileRepository.save(profile);
+        // #2712: a YAML profile that appears, re-points, enables or disables may move the vendor's purchasing channel.
+        SupplierProfileEntity reconciled = profile;
+        profile = purchasingProfile.republishIfChanged(vendorIdsOf(reconciled), () -> profileRepository.save(reconciled));
         UUID vendorProfileId = profile.getVendorProfileId();
         reconcileAuthConfigs(vendorProfileId, spec);
         reconcileAccounts(vendorProfileId, spec);
@@ -332,7 +335,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                 .increment();
         if (profile.getVendorProfileId() != null && profile.isEnabled()) {
             profile.setEnabled(false);
-            profileRepository.save(profile);
+            purchasingProfile.republishIfChanged(vendorIdsOf(profile), () -> profileRepository.save(profile));
         }
     }
 
@@ -344,7 +347,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         for (SupplierProfileEntity profile : profileRepository.findBySourceOfTruth(ProfileSourceOfTruth.YAML)) {
             if (!yamlKeys.contains(profile.getSupplierRef()) && profile.isEnabled()) {
                 profile.setEnabled(false);
-                profileRepository.save(profile);
+                purchasingProfile.republishIfChanged(vendorIdsOf(profile), () -> profileRepository.save(profile));
             }
         }
     }
@@ -637,5 +640,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private static SupplierConfigurationException invalid(@NonNull String message) {
         return new SupplierConfigurationException(
                 SupplierConfigurationException.YAML_BOOTSTRAP_INVALID, "Supplier YAML bootstrap rejected: " + message);
+    }
+
+    private static java.util.Set<UUID> vendorIdsOf(SupplierProfileEntity profile) {
+        return profile.getVendorId() == null ? java.util.Set.of() : java.util.Set.of(profile.getVendorId());
     }
 }

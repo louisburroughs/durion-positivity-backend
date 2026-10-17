@@ -517,6 +517,15 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
 
     /** The principal name, the form pos-accounting records for approvers (S24 compares them). */
     @NonNull
+    /** The sign-in name, or null when no principal is bound (a reconciliation at start-up); for #2712's republish. */
+    static @Nullable String currentActorOrNull() {
+        try {
+            return currentActor();
+        } catch (RuntimeException noPrincipal) {
+            return null;
+        }
+    }
+
     private static String currentActor() {
         return SecurityContextHelper.getCurrentUsernameOrDefault("system");
     }
