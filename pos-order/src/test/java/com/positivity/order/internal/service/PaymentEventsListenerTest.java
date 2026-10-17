@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
+import com.positivity.domainevents.order.OrderCompletedV1;
 import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderStatus;
@@ -188,6 +189,16 @@ class PaymentEventsListenerTest {
         assertThat(record.getCashRoundingAmount()).isEqualByComparingTo("0.02");
         assertThat(record.getCashIncrement()).isEqualByComparingTo("0.05");
         assertThat(record.cashAmount()).isEqualByComparingTo("100.00");
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<OrderCompletedV1.Tender>> tenders =
+                org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(domainEventPublisher).publishOrderCompleted(eq(order), tenders.capture());
+        assertThat(tenders.getValue()).singleElement().satisfies(t -> {
+            assertThat(t.methodType()).isEqualTo("CASH");
+            assertThat(t.amount()).isEqualByComparingTo("99.98");
+            assertThat(t.settledAmount()).isEqualByComparingTo("100.00");
+            assertThat(t.cashRoundingAmount()).isEqualByComparingTo("0.02");
+        });
     }
 
     @Test

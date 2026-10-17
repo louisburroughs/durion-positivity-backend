@@ -122,8 +122,7 @@ class RestInvoicingPortAdapterTest {
         server.expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/payments/cash"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-User", "pos-order"))
-                .andExpect(header(
-                        "X-Authorities", "invoice:manage,invoice:payment:process,invoice:payment:limit_override"))
+                .andExpect(header("X-Authorities", "invoice:manage,invoice:payment:process"))
                 .andExpect(jsonPath("$.idempotencyKey").value("idem-cash-1"))
                 .andExpect(jsonPath("$.amount").value(9.98))
                 .andExpect(jsonPath("$.settledAmount").value(10.00))
@@ -165,6 +164,32 @@ class RestInvoicingPortAdapterTest {
         assertThatThrownBy(() -> adapter.recordCashPayment(INVOICE_ID, cashCommand()))
                 .isInstanceOf(OrderConflictException.class)
                 .hasMessageContaining("CASH_ROUNDING_INVALID");
+    }
+
+    @Test
+    @DisplayName("A8: pos-invoice's 403 (the limit above 500.00 without the override) is the clerk's 403")
+    void cashPaymentLimitRefused() {
+        server.expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/payments/cash"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"FORBIDDEN\",\"message\":\"Missing authority"
+                                + " invoice:payment:limit_override\",\"status\":403}"));
+
+        assertThatThrownBy(() -> adapter.recordCashPayment(INVOICE_ID, cashCommand()))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+                .hasMessageContaining("invoice:payment:limit_override");
+    }
+
+    @Test
+    @DisplayName("A8: pos-invoice's INVOICE_PARTY_REQUIRED is the order's customer-required refusal")
+    void cashPaymentPartyRequired() {
+        server.expect(requestTo("http://invoice/v1/invoices/" + INVOICE_ID + "/payments/cash"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_CONTENT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"INVOICE_PARTY_REQUIRED\",\"message\":\"no customer\",\"status\":422}"));
+
+        assertThatThrownBy(() -> adapter.recordCashPayment(INVOICE_ID, cashCommand()))
+                .isInstanceOf(com.positivity.order.internal.exception.OrderCustomerRequiredException.class);
     }
 
     @Test
