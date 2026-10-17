@@ -65,7 +65,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class PostingEngineOrchestrator {
 
     /** The payload field a currency-held fact states its currency in (ADR-0067 E-3). */
-    private static final String PAYLOAD_CURRENCY_FIELD = "currencyCode";
+    /** The payload field naming a fact's currency; the #2620 fence reads it for its {@code nextAction} too. */
+    static final String PAYLOAD_CURRENCY_FIELD = "currencyCode";
 
     /** The payload list a register-session close fact states its drawer movements in, each with its own currency. */
     private static final String PAYLOAD_MOVEMENTS_FIELD = "movements";
@@ -239,12 +240,18 @@ public class PostingEngineOrchestrator {
             return Optional.empty();
         }
         String currencyCode = foreignPayloadCurrency(event.getPayload());
-        if (currencyCode == null) {
+        if (currencyCode == null && statesACurrency(event.getPayload())) {
+            // Every stated currency is the ledger's: the hold is over, normal evaluation continues.
             return Optional.empty();
         }
-        String details = "Fact is in " + currencyCode + " but the ledger books " + ledgerCurrency.code()
-                + " only; never booked at par (ADR-0067 PC-9). Event re-suspended with"
-                + " CURRENCY_NOT_SUPPORTED until a booking rate or manual handling releases it";
+        // #2620: a held row that states no currency is unknown, not functional. It stays held.
+        String details = currencyCode == null
+                ? "Fact states no currency; the ledger books " + ledgerCurrency.code()
+                        + " only and an unknown currency is never booked at par (ADR-0067 PC-9). Event re-suspended"
+                        + " with CURRENCY_NOT_SUPPORTED"
+                : "Fact is in " + currencyCode + " but the ledger books " + ledgerCurrency.code()
+                        + " only; never booked at par (ADR-0067 PC-9). Event re-suspended with"
+                        + " CURRENCY_NOT_SUPPORTED until a booking rate or manual handling releases it";
         log.warn("Re-suspending currency-held event {}: {}", event.getEventId(), details);
 
         event.setStatus(AccountingEventStatus.SUSPENDED);
@@ -258,6 +265,25 @@ public class PostingEngineOrchestrator {
         reprocessingAttemptHistoryRepository.save(attemptHistory);
 
         return Optional.of(PostingResult.failure(PostingFailureReason.CURRENCY_NOT_SUPPORTED, details));
+    }
+
+    /** Whether the fact states any currency at all (its own, or a movement's). */
+    private static boolean statesACurrency(@Nullable Map<String, Object> payload) {
+        if (payload == null) {
+            return false;
+        }
+        if (payload.get(PAYLOAD_CURRENCY_FIELD) != null) {
+            return true;
+        }
+        Object movements = payload.get("movements");
+        if (movements instanceof java.util.Collection<?> rows) {
+            for (Object row : rows) {
+                if (row instanceof Map<?, ?> movement && movement.get(PAYLOAD_CURRENCY_FIELD) != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

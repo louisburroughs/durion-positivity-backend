@@ -1065,13 +1065,15 @@ public enum PermissionCode {
     ACCOUNTING__TAX_REGISTRATION__MANAGE(561, "accounting:tax_registration:manage"),
     ACCOUNTING__TAX_REGISTRATION__VIEW(562, "accounting:tax_registration:view"),
     // ── Security (new) ─────────────────────────────────────────────────────────
-    SECURITY__AUDIT_EXPORT__WEBHOOK_MANAGE(563, "security:audit_export:webhook_manage");
+    SECURITY__AUDIT_EXPORT__WEBHOOK_MANAGE(563, "security:audit_export:webhook_manage"),
+    // ── Order (new) ────────────────────────────────────────────────────────────
+    ORDER__PURCHASE_ORDER__REOPEN(564, "order:purchase_order:reopen");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 106;
+    public static final int CATALOG_VERSION = 107;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

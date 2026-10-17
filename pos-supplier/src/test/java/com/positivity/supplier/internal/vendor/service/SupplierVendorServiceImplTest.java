@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
+import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.PostgresSliceTestBase;
 import com.positivity.supplier.internal.config.JpaConfig;
@@ -67,6 +68,7 @@ import tools.jackson.databind.json.JsonMapper;
     VendorNumberAllocator.class,
     VendorFactPublisher.class,
     SupplierOutboxEventWriter.class,
+    com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig.class,
     SupplierVendorServiceImplTest.SupportConfig.class
 })
 @DisplayName("SupplierVendorServiceImpl — the vendor master (#2516)")
@@ -576,7 +578,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         void readsAreMasked() {
             VendorView created = createWith(
                     new TaxRegistrationDto(null, "SSN", SSN, null),
-                    new TaxRegistrationDto(null, "BN", "FAKE-123", "ON"));
+                    new TaxRegistrationDto(null, "QST", "FAKE-123", "QC"));
             VendorView got = service.getVendor(created.vendorId());
             VendorView listed = service.listVendors("Sole", null, 0, 50).items().getFirst();
             VendorView updated = as(
@@ -606,7 +608,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                                 TaxRegistrationView::scheme, TaxRegistrationView::region, TaxRegistrationView::last4)
                         .containsExactly(
                                 org.assertj.core.groups.Tuple.tuple("SSN", null, "1234"),
-                                org.assertj.core.groups.Tuple.tuple("BN", "ON", null));
+                                org.assertj.core.groups.Tuple.tuple("QST", "QC", null));
                 String json = JSON.writeValueAsString(view);
                 assertThat(json.contains(SSN) || json.contains(SSN_BARE) || json.contains("FAKE-123"))
                         .as("number absent from the response")
@@ -618,7 +620,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         @Test
         @DisplayName("AC 9: a registration kept by id without its number keeps its ciphertext and queues no fact")
         void keptRegistrationIsUnchanged() {
-            VendorView vendor = createWith(new TaxRegistrationDto(null, "GST_HST", "000000000RT0001", "ON"));
+            VendorView vendor = createWith(new TaxRegistrationDto(null, "QST", "0000000000TQ0001", "QC"));
             String before = storedText(vendor.vendorId());
             int factsBefore = vendorFacts(vendor.vendorId()).size();
             UUID registrationId = vendor.taxRegistrations().getFirst().registrationId();
@@ -627,7 +629,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                     "clerk.a",
                     () -> service.updateVendor(
                             vendor.vendorId(),
-                            update(vendor, new TaxRegistrationDto(registrationId, "GST_HST", null, "ON"))));
+                            update(vendor, new TaxRegistrationDto(registrationId, "QST", null, "QC"))));
 
             assertThat(storedText(vendor.vendorId())).isEqualTo(before);
             assertThat(after.version()).isEqualTo(vendor.version());
@@ -723,7 +725,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
         void reEnteredNumberKeepsTheIdAndOmittedIsRemoved() {
             VendorView vendor = createWith(
                     new TaxRegistrationDto(null, "EIN", SSN, null),
-                    new TaxRegistrationDto(null, "BN", "000000000RT0001", "ON"));
+                    new TaxRegistrationDto(null, "QST", "0000000000TQ0001", "QC"));
             UUID ein = vendor.taxRegistrations().getFirst().registrationId();
 
             VendorView after = as(
@@ -832,19 +834,22 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                         });
             }
 
-            VendorView stored = createWith(new TaxRegistrationDto(null, " gst_hst ", "000000000RT0001", "qc"));
+            VendorView stored = createWith(new TaxRegistrationDto(null, " qst ", "0000000000TQ0001", "qc"));
             assertThat(stored.taxRegistrations()).singleElement().satisfies(view -> {
-                assertThat(view.scheme()).isEqualTo("GST_HST");
+                assertThat(view.scheme()).isEqualTo("QST");
                 assertThat(view.region()).isEqualTo("QC");
             });
             JsonNode element = stored(stored.vendorId()).get(0);
-            assertThat(element.path("scheme").stringValue()).isEqualTo("GST_HST");
+            assertThat(element.path("scheme").stringValue()).isEqualTo("QST");
             assertThat(element.path("region").stringValue()).isEqualTo("QC");
-            assertThat(createWith(new TaxRegistrationDto(null, "VAT/IVA", "FAKE00001234", "ca-qc"))
-                            .taxRegistrations()
-                            .getFirst()
-                            .region())
-                    .isEqualTo("CA-QC");
+            // A shape-conformant scheme outside pos-tax's vocabulary is refused since #2623 (unknown scheme), not
+            // stored.
+            assertThatThrownBy(() -> createWith(new TaxRegistrationDto(null, "VAT/IVA", "FAKE00001234", "ca-qc")))
+                    .isInstanceOfSatisfying(
+                            SupplierValidationException.class,
+                            failure -> assertThat(failure.getFieldErrors())
+                                    .extracting(ApiErrorField::of)
+                                    .containsExactly("taxRegistrations[0].scheme"));
         }
     }
 
@@ -920,6 +925,226 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
                     createRequests.findByRequestId(key).orElseThrow();
             assertThat(row.getRequestHash()).hasSize(64);
             assertThat(row.getResponseJson()).contains("Michelin").doesNotContain("000-00-1234");
+        }
+    }
+
+    @Nested
+    @DisplayName("tax-registration schemes are a closed vocabulary from pos-tax (#2623)")
+    class SchemeVocabulary {
+
+        @Autowired
+        private com.positivity.supplier.internal.client.TaxRegistrationSchemeClient schemeClient;
+
+        private static final String GST = "000000000RT0001";
+        private static final String QST_NUMBER = "0000000000TQ0001";
+
+        @org.junit.jupiter.api.BeforeEach
+        void vocabulary() {
+            org.mockito.Mockito.reset(schemeClient);
+            org.mockito.Mockito.when(schemeClient.fetch(org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(
+                            com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig
+                                    .placeholderVocabulary());
+        }
+
+        private VendorView createWith(TaxRegistrationDto... registrations) {
+            return as(
+                    "clerk.a",
+                    () -> service.createVendor(new VendorCreateRequest(
+                            null, "Les Pneus Inc.", "Pneus", List.of(registrations), null, "NET30", "CAD")));
+        }
+
+        private static SupplierValidationException refusal(org.junit.jupiter.api.function.ThrowingSupplier<?> call) {
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(call::get);
+            assertThat(thrown).isInstanceOf(SupplierValidationException.class);
+            return (SupplierValidationException) thrown;
+        }
+
+        private static List<String> fields(SupplierValidationException refused) {
+            return refused.getFieldErrors().stream()
+                    .map(ApiError.FieldError::field)
+                    .toList();
+        }
+
+        private JsonNode stored(UUID vendorId) {
+            entityManager.flush();
+            String text = (String) entityManager
+                    .createNativeQuery("SELECT tax_registrations::text FROM supplier_vendor WHERE vendor_id = ?1")
+                    .setParameter(1, vendorId)
+                    .getSingleResult();
+            return JSON.readTree(text);
+        }
+
+        @Test
+        @DisplayName("AC 3: gst_hst and QST/qc are accepted and stored as the listed codes, region null and QC")
+        void acceptedEntryIsCanonical() {
+            VendorView vendor = createWith(
+                    new TaxRegistrationDto(null, "gst_hst", GST, null),
+                    new TaxRegistrationDto(null, " qst ", QST_NUMBER, " qc "));
+
+            assertThat(vendor.taxRegistrations())
+                    .extracting(r -> r.scheme() + "/" + r.region() + "/" + r.last4())
+                    .containsExactly("GST_HST/null/0001", "QST/QC/0001");
+            // A region sent with its country prefix is stored as the listed subdivision (#2733 review).
+            VendorView prefixed = createWith(new TaxRegistrationDto(null, "QST", QST_NUMBER, "ca-qc"));
+            assertThat(prefixed.taxRegistrations().getFirst().region()).isEqualTo("QC");
+            JsonNode stored = stored(vendor.vendorId());
+            assertThat(stored.get(0).path("scheme").stringValue()).isEqualTo("GST_HST");
+            assertThat(stored.get(0).path("region").isNull()).isTrue();
+            assertThat(stored.get(1).path("region").stringValue()).isEqualTo("QC");
+            // One read per request that carries a number: two creates above, two reads (the client's own cache is
+            // mocked away here; TaxRegistrationSchemeClientTest covers it).
+            org.mockito.Mockito.verify(schemeClient, org.mockito.Mockito.times(2))
+                    .fetch(null);
+        }
+
+        @Test
+        @DisplayName("AC 4: a personal-id scheme (SSN) is stored with the same shape as a business one (EIN)")
+        void personalIdSchemeIsStoredLikeABusinessOne() {
+            VendorView vendor = createWith(
+                    new TaxRegistrationDto(null, "SSN", "000-00-1234", null),
+                    new TaxRegistrationDto(null, "EIN", "00-0005678", null));
+
+            JsonNode stored = stored(vendor.vendorId());
+            java.util.Set<String> ssnFields = new java.util.TreeSet<>();
+            java.util.Set<String> einFields = new java.util.TreeSet<>();
+            stored.get(0).properties().forEach(property -> ssnFields.add(property.getKey()));
+            stored.get(1).properties().forEach(property -> einFields.add(property.getKey()));
+            assertThat(ssnFields).isEqualTo(einFields).contains("registrationId", "scheme", "region", "last4");
+            assertThat(vendor.taxRegistrations().get(0).last4()).isEqualTo("1234");
+            JsonNode fact = envelope(vendorFacts(vendor.vendorId()).getFirst())
+                    .path("payload")
+                    .path("taxRegistrations")
+                    .get(0);
+            assertThat(fact.path("scheme").stringValue()).isEqualTo("SSN");
+            assertThat(fact.path("region").isNull()).isTrue();
+            assertThat(fact.path("last4").stringValue()).isEqualTo("1234");
+        }
+
+        @Test
+        @DisplayName("AC 5: an unknown scheme, a missing, wrong or forbidden region are 400 with the field named;"
+                + " two bad entries report both; nothing is written and no fact is queued; no number in the message")
+        void refusals() {
+            long vendorsBefore = vendorRepository.count();
+            long factsBefore = outboxRepository.count();
+
+            assertThat(fields(refusal(() -> createWith(new TaxRegistrationDto(null, "TAXID", GST, null)))))
+                    .containsExactly("taxRegistrations[0].scheme");
+            assertThat(fields(refusal(() -> createWith(new TaxRegistrationDto(null, "QST", QST_NUMBER, null)))))
+                    .containsExactly("taxRegistrations[0].region");
+            assertThat(fields(refusal(() -> createWith(new TaxRegistrationDto(null, "QST", QST_NUMBER, "ON")))))
+                    .containsExactly("taxRegistrations[0].region");
+            assertThat(fields(refusal(() -> createWith(new TaxRegistrationDto(null, "EIN", "00-0005678", "NY")))))
+                    .containsExactly("taxRegistrations[0].region");
+            SupplierValidationException both = refusal(() -> createWith(
+                    new TaxRegistrationDto(null, "TAXID", GST, null),
+                    new TaxRegistrationDto(null, "QST", QST_NUMBER, "ON")));
+            assertThat(fields(both)).containsExactly("taxRegistrations[0].scheme", "taxRegistrations[1].region");
+            String said = both.getMessage() + both.getFieldErrors();
+            assertThat(said).doesNotContain(GST).doesNotContain(QST_NUMBER).doesNotContain("TAXID");
+            assertThat(both.getFieldErrors())
+                    .extracting(ApiError.FieldError::message)
+                    .containsExactly("scheme is not a listed code", "region not valid for this scheme");
+
+            entityManager.flush();
+            assertThat(vendorRepository.count()).isEqualTo(vendorsBefore);
+            assertThat(outboxRepository.count()).isEqualTo(factsBefore);
+        }
+
+        @Test
+        @DisplayName("AC 6: a kept registration of an unlisted scheme is not checked and pos-tax is not called")
+        void keptEntriesAreNotChecked() {
+            VendorView vendor = createWith(new TaxRegistrationDto(null, "GST_HST", GST, null));
+            // The stored scheme becomes one no list knows (written before this story).
+            entityManager.flush();
+            entityManager
+                    .createNativeQuery("UPDATE supplier_vendor SET tax_registrations = jsonb_set(tax_registrations,"
+                            + " '{0,scheme}', '\"LEGACY\"') WHERE vendor_id = ?1")
+                    .setParameter(1, vendor.vendorId())
+                    .executeUpdate();
+            entityManager.clear();
+            UUID registrationId = vendor.taxRegistrations().get(0).registrationId();
+            org.mockito.Mockito.reset(schemeClient);
+
+            VendorView kept = as(
+                    "clerk.a",
+                    () -> service.updateVendor(
+                            vendor.vendorId(),
+                            new VendorUpdateRequest(
+                                    vendor.legalName(),
+                                    "Pneus renamed",
+                                    List.of(new TaxRegistrationDto(registrationId, "LEGACY", null, null)),
+                                    vendor.defaultPaymentTerms(),
+                                    vendor.defaultCurrency(),
+                                    vendor.version())));
+
+            assertThat(kept.displayName()).isEqualTo("Pneus renamed");
+            assertThat(kept.taxRegistrations().get(0).scheme()).isEqualTo("LEGACY");
+            org.mockito.Mockito.verifyNoInteractions(schemeClient);
+        }
+
+        @Test
+        @DisplayName("AC 7: pos-tax down: a create with a number is 503 and writes nothing; a rename makes no call")
+        void posTaxDownFailsClosed() {
+            VendorView vendor = createWith(new TaxRegistrationDto(null, "EIN", "00-0005678", null));
+            org.mockito.Mockito.reset(schemeClient);
+            org.mockito.Mockito.when(schemeClient.fetch(org.mockito.ArgumentMatchers.any()))
+                    .thenThrow(new com.positivity.supplier.internal.exception.SupplierServiceUnavailableException(
+                            "pos-tax could not be reached"));
+            long vendorsBefore = vendorRepository.count();
+            long factsBefore = outboxRepository.count();
+
+            assertThatThrownBy(() -> createWith(new TaxRegistrationDto(null, "GST_HST", GST, null)))
+                    .isInstanceOf(com.positivity.supplier.internal.exception.SupplierServiceUnavailableException.class);
+            entityManager.flush();
+            assertThat(vendorRepository.count()).isEqualTo(vendorsBefore);
+            assertThat(outboxRepository.count()).isEqualTo(factsBefore);
+
+            org.mockito.Mockito.reset(schemeClient);
+            VendorView renamed = as(
+                    "clerk.a",
+                    () -> service.updateVendor(
+                            vendor.vendorId(),
+                            new VendorUpdateRequest(
+                                    vendor.legalName(),
+                                    "Pneus renamed",
+                                    List.of(new TaxRegistrationDto(
+                                            vendor.taxRegistrations().get(0).registrationId(), "EIN", null, null)),
+                                    vendor.defaultPaymentTerms(),
+                                    vendor.defaultCurrency(),
+                                    vendor.version())));
+            assertThat(renamed.displayName()).isEqualTo("Pneus renamed");
+            org.mockito.Mockito.verifyNoInteractions(schemeClient);
+        }
+
+        @Test
+        @DisplayName("AC 5: the captured logs (DEBUG over com.positivity.supplier) never hold a refused number")
+        void refusedNumberNeverReachesALog() {
+            ch.qos.logback.classic.Logger supplier =
+                    (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger("com.positivity.supplier");
+            ch.qos.logback.classic.Level before = supplier.getLevel();
+            ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                    new ch.qos.logback.core.read.ListAppender<>();
+            appender.start();
+            supplier.addAppender(appender);
+            supplier.setLevel(ch.qos.logback.classic.Level.DEBUG);
+            try {
+                refusal(() -> createWith(new TaxRegistrationDto(null, "QST", QST_NUMBER, "ON")));
+                org.mockito.Mockito.reset(schemeClient);
+                org.mockito.Mockito.when(schemeClient.fetch(org.mockito.ArgumentMatchers.any()))
+                        .thenThrow(new com.positivity.supplier.internal.exception.SupplierServiceUnavailableException(
+                                "pos-tax could not be reached"));
+                assertThatThrownBy(() -> createWith(new TaxRegistrationDto(null, "GST_HST", GST, null)))
+                        .isInstanceOf(
+                                com.positivity.supplier.internal.exception.SupplierServiceUnavailableException.class);
+            } finally {
+                supplier.detachAppender(appender);
+                supplier.setLevel(before);
+            }
+            assertThat(appender.list)
+                    .allSatisfy(event -> assertThat(event.getFormattedMessage())
+                            .doesNotContain(QST_NUMBER)
+                            .doesNotContain(GST));
         }
     }
 }

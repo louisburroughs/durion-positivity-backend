@@ -51,6 +51,9 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class SupplierExceptionHandler {
     private static final String VALIDATION_ERROR = "VALIDATION_ERROR";
 
+    /** Seconds a client waits before retrying a 503 of a dependency read (#2623), as pos-accounting answers. */
+    private static final int SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS = 5;
+
     private static final Logger log = LoggerFactory.getLogger(SupplierExceptionHandler.class);
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
 
@@ -175,6 +178,21 @@ public class SupplierExceptionHandler {
     }
 
     /** Configuration-state collisions, including YAML-managed profile mutation (ADR-0050 §6). */
+    /**
+     * A dependency the request needs did not answer (#2623: pos-tax's registration-scheme list). 503, nothing was
+     * written, the request may be retried as sent.
+     */
+    @ExceptionHandler(SupplierServiceUnavailableException.class)
+    public ResponseEntity<ApiError> handleServiceUnavailable(
+            SupplierServiceUnavailableException ex, HttpServletRequest request) {
+        ResponseEntity<ApiError> response =
+                build(HttpStatus.SERVICE_UNAVAILABLE, ex.getCode(), ex.getMessage(), request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(response.getHeaders());
+        headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));
+        return new ResponseEntity<>(response.getBody(), headers, HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
     @ExceptionHandler(SupplierConflictException.class)
     public ResponseEntity<ApiError> handleConflict(SupplierConflictException ex, HttpServletRequest request) {
         return build(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), request);

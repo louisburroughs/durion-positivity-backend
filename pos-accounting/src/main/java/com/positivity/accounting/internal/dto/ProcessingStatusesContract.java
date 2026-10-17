@@ -16,8 +16,10 @@ import lombok.NoArgsConstructor;
  * while a Kafka-consumed posting fact writes a single row directly: terminal (PROCESSED or SKIPPED),
  * except a hold: a currency hold (SUSPENDED / CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9, #2334), a malformed
  * goods receipt (SUSPENDED / VALIDATION_ERROR, #2602) or a settled payment its automatic application
- * could not complete (SUSPENDED or FAILED, #2503). A manual reprocess routes a goods receipt or a settled
- * payment back to its own path.
+ * could not complete (SUSPENDED or FAILED, #2503). A manual reprocess routes a held goods receipt, register
+ * session, invoice or settled payment back to its own path; a held Kafka row with no such path (a settled payment
+ * held for its currency) is refused with 409 ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE and keeps its reason (#2620): a
+ * currency hold is released only when the ledger accepts the currency (ADR-0067 Stage B1).
  */
 @Data
 @Builder
@@ -44,8 +46,12 @@ public class ProcessingStatusesContract {
                     + "except a hold. A fact held for its currency is SUSPENDED with failureReasonCode "
                     + "CURRENCY_NOT_SUPPORTED, and a malformed goods receipt is SUSPENDED with VALIDATION_ERROR; "
                     + "neither is auto-retried. A settled payment its automatic application could not complete is "
-                    + "SUSPENDED or FAILED with its own reason. A manual reprocess re-runs a goods receipt's or a "
-                    + "settled payment's own path from the stored fact, never the posting rules",
+                    + "SUSPENDED or FAILED with its own reason. A manual reprocess re-runs a held goods receipt's, "
+                    + "register session's, invoice's or settled payment's own path from the stored fact, never the "
+                    + "posting rules; a held Kafka row with no such path (a settled payment held for its currency) "
+                    + "is refused with 409 ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE and keeps its reason: a currency "
+                    + "hold is released only when the ledger accepts the currency (ADR-0067 Stage B1), never by "
+                    + "reprocess (#2620)",
             example = "[\"PROCESSED|SKIPPED|SUSPENDED\"]",
             requiredMode = REQUIRED)
     private List<String> kafkaFactLifecycle;

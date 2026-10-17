@@ -87,6 +87,11 @@ pos:
     # stored there so a product page never renders from a manufacturer's own server.
     service-id: ${POS_IMAGE_SERVICE_ID:image}
     base-path: ${POS_IMAGE_BASE_PATH:/v1/images}
+  tax:
+    # pos-tax is a Utility module under ADR-0044 R2 and may be called directly (CAP:550 #2623): the vendor entry
+    # checks each registration's scheme and region against pos-tax's registration-schemes stub, fail-closed.
+    service-id: ${POS_TAX_SERVICE_ID:pos-tax}
+    registration-schemes-path: ${POS_TAX_REGISTRATION_SCHEMES_PATH:/v1/tax/registration-schemes}
   # ── Exchange-audit payload encryption (ADR-0050 §7) ─────────────────────────────────
   #
   # NOT optional plumbing. AuditPayloadCipher fails startup without a key unless the dev or test

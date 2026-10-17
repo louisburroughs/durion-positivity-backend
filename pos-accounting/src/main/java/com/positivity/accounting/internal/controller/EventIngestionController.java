@@ -304,8 +304,9 @@ public class EventIngestionController {
                 Required inputs: eventId (UUID) as a path parameter; the request body is optional and \
                 ignored.
                 Emits an ACCOUNTING_EVENT_RETRY event and returns 202 with the event in its new status.
-                Returns 404 EVENT_NOT_FOUND when the event does not exist, and 409 EVENT_NOT_RETRYABLE \
-                when the event is not FAILED.
+                Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 EVENT_NOT_RETRYABLE \
+                when the event is not FAILED, and 409 ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE when it is a Kafka \
+                fact no route can release (the row is left unchanged).
                 """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Retry ran; the event carries its new status")
@@ -315,7 +316,8 @@ public class EventIngestionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "EVENT_NOT_RETRYABLE: the event is not FAILED and was left unchanged",
+            description = "EVENT_NOT_RETRYABLE: the event is not FAILED and was left unchanged; or"
+                    + " ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE: a Kafka fact no route can release, left unchanged",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_RETRY", apiVersion = "1")
     public ResponseEntity<AccountingEventResponse> retryEventProcessing(
@@ -349,9 +351,12 @@ public class EventIngestionController {
                 which is the unaudited retry for transient failures (FAILED events only, no mapping-version pin).
                 Preconditions: the event must exist and be SUSPENDED or FAILED; an event already PROCESSED is \
                 rejected to preserve idempotency, and any other status (RECEIVED, PROCESSING, SKIPPED) is \
-                rejected as not reprocessable. A fact held for its currency (failureReasonCode \
-                CURRENCY_NOT_SUPPORTED, ADR-0067 PC-9) is released here too; while its currency is still \
-                not the ledger's it stays SUSPENDED with that reason and nothing is posted. A closed register \
+                rejected as not reprocessable. A Kafka fact (goodsreceipt.recorded, order.session.closed, \
+                invoice.updated, payment.payment.settled) re-runs its own posting from the stored fact through its \
+                dedicated route, never the posting engine; a held Kafka fact no route can release, such as a \
+                settled payment or an invoice held for its currency (failureReasonCode CURRENCY_NOT_SUPPORTED, \
+                ADR-0067 PC-9, released by Stage B1 only), is refused with 409 \
+                ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE and a nextAction, the row untouched. A closed register \
                 session (order.session.closed) held GL_MAPPING_NOT_CONFIGURED, failed VALIDATION_ERROR or held for \
                 its currency re-runs its own posting (drawer movements, over/short) from the stored fact, never \
                 the posting engine: it posts once, or ends PROCESSED / DUPLICATE_IGNORED when it already posted.
@@ -360,7 +365,8 @@ public class EventIngestionController {
                 Emits an ACCOUNTING_EVENT_REPROCESS event; a successful synchronous outcome returns 200 \
                 with status PROCESSED while 202 means processing continues.
                 Returns 404 EVENT_NOT_FOUND when the event does not exist, 409 when it is already \
-                PROCESSED or is neither SUSPENDED nor FAILED, and 400 when the request is invalid.
+                PROCESSED or is neither SUSPENDED nor FAILED, 409 ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE when it is \
+                a held Kafka fact no route can release, and 400 when the request is invalid.
                 """,
             tags = {"Accounting Events"})
     @ApiResponse(responseCode = "202", description = "Reprocessing accepted")
@@ -374,7 +380,9 @@ public class EventIngestionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "Event already PROCESSED (idempotency violation), or neither SUSPENDED nor FAILED",
+            description = "Event already PROCESSED (idempotency violation), or neither SUSPENDED nor FAILED; or"
+                    + " ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE: a held Kafka fact no route can release (nextAction names"
+                    + " what releases it), the row untouched",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @EmitEvent(id = "ACCOUNTING_EVENT_REPROCESS", apiVersion = "1")
     public ResponseEntity<AccountingEventResponse> reprocessSuspendedEvent(
