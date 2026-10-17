@@ -545,8 +545,9 @@ class CashPositionServiceTest {
     @DisplayName("a fact received after the lag threshold marks the position lagging; eventFedAsOf is its receivedAt")
     void laggingWhenTheNewestFactArrivedLate() {
         Instant received = NOW.minus(Duration.ofMinutes(1));
+        AccountingEvent newest = fact(received, received.minus(Duration.ofMinutes(20)));
         when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
-                .thenReturn(Optional.of(fact(received, received.minus(Duration.ofMinutes(20)))));
+                .thenReturn(Optional.of(newest));
 
         CashPositionResponse position = service.read();
 
@@ -558,14 +559,16 @@ class CashPositionServiceTest {
     @DisplayName("a fact received within the threshold is not lagging, however old; at the threshold exactly it is not")
     void notLaggingWhenTheNewestFactArrivedPromptly() {
         Instant received = NOW.minus(Duration.ofDays(3));
+        AccountingEvent newest = fact(received, received.minus(Duration.ofMinutes(5)));
         when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
-                .thenReturn(Optional.of(fact(received, received.minus(Duration.ofMinutes(5)))));
+                .thenReturn(Optional.of(newest));
         assertThat(service.read().lagging())
                 .as("a quiet shop is not a lagging replica")
                 .isFalse();
 
+        AccountingEvent atLimit = fact(received, received.minus(Duration.ofMinutes(15)));
         when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
-                .thenReturn(Optional.of(fact(received, received.minus(Duration.ofMinutes(15)))));
+                .thenReturn(Optional.of(atLimit));
         CashPositionResponse atThreshold = service.read();
         assertThat(atThreshold.eventFedAsOf()).isEqualTo(received);
         assertThat(atThreshold.lagging()).isFalse();
