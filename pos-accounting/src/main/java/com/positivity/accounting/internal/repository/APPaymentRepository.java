@@ -2,9 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
-import com.positivity.accounting.internal.enums.PaymentMethod;
 import jakarta.persistence.LockModeType;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
