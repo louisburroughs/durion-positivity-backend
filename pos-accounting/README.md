@@ -236,8 +236,9 @@ tenant (the applier holds the tenant's state row `FOR UPDATE` for the length of 
 **Tenant locale (#2618, CAP:550 S44).** `ext_tenant` (V33) is a tenant-scoped replica, one row per tenant, of the locale
 (BCP 47, `character varying(35)`) that pos-tenant records. Its key `ext_tenant_id` holds the tenant's own id, with
 `UNIQUE (tenant_id)` (the entity extends `TenantScopedEntity`, so `tenant_id` cannot also be the `@Id`). `TenantEventsListener`
-writes it through `TenantLocaleReplicaWriter`, bound to the fact's tenant in its own transaction: `tenant.created` after
-provisioning (the platform tenant, never provisioned, still gets its row), and `tenant.updated` or any other projection fact
+writes it through `TenantLocaleReplicaWriter`, bound to the fact's tenant in its own transaction: `tenant.created` before
+provisioning (so a failure anywhere redelivers both and the upsert repeats harmlessly; the platform tenant, never
+provisioned, still gets its row), and `tenant.updated` or any other projection fact
 that carries a locale, with its eventId recorded in the same transaction. A fact older than the stored row's
 `aggregate_version` is ignored (an equal version applies, so replay repairs); a fact without a locale changes nothing.
 `TenantLocaleResolver.localeOf(tenantId)` / `localeOfCurrentTenant()` return the stored locale or `en-US` (ADR-0030 §2); S26's

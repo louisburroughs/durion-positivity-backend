@@ -23,12 +23,12 @@ import tools.jackson.databind.JsonNode;
  * @param aggregateVersion owner's per-tenant sequence
  * @param tenantId the tenant the projection describes
  * @param slug URL-safe unique name
+ * <p>{@code locale} (BCP 47, CAP:550 S44, #2618) is the tenant's language as pos-tenant records it; it is null on a
+ * fact published before the field existed, which means "unknown", never a default.
+ *
  * @param displayName human-readable name, may be absent
  * @param status raw lifecycle status
- */
-/**
- * {@code locale} (BCP 47, CAP:550 S44, #2618): the tenant's language as pos-tenant records it; null on a fact published
- * before the field existed, which means "unknown", never a default.
+ * @param locale BCP 47 tag, or null when the fact predates the field
  */
 public record TenantProjectionEvent(
         @NonNull String eventId,

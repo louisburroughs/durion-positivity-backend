@@ -16,7 +16,7 @@ ALTER TABLE ONLY public.ext_tenant
     ADD CONSTRAINT ext_tenant_tenant_key UNIQUE (tenant_id, ext_tenant_id);
 ALTER TABLE ONLY public.ext_tenant
     ADD CONSTRAINT uq_ext_tenant_one_row UNIQUE (tenant_id);
-CREATE INDEX ext_tenant_tenant_idx ON public.ext_tenant USING btree (tenant_id);
+-- No separate tenant_id index: uq_ext_tenant_one_row already indexes it.
 ALTER TABLE public.ext_tenant ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ext_tenant FORCE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON public.ext_tenant

@@ -99,9 +99,10 @@ public class TenantEventsListener {
                     "tenant.created eventId={} names the platform tenant, which holds the accounting template and is"
                             + " never provisioned; recorded and skipped",
                     eventId);
-            provisioner.recordSkipped(eventId);
-            // Its locale is still the platform's own (en-US), stored under its own binding.
+            // Its locale is still the platform's own (en-US), stored under its own binding, and before the eventId is
+            // recorded, for the same reason as below: a failed write must redeliver.
             TenantContext.runAs(tenantId, () -> localeWriter.apply(projection.get()));
+            provisioner.recordSkipped(eventId);
             return;
         }
         // The locale first, in its own transaction under the tenant's own binding (#2618): a version-guarded

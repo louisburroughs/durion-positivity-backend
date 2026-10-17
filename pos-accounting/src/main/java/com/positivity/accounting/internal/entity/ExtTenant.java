@@ -14,6 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
@@ -28,7 +29,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 @Entity
 @EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_tenant")
-public class ExtTenant extends TenantScopedEntity {
+public class ExtTenant extends TenantScopedEntity implements Persistable<UUID> {
 
     @EqualsAndHashCode.Include
     @Id
@@ -46,4 +47,15 @@ public class ExtTenant extends TenantScopedEntity {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
+
+    @Override
+    public UUID getId() {
+        return extTenantId;
+    }
+
+    /** The key is assigned by the writer, so "new" is "never saved": {@code updatedAt} is stamped on the first save. */
+    @Override
+    public boolean isNew() {
+        return updatedAt == null;
+    }
 }
