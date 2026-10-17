@@ -11,4 +11,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
  * specification executor serves the purchase-order screens' vendor list (#2680).
  */
 public interface ExtSupplierVendorRepository
-        extends JpaRepository<ExtSupplierVendor, UUID>, JpaSpecificationExecutor<ExtSupplierVendor> {}
+        extends JpaRepository<ExtSupplierVendor, UUID>, JpaSpecificationExecutor<ExtSupplierVendor> {
+
+    /** The copy's vendors in one status, by display name (#2576: the vendors a drawer may pay cash on delivery). */
+    java.util.List<ExtSupplierVendor> findByStatusOrderByDisplayNameAsc(ExtSupplierVendor.Status status);
+}

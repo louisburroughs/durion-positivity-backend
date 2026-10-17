@@ -42,6 +42,11 @@ public class SupplierVendorGuard {
      * @throws ReplicationPendingException {@value #VENDOR_REPLICATION_PENDING} when it is not in the copy
      * @throws PurchaseOrderVendorException {@code VENDOR_INACTIVE} when it is inactive
      */
+    /** The ACTIVE vendors of the copy, by display name: what the cash-movement options offer for VENDOR_COD (#2576). */
+    public @NonNull java.util.List<ExtSupplierVendor> activeVendors() {
+        return vendors.findByStatusOrderByDisplayNameAsc(ExtSupplierVendor.Status.ACTIVE);
+    }
+
     public @NonNull ExtSupplierVendor requireActive(@NonNull UUID vendorId) {
         ExtSupplierVendor vendor = vendors.findById(vendorId)
                 .orElseThrow(() -> new ReplicationPendingException(

@@ -506,6 +506,10 @@ public class RegisterSessionController {
                         .map(c -> new CashMovementOptionsResponse.CategoryOption(
                                 c.code(), c.label(), c.examples(), c.offeredRegimes()))
                         .toList(),
+                options.vendors().stream()
+                        .map(v -> new CashMovementOptionsResponse.VendorOption(
+                                v.vendorId(), v.vendorNumber(), v.displayName()))
+                        .toList(),
                 options.evidenceRule() == null
                         ? null
                         : new CashMovementOptionsResponse.EvidenceRule(

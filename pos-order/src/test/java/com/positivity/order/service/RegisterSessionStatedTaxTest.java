@@ -117,6 +117,8 @@ class RegisterSessionStatedTaxTest {
 
     private RegisterSession session;
     private ExtAccountingPettyExpenseCategory shopSupplies;
+    private final com.positivity.order.internal.repository.ExtSupplierVendorRepository vendorCopies =
+            org.mockito.Mockito.mock(com.positivity.order.internal.repository.ExtSupplierVendorRepository.class);
     private RegisterSessionServiceImpl service;
 
     @BeforeEach
@@ -140,8 +142,9 @@ class RegisterSessionStatedTaxTest {
                 drawerStatedTax,
                 new com.positivity.order.internal.service.ActorDisplayNames(org.mockito.Mockito.mock(
                         com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository.class)),
+                new com.positivity.order.internal.service.SupplierVendorGuard(vendorCopies),
                 CLOCK,
-                meters);
+meters);
         session = RegisterSession.builder()
                 .sessionId(SESSION_ID)
                 .version(1L)

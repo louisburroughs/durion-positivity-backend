@@ -58,9 +58,6 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
     static final BigDecimal DEFAULT_PETTY_EXPENSE_LIMIT = scale(new BigDecimal("50.00"));
     static final BigDecimal DEFAULT_OVER_SHORT_TOLERANCE = scale(new BigDecimal("5.00"));
 
-    /** Whether vendor cash on delivery may be switched on: not before pos-order's vendor copy (S24). */
-    static final boolean VENDOR_COD_AVAILABLE = false;
-
     static final int MIN_JUSTIFICATION_LENGTH = 10;
     static final int MAX_JUSTIFICATION_LENGTH = 1000;
 
@@ -221,11 +218,6 @@ public class SessionPolicyServiceImpl implements SessionPolicyService {
                 throw new SessionPolicyValidationException(
                         "vendorCod.cashierLimit",
                         "vendorCod.cashierLimit is required to switch vendor cash on delivery on");
-            }
-            if (!VENDOR_COD_AVAILABLE) {
-                throw new SessionPolicyValidationException(
-                        "vendorCod.allowed",
-                        "vendor cash on delivery cannot be switched on until pos-order holds the vendor list");
             }
         }
         return justification;

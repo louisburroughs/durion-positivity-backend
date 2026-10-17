@@ -219,6 +219,25 @@ public class RegisterSessionExceptionHandler {
     }
 
     /** ADR-0067 R-1: a drawer amount in a currency other than the functional currency (CAP:550 S16). */
+    /**
+     * A cash-on-delivery movement names an inactive vendor of the copy (#2576, S24 pattern): 422 {@code
+     * VENDOR_INACTIVE}. A vendor the copy does not hold is 503 {@code VENDOR_REPLICATION_PENDING} with {@code
+     * Retry-After}, rendered by the platform handler ({@code ReplicationPendingException}).
+     */
+    @ExceptionHandler(com.positivity.order.internal.exception.PurchaseOrderVendorException.class)
+    public ResponseEntity<ApiError> handleVendor(
+            com.positivity.order.internal.exception.PurchaseOrderVendorException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        ex.getCode().name(),
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
     @ExceptionHandler(CurrencyNotSupportedException.class)
     public ResponseEntity<ApiError> handleCurrencyNotSupported(
             CurrencyNotSupportedException ex, HttpServletRequest request) {

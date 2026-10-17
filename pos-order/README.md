@@ -469,7 +469,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `VALIDATION_FAILED` | 400 | Bean-validation rejection of a price-override body, with `fieldErrors` |
 | `PURCHASE_ORDER_BAD_REQUEST` | 400 | Purchase-order request validation failure, including a currency that is not an ISO 4217 code |
 | `REGISTER_SESSION_INVALID_ARGUMENT` | 400 | Register-session request validation failure; on a cash movement's stated-tax fields (CAP:550 S32d) with `fieldErrors`, including a supplier's number pos-tax found malformed (never echoed) |
-| `VALIDATION_ERROR` | 400 | `PUT /v1/orders/session-policy`: justification under 10 characters, a negative limit or tolerance, an allowed type without a cashier limit, vendor cash on delivery switched on (not until S24), or a missing / non-ISO `currencyCode`; `fieldErrors[0].field` is the refused field's JSON path (`justification`, `pettyExpense.allowed`, `pettyExpense.cashierLimit`, `vendorCod.allowed`, `vendorCod.cashierLimit`, `overShortTolerance`, `currencyCode`; #2674); also a non-ISO `currencyCode` on a cash-movement or approval body (CAP:550 S16) |
+| `VALIDATION_ERROR` | 400 | `PUT /v1/orders/session-policy`: justification under 10 characters, a negative limit or tolerance, an allowed type without a cashier limit, or a missing / non-ISO `currencyCode`; `fieldErrors[0].field` is the refused field's JSON path (`justification`, `pettyExpense.allowed`, `pettyExpense.cashierLimit`, `vendorCod.allowed`, `vendorCod.cashierLimit`, `overShortTolerance`, `currencyCode`; #2674); also a non-ISO `currencyCode` on a cash-movement or approval body (CAP:550 S16) |
 | `RETURN_INVALID_ARGUMENT` | 400 | Return request validation failure |
 | `ORDER_FORBIDDEN` | 403 | Caller lacks required order permissions (sales orders, cancellations, price overrides, register sessions) |
 | `PURCHASE_ORDER_FORBIDDEN` | 403 | Caller lacks required purchase-order permissions |
@@ -519,7 +519,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `RETURN_WALK_IN_NOT_ALLOWED` | 422 | A return against a walk-in sale asked for `STORE_CREDIT` or `ON_ACCOUNT_CREDIT`; only `ORIGINAL_TENDER` is allowed |
 | `RETURN_UNPROCESSABLE` | 422 | A structurally valid return that a domain rule refuses: a refund method needing a customer the return lacks, no invoice to refund against, or insufficient settled original tender |
 | `UOM_CONVERSION_UNDEFINED` | 422 | A purchase-order line names a `uomCode` with no conversion row for the product |
-| `VENDOR_INACTIVE` | 422 | The purchase order's vendor is inactive and takes no new purchase order (create, approve, a vendor-changing revision, transmit) |
+| `VENDOR_INACTIVE` | 422 | The purchase order's vendor is inactive and takes no new purchase order (create, approve, a vendor-changing revision, transmit); or a drawer cash-on-delivery movement names an inactive vendor (#2576) |
 | `SUPPLIER_REF_MISSING` | 422 | The purchase order cannot be transmitted: no supplier reference |
 | `PURCHASE_ORDER_NOT_APPROVED` | 422 | The purchase order cannot be transmitted: not approved |
 | `TRANSMISSION_IN_FLIGHT` | 422 | A transmission of this purchase order is already in flight (ADR-0052) |
@@ -528,7 +528,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `FRACTIONAL_QUANTITY` | 422 | A purchase-order line's quantity is not a whole number |
 | `TRANSMISSION_UNAVAILABLE` | 422 | The deployment has no event publishing wired, so nothing can reach the vendor |
 | `ORDER_CANCEL_REVIEW_REQUIRED` | 500 | The cancellation retry failed again and the order is parked at `CANCEL_REQUIRES_MANUAL_REVIEW`; `nextAction` carries the recovery |
-| `VENDOR_REPLICATION_PENDING` | 503 | The purchase order's vendor is not in pos-order's copy of the pos-supplier vendor master yet (create, approve, a vendor-changing revision, transmit); `Retry-After` is set, retry or seed the copy (ADR-0017 §1, #1994) |
+| `VENDOR_REPLICATION_PENDING` | 503 | The purchase order's vendor, or the vendor a drawer cash-on-delivery movement names (#2576), is not in pos-order's copy of the pos-supplier vendor master yet; `Retry-After` is set, retry or seed the copy (ADR-0017 §1, #1994) |
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
 | `TAX_CHECK_UNAVAILABLE` | 503 | A petty expense carried the supplier's number and pos-tax could not check it (unreachable, timed out, failed, or disagreed with pos-order's replicas); `Retry-After` is set (`pos.order.tax-check.retry-after-seconds`); nothing recorded (CAP:550 S32d) |

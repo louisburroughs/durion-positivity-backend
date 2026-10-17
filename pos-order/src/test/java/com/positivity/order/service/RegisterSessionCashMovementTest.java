@@ -95,6 +95,8 @@ class RegisterSessionCashMovementTest {
     private final OrderDomainEventPublisher publisher = mock(OrderDomainEventPublisher.class);
     private final SessionPolicyService policyService = mock(SessionPolicyService.class);
     private final CashMovementApprovalService approvalService = mock(CashMovementApprovalService.class);
+    private final com.positivity.order.internal.repository.ExtSupplierVendorRepository vendorCopies =
+            org.mockito.Mockito.mock(com.positivity.order.internal.repository.ExtSupplierVendorRepository.class);
     private final ExtAccountingRegisterFloatRepository floats = mock(ExtAccountingRegisterFloatRepository.class);
     private final ExtAccountingPettyExpenseCategoryRepository categories =
             mock(ExtAccountingPettyExpenseCategoryRepository.class);
@@ -131,8 +133,9 @@ class RegisterSessionCashMovementTest {
                 new FunctionalCurrency("USD"),
                 mock(DrawerStatedTax.class),
                 new ActorDisplayNames(links),
+                new com.positivity.order.internal.service.SupplierVendorGuard(vendorCopies),
                 CLOCK,
-                meters);
+meters);
         session = RegisterSession.builder()
                 .sessionId(SESSION_ID)
                 .version(3L)
@@ -402,6 +405,60 @@ class RegisterSessionCashMovementTest {
 
             assertThatThrownBy(() -> service.recordCashMovement(cod))
                     .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.TYPE_NOT_ALLOWED));
+        }
+
+        @Test
+        @DisplayName("#2576: with the policy allowing it, a cash-on-delivery movement naming an active vendor of the copy"
+                + " is recorded; an inactive vendor is 422 VENDOR_INACTIVE; one the copy lacks is 503 (replication pending)")
+        void vendorCodChecksTheVendorCopy() {
+            when(policyService.current())
+                    .thenReturn(new com.positivity.order.internal.service.model.SessionPolicyView(
+                            1L, true, new BigDecimal("50.00"), true, new BigDecimal("500.00"), new BigDecimal("5.00"), "USD"));
+            UUID active = UUIDv7Generator.generate();
+            UUID inactive = UUIDv7Generator.generate();
+            UUID unknown = UUIDv7Generator.generate();
+            when(vendorCopies.findById(active)).thenReturn(java.util.Optional.of(vendorCopy(active, true)));
+            when(vendorCopies.findById(inactive)).thenReturn(java.util.Optional.of(vendorCopy(inactive, false)));
+            when(vendorCopies.findById(unknown)).thenReturn(java.util.Optional.empty());
+
+            service.recordCashMovement(cod(active, "40.00"));
+            verify(movements).save(any(CashMovement.class));
+
+            assertThatThrownBy(() -> service.recordCashMovement(cod(inactive, "40.00")))
+                    .isInstanceOf(com.positivity.order.internal.exception.PurchaseOrderVendorException.class);
+            assertThatThrownBy(() -> service.recordCashMovement(cod(unknown, "40.00")))
+                    .isInstanceOf(com.positivity.web.common.ReplicationPendingException.class);
+        }
+
+        private static com.positivity.order.internal.entity.ExtSupplierVendor vendorCopy(UUID vendorId, boolean active) {
+            com.positivity.order.internal.entity.ExtSupplierVendor vendor =
+                    new com.positivity.order.internal.entity.ExtSupplierVendor();
+            vendor.setVendorId(vendorId);
+            vendor.setVendorNumber("V-000123");
+            vendor.setDisplayName("Acme Parts");
+            vendor.setStatus(
+                    active
+                            ? com.positivity.order.internal.entity.ExtSupplierVendor.Status.ACTIVE
+                            : com.positivity.order.internal.entity.ExtSupplierVendor.Status.INACTIVE);
+            return vendor;
+        }
+
+        private static CashMovementCommand cod(UUID vendorId, String amount) {
+            return new CashMovementCommand(
+                    SESSION_ID,
+                    UUIDv7Generator.generate(),
+                    "VENDOR_COD",
+                    new BigDecimal(amount),
+                    "USD",
+                    null,
+                    vendorId,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         @Test

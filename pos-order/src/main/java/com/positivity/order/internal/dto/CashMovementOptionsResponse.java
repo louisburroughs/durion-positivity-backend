@@ -21,12 +21,21 @@ public record CashMovementOptionsResponse(
 
         @Schema(description = "The ACTIVE petty-expense categories")
         List<CategoryOption> categories,
+        @Schema(description = "The ACTIVE vendors a drawer may pay cash on delivery (VENDOR_COD), by display name;"
+                + " pos-order's copy of the pos-supplier vendor master (#2576)")
+        List<VendorOption> vendors,
 
         @Schema(
                 description = "From which receipt total the supplier's registration number is asked for; null when"
                         + " pos-tax did not answer or no regime is offered",
                 nullable = true)
         EvidenceRule evidenceRule) {
+
+    @Schema(description = "A vendor the drawer may pay cash on delivery")
+    public record VendorOption(
+            @Schema(description = "The vendor") UUID vendorId,
+            @Schema(description = "Vendor number", example = "V-000123") String vendorNumber,
+            @Schema(description = "Display name", example = "Acme Parts") String displayName) {}
 
     @Schema(description = "One reason's options")
     public record ReasonOption(
