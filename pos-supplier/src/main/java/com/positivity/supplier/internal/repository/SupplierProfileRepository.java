@@ -2,6 +2,7 @@ package com.positivity.supplier.internal.repository;
 
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,5 +28,5 @@ public interface SupplierProfileRepository extends JpaRepository<SupplierProfile
     List<SupplierProfileEntity> findByVendorIdOrderBySupplierRefAsc(@NonNull UUID vendorId);
 
     /** The profiles of a page of vendors in one query (#2712 replay): a vendor without profiles has no rows. */
-    List<SupplierProfileEntity> findByVendorIdIn(@NonNull java.util.Collection<UUID> vendorIds);
+    List<SupplierProfileEntity> findByVendorIdIn(@NonNull Collection<UUID> vendorIds);
 }
