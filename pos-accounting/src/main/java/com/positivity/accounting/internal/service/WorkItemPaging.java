@@ -3,8 +3,6 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.exception.WorkItemsCursorInvalidException;
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
-import java.security.MessageDigest;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -12,23 +10,17 @@ import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
  * Limit and cursor of the work-item reads (CAP:550 S19, #2515; ruling 8 of 2026-10-17): oldest first, {@code itemId}
  * the tiebreak, a page resuming after the key of the last item it served, so an item that has since vanished is no
- * error. The cursor is the URL-safe Base64 of {@code v1|scope|occurredOn|itemId} and an HMAC-SHA256 of that text; the
- * scope is the area the cursor was issued for, or the {@code since} of the automatic list. A cursor that is malformed,
- * altered or issued for another scope is {@link WorkItemsCursorInvalidException}.
- *
- * <p>The cursor holds a position only, never an authority: the HMAC catches a hand-edited or truncated value, it does
- * not hide the position. The key is {@code pos.accounting.work-items.cursor-secret}; its default is the same on every
- * instance, so a cursor survives a restart and a request landing on another instance.
+ * error. The cursor is a plain opaque token, the URL-safe Base64 of {@code scope|occurredOn|itemId}; the scope is the
+ * area the cursor was issued for, or the {@code since} of the automatic list. A cursor that does not decode to that
+ * shape, or was issued for another scope, is {@link WorkItemsCursorInvalidException}. It holds a position only, never
+ * an authority, so it is not signed.
  */
 @Component
 public class WorkItemPaging {
@@ -39,17 +31,7 @@ public class WorkItemPaging {
     /** The largest page size. */
     public static final int MAX_LIMIT = 200;
 
-    private static final String VERSION = "v1";
     private static final String SEPARATOR = "|";
-    private static final String MAC_ALGORITHM = "HmacSHA256";
-
-    private final byte[] secret;
-
-    public WorkItemPaging(
-            @Value("${pos.accounting.work-items.cursor-secret:durion-accounting-work-items-cursor}") String secret) {
-        this.secret = secret.getBytes(StandardCharsets.UTF_8);
-    }
-
     /** The position after which a page resumes. */
     public record Key(
             @NonNull LocalDate occurredOn, @NonNull String itemId) {}
@@ -78,21 +60,12 @@ public class WorkItemPaging {
         if (cursor == null || cursor.isBlank()) {
             return null;
         }
-        int dot = cursor.indexOf('.');
-        if (dot <= 0 || dot == cursor.length() - 1) {
-            throw invalid();
-        }
         try {
-            byte[] payload = Base64.getUrlDecoder().decode(cursor.substring(0, dot));
-            byte[] mac = Base64.getUrlDecoder().decode(cursor.substring(dot + 1));
-            if (!MessageDigest.isEqual(mac, mac(payload))) {
+            String[] parts = new String(Base64.getUrlDecoder().decode(cursor), StandardCharsets.UTF_8).split("\\|", 3);
+            if (parts.length != 3 || !scope.equals(parts[0]) || parts[2].isEmpty()) {
                 throw invalid();
             }
-            String[] parts = new String(payload, StandardCharsets.UTF_8).split("\\|", 4);
-            if (parts.length != 4 || !VERSION.equals(parts[0]) || !scope.equals(parts[1]) || parts[3].isEmpty()) {
-                throw invalid();
-            }
-            return new Key(LocalDate.parse(parts[2]), parts[3]);
+            return new Key(LocalDate.parse(parts[1]), parts[2]);
         } catch (IllegalArgumentException | DateTimeParseException e) {
             throw invalid();
         }
@@ -100,11 +73,9 @@ public class WorkItemPaging {
 
     /** The cursor of a position, for {@code scope}. */
     public @NonNull String encode(@NonNull String scope, @NonNull Key key) {
-        byte[] payload = String.join(SEPARATOR, VERSION, scope, key.occurredOn().toString(), key.itemId())
-                .getBytes(StandardCharsets.UTF_8);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(payload)
-                + "."
-                + Base64.getUrlEncoder().withoutPadding().encodeToString(mac(payload));
+        byte[] payload =
+                String.join(SEPARATOR, scope, key.occurredOn().toString(), key.itemId()).getBytes(StandardCharsets.UTF_8);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(payload);
     }
 
     /**
@@ -144,16 +115,6 @@ public class WorkItemPaging {
     private static int compare(LocalDate date, String itemId, Key key) {
         int byDate = date.compareTo(key.occurredOn());
         return byDate != 0 ? byDate : itemId.compareTo(key.itemId());
-    }
-
-    private byte[] mac(byte[] payload) {
-        try {
-            Mac mac = Mac.getInstance(MAC_ALGORITHM);
-            mac.init(new SecretKeySpec(secret, MAC_ALGORITHM));
-            return mac.doFinal(payload);
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("HMAC-SHA256 is unavailable", e);
-        }
     }
 
     private static WorkItemsCursorInvalidException invalid() {

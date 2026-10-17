@@ -76,7 +76,7 @@ public class WorkItemController {
                     Emits an ACCOUNTING_WORK_ITEMS_LIST event and changes no state; countsByArea counts every \
                     area the caller may see, before the area filter and paging.
                     Returns 200 with the page, 400 VALIDATION_ERROR for a limit outside 1 to 200, 400 \
-                    WORK_ITEMS_CURSOR_INVALID for a cursor that is malformed, altered or issued for another area \
+                    WORK_ITEMS_CURSOR_INVALID for a cursor that is malformed or issued for another area \
                     (start again from the first page), and 403 when the caller holds none of the permissions.
                     """,
             tags = {"Work Items"})
@@ -130,7 +130,7 @@ public class WorkItemController {
                     to 200 and 50 when omitted.
                     Emits an ACCOUNTING_WORK_ITEMS_AUTOMATIC_LIST event and changes no state.
                     Returns 200 with the page, 400 VALIDATION_ERROR for a since or limit out of range, 400 \
-                    WORK_ITEMS_CURSOR_INVALID for a cursor that is malformed, altered or issued for another \
+                    WORK_ITEMS_CURSOR_INVALID for a cursor that is malformed or issued for another \
                     since, and 403 when the caller holds none of the permissions.
                     """,
             tags = {"Work Items"})

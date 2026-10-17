@@ -105,7 +105,7 @@ class WorkItemAutomaticServiceTest {
                 applications,
                 settlementLines,
                 vendorBills,
-                new WorkItemPaging("test-secret"),
+                new WorkItemPaging(),
                 zoneResolver,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -322,7 +322,7 @@ class WorkItemAutomaticServiceTest {
 
         assertThatThrownBy(() -> service.list("2026-10-13", first.nextCursor(), 2))
                 .isInstanceOf(WorkItemsCursorInvalidException.class);
-        assertThatThrownBy(() -> service.list("2026-10-14", first.nextCursor() + "x", 2))
+        assertThatThrownBy(() -> service.list("2026-10-14", "Zm9v", 2))
                 .isInstanceOf(WorkItemsCursorInvalidException.class);
         assertThatThrownBy(() -> service.list("2026-10-14", null, 201))
                 .isInstanceOfSatisfying(

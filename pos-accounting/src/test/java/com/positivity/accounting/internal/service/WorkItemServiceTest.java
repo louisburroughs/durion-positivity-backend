@@ -178,7 +178,7 @@ class WorkItemServiceTest {
                         receivables, walkInSales, apPayments, glAccounts, glMappingResolver, periodGate, zoneResolver),
                 new CashWorkItemSource(attentionSources, settings, depositService, drops, locations),
                 new BankWorkItemSource(reconciliations, transactions, candidateFinder, bankRecPolicy, zoneResolver),
-                new WorkItemPaging("test-secret"),
+                new WorkItemPaging(),
                 zoneResolver,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 registry);
@@ -1097,18 +1097,26 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("a tampered cursor is WORK_ITEMS_CURSOR_INVALID")
-    void tamperedCursor() {
+    @DisplayName("a cursor that does not decode to area|date|item is WORK_ITEMS_CURSOR_INVALID")
+    void malformedCursor() {
         fiveDueBills();
         signIn("pat", PAYER);
-        String cursor = service.list(null, null, 2).nextCursor();
-        String tampered = cursor.substring(0, cursor.length() - 2) + (cursor.endsWith("AA") ? "BB" : "AA");
+        java.util.function.Function<String, String> token = text -> java.util.Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
 
-        assertThatThrownBy(() -> service.list(null, tampered, 2)).isInstanceOf(WorkItemsCursorInvalidException.class);
-        assertThatThrownBy(() -> service.list(null, "not-a-cursor", 2))
-                .isInstanceOf(WorkItemsCursorInvalidException.class);
-        assertThatThrownBy(() -> service.list(null, cursor.substring(0, cursor.indexOf('.')), 2))
-                .isInstanceOf(WorkItemsCursorInvalidException.class);
+        for (String bad : List.of(
+                "not a cursor!",
+                token.apply("ALL|2026-10-17"),
+                token.apply("ALL|not-a-date|BILLS_DUE_SOON:x"),
+                token.apply("ALL|2026-10-17|"),
+                token.apply("garbage"))) {
+            assertThatThrownBy(() -> service.list(null, bad, 2))
+                    .as(bad)
+                    .isInstanceOf(WorkItemsCursorInvalidException.class);
+        }
+        assertThat(service.list(null, token.apply("ALL|2026-10-17|BILLS_DUE_SOON:0"), 2).items())
+                .isNotEmpty();
     }
 
     @Test
