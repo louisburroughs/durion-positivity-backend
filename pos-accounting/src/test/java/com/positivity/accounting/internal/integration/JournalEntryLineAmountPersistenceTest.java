@@ -138,11 +138,10 @@ class JournalEntryLineAmountPersistenceTest extends PostgresIntegrationTestBase 
         entityManager.flush();
         entityManager.clear();
 
-        List<UUID> persistedIds = journalEntryLineRepository
-                .findByJournalEntry_JournalEntryId(created.getJournalEntryId())
-                .stream()
-                .map(JournalEntryLine::getLineId)
-                .toList();
+        List<UUID> persistedIds =
+                journalEntryLineRepository.findByJournalEntry_JournalEntryId(created.getJournalEntryId()).stream()
+                        .map(JournalEntryLine::getLineId)
+                        .toList();
         assertThat(persistedIds).hasSize(2).doesNotContainNull();
         assertThat(created.getLines())
                 .extracting(JournalEntryResponse.JournalEntryLineResponse::getLineId)
