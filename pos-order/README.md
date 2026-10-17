@@ -431,7 +431,7 @@ published figure, now derived (`PurchaseOrderLineFigures`):
 State transitions: `APPROVED` → receipt → `PARTIALLY_RECEIVED` → every line settled → `FULLY_RECEIVED` (`CLOSED` if any
 short-closed quantity); a correction or reopen takes `FULLY_RECEIVED` back to `PARTIALLY_RECEIVED` and a correction that
 returns everything received takes `PARTIALLY_RECEIVED` back to `APPROVED`; `RETURN_TO_VENDOR` changes no status; close
-→ `CLOSED`; whole-order cancel (existing) → `CANCELLED`. The fact `PurchaseOrderUpdatedV1` is unchanged in v1; the read
+→ `CLOSED`; whole-order cancel (existing) → `CANCELLED`. The fact `PurchaseOrderUpdatedV1` is schema 2 (#2515): it adds the trailing nullable `paymentTermsId` (the order's terms, `null` when it has none), which pos-accounting reads to estimate a vendor-bill due date; schema-1 payloads read it as `null`; the read
 (`PurchaseOrderLineResponse`) adds `receivedQuantityDecimal`, `returnedQuantityDecimal` and `cancelledQuantityDecimal`.
 
 ## Purchase order transmission timeline (issue #1638)

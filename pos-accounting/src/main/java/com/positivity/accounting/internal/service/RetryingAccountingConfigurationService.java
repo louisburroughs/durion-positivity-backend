@@ -1,7 +1,11 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.dto.AgedThresholdsRequest;
+import com.positivity.accounting.internal.dto.AgedThresholdsResponse;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
+import com.positivity.accounting.internal.dto.CashSafetyCushionRequest;
+import com.positivity.accounting.internal.dto.CashSafetyCushionResponse;
 import java.time.LocalDate;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +67,36 @@ public class RetryingAccountingConfigurationService implements AccountingConfigu
         } catch (DataIntegrityViolationException raced) {
             log.warn("Bank reconciliation policy update lost a race on a setting's first row; retrying once", raced);
             return delegate.setBankReconciliationPolicy(request);
+        }
+    }
+
+    @Override
+    public @NonNull CashSafetyCushionResponse getCashSafetyCushion() {
+        return delegate.getCashSafetyCushion();
+    }
+
+    @Override
+    public @NonNull CashSafetyCushionResponse setCashSafetyCushion(@NonNull CashSafetyCushionRequest request) {
+        try {
+            return delegate.setCashSafetyCushion(request);
+        } catch (DataIntegrityViolationException raced) {
+            log.warn("Cash safety cushion update lost a race on the setting's first row; retrying once", raced);
+            return delegate.setCashSafetyCushion(request);
+        }
+    }
+
+    @Override
+    public @NonNull AgedThresholdsResponse getAgedThresholds() {
+        return delegate.getAgedThresholds();
+    }
+
+    @Override
+    public @NonNull AgedThresholdsResponse setAgedThresholds(@NonNull AgedThresholdsRequest request) {
+        try {
+            return delegate.setAgedThresholds(request);
+        } catch (DataIntegrityViolationException raced) {
+            log.warn("Aged thresholds update lost a race on a setting's first row; retrying once", raced);
+            return delegate.setAgedThresholds(request);
         }
     }
 }

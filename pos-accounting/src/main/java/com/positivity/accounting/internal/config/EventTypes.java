@@ -559,10 +559,18 @@ public final class EventTypes {
                                 "Replace the tenant's bank reconciliation close policy (mandatory justification)")
                         .build(),
 
-                // AccountingConfigurationController — 1 event (Issue #2558)
+                // AccountingConfigurationController — 3 events (Issues #2558, #2515)
                 EventTypeRegistration.approval(
                                 "ACCOUNTING_CONFIGURATION_TIME_ZONE_SET",
                                 "Set the tenant's accounting-calendar time zone (before the first period close)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_CONFIGURATION_CASH_SAFETY_CUSHION_SET",
+                                "Set or clear the tenant's cash safety cushion (mandatory justification)")
+                        .build(),
+                EventTypeRegistration.write(
+                                "ACCOUNTING_CONFIGURATION_AGED_THRESHOLDS_SET",
+                                "Replace the tenant's three aged-item thresholds (mandatory justification)")
                         .build(),
 
                 // SettlementReconciliationController — 3 events (Story F1c, Issue #963)

@@ -73,12 +73,14 @@ Every display value is resolved from data accounting already holds — its own r
 - `GET /v1/accounting/periods/hard-lock` — read the org-level hard-lock date (permission `accounting:period:view`, event `ACCOUNTING_PERIOD_HARD_LOCK_VIEW`)
 - `PUT /v1/accounting/periods/hard-lock` — set/advance the hard-lock date with mandatory justification (permission `accounting:period:hard_lock`, event `ACCOUNTING_PERIOD_HARD_LOCK_SET`)
 - `PUT /v1/accounting/configuration/time-zone` — set the tenant's accounting-calendar time zone before its first close (permission `accounting:period:hard_lock`, event `ACCOUNTING_CONFIGURATION_TIME_ZONE_SET`; see [Accounting time zone](#accounting-time-zone-2558))
+- `GET|PUT /v1/accounting/configuration/cash-safety-cushion` — read, set or clear the cash safety cushion (permission `accounting:period:hard_lock`; PUT event `ACCOUNTING_CONFIGURATION_CASH_SAFETY_CUSHION_SET`; see [Cash safety cushion and aged thresholds](#cash-safety-cushion-and-aged-thresholds-2515))
+- `GET|PUT /v1/accounting/configuration/aged-thresholds` — read or replace the three aged-item thresholds (permission `accounting:period:hard_lock`; PUT event `ACCOUNTING_CONFIGURATION_AGED_THRESHOLDS_SET`)
 - `POST /v1/accounting/export` — request a timekeeping export job
 - `GET /v1/accounting/export/status/{jobId}` — get export job status
 - `GET /v1/accounting/export/history` — list export job history
 - `GET /v1/accounting/reports/financial/general-ledger` — general ledger report (story G2)
 - `GET /v1/accounting/reports/financial/aged-receivables` — aged receivables by due state: `notYetDue`, `days1To30`, `days31To60`, `days61To90`, `days90Plus`, `overdue`, `totalOutstanding`; rows carry `customerName` / `customerReference` from the customer replica, ordered by name then id; the CASH walk-in house account is left out (its open sales are the unpaid walk-in sales read's, so aged receivables plus that read's `balance` is the AR subledger, apart from legacy party-less invoices) (story G2; CAP:550 S35, #2524; S11, #2508)
-- `GET /v1/accounting/reports/financial/aged-payables` — aged payables with the same buckets over APPROVED bills only; bills not yet approved (`PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`) are reported unaged as `unapproved`, `unapprovedBillCount`, `totalIncludingUnapproved` per row and beside `totals` (AW11; CAP:550 S35, #2524)
+- `GET /v1/accounting/reports/financial/aged-payables` — aged payables with the same buckets over APPROVED bills only; bills not yet approved (`PENDING_RECEIPT_MATCH`, `MATCH_EXCEPTION`) are reported unaged as `unapproved`, `unapprovedBillCount`, `totalIncludingUnapproved` per row and beside `totals` (AW11; CAP:550 S35, #2524); a bill with no due date ages from its estimated due date (see [Estimated due dates](#estimated-due-dates-2515)) and its open amount is also shown as `estimatedDueDateAmount`; the vendor's unapplied AP payments (not voided or returned, functional currency) show as the negative `unappliedPayments` and `netOwed` = `totalOutstanding` + `unappliedPayments`, per row and for the report; a vendor holding only an unapplied payment has a row with zero buckets (#2515)
 - `POST /v1/accounting/payments/{paymentId}/remainder-credit` — keep a payment's whole unapplied remainder as a customer credit (AD-003): one transaction creates the credit, enqueues Dr 1090 / Cr 2300, and the payment becomes `FULLY_APPLIED`; idempotent on `requestId`, guarded by `expectedAmount`; refused with 422 `CASH_CUSTOMER_CREDIT_NOT_ALLOWED` for a payment of the CASH walk-in account (#2508) (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_REMAINDER_CREDIT`, CAP:550 S35, #2524)
 - `GET /v1/accounting/receivable-payments?status=AVAILABLE&customerId=&page=&size=` — customer payments still waiting to be matched, oldest cleared first (`size` 1-100, default 25; any other `status` → 400 `VALIDATION_ERROR`). Each row carries the customer's name and number from the replica (null when unknown), `paymentMethod`, `sourceInvoiceId` / `sourceInvoiceNumber` (the invoice it was taken against), `sourceInvoiceState`, `possibleDuplicate` and `autoApplicationReason` (served facts about that invoice and the automatic application, see [Source invoice state on unapplied payments](#source-invoice-state-on-unapplied-payments-cap550-s1-2563)) and a `suggestion` of the open invoices it most likely pays: `reasons` (`REMITTANCE_REFERENCE`, `SAME_CUSTOMER`, `EXACT_TOTAL`), `invoices` with `suggestedAmount`, `suggestedTotal` and `leftOver` (the would-be credit, AD-003; null for a payment of the CASH walk-in account, which never keeps a credit, #2508). `summary` totals every matching payment, not only the page (permission `accounting:payment:apply`, event `ACCOUNTING_RECEIVABLE_PAYMENT_LIST_VIEW`, CAP:550 S1, #2502)
 - `GET /v1/accounting/payment-applications/automatic?since=&page=&size=` — "Matched automatically": the payment applications nobody made by hand (`source` `PAYMENT_SETTLED` or `INVOICE_PAYMENT`) at or after `since` (required ISO-8601 instant, at most 31 days back), newest first (`size` 1-100, default 50). Each row carries `paymentApplicationId` / `paymentId` / `invoiceId` for commands and links, `appliedAt`, `appliedAmount`, `invoiceNumber`, `customerDisplayName`, `customerReference` (null when unresolved, never a UUID), `creditCreatedAmount` (the credit the same request kept, else null), `reversed` / `reversedAt`, and `actions` = `["UNDO"]` while it stands and the caller holds `accounting:payment:reverse` (undo is `reversePaymentApplication`). `totalElements` counts reversed ones too (permission `accounting:payment:apply`, event `ACCOUNTING_PAYMENT_APPLICATION_AUTOMATIC_LIST_VIEW`, CAP:550 S2, #2503)
@@ -419,6 +421,49 @@ posting dates.
 - **Calendar lock.** A zone change, a period close and a hard-lock change each take the tenant's
   `ACCOUNTING_TIME_ZONE` row `FOR UPDATE` first, so a close or hard lock that commits first is seen by the
   zone change's checks (409), and a zone change that commits first is what the close then cuts in.
+
+### Cash safety cushion and aged thresholds (#2515)
+
+Settings of the cash and payables workspace, in the `accounting_configuration` family, read through
+`CashAndPayablesSettings` (an absent row is the default; a stored value that does not parse or is out of range reads
+as the default with a warning). Both are written under `accounting:period:hard_lock` (CONTROLLER and ADMIN), audited
+old to new, and idempotent on `requestId`: a replay of the same body writes nothing, the same `requestId` with another
+body is `409`. Each PUT also needs a `justification` of 10 to 1000 characters (`400 JUSTIFICATION_REQUIRED` for 1-9).
+
+| Key | Meaning | Default | Range |
+| --- | --- | --- | --- |
+| `CASH_SAFETY_CUSHION` | management threshold of the cash outlook: never posted, never subtracted from cash, refuses nothing; `null` is unset, `0` a real value | unset | >= 0 at the functional currency's precision |
+| `UNDEPOSITED_CASH_AGED_DAYS` | days an undeposited session waits, from its business date | 3 | 1..30 |
+| `VENDOR_COD_UNAPPLIED_AGED_DAYS` | days a vendor cash-on-delivery payment sits unapplied, from `payment_date` | 14 | 1..90 |
+| `DELIVERIES_NOT_BILLED_DAYS` | days a goods receipt waits for its approved bill | 30 | 7..120 |
+
+- `GET|PUT /v1/accounting/configuration/cash-safety-cushion`: PUT body `{amount|null, currencyCode, justification,
+  requestId}`; GET returns `{amount, currencyCode}` (`amount` null while unset). `currencyCode` is ISO 4217 and must be
+  the tenant's functional currency: another one is `422 CURRENCY_NOT_SUPPORTED`, an unknown code `400 VALIDATION_ERROR`,
+  as are a missing `amount` key (send `null` to clear), a negative amount and one finer than the minor unit. Audit
+  operation `CASH_SAFETY_CUSHION_SET` (a clear of an unset cushion writes none).
+- `GET|PUT /v1/accounting/configuration/aged-thresholds`: PUT body `{undepositedCashAgedDays,
+  vendorCodUnappliedAgedDays, deliveriesNotBilledDays, justification, requestId}`; a value outside its range or a
+  missing one is `400 VALIDATION_ERROR`. One `AGED_THRESHOLDS_SET` audit row per threshold whose value changes.
+- Ages are calendar days on the tenant accounting date (the time-zone setting). Typed accessors on
+  `CashAndPayablesSettings`: `undepositedCashAgedDays()`, `vendorCodUnappliedAgedDays()`,
+  `deliveriesNotBilledDays()`, `cashSafetyCushion()`.
+
+### Estimated due dates (#2515)
+
+`EstimatedDueDateService` (read side only; the bill's `dueDate` is never written) estimates the due date of a vendor
+bill that has none: bill date plus the days of its terms, tagged with `termsSource`. Terms come, in order, from the
+purchase order's `paymentTermsId` (`PURCHASE_ORDER`), the vendor's `defaultPaymentTerms` from the vendor copy
+(`VENDOR`), and `AP_DEFAULT_TERMS` (`TENANT_DEFAULT`); a value that does not parse falls through to the next. Parsed
+forms: `NET<n>`, `Net <n>`, `NET <n>` (n 1..120) and `DUE_ON_RECEIPT` / `Due on Receipt` (0 days), any case; anything
+else is unparsable. `estimate(bill)` answers one bill, `estimateAll(bills)` loads the order and vendor copies in one
+query each. The aged payables report ages an approved bill with no due date from this estimate, not its bill date.
+
+The purchase-order copy `ext_order_purchase_order` (V36: `purchase_order_id`, `po_number`, `vendor_id`,
+`payment_terms_id`, `aggregate_version`, `updated_at`; tenant-scoped under row-level security) is written only by
+`OrderEventsListener` from `purchaseorder.updated` facts on `order.events.v1` (`PurchaseOrderReplica`, version-guarded,
+equal versions apply). `paymentTermsId` arrives with schema 2 of the fact; a schema-1 fact stores null and a row fills
+with the order's next fact. No backfill.
 
 ### Bank reconciliation close readiness and policy (#2305)
 
