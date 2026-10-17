@@ -12,16 +12,20 @@ import com.positivity.accounting.internal.dto.CashPositionResponse.TimingItems;
 import com.positivity.accounting.internal.dto.CashPositionResponse.UnpaidWalkInSales;
 import com.positivity.accounting.internal.dto.UnpaidWalkInSalesResponse;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.CashAttentionCode;
 import com.positivity.accounting.internal.enums.CashAttentionReason;
-import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.security.AccountingPermissions;
 import com.positivity.accounting.internal.service.CashAccounts.Components;
 import com.positivity.accounting.internal.service.CashAccounts.Row;
 import com.positivity.accounting.internal.service.CashAttentionSources.AgedSession;
+import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
+import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.security.common.SecurityContextHelper;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -34,6 +38,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,12 +66,12 @@ public class CashPositionServiceImpl implements CashPositionService {
     private final CashAttentionSources attentionSources;
     private final CashOutlookService outlookService;
     private final UnpaidWalkInSalesService unpaidWalkInSalesService;
-    private final InvoiceBalanceCalculator invoiceBalanceCalculator;
-    private final ExtInvoiceRepository extInvoiceRepository;
+    private final AccountingEventRepository accountingEvents;
     private final CashAndPayablesSettings settings;
     private final AccountingCalendarZoneResolver zoneResolver;
     private final LedgerCurrency ledgerCurrency;
     private final Clock clock;
+    private final Duration factLag;
 
     public CashPositionServiceImpl(
             CashAccounts cashAccounts,
@@ -74,23 +79,23 @@ public class CashPositionServiceImpl implements CashPositionService {
             CashAttentionSources attentionSources,
             CashOutlookService outlookService,
             UnpaidWalkInSalesService unpaidWalkInSalesService,
-            InvoiceBalanceCalculator invoiceBalanceCalculator,
-            ExtInvoiceRepository extInvoiceRepository,
+            AccountingEventRepository accountingEvents,
             CashAndPayablesSettings settings,
             AccountingCalendarZoneResolver zoneResolver,
             LedgerCurrency ledgerCurrency,
-            Clock clock) {
+            Clock clock,
+            @Value("${pos.accounting.cash-position.fact-lag:PT15M}") Duration factLag) {
         this.cashAccounts = cashAccounts;
         this.bankPositionFacts = bankPositionFacts;
         this.attentionSources = attentionSources;
         this.outlookService = outlookService;
         this.unpaidWalkInSalesService = unpaidWalkInSalesService;
-        this.invoiceBalanceCalculator = invoiceBalanceCalculator;
-        this.extInvoiceRepository = extInvoiceRepository;
+        this.accountingEvents = accountingEvents;
         this.settings = settings;
         this.zoneResolver = zoneResolver;
         this.ledgerCurrency = ledgerCurrency;
         this.clock = clock;
+        this.factLag = factLag;
     }
 
     @Override
@@ -114,11 +119,11 @@ public class CashPositionServiceImpl implements CashPositionService {
         BigDecimal drawersTotal = Components.total(cash.drawers());
 
         UnpaidWalkInSalesResponse walkIn = unpaidWalkInSalesService.read();
-        Instant eventFedAsOf = newestWalkInFact();
-        // Replica lag cannot be measured: the ingestion record (AccountingEvent) stamps when accounting received a
-        // fact and the fact's business time, never when the producer emitted it, so a quiet shop and a stalled
-        // consumer look the same. eventFedAsOf is the newest replica write and lagging stays false.
-        boolean lagging = false;
+        NewestFact fact = newestFact();
+        Instant eventFedAsOf = fact.receivedAt();
+        boolean lagging = fact.receivedAt() != null
+                && fact.occurredAt() != null
+                && Duration.between(fact.occurredAt(), fact.receivedAt()).compareTo(factLag) > 0;
 
         return new CashPositionResponse(
                 now,
@@ -248,15 +253,26 @@ public class CashPositionServiceImpl implements CashPositionService {
                 CashAttentionCode.UNDEPOSITED_CASH_AGED, reason, scaled(amount, currency), sessions.size(), since));
     }
 
-    /** The newest fact the unpaid walk-in balance rests on: the latest replica update of a CASH party's invoices. */
-    private @Nullable Instant newestWalkInFact() {
-        Set<UUID> parties = invoiceBalanceCalculator.walkInPartyIds();
-        if (parties.isEmpty()) {
-            return null;
+    /**
+     * The newest invoice or register-session fact accounting ingested, from the ingestion record. Its {@code receivedAt}
+     * is the freshest event-fed write; the gap between it and the fact's business time (the source's write time) is the
+     * replica-lag proxy: more than the fact-lag threshold means accounting is behind its sources.
+     */
+    private NewestFact newestFact() {
+        Optional<AccountingEvent> newest = accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(
+                List.of(InvoiceUpdatedV1.EVENT_TYPE, RegisterSessionClosedV1.EVENT_TYPE));
+        if (newest.isEmpty()) {
+            return new NewestFact(null, null);
         }
-        return extInvoiceRepository.findNewestUpdateByPartyIdIn(
-                parties.stream().map(UUID::toString).collect(Collectors.toSet()));
+        AccountingEvent event = newest.get();
+        Instant occurred = event.getTransactionDate() == null
+                ? null
+                : event.getTransactionDate().atZone(zoneResolver.zone()).toInstant();
+        return new NewestFact(event.getReceivedAt(), occurred);
     }
+
+    /** The newest ingested fact: when accounting received it and the fact's own time. */
+    private record NewestFact(@Nullable Instant receivedAt, @Nullable Instant occurredAt) {}
 
     private static BigDecimal scaled(BigDecimal amount, String currency) {
         return InvoiceBalanceCalculator.atCurrencyScale(amount, currency);

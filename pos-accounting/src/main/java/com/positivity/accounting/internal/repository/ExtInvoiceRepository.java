@@ -92,14 +92,6 @@ public interface ExtInvoiceRepository extends JpaRepository<ExtInvoice, UUID> {
             Collection<String> statuses, Instant from, Instant to, Limit limit);
 
     /**
-     * The newest replica update among the given parties' invoices (#2515): the freshest fact the unpaid walk-in balance
-     * rests on; null when they have none. Parties match the way {@code InvoiceBalanceCalculator.isWalkIn} reads them,
-     * trimmed and case-insensitive, so {@code partyIds} must be lower case.
-     */
-    @Query("SELECT MAX(i.updatedAt) FROM ExtInvoice i WHERE lower(trim(i.partyId)) IN :partyIds")
-    Instant findNewestUpdateByPartyIdIn(@Param("partyIds") Collection<String> partyIds);
-
-    /**
      * Replicated invoices in the given lifecycle statuses whose party is not one of {@code excludedParties} (#2515):
      * the cash outlook's candidates, with the CASH walk-in account left out in the query so its invoices are never
      * loaded or balanced. Parties match as {@code InvoiceBalanceCalculator.isWalkIn} reads them, trimmed and
