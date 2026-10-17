@@ -934,9 +934,9 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   deactivated after its movement was recorded still resolves: its mapping key stays.
 - **Idempotency** — `REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>`, registered with the entry and scoped to the
   tenant: a fact redelivered under a new envelope id posts nothing twice and its record is `PROCESSED /
-  DUPLICATE_IGNORED`. The key expires after 24 hours (`IdempotencyService`); past that, the entry's deterministic
-  `sourceEventId` is the durable backstop, as for inventory revaluations. The over/short has no such backstop: its
-  "posts nothing twice" holds within the posting-key window, pending non-expiring posting keys (#2595). The checks run
+  `DUPLICATE_IGNORED`. Posting keys never expire (#2595, `IdempotencyService`; V28 dropped the 24-hour expiry and
+  nothing deletes a key), so "posts nothing twice" holds for any redelivery, days later included; the entry's
+  deterministic `sourceEventId` remains a second line of defence where one exists. The checks run
   in the over/short's order — idempotency, then currency, then the fact's contract — so a redelivered session already
   posted never writes a hold, and a foreign session with a malformed movement is held rather than sent to the DLQ.
 - **Failures** — a closed period, a missing mapping or a broken contract rolls the whole session back (over/short,
@@ -956,7 +956,7 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   — so the scheduled retry never runs a session through the engine either. It re-runs the session's own posting
   (movements, over/short, undeposited session) from the stored `payload` in a transaction of its own: posted is
   `PROCESSED / NEW` linked to the over/short's entry (else the first movement's); a session whose posting keys are
-  registered, or whose over/short entry is already in the ledger (its key expires after 24 hours, #2595), posts
+  registered, or whose over/short entry is already in the ledger, posts
   nothing and closes `PROCESSED / DUPLICATE_IGNORED`; a refusal is held again (`PERIOD_CLOSED`,
   `ACCOUNTING_TIME_ZONE_UNSET`, `GL_MAPPING_NOT_CONFIGURED`, `CURRENCY_NOT_SUPPORTED`) or stays `FAILED /
   VALIDATION_ERROR`. The undeposited session is written exactly when the session posts and never twice. The stored
@@ -2027,8 +2027,8 @@ ignored without recording its eventId.
   `sourceEventId = nameUUIDFromBytes("INVENTORY_SHRINKAGE:" + scrapId)` /
   `nameUUIDFromBytes("INVENTORY_ADJUSTMENT:" + kind + ":" + adjustmentId)` /
   `nameUUIDFromBytes("INVENTORY_REVALUATION:" + revaluationId)` /
-  `nameUUIDFromBytes("GOODS_RECEIPT_ACCRUAL:" + receiptId)` (source type `GOODS_RECEIPT_ACCRUAL`). A fact whose posting key has expired is still
-  recognised as posted by its `sourceEventId`.
+  `nameUUIDFromBytes("GOODS_RECEIPT_ACCRUAL:" + receiptId)` (source type `GOODS_RECEIPT_ACCRUAL`). Posting keys never
+  expire (#2595); the deterministic `sourceEventId` is a second line of defence, not the only one.
 - **Transaction shape** (ADR-0044 as amended by #2146; `OrderEventsListener` has the same shape) — the listener
   method is not transactional. The posting, posting key, ingestion record and processed mark commit together
   in a `REQUIRES_NEW` transaction. A malformed payload (`replica.payload.rejected`) and an uncosted fact are each
