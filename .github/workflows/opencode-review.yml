@@ -1,0 +1,87 @@
+name: OpenCode Review
+
+# Automated code review on pull requests, posted as a GitHub review with inline
+# comments on the changed lines (the same surface GitHub Copilot code review
+# uses). OpenCode reads the PR diff with the checked-in config at
+# .config/opencode/opencode.json and the prompt at
+# .config/opencode/review-prompt.md, writes its findings to a JSON file, and
+# scripts/ci/post-opencode-review.py turns that file into one review.
+#
+# The review is submitted as a comment-only review: it never approves or
+# requests changes, so it does not block merging by itself.
+#
+# Pull requests from forks are skipped: GitHub does not expose repository
+# secrets to them, so the OLLAMA_CLOUD_API_KEY secret would be empty.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: opencode-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Review pull request
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPENCODE_CONFIG: ${{ github.workspace }}/.config/opencode/opencode.json
+      OLLAMA_CLOUD_API_KEY: ${{ secrets.OLLAMA_CLOUD_API_KEY }}
+      BASE_REF: ${{ github.event.pull_request.base.ref }}
+      REVIEW_FILE: ${{ runner.temp }}/opencode-review.json
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check required secret
+        run: |
+          set -euo pipefail
+          if [[ -z "${OLLAMA_CLOUD_API_KEY}" ]]; then
+            echo "::error::Repository secret OLLAMA_CLOUD_API_KEY is not set. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Fetch base branch
+        run: git fetch --no-tags origin "${BASE_REF}"
+
+      - name: Install OpenCode
+        run: |
+          set -euo pipefail
+          curl -fsSL https://opencode.ai/install | bash
+          echo "${HOME}/.opencode/bin" >> "${GITHUB_PATH}"
+
+      - name: Show OpenCode version
+        run: opencode --version
+
+      - name: Run OpenCode review
+        run: |
+          set -euo pipefail
+          PROMPT="$(sed -e "s|{{BASE_REF}}|${BASE_REF}|g" -e "s|{{REVIEW_FILE}}|${REVIEW_FILE}|g" .config/opencode/review-prompt.md)"
+          opencode run "${PROMPT}"
+          if [[ ! -s "${REVIEW_FILE}" ]]; then
+            echo "::error::OpenCode did not write ${REVIEW_FILE}; see the run log above."
+            exit 1
+          fi
+          # OpenCode must not change the checkout; discard anything it touched.
+          git checkout -- . && git clean -fdq
+
+      - name: Post review to the pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 -I scripts/ci/post-opencode-review.py
