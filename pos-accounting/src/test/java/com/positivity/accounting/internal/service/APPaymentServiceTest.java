@@ -243,7 +243,8 @@ class APPaymentServiceTest {
     }
 
     @Test
-    @DisplayName("a bill named twice in one allocation request is 400: each line alone would pass the open-amount check")
+    @DisplayName(
+            "a bill named twice in one allocation request is 400: each line alone would pass the open-amount check")
     void allocateCashPaymentRefusesADuplicateBill() {
         UUID paymentId = UUID.randomUUID();
         UUID billId = UUID.randomUUID();

@@ -125,8 +125,24 @@ class RegisterCashMovementPostingServiceTest {
         UUID vendor = UUID.randomUUID();
         String longClerk = "clerk-" + "x".repeat(70);
         Movement cod = new Movement(
-                COD, "VENDOR_COD", "OUT", new BigDecimal("12.00"), "USD", null, vendor, null, null, longClerk, null,
-                null, CLOSED_AT.minusSeconds(3600), null, List.of(), null, null, null);
+                COD,
+                "VENDOR_COD",
+                "OUT",
+                new BigDecimal("12.00"),
+                "USD",
+                null,
+                vendor,
+                null,
+                null,
+                longClerk,
+                null,
+                null,
+                CLOSED_AT.minusSeconds(3600),
+                null,
+                List.of(),
+                null,
+                null,
+                null);
         postsReturn(UUID.randomUUID());
         when(vendorCopies.find(vendor)).thenReturn(java.util.Optional.empty());
 
