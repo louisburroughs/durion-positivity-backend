@@ -43,6 +43,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -68,6 +69,7 @@ import org.springframework.transaction.annotation.Transactional;
  * this service to move them. The lifecycle statuses {@code PARTIALLY_RECEIVED} and
  * {@code FULLY_RECEIVED} are therefore reached from a fact rather than from an endpoint.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PurchaseOrderServiceImpl implements PurchaseOrderService {
