@@ -23,14 +23,14 @@ public record CashPositionResponse(
         Instant asOf,
 
         @Schema(
-                description = "When the newest fact behind an event-fed figure (the unpaid walk-in sales) reached"
-                        + " accounting; null when no such fact exists")
+                description = "When the newest replica row behind an event-fed figure (the unpaid walk-in sales) was"
+                        + " written; null when there is none")
         @Nullable
         Instant eventFedAsOf,
 
         @Schema(
-                description = "True when the newest event-fed fact is older than the fact-lag threshold, so that figure"
-                        + " may trail the register",
+                description = "Whether an event-fed figure trails the register. Replica lag cannot be measured yet (the"
+                        + " ingestion record has no emission time), so this is always false",
                 example = "false")
         boolean lagging,
 

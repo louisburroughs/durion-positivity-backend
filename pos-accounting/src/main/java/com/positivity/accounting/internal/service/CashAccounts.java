@@ -1,8 +1,6 @@
 package com.positivity.accounting.internal.service;
 
 import com.positivity.accounting.internal.bankrec.readmodel.BankPositionFacts;
-import com.positivity.accounting.internal.bankrec.service.BankCashAccounts;
-import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.enums.AccountSubtype;
@@ -33,8 +31,9 @@ import org.springframework.transaction.annotation.Transactional;
  * §4.1; AW9). The one place the cash position and the outlook agree on the rule, so they cannot drift:
  *
  * <ul>
- *   <li><b>In the bank</b>: the active {@code BANK_CASH} accounts in the functional currency; one in another currency is
- *       left out and counted (ADR-0067 PC-9), never summed at par.
+ *   <li><b>In the bank</b>: every active {@code BANK_CASH} account in the functional currency, reconcilable or not (the
+ *       set the balance sheet puts on {@code BS_IN_THE_BANK}); one in another currency is left out and counted (ADR-0067
+ *       PC-9), never summed at par. Only the reconcilable ones can carry statement facts ({@link Row#reconcilable}).
  *   <li><b>Waiting to be deposited</b>: the accounts behind the mapping keys {@code UNDEPOSITED_FUNDS} (1090) and {@code
  *       CASH_CLEARING} (1095), both shown and netted.
  *   <li><b>Kept in drawers</b>: the active {@code CASH_ON_HAND} accounts (1080).
@@ -43,7 +42,8 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  *
  * No account number appears in code: the roles are the mapping keys and the account subtypes. A balance is debits minus
- * credits over POSTED and REVERSED entries, the rule {@code JournalEntryLineRepository#getAccountBalance} applies,
+ * credits over POSTED and REVERSED entries dated up to the end of today on the tenant accounting date, the rule {@code
+ * JournalEntryLineRepository#getAccountBalance} applies bounded by date so a post-dated entry is not in today's cash,
  * summed for all the accounts in one query. A role with no account yields no rows and a zero.
  */
 @Component
@@ -51,7 +51,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class CashAccounts {
 
-    private final BankCashAccounts bankCashAccounts;
     private final BankPositionFacts bankPositionFacts;
     private final GLAccountRepository glAccounts;
     private final JournalEntryLineRepository journalEntryLines;
@@ -65,7 +64,8 @@ public class CashAccounts {
             @NonNull UUID glAccountId,
             @NonNull String accountCode,
             @NonNull String accountName,
-            @NonNull BigDecimal balance) {}
+            @NonNull BigDecimal balance,
+            boolean reconcilable) {}
 
     /**
      * The cash accounts by role. {@code clearingAccountId} is the account behind {@code CASH_CLEARING}, null when
@@ -99,13 +99,13 @@ public class CashAccounts {
         LocalDateTime at = zoneResolver.postingDateTime(clock.instant());
         String currency = ledgerCurrency.code();
 
-        List<BankCashAccount> activeBank = bankCashAccounts.listActive();
+        List<GLAccount> activeBank = glAccounts.findBySubtypeActiveAt(AccountSubtype.BANK_CASH, at, at);
         Map<UUID, String> currencies = bankPositionFacts.currenciesOf(
-                activeBank.stream().map(BankCashAccount::glAccountId).toList());
-        List<BankCashAccount> bank = new ArrayList<>();
+                activeBank.stream().map(GLAccount::getGlAccountId).toList());
+        List<GLAccount> bank = new ArrayList<>();
         int excluded = 0;
-        for (BankCashAccount account : activeBank) {
-            if (ledgerCurrency.isForeign(currencies.get(account.glAccountId()))) {
+        for (GLAccount account : activeBank) {
+            if (ledgerCurrency.isForeign(currencies.get(account.getGlAccountId()))) {
                 excluded++;
             } else {
                 bank.add(account);
@@ -128,32 +128,21 @@ public class CashAccounts {
         List<GLAccount> drawerAccounts = glAccounts.findBySubtypeActiveAt(AccountSubtype.CASH_ON_HAND, at, at);
 
         Set<UUID> ids = new LinkedHashSet<>();
-        bank.forEach(account -> ids.add(account.glAccountId()));
+        bank.forEach(account -> ids.add(account.getGlAccountId()));
         ids.addAll(waitingAccounts.keySet());
         drawerAccounts.forEach(account -> ids.add(account.getGlAccountId()));
         suspense.ifPresent(ids::add);
-        Map<UUID, BigDecimal> balances = balancesOf(ids);
+        Map<UUID, BigDecimal> balances =
+                balancesOf(ids, zoneResolver.today().plusDays(1).atStartOfDay());
 
-        List<Row> bankRows = bank.stream()
-                .map(account ->
-                        row(account.glAccountId(), account.accountCode(), account.accountName(), balances, currency))
-                .toList();
+        List<Row> bankRows =
+                bank.stream().map(account -> row(account, balances, currency)).toList();
         List<Row> waitingRows = waitingAccounts.values().stream()
                 .sorted(Comparator.comparing(GLAccount::getAccountCode))
-                .map(account -> row(
-                        account.getGlAccountId(),
-                        account.getAccountCode(),
-                        account.getAccountName(),
-                        balances,
-                        currency))
+                .map(account -> row(account, balances, currency))
                 .toList();
         List<Row> drawerRows = drawerAccounts.stream()
-                .map(account -> row(
-                        account.getGlAccountId(),
-                        account.getAccountCode(),
-                        account.getAccountName(),
-                        balances,
-                        currency))
+                .map(account -> row(account, balances, currency))
                 .toList();
         BigDecimal suspenseBalance = suspense.map(id ->
                         InvoiceBalanceCalculator.atCurrencyScale(balances.getOrDefault(id, BigDecimal.ZERO), currency))
@@ -161,22 +150,24 @@ public class CashAccounts {
         return new Components(bankRows, waitingRows, drawerRows, suspenseBalance, clearing.orElse(null), excluded);
     }
 
-    private Map<UUID, BigDecimal> balancesOf(Collection<UUID> ids) {
+    private Map<UUID, BigDecimal> balancesOf(Collection<UUID> ids, LocalDateTime before) {
         Map<UUID, BigDecimal> balances = new LinkedHashMap<>();
         if (ids.isEmpty()) {
             return balances;
         }
-        for (JournalEntryLineRepository.AccountBalance row : journalEntryLines.getAccountBalances(ids)) {
+        for (JournalEntryLineRepository.AccountBalance row : journalEntryLines.getAccountBalances(ids, before)) {
             balances.put(row.getGlAccountId(), row.getBalance());
         }
         return balances;
     }
 
-    private static Row row(UUID id, String code, String name, Map<UUID, BigDecimal> balances, String currency) {
+    private static Row row(GLAccount account, Map<UUID, BigDecimal> balances, String currency) {
         return new Row(
-                id,
-                code,
-                name,
-                InvoiceBalanceCalculator.atCurrencyScale(balances.getOrDefault(id, BigDecimal.ZERO), currency));
+                account.getGlAccountId(),
+                account.getAccountCode(),
+                account.getAccountName(),
+                InvoiceBalanceCalculator.atCurrencyScale(
+                        balances.getOrDefault(account.getGlAccountId(), BigDecimal.ZERO), currency),
+                account.isReconcilable());
     }
 }

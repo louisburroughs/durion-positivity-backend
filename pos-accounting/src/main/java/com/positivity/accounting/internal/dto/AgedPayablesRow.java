@@ -168,8 +168,9 @@ public class AgedPayablesRow {
      * totalOutstanding + unappliedPayments.
      */
     @Schema(
-            description = "What is owed to this vendor after its unapplied payments: totalOutstanding + "
-                    + "unappliedPayments; negative when the vendor holds more of our money than it is owed",
+            description = "Approved open bills less unapplied AP payments only: totalOutstanding + "
+                    + "unappliedPayments; credit notes and unapproved bills are not netted; negative when the "
+                    + "vendor holds more of our money than it is owed",
             example = "3900.00",
             requiredMode = REQUIRED)
     @NonNull

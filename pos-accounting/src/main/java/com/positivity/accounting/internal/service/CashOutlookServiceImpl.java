@@ -59,6 +59,9 @@ public class CashOutlookServiceImpl implements CashOutlookService {
     /** Days after today that the bills lane's "due in 7 days" segment reaches. */
     static final int BILLS_SOON_DAYS = 7;
 
+    /** Stands in for "no excluded party" in the candidate query, which needs a non-empty list; never a party id. */
+    private static final String NO_PARTY = "-";
+
     private static final Pattern NET = Pattern.compile("(?i)net[_ ]?([0-9]{1,3})");
 
     private final CashAccounts cashAccounts;
@@ -213,8 +216,14 @@ public class CashOutlookServiceImpl implements CashOutlookService {
 
     private List<Receivable> receivables(LocalDate today, String currency) {
         Set<UUID> walkIn = invoiceBalanceCalculator.walkInPartyIds();
+        // The CASH account's invoices are left out in the query, so only the other customers' are balanced.
+        Set<String> excluded = walkIn.isEmpty()
+                ? Set.of(NO_PARTY)
+                : walkIn.stream().map(UUID::toString).collect(Collectors.toSet());
         List<ExtInvoice> candidates =
-                extInvoiceRepository.findByStatusIn(InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES).stream()
+                extInvoiceRepository
+                        .findByStatusInExcludingParties(InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES, excluded)
+                        .stream()
                         .filter(invoice -> !InvoiceBalanceCalculator.isWalkIn(invoice, walkIn))
                         .toList();
         if (candidates.isEmpty()) {

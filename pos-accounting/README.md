@@ -479,24 +479,27 @@ GL mapping key and account subtype, never by account number:
 
 | Component | Accounts | Notes |
 | --- | --- | --- |
-| `inTheBank` | the active reconcilable `BANK_CASH` accounts, one row each (code, name, books balance) | a bank account whose profile is in another currency is left out and counted in `excludedForeignCurrencyAccounts` |
+| `inTheBank` | every active `BANK_CASH` account, reconcilable or not (the set the balance sheet puts on `BS_IN_THE_BANK`), one row each (code, name, books balance) | a bank account whose profile is in another currency is left out and counted in `excludedForeignCurrencyAccounts` |
 | `waitingToBeDeposited` | the accounts behind the mapping keys `UNDEPOSITED_FUNDS` (1090) and `CASH_CLEARING` (1095), shown and netted | |
 | `keptInDrawers` | the active `CASH_ON_HAND` accounts (1080) | |
 
 `total` = in the bank + waiting to be deposited + kept in drawers. Settlement suspense (`SETTLEMENT_SUSPENSE`, 2350) is
-never a component. A balance is debits minus credits over `POSTED` and `REVERSED` entries (the rule of
-`JournalEntryLineRepository.getAccountBalance`), summed for all the request's accounts in one query. A role with no
+never a component. A balance is debits minus credits over `POSTED` and `REVERSED` entries dated before the start of
+tomorrow on the tenant accounting date (the rule of `JournalEntryLineRepository.getAccountBalance`, so a post-dated entry
+is not in today's cash), summed for all the request's accounts in one query. A role with no
 account has no rows and a zero.
 
-With `accounting:reconciliation:view` each bank row adds `statementClosingBalance` and `statementEndDate` (the latest
+With `accounting:reconciliation:view` each reconcilable bank row adds `statementClosingBalance` and `statementEndDate` (the latest
 `COMMITTED` statement), `reconciledThrough`, `depositsInTransit` and `outstandingChecks` (open items: `count` and the
 signed `amount`, a check negative) and `unmatchedBankLineCount` (unmatched lines and unreviewed possible duplicates since
 the baseline, as the bank-accounts list counts them), through `BankPositionFacts` in the reconciliation read model.
 They sit beside the books balance and are never in `total`. Without that permission the fields are absent.
 
-`asOf` is the ledger read instant. `eventFedAsOf` is the newest replica update of a CASH-party invoice (the fact the
-unpaid walk-in balance rests on; null when there is none) and `lagging` is true when it is older than
-`pos.accounting.cash-position.fact-lag` (default `PT15M`).
+`asOf` is the ledger read instant. `eventFedAsOf` is the newest replica write of a CASH-party invoice (the fact the
+unpaid walk-in balance rests on; null when there is none). `lagging` is always false for now: the ingestion record
+(`AccountingEvent`) stamps when accounting received a fact and the fact's business time, never when the producer
+emitted it, so replica lag cannot be told from a quiet shop; it will carry a measured value once facts carry an
+emission time.
 
 `needsAttention[]` holds `{code, reason, amount, count, since}`, in this order, each only when it applies:
 
@@ -518,8 +521,8 @@ undeposited-session query (`undepositedSessions()`, `agedUndepositedSessions(tod
 committed items only, per day from today on the tenant accounting date (`points[]`, days + 1 of them, each with the
 day's `moneyIn`, `moneyOut` and the `estimatedMoneyOut` part of it):
 
-- money in: finalized or posted invoices with an open balance (`InvoiceBalanceCalculator`), the CASH walk-in account
-  excluded, on `dueDate`, else the finalization day plus the customer's terms (`NET<n>`, `Net 30`, `NET_30`; due on
+- money in: finalized or posted invoices with an open balance (`InvoiceBalanceCalculator`; the CASH walk-in account is
+  excluded in the query, so only the other customers' invoices are balanced), on `dueDate`, else the finalization day plus the customer's terms (`NET<n>`, `Net 30`, `NET_30`; due on
   receipt, no terms and unparsable terms fall due on the finalization day). An invoice already past due is not in the
   line and is `overdueIn {amount, count}`; one due beyond the horizon is in neither.
 - money out: the open amount (total minus live allocations, as aged payables computes it) of each `APPROVED` bill on its

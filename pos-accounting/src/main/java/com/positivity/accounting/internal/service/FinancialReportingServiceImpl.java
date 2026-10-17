@@ -825,6 +825,12 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         Map<VendorBill, EstimatedDueDateService.EstimatedDueDate> estimates =
                 estimatedDueDates.estimateAll(bills.stream()
                         .filter(bill -> APPROVED_PAYABLE_STATUSES.contains(bill.getStatus()))
+                        .filter(bill -> !ledgerCurrency.isForeign(bill.getCurrency()))
+                        .filter(bill -> nullSafe(bill.getTotalAmount())
+                                        .subtract(nullSafe(allocatedByBill.get(bill.getVendorBillId())))
+                                        .signum()
+                                > 0)
+                        .filter(bill -> !payableDocumentDate(bill).isAfter(asOfDate))
                         .toList());
 
         Map<UUID, VendorAging> byVendor = new LinkedHashMap<>();
@@ -871,7 +877,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         // gone, a foreign-currency one is never summed into ledger totals (ADR-0067 PC-9). A vendor with only an
         // unapplied payment still gets a row, so the rows add up to the report's netOwed.
         for (APPaymentRepository.VendorUnappliedSum unapplied :
-                apPaymentRepository.sumUnappliedByVendor(ledgerCurrency.code(), UNCOUNTED_PAYMENT_STATUSES)) {
+                apPaymentRepository.sumUnappliedByVendor(ledgerCurrency.code(), UNCOUNTED_PAYMENT_STATUSES, asOfDate)) {
             if (unapplied.getUnapplied() == null || unapplied.getUnapplied().signum() <= 0) {
                 continue;
             }

@@ -7,14 +7,13 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.bankrec.readmodel.BankPositionFacts;
 import com.positivity.accounting.internal.bankrec.readmodel.BankPositionFacts.Facts;
 import com.positivity.accounting.internal.bankrec.readmodel.BankPositionFacts.ItemTotal;
-import com.positivity.accounting.internal.bankrec.service.BankCashAccounts;
-import com.positivity.accounting.internal.bankrec.service.BankCashAccounts.BankCashAccount;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.CashOutlookResponse;
 import com.positivity.accounting.internal.dto.CashOutlookResponse.BillsLane;
@@ -83,7 +82,6 @@ class CashPositionServiceTest {
     private static final UUID DRAWERS = UUID.fromString("019a0000-0000-7000-8000-000000001080");
     private static final UUID SUSPENSE = UUID.fromString("019a0000-0000-7000-8000-000000002350");
 
-    private final BankCashAccounts bankCashAccounts = mock(BankCashAccounts.class);
     private final BankPositionFacts bankPositionFacts = mock(BankPositionFacts.class);
     private final GLAccountRepository glAccounts = mock(GLAccountRepository.class);
     private final JournalEntryLineRepository journalEntryLines = mock(JournalEntryLineRepository.class);
@@ -110,10 +108,8 @@ class CashPositionServiceTest {
         when(zoneResolver.postingDate(any(Instant.class)))
                 .thenAnswer(invocation -> LocalDate.ofInstant(invocation.getArgument(0), ZoneOffset.UTC));
 
-        when(bankCashAccounts.listActive())
-                .thenReturn(List.of(
-                        new BankCashAccount(BANK, "1000", "Operating Bank"),
-                        new BankCashAccount(EURO_BANK, "1010", "Euro Bank")));
+        when(glAccounts.findBySubtypeActiveAt(eq(AccountSubtype.BANK_CASH), any(), any()))
+                .thenReturn(List.of(bankAccount(BANK, "1000", true), bankAccount(EURO_BANK, "1010", true)));
         when(bankPositionFacts.currenciesOf(anyCollection())).thenReturn(Map.of(BANK, "USD", EURO_BANK, "EUR"));
         when(glMappingResolver.findGLAccount(
                         eq(DepositServiceImpl.POSTING_CATEGORY), eq(DepositServiceImpl.UNDEPOSITED_FUNDS_KEY), any()))
@@ -130,7 +126,7 @@ class CashPositionServiceTest {
                 .thenReturn(List.of(account(UNDEPOSITED, "1090"), account(CLEARING, "1095")));
         when(glAccounts.findBySubtypeActiveAt(eq(AccountSubtype.CASH_ON_HAND), any(), any()))
                 .thenReturn(List.of(account(DRAWERS, "1080")));
-        when(journalEntryLines.getAccountBalances(anyCollection())).thenAnswer(invocation -> {
+        when(journalEntryLines.getAccountBalances(anyCollection(), any())).thenAnswer(invocation -> {
             List<JournalEntryLineRepository.AccountBalance> rows = new ArrayList<>();
             for (Map.Entry<UUID, String> entry : balances.entrySet()) {
                 rows.add(balance(entry.getKey(), entry.getValue()));
@@ -151,7 +147,6 @@ class CashPositionServiceTest {
         when(outlookService.outlook(eq(30), any())).thenReturn(outlook(false));
 
         CashAccounts cash = new CashAccounts(
-                bankCashAccounts,
                 bankPositionFacts,
                 glAccounts,
                 journalEntryLines,
@@ -171,8 +166,7 @@ class CashPositionServiceTest {
                 settings,
                 zoneResolver,
                 ledgerCurrency,
-                clock,
-                Duration.ofMinutes(15));
+                clock);
     }
 
     @AfterEach
@@ -232,7 +226,8 @@ class CashPositionServiceTest {
     @Test
     @DisplayName("with no accounts in a role the component is zero with no rows")
     void emptyRoles() {
-        when(bankCashAccounts.listActive()).thenReturn(List.of());
+        when(glAccounts.findBySubtypeActiveAt(eq(AccountSubtype.BANK_CASH), any(), any()))
+                .thenReturn(List.of());
         when(glAccounts.findAllById(any())).thenReturn(List.of());
         when(glAccounts.findBySubtypeActiveAt(eq(AccountSubtype.CASH_ON_HAND), any(), any()))
                 .thenReturn(List.of());
@@ -261,8 +256,63 @@ class CashPositionServiceTest {
         assertThat(position.total()).isEqualByComparingTo("14197.00");
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<UUID>> asked = ArgumentCaptor.forClass(Collection.class);
-        verify(journalEntryLines).getAccountBalances(asked.capture());
+        verify(journalEntryLines).getAccountBalances(asked.capture(), any());
         assertThat(asked.getValue()).contains(BANK).doesNotContain(EURO_BANK);
+    }
+
+    @Test
+    @DisplayName("a non-reconcilable BANK_CASH account's balance is in the bank and the total, without statement facts")
+    void nonReconcilableBankAccountIsInTheTotal() {
+        UUID petty = UUID.fromString("019a0000-0000-7000-8000-000000001020");
+        when(glAccounts.findBySubtypeActiveAt(eq(AccountSubtype.BANK_CASH), any(), any()))
+                .thenReturn(List.of(bankAccount(BANK, "1000", true), bankAccount(petty, "1020", false)));
+        when(bankPositionFacts.currenciesOf(anyCollection())).thenReturn(Map.of());
+        balances.put(petty, "300.00");
+        signIn(AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS, AccountingPermissions.RECONCILIATION_VIEW);
+        when(bankPositionFacts.factsOf(anyCollection()))
+                .thenReturn(Map.of(
+                        BANK,
+                        new Facts(
+                                new BigDecimal("12100.00"),
+                                LocalDate.of(2026, 9, 30),
+                                null,
+                                new ItemTotal(0, BigDecimal.ZERO),
+                                new ItemTotal(0, BigDecimal.ZERO),
+                                0)));
+
+        CashPositionResponse position = service.read();
+
+        assertThat(position.inTheBank().total()).isEqualByComparingTo("12700.00");
+        assertThat(position.total()).isEqualByComparingTo("14497.00");
+        assertThat(position.inTheBank().accounts())
+                .extracting(AccountRow::accountCode)
+                .containsExactly("1000", "1020");
+        assertThat(position.inTheBank().accounts().get(0).statementClosingBalance())
+                .isEqualByComparingTo("12100.00");
+        assertThat(position.inTheBank().accounts().get(1).statementClosingBalance())
+                .isNull();
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<UUID>> asked = ArgumentCaptor.forClass(Collection.class);
+        verify(bankPositionFacts).factsOf(asked.capture());
+        assertThat(asked.getValue()).containsExactly(BANK);
+    }
+
+    @Test
+    @DisplayName(
+            "balances count entries dated before the start of tomorrow on the accounting date, not post-dated ones")
+    void balancesAreBoundedByTheAccountingDate() {
+        service.read();
+
+        verify(journalEntryLines).getAccountBalances(anyCollection(), eq(LocalDateTime.of(2026, 10, 18, 0, 0)));
+    }
+
+    @Test
+    @DisplayName("one cash-position read projects the outlook once")
+    void computesTheOutlookOnce() {
+        service.read();
+
+        verify(outlookService, times(1)).outlook(eq(30), any());
+        verify(outlookService, never()).outlook(30);
     }
 
     // ---- statement fields ------------------------------------------------------------------------------------
@@ -490,32 +540,29 @@ class CashPositionServiceTest {
     }
 
     @Test
-    @DisplayName("an event-fed fact older than the lag threshold marks the position lagging")
-    void laggingWhenTheNewestFactIsOld() {
+    @DisplayName("eventFedAsOf is the newest CASH-party replica write; lagging is never claimed, however old it is")
+    void eventFedAsOfIsTheNewestReplicaWrite() {
         UUID cash = UUID.fromString("019a0000-0000-7000-8000-00000000ca51");
         when(balanceCalculator.walkInPartyIds()).thenReturn(Set.of(cash));
         when(extInvoices.findNewestUpdateByPartyIdIn(Set.of(cash.toString())))
-                .thenReturn(NOW.minus(Duration.ofMinutes(20)));
+                .thenReturn(NOW.minus(Duration.ofDays(3)));
 
         CashPositionResponse position = service.read();
 
-        assertThat(position.eventFedAsOf()).isEqualTo(NOW.minus(Duration.ofMinutes(20)));
-        assertThat(position.lagging()).isTrue();
+        assertThat(position.eventFedAsOf()).isEqualTo(NOW.minus(Duration.ofDays(3)));
+        assertThat(position.lagging())
+                .as("a quiet shop is not a lagging replica")
+                .isFalse();
     }
 
     @Test
-    @DisplayName("a fresh event-fed fact is not lagging, and no fact is not lagging either")
-    void notLaggingWhenFreshOrAbsent() {
-        UUID cash = UUID.fromString("019a0000-0000-7000-8000-00000000ca51");
-        when(balanceCalculator.walkInPartyIds()).thenReturn(Set.of(cash));
-        when(extInvoices.findNewestUpdateByPartyIdIn(Set.of(cash.toString())))
-                .thenReturn(NOW.minus(Duration.ofMinutes(5)));
-        assertThat(service.read().lagging()).isFalse();
-
-        when(balanceCalculator.walkInPartyIds()).thenReturn(Set.of());
+    @DisplayName("with no CASH party there is no event-fed fact and nothing lags")
+    void noEventFedFact() {
         CashPositionResponse none = service.read();
+
         assertThat(none.eventFedAsOf()).isNull();
         assertThat(none.lagging()).isFalse();
+        verify(extInvoices, never()).findNewestUpdateByPartyIdIn(any());
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------
@@ -532,6 +579,13 @@ class CashPositionServiceTest {
                 "n/a",
                 Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList());
         SecurityContextHolder.getContext().setAuthentication(caller);
+    }
+
+    private static GLAccount bankAccount(UUID id, String code, boolean reconcilable) {
+        GLAccount account = account(id, code);
+        account.setAccountSubtype(AccountSubtype.BANK_CASH);
+        account.setReconcilable(reconcilable);
+        return account;
     }
 
     private static GLAccount account(UUID id, String code) {
