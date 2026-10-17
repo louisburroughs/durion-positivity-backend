@@ -546,6 +546,14 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 bindingRepository,
                 vendorRepository,
                 new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())),
+                // #2712: the write is rejected before any designation can move, so the publisher is a mock.
+                new com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile(
+                        profileRepository,
+                        vendorRepository,
+                        org.mockito.Mockito.mock(
+                                com.positivity.supplier.internal.vendor.service.VendorFactPublisher.class),
+                        entityManager,
+                        clock),
                 // A discarding publisher: these assertions are about YAML authority rejecting the write
                 // before anything is published. If a credential-invalidation event ever escaped a rejected
                 // mutation that would be a defect, and SupplierProfileAdminServiceImplTest is where it is
