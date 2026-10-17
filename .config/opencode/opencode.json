@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "ollama_cloud/qwen3-coder:480b-cloud",
   "provider": {
     "ollama_cloud": {
       "npm": "@ai-sdk/openai-compatible",
@@ -7,7 +8,7 @@
       "options": {
         "baseURL": "https://api.ollama.com/v1",
         "headers": {
-          "Authorization": "Bearer YOUR_OLLAMA_CLOUD_API_KEY"
+          "Authorization": "Bearer {env:OLLAMA_CLOUD_API_KEY}"
         }
       },
       "models": {
