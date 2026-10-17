@@ -8,6 +8,7 @@ import com.positivity.tenant.internal.enums.TenantStatus;
 import com.positivity.tenant.internal.exception.DuplicateResourceException;
 import com.positivity.tenant.internal.exception.InvalidStatusTransitionException;
 import com.positivity.tenant.internal.exception.ResourceNotFoundException;
+import com.positivity.tenant.internal.validation.TenantLocales;
 import com.positivity.tenant.internal.repository.AccountRepository;
 import com.positivity.tenant.internal.repository.TenantRepository;
 import java.time.Clock;

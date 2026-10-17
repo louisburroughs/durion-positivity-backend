@@ -1,4 +1,4 @@
-package com.positivity.tenant.internal.service;
+package com.positivity.tenant.internal.validation;
 
 import java.util.List;
 import java.util.Locale;

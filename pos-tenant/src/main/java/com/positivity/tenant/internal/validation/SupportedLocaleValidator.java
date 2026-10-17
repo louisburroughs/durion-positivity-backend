@@ -1,6 +1,5 @@
 package com.positivity.tenant.internal.validation;
 
-import com.positivity.tenant.internal.service.TenantLocales;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import lombok.RequiredArgsConstructor;

@@ -45,7 +45,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * map to.
  */
 @WebMvcTest({PlatformTenantController.class, PlatformAccountController.class})
-@Import({SecurityConfig.class, WebCommonErrorAutoConfiguration.class, com.positivity.tenant.internal.service.TenantLocales.class, PlatformControllersWebMvcTest.SliceConfig.class})
+@Import({SecurityConfig.class, WebCommonErrorAutoConfiguration.class, com.positivity.tenant.internal.validation.TenantLocales.class, PlatformControllersWebMvcTest.SliceConfig.class})
 class PlatformControllersWebMvcTest {
 
     private static final UUID TENANT_ID = UUID.fromString("01990000-0000-7000-8000-000000000123");
