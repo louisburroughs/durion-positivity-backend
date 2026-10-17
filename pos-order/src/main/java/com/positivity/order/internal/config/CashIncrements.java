@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.Environment;
@@ -37,6 +38,7 @@ public class CashIncrements {
 
     private final Map<String, BigDecimal> increments;
 
+    @Autowired
     public CashIncrements(@NonNull Environment environment) {
         this(Binder.get(environment)
                 .bind(PROPERTY_PREFIX, Bindable.mapOf(String.class, BigDecimal.class))

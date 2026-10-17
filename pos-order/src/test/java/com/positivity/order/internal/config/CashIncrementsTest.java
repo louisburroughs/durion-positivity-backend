@@ -35,7 +35,7 @@ class CashIncrementsTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("pos.order.cash-increments.CAD")
                 .hasMessageContaining("coin");
-        assertThatThrownBy(() -> new CashIncrements(Map.of("JPY", new BigDecimal("2.5"))))
+        assertThatThrownBy(() -> new CashIncrements(Map.of("SEK", new BigDecimal("2.50"))))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("coin");
     }
