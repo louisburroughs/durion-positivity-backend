@@ -1161,7 +1161,11 @@ differenceClass, differenceAmount, reversalReference}`. The period gate then app
 unless `accounting:period:override` and `overrideJustification`, audited `PERIOD_OVERRIDE_POST`; HARD_LOCKED: 422
 `PERIOD_HARD_LOCKED`). A key with no mapping effective on that date, or one whose account is not active then, is
 one refusal (#2601): 422 `GL_MAPPING_NOT_CONFIGURED`, its message naming the category, the key and the posting date,
-guided with `referenceId` `VENDOR_BILL/<KEY>` and a `nextAction` naming the mapping to set up. Any refusal rolls the
+guided with `referenceId` `VENDOR_BILL/<KEY>` and a `nextAction` naming the mapping to set up. The same refusal
+covers a deactivated posting category or mapping key on every posting path (#2612, `GLMappingResolver`): an
+inactive one resolves nothing, and a new mapping against it is refused up front. A petty-expense category's
+deactivation leaves its mapping key active, so movements recorded before it still post at close (never
+retroactive). Any refusal rolls the
 approval back (no approval field, no entry) and writes one `VENDOR_BILL_APPROVE_REFUSED` (or
 `..._MATCH_EXCEPTION_RESOLVE_REFUSED`) audit row in a transaction of its own. One `vendor_bill_gl_posting` row per
 bill holds the entry and the durable keys `VENDOR_BILL:<billId>` and `VENDOR_BILL_VOID:<billId>`; the entry's

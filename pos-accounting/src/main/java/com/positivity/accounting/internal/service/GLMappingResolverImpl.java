@@ -85,6 +85,15 @@ public class GLMappingResolverImpl implements GLMappingResolver {
             UUID mappingKeyId,
             LocalDateTime transactionDate,
             Map<String, String> dimensionContext) {
+        requireActive(postingCategoryId, mappingKeyId);
+        return resolveActive(postingCategoryId, mappingKeyId, transactionDate, dimensionContext);
+    }
+
+    private UUID resolveActive(
+            UUID postingCategoryId,
+            UUID mappingKeyId,
+            LocalDateTime transactionDate,
+            Map<String, String> dimensionContext) {
 
         // Attempt resolution in order of specificity
         // 1. Try exact dimensional match
@@ -148,14 +157,57 @@ public class GLMappingResolverImpl implements GLMappingResolver {
                 .findByCategoryName(postingCategoryName)
                 .orElseThrow(() ->
                         new GLMappingNotConfiguredException("Posting category not configured: " + postingCategoryName));
+        if (inactive(category)) {
+            throw new GLMappingNotConfiguredException("Posting category inactive: " + postingCategoryName);
+        }
 
         MappingKey mappingKey = mappingKeyRepository
                 .findByPostingCategory_PostingCategoryIdAndKeyName(category.getPostingCategoryId(), mappingKeyName)
                 .orElseThrow(() -> new GLMappingNotConfiguredException(
                         "Mapping key not configured: " + postingCategoryName + "/" + mappingKeyName));
+        if (inactive(mappingKey)) {
+            throw new GLMappingNotConfiguredException(
+                    "Mapping key inactive: " + postingCategoryName + "/" + mappingKeyName);
+        }
 
-        return resolveGLAccount(
+        return resolveActive(
                 category.getPostingCategoryId(), mappingKey.getMappingKeyId(), transactionDate, Map.of());
+    }
+
+    /**
+     * An inactive posting category or mapping key is unresolved (#2612): it answers exactly as a missing one, 422
+     * {@code GL_MAPPING_NOT_CONFIGURED} (#2601, one code for every case). Deactivation already requires that no
+     * mapping is active, so this closes the gap of a mapping created afterwards against the retired configuration.
+     * A petty-expense category's deactivation keeps its mapping key active on purpose, so movements recorded before
+     * it still post at close (S15 §4.6, never retroactive); that path is not affected.
+     */
+    private void requireActive(UUID postingCategoryId, UUID mappingKeyId) {
+        inactiveReason(postingCategoryId, mappingKeyId).ifPresent(reason -> {
+            log.warn("GL mapping unresolved: {}", reason);
+            throw new GLMappingNotConfiguredException(reason);
+        });
+    }
+
+    private Optional<String> inactiveReason(UUID postingCategoryId, UUID mappingKeyId) {
+        Optional<String> category = postingCategoryRepository
+                .findById(postingCategoryId)
+                .filter(GLMappingResolverImpl::inactive)
+                .map(c -> "Posting category inactive: " + c.getCategoryName());
+        if (category.isPresent()) {
+            return category;
+        }
+        return mappingKeyRepository
+                .findById(mappingKeyId)
+                .filter(GLMappingResolverImpl::inactive)
+                .map(k -> "Mapping key inactive: " + k.getKeyName());
+    }
+
+    private static boolean inactive(PostingCategory category) {
+        return Boolean.FALSE.equals(category.getIsActive());
+    }
+
+    private static boolean inactive(MappingKey key) {
+        return Boolean.FALSE.equals(key.getIsActive());
     }
 
     /**
@@ -174,10 +226,12 @@ public class GLMappingResolverImpl implements GLMappingResolver {
             @NonNull LocalDateTime transactionDate) {
         return postingCategoryRepository
                 .findByCategoryName(postingCategoryName)
+                .filter(category -> !inactive(category))
                 .flatMap(category -> {
                     UUID categoryId = category.getPostingCategoryId();
                     return mappingKeyRepository
                             .findByPostingCategory_PostingCategoryIdAndKeyName(categoryId, mappingKeyName)
+                            .filter(key -> !inactive(key))
                             .flatMap(key -> categoryDefaultFirst(mappingRepository.findAllEffectiveMappings(
                                     categoryId, key.getMappingKeyId(), transactionDate)));
                 })
@@ -323,6 +377,10 @@ public class GLMappingResolverImpl implements GLMappingResolver {
         if (mapping.getEffectiveStartDate() == null) {
             throw new IllegalArgumentException("Effective from date is required");
         }
+        // A mapping against a retired category or key would resolve nothing (#2612); refuse it up front.
+        inactiveReason(mapping.getPostingCategoryId(), mapping.getMappingKeyId()).ifPresent(reason -> {
+            throw new IllegalArgumentException(reason);
+        });
         if (mapping.getEffectiveEndDate() != null
                 && mapping.getEffectiveStartDate().isAfter(mapping.getEffectiveEndDate())) {
             throw new IllegalArgumentException("Effective from date must be on or before effective to date");
@@ -376,6 +434,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      */
     @Override
     public UUID getEffectiveAccount(UUID postingCategoryId, UUID mappingKeyId, LocalDateTime transactionDate) {
+        requireActive(postingCategoryId, mappingKeyId);
         return mappingRepository
                 .findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate)
                 .map(GLMapping::getGlAccountId)
