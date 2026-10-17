@@ -125,6 +125,12 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- A real broker for the outbox → topic → replay IT (#2657). -->
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>com.positivity</groupId>
             <artifactId>pos-events</artifactId>
         </dependency>
