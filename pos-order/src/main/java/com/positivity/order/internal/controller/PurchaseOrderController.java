@@ -377,8 +377,8 @@ public class PurchaseOrderController {
                     merged; each line's taxCodeId and glAccountId are returned by getPurchaseOrder, so a read, \
                     edited and revised line keeps them. paymentTermsId, expectedDeliveryDate, shipToLocationId and \
                     comment overwrite the stored values even when omitted; requestedBy is the order's requester \
-                    (not the reviser, who is the caller) and is kept unless given; an optional vendorId changes the \
-                    vendor of a DRAFT order only.
+                    (not the reviser, who is the caller): omitted keeps it, blank clears it, a value corrects it; an \
+                    optional vendorId changes the vendor of a DRAFT order only.
                     Emits an ORDER_PURCHASE_ORDER_REVISE event carrying the field-level delta and the \
                     revision reason.
                     Returns 404 when the purchase order does not exist, 409 PURCHASE_ORDER_VERSION_CONFLICT when \
@@ -440,7 +440,8 @@ public class PurchaseOrderController {
                                             mediaType = "application/json",
                                             schema = @Schema(implementation = RevisePurchaseOrderRequest.class),
                                             examples = @ExampleObject(name = "Quantity increase", value = """
-                                                                    {"poDate":"2026-08-20",
+                                                                    {"expectedVersionNumber":1,
+                                                                     "poDate":"2026-08-20",
                                                                      "paymentTermsId":"NET30",
                                                                      "expectedDeliveryDate":"2026-09-03",
                                                                      "revisionReason":"Vendor confirmed availability of larger quantity",

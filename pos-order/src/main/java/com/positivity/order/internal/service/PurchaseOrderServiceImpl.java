@@ -392,9 +392,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Transactional
     public @NonNull PurchaseOrderResponse revisePurchaseOrder(
             @NonNull UUID poId, @NonNull RevisePurchaseOrderRequest request, @NonNull String actorId) {
-        if (request.getExpectedVersionNumber() == null) {
+        if (request.getExpectedVersionNumber() == null || request.getExpectedVersionNumber() < 1) {
+            // Bean validation answers HTTP callers first; this keeps an in-process caller to the same contract.
             throw new PurchaseOrderRequestValidationException(
-                    "expectedVersionNumber is required: the versionNumber the revision was built on");
+                    "expectedVersionNumber is required and at least 1: the versionNumber the revision was built on");
         }
         PurchaseOrderEntity po = purchaseOrderRepository
                 .findByIdForUpdate(poId)
@@ -410,9 +411,11 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         po.setPaymentTermsId(request.getPaymentTermsId());
         po.setExpectedDeliveryDate(request.getExpectedDeliveryDate());
         po.setShipToLocationId(request.getShipToLocationId());
-        // The order's requester, not the reviser (who is the actor): kept unless deliberately corrected (#2681).
+        // The order's requester, not the reviser (who is the actor): absent keeps it, blank clears it, a value
+        // corrects it (#2681).
         if (request.getRequestedBy() != null) {
-            po.setRequestedBy(request.getRequestedBy());
+            String requester = request.getRequestedBy().trim();
+            po.setRequestedBy(requester.isEmpty() ? null : requester);
         }
         po.setComment(request.getComment());
 
@@ -436,7 +439,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Override
     @Transactional
     public @NonNull PurchaseOrderResponse cancelPurchaseOrder(@NonNull UUID poId, @NonNull String actorId) {
-        PurchaseOrderEntity po = getPoOrThrow(poId);
+        // Every writer of the header takes the row lock (#2681), so none writes a stale row back over a revision.
+        PurchaseOrderEntity po = purchaseOrderRepository
+                .findByIdForUpdate(poId)
+                .orElseThrow(() -> new PurchaseOrderNotFoundException(poId));
         if (po.getStatus() == PurchaseOrderStatus.FULLY_RECEIVED || po.getStatus() == PurchaseOrderStatus.CLOSED) {
             throw new PurchaseOrderStateConflictException("Cannot cancel a fully received or closed purchase order");
         }

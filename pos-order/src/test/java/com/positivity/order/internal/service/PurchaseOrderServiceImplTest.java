@@ -754,6 +754,40 @@ class PurchaseOrderServiceImplTest {
         }
 
         @Test
+        @DisplayName("an expectedVersionNumber below 1 is a 400, not a 409 against 'version 0'")
+        void nonPositiveExpectedVersionIsRefused() {
+            when(purchaseOrderRepository.findById(PO_ID))
+                    .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.DRAFT)));
+
+            assertThatThrownBy(() -> service.revisePurchaseOrder(PO_ID, revisionBuiltOn(0), ACTOR))
+                    .isInstanceOf(PurchaseOrderRequestValidationException.class);
+        }
+
+        @Test
+        @DisplayName("cancel reads the order under the row lock, like every other header writer")
+        void cancelLocksTheRow() {
+            when(purchaseOrderRepository.findById(PO_ID))
+                    .thenReturn(Optional.of(existingOrder(PurchaseOrderStatus.DRAFT)));
+
+            service.cancelPurchaseOrder(PO_ID, ACTOR);
+
+            verify(purchaseOrderRepository).findByIdForUpdate(PO_ID);
+        }
+
+        @Test
+        @DisplayName("a blank requestedBy clears the requester")
+        void blankRequesterClears() {
+            PurchaseOrderEntity order = existingOrder(PurchaseOrderStatus.DRAFT);
+            order.setRequestedBy("tech-maria");
+            when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(order));
+            RevisePurchaseOrderRequest cleared = revisionBuiltOn(1);
+            cleared.setRequestedBy("   ");
+
+            assertThat(service.revisePurchaseOrder(PO_ID, cleared, ACTOR).getRequestedBy())
+                    .isNull();
+        }
+
+        @Test
         @DisplayName("a revision keeps the order's requester unless it names a new one")
         void requesterIsKeptUnlessCorrected() {
             PurchaseOrderEntity order = existingOrder(PurchaseOrderStatus.DRAFT);

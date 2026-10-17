@@ -12,6 +12,7 @@ import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -102,7 +103,32 @@ public class PurchaseOrderExceptionHandler {
     @ExceptionHandler(PurchaseOrderVersionConflictException.class)
     public ResponseEntity<ApiError> handleVersionConflict(
             PurchaseOrderVersionConflictException ex, HttpServletRequest request) {
-        return respond(HttpStatus.CONFLICT, "PURCHASE_ORDER_VERSION_CONFLICT", ex.getMessage(), request);
+        String correlationId = correlationId(request);
+        // ADR-0017 §3: the versions travel structured, not only in prose. referenceId is the order; the one HARD
+        // conflict names the current version in its code's resource, so a client can reload or retry on it.
+        ApiError.Conflict conflict = new ApiError.Conflict(
+                "HARD",
+                "PURCHASE_ORDER_VERSION_CONFLICT",
+                "Built on version " + ex.getExpectedVersionNumber() + "; the order is at version "
+                        + ex.getCurrentVersionNumber(),
+                false,
+                "versionNumber: " + ex.getCurrentVersionNumber());
+        ApiError body = new ApiError(
+                "PURCHASE_ORDER_VERSION_CONFLICT",
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                null,
+                ex.getPurchaseOrderId().toString(),
+                "Re-read the purchase order (versionNumber " + ex.getCurrentVersionNumber()
+                        + ") and apply the change to it",
+                null,
+                List.of(conflict),
+                null);
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(body);
     }
 
     /**

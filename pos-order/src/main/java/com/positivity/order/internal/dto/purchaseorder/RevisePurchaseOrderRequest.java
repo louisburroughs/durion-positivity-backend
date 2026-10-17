@@ -59,8 +59,8 @@ public class RevisePurchaseOrderRequest {
 
     @Schema(
             description = "The order's requester: the person the goods are for, as on create. Not the reviser, who is"
-                    + " the authenticated caller. Absent keeps the order's current requester; give it only to correct"
-                    + " the requester",
+                    + " the authenticated caller. Omitted keeps the order's current requester, blank clears it, a value"
+                    + " corrects it",
             example = "user-jdoe",
             requiredMode = NOT_REQUIRED)
     private String requestedBy;

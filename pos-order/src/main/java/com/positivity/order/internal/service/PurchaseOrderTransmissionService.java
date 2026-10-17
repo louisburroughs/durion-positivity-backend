@@ -86,8 +86,10 @@ public class PurchaseOrderTransmissionService {
      */
     @Transactional
     public void requestTransmission(@NonNull UUID purchaseOrderId, @NonNull String actorId) {
+        // Under the row lock (#2681): this writes the header, and an unlocked read racing a revision would write the
+        // stale row back over it.
         PurchaseOrderEntity order = purchaseOrderRepository
-                .findById(purchaseOrderId)
+                .findByIdForUpdate(purchaseOrderId)
                 .orElseThrow(() -> new PurchaseOrderNotFoundException(purchaseOrderId));
 
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();

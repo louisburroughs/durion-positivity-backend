@@ -124,10 +124,20 @@ class PurchaseOrderExceptionHandlerTest {
     @Test
     @DisplayName("maps a stale expected version to 409 PURCHASE_ORDER_VERSION_CONFLICT (#2681)")
     void versionConflict() {
-        assertEnvelope(
-                sut.handleVersionConflict(new PurchaseOrderVersionConflictException(PO_ID, "0000001A", 1, 2), request),
-                HttpStatus.CONFLICT,
-                "PURCHASE_ORDER_VERSION_CONFLICT");
+        var response =
+                sut.handleVersionConflict(new PurchaseOrderVersionConflictException(PO_ID, "0000001A", 1, 2), request);
+
+        assertEnvelope(response, HttpStatus.CONFLICT, "PURCHASE_ORDER_VERSION_CONFLICT");
+        ApiError body = response.getBody();
+        assertThat(body).isNotNull();
+        assertThat(body.referenceId()).isEqualTo(PO_ID.toString());
+        assertThat(body.nextAction()).contains("versionNumber 2");
+        assertThat(body.conflicts()).singleElement().satisfies(conflict -> {
+            assertThat(conflict.severity()).isEqualTo("HARD");
+            assertThat(conflict.code()).isEqualTo("PURCHASE_ORDER_VERSION_CONFLICT");
+            assertThat(conflict.overridable()).isFalse();
+            assertThat(conflict.affectedResource()).isEqualTo("versionNumber: 2");
+        });
     }
 
     @Test

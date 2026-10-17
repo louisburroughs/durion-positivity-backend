@@ -435,9 +435,14 @@ A revision replaces the header and every line, so a committing revise must be bu
 - **Lines round-trip.** `PurchaseOrderLineResponse` returns `taxCodeId` and `glAccountId` alongside `skuId`,
   `documentUom` and `documentQuantity`, so a client that reads, edits and revises an order's lines keeps them. A
   dropped `taxCodeId` would have zeroed the line's tax; a dropped `glAccountId` only surfaced at posting.
-- **`requestedBy`.** The order's requester (the person the goods are for), as on create: a revision keeps it unless
-  the request names a new one. The reviser is the authenticated actor, recorded as `updatedBy` and on the
-  `ORDER_PURCHASE_ORDER_REVISE` event; it is never written to `requestedBy`.
+- **`requestedBy`.** The order's requester (the person the goods are for), as on create: a revision keeps it when
+  the field is omitted, clears it when it is blank, and corrects it when it names someone. The reviser is the
+  authenticated actor, recorded as `updatedBy` and on the `ORDER_PURCHASE_ORDER_REVISE` event; it is never written
+  to `requestedBy`.
+- **Every header writer locks.** Revise, approve, cancel, transmit and the supplier-result and goods-receipt
+  consumers all read the order through `findByIdForUpdate`, and the entity is `@DynamicUpdate`, so no path writes a
+  stale header (and a stale `versionNumber`) back over a committed revision. The 409 carries the order as
+  `referenceId`, the current version in `conflicts[0].affectedResource` (`versionNumber: N`) and a `nextAction`.
 
 ## Error codes
 

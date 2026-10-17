@@ -496,7 +496,9 @@ public class SupplierOrderResultListener {
     }
 
     private @Nullable PurchaseOrderEntity orderFor(UUID purchaseOrderId) {
-        Optional<PurchaseOrderEntity> order = purchaseOrderRepository.findById(purchaseOrderId);
+        // The row lock, like every other writer of the header (#2681): a result applied while a buyer revises must not
+        // write the pre-revision row back.
+        Optional<PurchaseOrderEntity> order = purchaseOrderRepository.findByIdForUpdate(purchaseOrderId);
         if (order.isEmpty()) {
             // pos-supplier only ever answers a command this domain sent, so an unknown order means
             // a data problem rather than a race worth retrying.
