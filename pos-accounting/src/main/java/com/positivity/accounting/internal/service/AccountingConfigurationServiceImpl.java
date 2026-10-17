@@ -377,7 +377,10 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
     @Transactional(readOnly = true)
     public CashSafetyCushionResponse getCashSafetyCushion() {
         return CashSafetyCushionResponse.builder()
-                .amount(cashAndPayablesSettings.cashSafetyCushion().map(this::scaledAmount).orElse(null))
+                .amount(cashAndPayablesSettings
+                        .cashSafetyCushion()
+                        .map(cushion -> cushion.setScale(functionalCurrency.fractionDigits(), RoundingMode.HALF_UP))
+                        .orElse(null))
                 .currencyCode(functionalCurrency.code())
                 .build();
     }
