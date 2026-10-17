@@ -474,9 +474,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             @NonNull UUID lineId,
             @NonNull ReopenPurchaseOrderLineRequest request,
             @NonNull String actorId) {
-        PurchaseOrderEntity po = lockedForLineAction(poId);
-        PurchaseOrderLineEntity line = lineOf(po, lineId);
-        PurchaseOrderLineFigures.adoptLegacyOpen(line);
+        PurchaseOrderEntity po = lockedForLineAction(poId);        PurchaseOrderLineEntity line = lineOf(po, lineId);
         BigDecimal quantity = request.getQuantity();
         BigDecimal returned = PurchaseOrderLineFigures.zeroIfNull(line.getReturnedQuantity());
         if (quantity.compareTo(returned) > 0) {
@@ -496,7 +494,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 quantity,
                 request.getVendorReturnId(),
                 actorId);
-        return finishLineAction(po, actorId);
+        return finishLineAction(po, actorId, null);
     }
 
     @Override
@@ -511,10 +509,16 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new PurchaseOrderStateConflictException(
                     "A DRAFT purchase order has no remainder to cancel; revise its lines instead",
                     "Revise the purchase order (revisePurchaseOrder) to change its quantities");
-        }
-        PurchaseOrderLineEntity line = lineOf(po, lineId);
-        PurchaseOrderLineFigures.adoptLegacyOpen(line);
+        }        PurchaseOrderLineEntity line = lineOf(po, lineId);
         cancelRemainder(po, line, request.getQuantity());
+        if (!PurchaseOrderLineFigures.anythingReceived(po) && PurchaseOrderLineFigures.allSettled(po)) {
+            // Nothing ever arrived and this cancel would settle every line: that is a cancellation of the order, not a
+            // short-close, and CLOSED must keep meaning "something was delivered" (the transaction rolls back).
+            throw new PurchaseOrderStateConflictException(
+                    "Cancelling this remainder would leave purchase order " + po.getPoNumber()
+                            + " with nothing received and nothing open; cancel the order instead",
+                    "Cancel the purchase order (cancelPurchaseOrder)");
+        }
         log.info(
                 "Purchase order {} line {} remainder cancelled | quantity={} | reason={} | by={}",
                 po.getPoNumber(),
@@ -522,7 +526,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 request.getQuantity(),
                 request.getReason(),
                 actorId);
-        return finishLineAction(po, actorId);
+        return finishLineAction(po, actorId, null);
     }
 
     @Override
@@ -534,9 +538,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new PurchaseOrderStateConflictException(
                     "A DRAFT purchase order cannot be closed; cancel it or revise it",
                     "Cancel the purchase order (cancelPurchaseOrder) or revise it (revisePurchaseOrder)");
-        }
-        po.getLines().forEach(PurchaseOrderLineFigures::adoptLegacyOpen);
-        if (!PurchaseOrderLineFigures.anythingReceived(po)) {
+        }        if (!PurchaseOrderLineFigures.anythingReceived(po)) {
             // Nothing arrived: this is a cancellation, and the order should say so rather than read as CLOSED.
             throw new PurchaseOrderStateConflictException(
                     "Nothing has been received on purchase order " + po.getPoNumber()
@@ -548,11 +550,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             if (open.signum() > 0) {
                 cancelRemainder(po, line, open);
             }
-        }
-        PurchaseOrderLineFigures.refresh(po);
-        po.setStatus(PurchaseOrderStatus.CLOSED);
-        log.info("Purchase order {} closed | reason={} | by={}", po.getPoNumber(), request.getReason(), actorId);
-        return finishLineAction(po, actorId);
+        }        log.info("Purchase order {} closed | reason={} | by={}", po.getPoNumber(), request.getReason(), actorId);
+        return finishLineAction(po, actorId, PurchaseOrderStatus.CLOSED);
     }
 
     /** The row-locked order (#2681) in a status the per-line actions may change: not CANCELLED or CLOSED. */

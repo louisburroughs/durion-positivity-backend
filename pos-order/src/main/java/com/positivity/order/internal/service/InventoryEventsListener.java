@@ -313,13 +313,14 @@ public class InventoryEventsListener {
 
         // #2635: a receipt adds to the line's received figures; open and status are derived from them, and the
         // balance takes the receipt's accrual off (as before). A line without a poLineId, or naming a line the order
-        // does not hold, moves only the balance.
+        // does not hold, moves only the balance.        boolean receivedOffLines = false;
         for (GoodsReceiptLine line : receipt.lines()) {
             PurchaseOrderLineEntity orderLine = line.poLineId() == null ? null : linesById.get(line.poLineId());
             if (orderLine == null) {
                 if (line.poLineId() != null) {
                     log.warn("Goods receipt {} references unknown line {}", receipt.receiptId(), line.poLineId());
                 }
+                receivedOffLines |= line.quantityReceived().signum() > 0;
                 continue;
             }
             PurchaseOrderLineFigures.adoptLegacyOpen(orderLine);
@@ -340,7 +341,7 @@ public class InventoryEventsListener {
                     order.getPurchaseOrderId(),
                     order.getStatus());
         }
-        PurchaseOrderLineFigures.refresh(order);
+        PurchaseOrderLineFigures.refresh(order, receivedOffLines);
         order.setVersionNumber(order.getVersionNumber() == null ? 1 : order.getVersionNumber() + 1);
 
         PurchaseOrderEntity saved = purchaseOrderRepository.save(order);
@@ -389,8 +390,9 @@ public class InventoryEventsListener {
                     vendorReturn.vendorReturnId(),
                     vendorReturn.purchaseOrderId());
             return;
-        }
-        String currency = order.getCurrency() != null ? order.getCurrency() : vendorReturn.currencyCode();
+        }        // accruedAmount is a decimal at the exponent of the fact's own currency (ADR-0067 PC-5 (a)); the order's
+        // currency only stands in when the fact states none.
+        String currency = vendorReturn.currencyCode() != null ? vendorReturn.currencyCode() : order.getCurrency();
         Map<UUID, PurchaseOrderLineEntity> linesById = order.getLines().stream()
                 .filter(line -> line.getLineId() != null)
                 .collect(Collectors.toMap(PurchaseOrderLineEntity::getLineId, Function.identity(), (a, b) -> a));
@@ -411,18 +413,16 @@ public class InventoryEventsListener {
                 continue;
             }
             PurchaseOrderLineFigures.adoptLegacyOpen(orderLine);
-            BigDecimal openBefore = PurchaseOrderLineFigures.open(orderLine);
             BigDecimal received = PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedQuantity())
                     .subtract(line.quantityReturned());
             orderLine.setReceivedQuantity(received.signum() < 0 ? BigDecimal.ZERO : received);
-            orderLine.setReceivedAccruedMinor(
-                    Math.max(0L, PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedAccruedMinor()) - accrued));
+            orderLine.setReceivedAccruedMinor(Math.max(
+                    0L, PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedAccruedMinor()) - accrued));
             if (!correction) {
-                BigDecimal reopened = PurchaseOrderLineFigures.open(orderLine).subtract(openBefore);
-                if (reopened.signum() > 0) {
-                    orderLine.setReturnedQuantity(PurchaseOrderLineFigures.zeroIfNull(orderLine.getReturnedQuantity())
-                            .add(reopened));
-                }
+                // Credit: the whole returned quantity moves from received to returned, so the derived open quantity
+                // is what it was (an over-received line stays settled) and a reopen may later take all of it back.
+                orderLine.setReturnedQuantity(PurchaseOrderLineFigures.zeroIfNull(orderLine.getReturnedQuantity())
+                        .add(line.quantityReturned()));
                 orderLine.setReturnedValueMinor(
                         PurchaseOrderLineFigures.zeroIfNull(orderLine.getReturnedValueMinor()) + accrued);
             }
@@ -442,8 +442,11 @@ public class InventoryEventsListener {
             if (order.getOpenBalanceMinor() != null && order.getOpenBalanceMinor() > ceiling) {
                 order.setOpenBalanceMinor(ceiling);
             }
+            PurchaseOrderLineFigures.refresh(order);
+        } else {
+            // Rule 2: a credited return changes no published figure, the status included.
+            PurchaseOrderLineFigures.refreshOpen(order);
         }
-        PurchaseOrderLineFigures.refresh(order);
         if (correction) {
             order.setVersionNumber(order.getVersionNumber() == null ? 1 : order.getVersionNumber() + 1);
             PurchaseOrderEntity saved = purchaseOrderRepository.save(order);

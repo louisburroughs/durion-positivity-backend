@@ -6,19 +6,22 @@
 -- Quantities are base units (ADR-0055); values are whole minor units of the order's currency (ADR-0067 R-1). All
 -- additive with defaults, no lock beyond the catalogue change; existing rows are backfilled from what the open
 -- quantity already said.
-ALTER TABLE public.purchase_order_line ADD COLUMN received_quantity numeric(18,6) NOT NULL DEFAULT 0;
+-- received_quantity is nullable on purpose: null marks a line the figures have not touched yet (adopted from the
+-- open quantity on first use, exactly as the backfill below does for every stored row); a zero is a real zero.
+ALTER TABLE public.purchase_order_line ADD COLUMN received_quantity numeric(18,6);
 ALTER TABLE public.purchase_order_line ADD COLUMN received_accrued_minor bigint NOT NULL DEFAULT 0;
 ALTER TABLE public.purchase_order_line ADD COLUMN returned_quantity numeric(18,6) NOT NULL DEFAULT 0;
 ALTER TABLE public.purchase_order_line ADD COLUMN returned_value_minor bigint NOT NULL DEFAULT 0;
 ALTER TABLE public.purchase_order_line ADD COLUMN cancelled_quantity numeric(18,6) NOT NULL DEFAULT 0;
 ALTER TABLE public.purchase_order_line ADD COLUMN cancelled_value_minor bigint NOT NULL DEFAULT 0;
 
--- Backfill: received = ordered - open where an open quantity was recorded; its accrual at the line's unit price.
+-- Backfill every row: received = ordered - open where an open quantity was recorded (else 0); its accrual at the
+-- line's unit price.
 UPDATE public.purchase_order_line
-   SET received_quantity = GREATEST(0, quantity_decimal - open_quantity_decimal),
+   SET received_quantity = CASE
+           WHEN open_quantity_decimal IS NOT NULL THEN GREATEST(0, quantity_decimal - open_quantity_decimal)
+           ELSE 0 END,
        received_accrued_minor = CASE
-           WHEN quantity_decimal > 0
+           WHEN open_quantity_decimal IS NOT NULL AND quantity_decimal > 0
                THEN ROUND(line_total_minor * GREATEST(0, quantity_decimal - open_quantity_decimal) / quantity_decimal)
-           ELSE 0 END
- WHERE open_quantity_decimal IS NOT NULL
-   AND open_quantity_decimal < quantity_decimal;
+           ELSE 0 END;

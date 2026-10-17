@@ -68,10 +68,13 @@ public class PurchaseOrderLineEntity extends TenantScopedEntity {
     @Column(precision = 18, scale = 6)
     private BigDecimal openQuantityDecimal;
 
-    /** Base units received, net of receipt corrections and returns (CAP:550 #2635). */
-    @Builder.Default
-    @Column(name = "received_quantity", nullable = false, precision = 18, scale = 6)
-    private BigDecimal receivedQuantity = BigDecimal.ZERO;
+    /**
+     * Base units received, net of receipt corrections and returns (CAP:550 #2635). {@code null} on a line written
+     * before the figures existed and not yet touched: it then adopts {@code ordered − open} once (the V14 backfill
+     * for stored rows); after that it is never null, so a figure that returns to zero is a zero, not a legacy row.
+     */
+    @Column(name = "received_quantity", precision = 18, scale = 6)
+    private BigDecimal receivedQuantity;
 
     /** Minor units accrued for the received quantity (GRNI, 2100), net of corrections and returns. */
     @Builder.Default

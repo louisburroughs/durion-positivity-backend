@@ -82,6 +82,7 @@ public interface PurchaseOrderService {
      * re-derived; the fact is published. 409 on a {@code CANCELLED} or {@code CLOSED} order, or when the quantity
      * exceeds what the line has returned; 404 for a line the order does not hold.
      */
+    @NonNull
     PurchaseOrderResponse reopenPurchaseOrderLine(
             @NonNull UUID poId,
             @NonNull UUID lineId,
@@ -93,6 +94,7 @@ public interface PurchaseOrderService {
      * quantity and its value; {@code CLOSED} once every line is settled; the fact is published. 409 on {@code DRAFT}
      * (revise instead), {@code CANCELLED} or {@code CLOSED}, or when the quantity exceeds the line's open quantity.
      */
+    @NonNull
     PurchaseOrderResponse cancelPurchaseOrderLine(
             @NonNull UUID poId,
             @NonNull UUID lineId,
@@ -104,6 +106,7 @@ public interface PurchaseOrderService {
      * is {@code CLOSED}; the fact is published. 409 on {@code DRAFT}, {@code CANCELLED} or {@code CLOSED}, and, with
      * {@code nextAction} naming cancel, on an order with nothing received.
      */
+    @NonNull
     PurchaseOrderResponse closePurchaseOrder(
             @NonNull UUID poId, @NonNull ClosePurchaseOrderRequest request, @NonNull String actorId);
 }

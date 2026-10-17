@@ -16,14 +16,14 @@ import org.jspecify.annotations.Nullable;
  *
  * <ul>
  *   <li>{@code open = max(0, ordered − received − returned − cancelled)}, stored on the line and published. A line
- *       written before the figures existed (open below ordered, every figure zero) adopts {@code received = ordered −
- *       open} on first touch, as V14 backfills stored rows;
+ *       written before the figures existed ({@code receivedQuantity} null) adopts {@code received = ordered − open}
+ *       once, as V14 backfills stored rows; from then on a zero is a zero;
  *   <li>the balance, ex-tax (#2633), moves with each event and never below zero: a receipt takes its accrual off, a
  *       correction puts it back, a reopen puts the quantity's value back, a short-close takes it off; a credited
  *       return leaves it alone;
  *   <li>the status, from the lines, applied only from {@code APPROVED}, {@code PARTIALLY_RECEIVED} and {@code
  *       FULLY_RECEIVED} (#2634): every line open 0 → {@code CLOSED} if anything was short-closed on the order,
- *       else {@code FULLY_RECEIVED}; else Σ received > 0 → {@code PARTIALLY_RECEIVED}; else {@code APPROVED}.
+ *       else {@code FULLY_RECEIVED}; else something received → {@code PARTIALLY_RECEIVED}; else {@code APPROVED}.
  * </ul>
  *
  * <p>A quantity's value is {@code lineTotalMinor × quantity ÷ ordered}, HALF_UP to whole minor units: the accrued
@@ -59,30 +59,48 @@ public final class PurchaseOrderLineFigures {
     }
 
     /**
-     * A line written before the figures existed: its open quantity is below what was ordered while every figure is
-     * zero. It adopts {@code received = ordered − open} (and that quantity's value as its accrual), the same backfill
-     * V14 applied to stored rows, so a fixture or a row the migration did not see derives the same open quantity.
+     * A line written before the figures existed ({@code receivedQuantity} null) adopts {@code received = ordered −
+     * open} (and that quantity's value as its accrual) exactly once: the backfill V14 applied to stored rows, so a
+     * fixture or a row the migration did not see derives the same open quantity. A line already carrying figures is
+     * left alone, so a figure that later returns to zero stays zero.
      */
     public static void adoptLegacyOpen(@NonNull PurchaseOrderLineEntity line) {
-        BigDecimal open = line.getOpenQuantityDecimal();
-        BigDecimal ordered = line.getQuantityDecimal();
-        if (open == null || ordered == null || open.compareTo(ordered) >= 0) {
+        if (line.getReceivedQuantity() != null) {
             return;
         }
-        boolean untouched = zeroIfNull(line.getReceivedQuantity()).signum() == 0
-                && zeroIfNull(line.getReturnedQuantity()).signum() == 0
-                && zeroIfNull(line.getCancelledQuantity()).signum() == 0;
-        if (untouched) {
-            BigDecimal received = ordered.subtract(open.signum() < 0 ? BigDecimal.ZERO : open);
-            line.setReceivedQuantity(received);
-            line.setReceivedAccruedMinor(valueOf(line, received));
+        BigDecimal open = line.getOpenQuantityDecimal();
+        BigDecimal ordered = zeroIfNull(line.getQuantityDecimal());
+        BigDecimal received = open == null || open.compareTo(ordered) >= 0
+                ? BigDecimal.ZERO
+                : ordered.subtract(open.signum() < 0 ? BigDecimal.ZERO : open);
+        line.setReceivedQuantity(received);
+        if (received.signum() > 0) {
+            line.setReceivedAccruedMinor(zeroIfNull(line.getReceivedAccruedMinor()) + valueOf(line, received));
         }
     }
 
-    /** Re-derives every line's open quantity from the figures, and the status when the order is in a receiving status. */
+    /** Re-derives every line's open quantity from the figures; the status is left alone (a credited return). */
+    public static void refreshOpen(@NonNull PurchaseOrderEntity order) {
+        for (PurchaseOrderLineEntity line : order.getLines()) {
+            adoptLegacyOpen(line);
+            line.setOpenQuantityDecimal(open(line));
+        }
+    }
+
+    /** {@link #refresh(PurchaseOrderEntity, boolean)} with nothing received beyond what the lines say. */
     public static void refresh(@NonNull PurchaseOrderEntity order) {
+        refresh(order, false);
+    }
+
+    /**
+     * Re-derives every line's open quantity from the figures, and the status when the order is in a receiving status.
+     *
+     * @param receivedOffLines true when the event received something the lines do not carry (a receipt line without
+     *     a {@code poLineId}): the order is then at least {@code PARTIALLY_RECEIVED}, as before the figures existed
+     */
+    public static void refresh(@NonNull PurchaseOrderEntity order, boolean receivedOffLines) {
         boolean allSettled = true;
-        boolean anyReceived = false;
+        boolean anyReceived = receivedOffLines;
         boolean anyCancelled = false;
         for (PurchaseOrderLineEntity line : order.getLines()) {
             adoptLegacyOpen(line);
@@ -107,10 +125,20 @@ public final class PurchaseOrderLineFigures {
         order.setOpenBalanceMinor(Math.max(0L, balance + deltaMinor));
     }
 
-    /** Whether anything was received on the order (net of corrections). */
+    /**
+     * Whether goods ever arrived on the order: received or returned for credit (gross of returns, net of
+     * corrections). An order whose receipts were all returned still had deliveries, so it closes rather than cancels.
+     */
     public static boolean anythingReceived(@NonNull PurchaseOrderEntity order) {
-        return order.getLines().stream()
-                .anyMatch(line -> zeroIfNull(line.getReceivedQuantity()).signum() > 0);
+        return order.getLines().stream().anyMatch(line -> zeroIfNull(line.getReceivedQuantity())
+                        .add(zeroIfNull(line.getReturnedQuantity()))
+                        .signum()
+                > 0);
+    }
+
+    /** Whether every line's open quantity is zero. */
+    public static boolean allSettled(@NonNull PurchaseOrderEntity order) {
+        return order.getLines().stream().allMatch(line -> open(line).signum() <= 0);
     }
 
     /** A decimal at the currency exponent, in whole minor units of {@code currencyCode} (HALF_UP). */
