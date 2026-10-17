@@ -59,7 +59,6 @@ class PurchaseTaxRulesControllerTest {
         PurchaseTaxRules purchaseTaxRules() {
             return new PurchaseTaxRules(PROPERTIES, CLOCK);
         }
-
     }
 
     @Autowired

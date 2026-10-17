@@ -58,7 +58,6 @@ class InformationReturnFormsControllerTest {
         InformationReturnForms informationReturnForms() {
             return new InformationReturnForms(PROPERTIES);
         }
-
     }
 
     @Autowired

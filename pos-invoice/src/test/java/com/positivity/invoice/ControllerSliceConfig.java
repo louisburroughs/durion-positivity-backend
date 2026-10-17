@@ -36,5 +36,4 @@ public class ControllerSliceConfig {
     public Clock clock() {
         return TEST_CLOCK;
     }
-
 }

@@ -54,6 +54,5 @@ public abstract class BaseControllerSliceTest {
         public Clock clock() {
             return TEST_CLOCK;
         }
-
     }
 }

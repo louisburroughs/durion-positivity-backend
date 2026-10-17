@@ -53,7 +53,6 @@ class SupplierTransmissionControllerWebMvcTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-08-13T12:00:00Z"), ZoneOffset.UTC);
         }
-
     }
 
     private static final String BASE = "/v1/supplier/transmissions";

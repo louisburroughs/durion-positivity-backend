@@ -115,6 +115,5 @@ class ProviderControllerErrorHandlingTest {
         Clock clock() {
             return TEST_CLOCK;
         }
-
     }
 }

@@ -54,7 +54,6 @@ class TaxControllerRatesTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-08-27T12:00:00Z"), ZoneOffset.UTC);
         }
-
     }
 
     @Autowired

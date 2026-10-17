@@ -59,7 +59,6 @@ class SupplierExchangeAuditControllerErrorHandlingTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-09-04T12:00:00Z"), ZoneOffset.UTC);
         }
-
     }
 
     private static final String BASE = "/v1/supplier/admin/audit";

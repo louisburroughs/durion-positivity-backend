@@ -83,7 +83,6 @@ class SupplierAdminControllersWebMvcTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-08-11T12:00:00Z"), ZoneOffset.UTC);
         }
-
     }
 
     private static final UUID PROFILE_ID = UUID.fromString("018f0000-0000-7000-8000-000000000501");

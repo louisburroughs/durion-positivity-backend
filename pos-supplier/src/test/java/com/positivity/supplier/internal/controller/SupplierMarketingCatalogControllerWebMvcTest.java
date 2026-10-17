@@ -50,7 +50,6 @@ class SupplierMarketingCatalogControllerWebMvcTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-08-16T10:00:00Z"), ZoneOffset.UTC);
         }
-
     }
 
     private static final String SUPPLIER_REF = "ediwheel-net";

@@ -124,7 +124,6 @@ class TaxEvidenceControllerTest {
                 ObjectProvider<MeterRegistry> meterRegistry) {
             return new TaxPlausibilityServiceImpl(PROPERTIES, profiles, shapes, rules, clock, meterRegistry);
         }
-
     }
 
     @Autowired

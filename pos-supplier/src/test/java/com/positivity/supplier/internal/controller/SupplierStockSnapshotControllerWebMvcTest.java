@@ -56,7 +56,6 @@ class SupplierStockSnapshotControllerWebMvcTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-08-13T12:00:00Z"), ZoneOffset.UTC);
         }
-
     }
 
     private static final UUID PROFILE_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a5b");
