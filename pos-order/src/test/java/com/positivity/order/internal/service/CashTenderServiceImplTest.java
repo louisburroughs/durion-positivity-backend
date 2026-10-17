@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,7 @@ import com.positivity.order.internal.client.RecordCashPaymentCommand;
 import com.positivity.order.internal.config.CashIncrements;
 import com.positivity.order.internal.dto.CashTenderRequest;
 import com.positivity.order.internal.dto.CashTenderResponse;
+import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrder;
@@ -26,9 +28,11 @@ import com.positivity.order.internal.exception.OrderConflictException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,6 +62,9 @@ class CashTenderServiceImplTest {
     private RegisterSessionRepository registerSessionRepository;
 
     @Mock
+    private OrderPaymentRecordRepository paymentRecordRepository;
+
+    @Mock
     private InvoicingPort invoicingPort;
 
     private CashTenderServiceImpl service;
@@ -69,8 +76,10 @@ class CashTenderServiceImplTest {
         service = new CashTenderServiceImpl(
                 salesOrderRepository,
                 registerSessionRepository,
+                paymentRecordRepository,
                 invoicingPort,
                 new CashIncrements(Map.of("CAD", new BigDecimal("0.05"))));
+        lenient().when(paymentRecordRepository.findByOrderId(ORDER_ID)).thenReturn(List.of());
         order = SalesOrder.builder()
                 .orderId(ORDER_ID)
                 .status(SalesOrderStatus.PENDING_PAYMENT)
@@ -217,6 +226,38 @@ class CashTenderServiceImplTest {
                     });
                 });
         verifyNoInteractions(invoicingPort);
+    }
+
+    @Test
+    @DisplayName("(g) a replayed key after the settled fact landed answers from the order's own record")
+    void replayAfterTheFactAnswersFromTheRecord() {
+        order.setStatus(SalesOrderStatus.COMPLETED);
+        order.setAmountPaid(new BigDecimal("9.9800"));
+        order.setBalanceDue(BigDecimal.ZERO);
+        when(salesOrderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
+        when(paymentRecordRepository.findByOrderId(ORDER_ID))
+                .thenReturn(List.of(OrderPaymentRecord.builder()
+                        .orderId(ORDER_ID)
+                        .recordType(OrderPaymentRecord.RecordType.SETTLED)
+                        .paymentIntentId(INTENT_ID)
+                        .methodType("CASH")
+                        .amount(new BigDecimal("9.9800"))
+                        .settledAmount(new BigDecimal("10.0000"))
+                        .cashRoundingAmount(new BigDecimal("0.0200"))
+                        .cashIncrement(new BigDecimal("0.0500"))
+                        .currencyCode("CAD")
+                        .reference(KEY)
+                        .build()));
+
+        CashTenderResponse response = service.recordCashTender(ORDER_ID, KEY, tender("20.00", null, "CAD"));
+
+        assertThat(response.paymentIntentId()).isEqualTo(INTENT_ID);
+        assertThat(response.amountDue()).isEqualByComparingTo("9.98");
+        assertThat(response.cashDue()).isEqualByComparingTo("10.00");
+        assertThat(response.cashRoundingAmount()).isEqualByComparingTo("0.02");
+        assertThat(response.changeDue()).isEqualByComparingTo("10.00");
+        assertThat(response.balanceDue()).isZero();
+        verifyNoInteractions(invoicingPort, registerSessionRepository);
     }
 
     @Test

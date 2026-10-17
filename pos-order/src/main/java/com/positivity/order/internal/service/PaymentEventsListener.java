@@ -234,9 +234,23 @@ public class PaymentEventsListener {
                     : resolveReversalMethod(records, record);
             byMethod.merge(method, signed, BigDecimal::add);
         }
+        // ADR-0067 A8 (#2662): CASH also reports the cash that crossed the counter and the signed rounding.
+        Map<String, BigDecimal> cashByMethod = new LinkedHashMap<>();
+        Map<String, BigDecimal> roundingByMethod = new LinkedHashMap<>();
+        for (OrderPaymentRecord record : records) {
+            if (record.getRecordType() != OrderPaymentRecord.RecordType.SETTLED || record.getSettledAmount() == null) {
+                continue;
+            }
+            cashByMethod.merge(record.getMethodType(), record.cashAmount(), BigDecimal::add);
+            roundingByMethod.merge(
+                    record.getMethodType(),
+                    record.getCashRoundingAmount() == null ? BigDecimal.ZERO : record.getCashRoundingAmount(),
+                    BigDecimal::add);
+        }
         return byMethod.entrySet().stream()
                 .filter(e -> e.getValue().signum() != 0)
-                .map(e -> new OrderCompletedV1.Tender(e.getKey(), e.getValue()))
+                .map(e -> new OrderCompletedV1.Tender(
+                        e.getKey(), e.getValue(), cashByMethod.get(e.getKey()), roundingByMethod.get(e.getKey())))
                 .toList();
     }
 

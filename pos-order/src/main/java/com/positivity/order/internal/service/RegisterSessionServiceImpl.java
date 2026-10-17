@@ -559,7 +559,8 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         }
         BigDecimal counted = session.getCountedCash() != null ? session.getCountedCash() : ZERO;
         BigDecimal cashMovementTotal = cashMovementTotal(sessionId);
-        BigDecimal cashSettlements = cashSettlements(sessionId);
+        List<OrderPaymentRecord> drawerRecords = paymentRecordRepository.findBySessionId(sessionId);
+        BigDecimal cashSettlements = cashSettlements(drawerRecords);
         BigDecimal theoretical =
                 scale(session.getOpeningFloat().add(cashSettlements).add(cashMovementTotal));
         BigDecimal overShort = scale(counted.subtract(theoretical));
@@ -586,7 +587,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         session.setClosedAt(now);
         RegisterSession saved = registerSessionRepository.save(session);
 
-        List<RegisterSessionClosedV1.TenderTotal> tenderTotals = tenderTotals(sessionId).entrySet().stream()
+        List<RegisterSessionClosedV1.TenderTotal> tenderTotals = tenderTotals(drawerRecords).entrySet().stream()
                 .map(e -> new RegisterSessionClosedV1.TenderTotal(e.getKey(), e.getValue()))
                 .toList();
         domainEventPublisher.publishRegisterSessionClosed(
@@ -608,7 +609,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                         saved.getOpenedAt(),
                         now,
                         factMovements(cashMovementRepository.findBySessionIdOrderByOccurredAtAsc(sessionId), saved),
-                        cashRoundingTotal(sessionId)));
+                        cashRoundingTotal(drawerRecords)));
         return toSummary(saved);
     }
 
@@ -629,12 +630,13 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private SessionReport buildReport(RegisterSession session, String reportType) {
         UUID sessionId = session.getSessionId();
         BigDecimal cashMovementTotal = cashMovementTotal(sessionId);
-        BigDecimal cashSettlements = cashSettlements(sessionId);
+        List<OrderPaymentRecord> drawerRecords = paymentRecordRepository.findBySessionId(sessionId);
+        BigDecimal cashSettlements = cashSettlements(drawerRecords);
         BigDecimal theoretical =
                 scale(session.getOpeningFloat().add(cashSettlements).add(cashMovementTotal));
         BigDecimal counted = session.getCountedCash();
         BigDecimal overShort = counted != null ? scale(counted.subtract(theoretical)) : null;
-        List<SessionReport.TenderTotal> tenderTotals = tenderTotals(sessionId).entrySet().stream()
+        List<SessionReport.TenderTotal> tenderTotals = tenderTotals(drawerRecords).entrySet().stream()
                 .map(e -> new SessionReport.TenderTotal(e.getKey(), e.getValue()))
                 .toList();
         List<CashMovementSummary> movements =
@@ -659,7 +661,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 movements,
                 session.getOpenedAt(),
                 Instant.now(clock),
-                cashRoundingTotal(sessionId));
+                cashRoundingTotal(drawerRecords));
     }
 
     /**
@@ -1145,22 +1147,22 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                 .orElse(null);
     }
 
-    /** Net CASH settled over the session: Σ SETTLED − Σ REVERSED. */
     /**
      * Σ cash through the drawer (SETTLED − REVERSED). ADR-0067 A8 (#2662): on a rounded CASH tender the drawer holds
      * the rounded {@code settledAmount}, not the applied {@code amount}, so theoretical cash and over/short count the
-     * cash that actually crossed the counter; rounding never reaches over/short (AW54).
+     * cash that actually crossed the counter; rounding never reaches over/short (AW54). Cash refunds are out of A8:
+     * a reversal is recorded under OTHER with no rounding, so only SETTLED rows reach these sums today.
      */
-    private BigDecimal cashSettlements(UUID sessionId) {
-        return paymentRecordRepository.findBySessionId(sessionId).stream()
+    private static BigDecimal cashSettlements(List<OrderPaymentRecord> records) {
+        return records.stream()
                 .filter(r -> CASH.equalsIgnoreCase(r.getMethodType()))
                 .map(RegisterSessionServiceImpl::signedCash)
                 .reduce(ZERO, BigDecimal::add);
     }
 
     /** ADR-0067 A8 (#2662): signed Σ of the cash rounding over the session's CASH tenders; informational. */
-    private BigDecimal cashRoundingTotal(UUID sessionId) {
-        return scale(paymentRecordRepository.findBySessionId(sessionId).stream()
+    private static BigDecimal cashRoundingTotal(List<OrderPaymentRecord> records) {
+        return scale(records.stream()
                 .filter(r -> CASH.equalsIgnoreCase(r.getMethodType()))
                 .filter(r -> r.getCashRoundingAmount() != null)
                 .map(r -> r.getRecordType() == OrderPaymentRecord.RecordType.SETTLED
@@ -1170,9 +1172,9 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     }
 
     /** Net settled per tender method over the session (Σ SETTLED − Σ REVERSED), ordered by method. */
-    private Map<String, BigDecimal> tenderTotals(UUID sessionId) {
+    private static Map<String, BigDecimal> tenderTotals(List<OrderPaymentRecord> records) {
         Map<String, BigDecimal> totals = new TreeMap<>();
-        for (OrderPaymentRecord record : paymentRecordRepository.findBySessionId(sessionId)) {
+        for (OrderPaymentRecord record : records) {
             String method = record.getMethodType() == null ? "OTHER" : record.getMethodType();
             // CASH is the cash in the drawer (rounded); the other methods settle the applied amount.
             BigDecimal signed = CASH.equalsIgnoreCase(method) ? signedCash(record) : signedAmount(record);

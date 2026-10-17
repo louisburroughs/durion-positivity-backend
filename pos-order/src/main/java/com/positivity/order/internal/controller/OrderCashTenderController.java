@@ -33,7 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/orders")
 @RequiredArgsConstructor
 @PreAuthorize("isAuthenticated()")
-@Tag(name = "Sales Orders", description = "Cart, checkout, cash tender and lifecycle of sales orders")
+@Tag(name = "Sales Orders", description = "Sales order cart management")
 public class OrderCashTenderController {
 
     private final CashTenderService cashTenderService;
@@ -60,8 +60,9 @@ public class OrderCashTenderController {
                     customer paid more than due) and is posted by pos-accounting, never to the customer's balance.
                     Emits an ORDER_CASH_TENDER_RECORD event.
                     Returns 201 with amountDue, cashIncrement, cashDue, cashRoundingAmount, cashTendered, changeDue \
-                    and the recorded payment intent; 400 when the body or the header is malformed; 403 when the \
-                    authority is missing; 404 when the order does not exist; 409 when the order is not \
+                    and the recorded payment intent; 400 when the header is missing or cashApplied exceeds the \
+                    balance (ORDER_INVALID_ARGUMENT) or the body fails validation (VALIDATION_ERROR); 403 when the \
+                    authority is missing or, above 500.00, the clerk lacks invoice:payment:limit_override; 404 when the order does not exist; 409 when the order is not \
                     PENDING_PAYMENT (ORDER_INVALID_STATE_TRANSITION), the session is not OPEN \
                     (REGISTER_SESSION_CONFLICT), the key was reused with another payload \
                     (ORDER_IDEMPOTENCY_CONFLICT) or pos-invoice's balance disagrees (ORDER_CONFLICT); 422 with \
@@ -71,8 +72,9 @@ public class OrderCashTenderController {
     @ApiResponse(responseCode = "201", description = "Cash tender recorded on the invoice")
     @ApiResponse(
             responseCode = "400",
-            description = "ORDER_INVALID_ARGUMENT: missing Idempotency-Key, negative or missing cashTendered, missing"
-                    + " currencyCode, or cashApplied above the balance",
+            description = "ORDER_INVALID_ARGUMENT: missing Idempotency-Key or cashApplied above the balance;"
+                    + " VALIDATION_ERROR with fieldErrors when the body fails validation (negative or missing"
+                    + " cashTendered, missing currencyCode)",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "403",

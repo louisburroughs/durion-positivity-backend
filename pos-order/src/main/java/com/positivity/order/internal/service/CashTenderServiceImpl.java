@@ -6,6 +6,7 @@ import com.positivity.order.internal.client.RecordCashPaymentCommand;
 import com.positivity.order.internal.config.CashIncrements;
 import com.positivity.order.internal.dto.CashTenderRequest;
 import com.positivity.order.internal.dto.CashTenderResponse;
+import com.positivity.order.internal.entity.OrderPaymentRecord;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrder;
@@ -18,6 +19,7 @@ import com.positivity.order.internal.exception.OrderConflictException;
 import com.positivity.order.internal.exception.RegisterSessionConflictException;
 import com.positivity.order.internal.exception.SalesOrderNotFoundException;
 import com.positivity.order.internal.exception.SalesOrderRequestValidationException;
+import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
 import com.positivity.security.common.SecurityContextHelper;
@@ -26,12 +28,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The register's cash arithmetic (ADR-0067 A8, PC-7 (b); #2662, Order ruling §1 and §5).
@@ -54,22 +56,26 @@ public class CashTenderServiceImpl implements CashTenderService {
 
     private final SalesOrderRepository salesOrderRepository;
     private final RegisterSessionRepository registerSessionRepository;
+    private final OrderPaymentRecordRepository paymentRecordRepository;
     private final InvoicingPort invoicingPort;
     private final CashIncrements cashIncrements;
 
     public CashTenderServiceImpl(
             @NonNull SalesOrderRepository salesOrderRepository,
             @NonNull RegisterSessionRepository registerSessionRepository,
+            @NonNull OrderPaymentRecordRepository paymentRecordRepository,
             @NonNull InvoicingPort invoicingPort,
             @NonNull CashIncrements cashIncrements) {
         this.salesOrderRepository = salesOrderRepository;
         this.registerSessionRepository = registerSessionRepository;
+        this.paymentRecordRepository = paymentRecordRepository;
         this.invoicingPort = invoicingPort;
         this.cashIncrements = cashIncrements;
     }
 
+    // Deliberately not transactional: reads, then a synchronous call to pos-invoice; a transaction here would pin
+    // a pooled connection for the whole round-trip (the #2342/#2344 pattern).
     @Override
-    @Transactional(readOnly = true)
     public @NonNull CashTenderResponse recordCashTender(
             @NonNull UUID orderId, @NonNull String idempotencyKey, @NonNull CashTenderRequest request) {
         String key = idempotencyKey.trim();
@@ -78,6 +84,18 @@ public class CashTenderServiceImpl implements CashTenderService {
         }
         SalesOrder order =
                 salesOrderRepository.findById(orderId).orElseThrow(() -> new SalesOrderNotFoundException(orderId));
+        // Replay after the settled fact has landed: the fact's gatewayReference is the register's key, so the
+        // order's own CASH record answers with the recorded figures before any state or balance gate (the register
+        // may have lost the first response). Before the fact lands, the recomputation below yields the same figures
+        // and pos-invoice replays the stored intent under the same key.
+        Optional<OrderPaymentRecord> recorded = paymentRecordRepository.findByOrderId(orderId).stream()
+                .filter(r -> r.getRecordType() == OrderPaymentRecord.RecordType.SETTLED)
+                .filter(r -> "CASH".equalsIgnoreCase(r.getMethodType()))
+                .filter(r -> key.equals(r.getReference()))
+                .findFirst();
+        if (recorded.isPresent()) {
+            return replay(order, recorded.get(), request);
+        }
         if (order.getStatus() != SalesOrderStatus.PENDING_PAYMENT) {
             throw new InvalidOrderStateTransitionException(orderId, order.getStatus(), SalesOrderStatus.COMPLETED);
         }
@@ -173,6 +191,32 @@ public class CashTenderServiceImpl implements CashTenderService {
                 cashTendered.subtract(rounded.cashDue()),
                 currency,
                 balanceDue);
+    }
+
+    private CashTenderResponse replay(SalesOrder order, OrderPaymentRecord record, CashTenderRequest request) {
+        BigDecimal applied = record.getAmount();
+        BigDecimal cash = record.cashAmount();
+        BigDecimal rounding =
+                record.getCashRoundingAmount() == null ? BigDecimal.ZERO : record.getCashRoundingAmount();
+        BigDecimal tendered = request.getCashTendered() == null ? cash : request.getCashTendered();
+        BigDecimal balance = order.getBalanceDue() == null ? BigDecimal.ZERO : order.getBalanceDue();
+        log.info(
+                "Cash tender replayed from its record: order={} intent={} key={}",
+                order.getOrderId(),
+                record.getPaymentIntentId(),
+                record.getReference());
+        return new CashTenderResponse(
+                order.getOrderId(),
+                order.getInvoiceId(),
+                record.getPaymentIntentId(),
+                applied,
+                record.getCashIncrement(),
+                cash,
+                rounding,
+                tendered,
+                tendered.subtract(cash).max(BigDecimal.ZERO),
+                record.getCurrencyCode() == null ? "" : record.getCurrencyCode(),
+                balance);
     }
 
     private RegisterSession requireOpenDrawer(SalesOrder order) {
