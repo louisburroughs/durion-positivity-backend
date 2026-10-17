@@ -85,6 +85,21 @@ public class InvoiceExceptionHandler {
      * anything and is dropped; this handler now only maps this module's own request-shape
      * validation type. Status/code unchanged for the remaining (genuine) 400 cases.
      */
+    /** pos-tax refused the calculation (#2644): 422 with this module's deterministic code (ADR-0017). */
+    @ExceptionHandler(com.positivity.invoice.internal.exception.InvoiceTaxRefusedException.class)
+    public ResponseEntity<ApiError> handleTaxRefused(
+            com.positivity.invoice.internal.exception.InvoiceTaxRefusedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        ex.getCode(),
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
     @ExceptionHandler(InvoiceRequestValidationException.class)
     public ResponseEntity<ApiError> handleValidation(InvoiceRequestValidationException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);

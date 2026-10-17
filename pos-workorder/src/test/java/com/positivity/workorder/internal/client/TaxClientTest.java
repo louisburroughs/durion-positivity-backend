@@ -41,6 +41,25 @@ class TaxClientTest {
     }
 
     @Test
+    void a422FromPosTaxBecomesThisModulesDeterministicCode() {
+        server.expect(requestTo(BASE + "/v1/tax/calculate"))
+                .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators.withStatus(
+                                org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY)
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .body("{\"code\":\"CURRENCY_NOT_SUPPORTED\",\"message\":\"CAD is not USD\",\"status\":422}"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.calculateTax(
+                        com.positivity.tax.common.dto.TaxCalculationRequest.builder()
+                                .currencyCode("CAD")
+                                .lineItems(java.util.List.of())
+                                .build()))
+                .isInstanceOfSatisfying(
+                        com.positivity.workorder.internal.exception.EstimateTaxRefusedException.class,
+                        e -> org.assertj.core.api.Assertions.assertThat(e.getCode())
+                                .isEqualTo("ESTIMATE_TAX_CURRENCY_NOT_SUPPORTED"));
+    }
+
+    @Test
     void calculateTaxPropagatesServiceAuthorityHeadersAndMapsResponse() {
         server.expect(requestTo(BASE + "/v1/tax/calculate"))
                 .andExpect(method(HttpMethod.POST))

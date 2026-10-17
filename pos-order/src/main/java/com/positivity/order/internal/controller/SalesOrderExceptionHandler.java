@@ -44,6 +44,21 @@ public class SalesOrderExceptionHandler {
                         correlationId));
     }
 
+    /** pos-tax refused the calculation (#2644): 422 with this module's deterministic code; configuration, not retry. */
+    @ExceptionHandler(com.positivity.order.internal.exception.OrderTaxRefusedException.class)
+    public ResponseEntity<ApiError> handleTaxRefused(
+            com.positivity.order.internal.exception.OrderTaxRefusedException ex, HttpServletRequest request) {
+        String correlationId = correlationId(request);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .header(X_CORRELATION_ID, correlationId)
+                .body(ApiError.of(
+                        ex.getCode(),
+                        ex.getMessage(),
+                        HttpStatus.UNPROCESSABLE_ENTITY.value(),
+                        Instant.now(clock).toString(),
+                        correlationId));
+    }
+
     @ExceptionHandler(com.positivity.order.internal.exception.TaxUnavailableException.class)
     public ResponseEntity<ApiError> handleTaxUnavailable(
             com.positivity.order.internal.exception.TaxUnavailableException ex, HttpServletRequest request) {

@@ -612,6 +612,13 @@ public class GlobalExceptionHandler {
      * that permits submission — what refuses it is an attribute of the target other than its
      * lifecycle status, which ADR-0017 §2 places at 422.
      */
+    /** pos-tax refused the estimate's calculation (#2644): 422 with this module's deterministic code (ADR-0017). */
+    @ExceptionHandler(com.positivity.workorder.internal.exception.EstimateTaxRefusedException.class)
+    public ResponseEntity<ApiError> handleEstimateTaxRefused(
+            com.positivity.workorder.internal.exception.EstimateTaxRefusedException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.UNPROCESSABLE_ENTITY, ex.getCode(), ex.getMessage(), request);
+    }
+
     @ExceptionHandler(EstimateIncompleteException.class)
     public ResponseEntity<ApiError> handleEstimateIncomplete(
             EstimateIncompleteException ex, HttpServletRequest request) {

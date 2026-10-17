@@ -93,6 +93,10 @@ class EstimateServiceImplTest {
     @Mock
     private DocumentNumberAllocator documentNumberAllocator;
 
+    @org.mockito.Spy
+    private com.positivity.workorder.internal.config.FunctionalCurrency functionalCurrency =
+            new com.positivity.workorder.internal.config.FunctionalCurrency("CAD");
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 

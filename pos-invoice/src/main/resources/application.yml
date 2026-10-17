@@ -84,6 +84,9 @@ pos:
     # ADR-0062: binds the alpha default tenant on every unbound path until every token carries tid
     default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:01900000-0000-7000-8000-000000000001}
   invoice:
+    # The tenant's functional currency (ADR-0067 R-2 / PC-2; #2644): what every tax request, payment event and
+    # rendered document states. Interim per-module source until the tenant carries it (#2583); ISO 4217.
+    functional-currency: ${POS_INVOICE_FUNCTIONAL_CURRENCY:USD}
     kafka:
       # Domain-event publishing (ADR-0044, #842): tier-1 rails, no enable flag (@KafkaRails).
       # Employment replica feed + reconciliation (ADR-0044 §6, #877; manifest listener #1537)

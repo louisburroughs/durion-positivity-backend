@@ -72,7 +72,11 @@ class OrderTaxServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new OrderTaxService(taxPort, extLocationRepository, totalsCalculator);
+        service = new OrderTaxService(
+                taxPort,
+                extLocationRepository,
+                totalsCalculator,
+                new com.positivity.order.internal.config.FunctionalCurrency("CAD"));
     }
 
     private static ExtLocation location(String postalCode, String country) {
@@ -148,7 +152,8 @@ class OrderTaxServiceTest {
         ArgumentCaptor<TaxCalculationRequest> captor = ArgumentCaptor.forClass(TaxCalculationRequest.class);
         verify(taxPort).calculate(captor.capture());
         TaxCalculationRequest request = captor.getValue();
-        assertThat(request.getCurrencyCode()).isEqualTo("USD");
+        // #2644: the tenant's functional currency, never a literal.
+        assertThat(request.getCurrencyCode()).isEqualTo("CAD");
         assertThat(request.getDestinationAddress().getPostalCode()).isEqualTo("78701");
         assertThat(request.getDestinationAddress().getCountryCode()).isEqualTo("US");
         assertThat(request.getDestinationAddress().getRegionCode()).isEqualTo("TX");

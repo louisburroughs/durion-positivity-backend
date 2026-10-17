@@ -7,6 +7,7 @@ import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxReferenceType;
+import com.positivity.workorder.internal.config.FunctionalCurrency;
 import com.positivity.workorder.internal.client.DocumentClient;
 import com.positivity.workorder.internal.client.TaxClient;
 import com.positivity.workorder.internal.dto.AddEstimateItemRequest;
@@ -86,6 +87,7 @@ public class EstimateServiceImpl implements EstimateService {
     private final ObjectMapper objectMapper;
     private final CustomerReferenceService customerReferenceService;
     private final VehicleReferenceService vehicleReferenceService;
+    private final FunctionalCurrency functionalCurrency;
     private final EstimateFactPublisher estimateFactPublisher;
     private final PartQuantityDivisibilityService partQuantityDivisibilityService;
     private final LaborTimeDefaultingService laborTimeDefaultingService;
@@ -1292,7 +1294,8 @@ public class EstimateServiceImpl implements EstimateService {
             TaxCalculationRequest taxRequest = TaxCalculationRequest.builder()
                     .lineItems(taxLineItems)
                     .locale("en-US")
-                    .currencyCode("USD")
+                    // The tenant's functional currency (ADR-0067 R-2; #2644), never a literal.
+                    .currencyCode(functionalCurrency.code())
                     .destinationAddress(destinationAddress)
                     .customerId(estimate.getCustomerId().toString())
                     .referenceId(estimateId)

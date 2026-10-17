@@ -87,6 +87,10 @@ pos:
   tax:
     # Direct-call exception (#641): pos-tax is internal-only, register-with-eureka: false
     base-url: ${POS_TAX_BASE_URL:http://pos-tax:8091}
+  workorder:
+    # The tenant's functional currency (ADR-0067 R-2 / PC-2; #2644): what every tax request states. Interim
+    # per-module source until the tenant carries it (#2583); ISO 4217.
+    functional-currency: ${POS_WORKORDER_FUNCTIONAL_CURRENCY:USD}
   people:
     service-id: ${POS_PEOPLE_SERVICE_ID:people}
   documents:

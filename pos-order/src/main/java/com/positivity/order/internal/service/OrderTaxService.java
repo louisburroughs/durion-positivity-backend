@@ -1,6 +1,7 @@
 package com.positivity.order.internal.service;
 
 import com.positivity.order.internal.client.TaxPort;
+import com.positivity.order.internal.config.FunctionalCurrency;
 import com.positivity.order.internal.entity.ExtLocation;
 import com.positivity.order.internal.entity.SalesOrder;
 import com.positivity.order.internal.entity.SalesOrderLine;
@@ -37,6 +38,7 @@ public class OrderTaxService {
     private final TaxPort taxPort;
     private final ExtLocationRepository extLocationRepository;
     private final OrderTotalsCalculator totalsCalculator;
+    private final FunctionalCurrency functionalCurrency;
 
     public void recomputeTax(@NonNull SalesOrder order) {
         List<SalesOrderLine> lines =
@@ -54,7 +56,8 @@ public class OrderTaxService {
         TaxCalculationRequest request = TaxCalculationRequest.builder()
                 .lineItems(lines.stream().map(OrderTaxService::toTaxLineItem).toList())
                 .destinationAddress(resolveAddress(order))
-                .currencyCode("USD")
+                // The tenant's functional currency (ADR-0067 R-2; #2644), never a literal.
+                .currencyCode(functionalCurrency.code())
                 .customerId(
                         order.getCustomerId() != null ? order.getCustomerId().toString() : null)
                 .build();
