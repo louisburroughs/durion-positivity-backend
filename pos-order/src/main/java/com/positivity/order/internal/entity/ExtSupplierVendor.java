@@ -76,6 +76,11 @@ public class ExtSupplierVendor extends TenantScopedEntity {
     private Instant updatedAt;
 
     /** Whether the vendor may be named on a new, approved or transmitted purchase order. */
+    /** Whether the vendor has a purchasing channel (#2713): a non-blank {@code purchaseOrderSupplierRef}. */
+    public boolean hasPurchasingChannel() {
+        return purchaseOrderSupplierRef != null && !purchaseOrderSupplierRef.isBlank();
+    }
+
     public boolean isActive() {
         return status == Status.ACTIVE;
     }

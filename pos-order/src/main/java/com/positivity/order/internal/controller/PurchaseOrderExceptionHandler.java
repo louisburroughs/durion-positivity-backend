@@ -63,25 +63,20 @@ public class PurchaseOrderExceptionHandler {
     @ExceptionHandler(PurchaseOrderNotTransmittableException.class)
     public ResponseEntity<ApiError> handleNotTransmittable(
             PurchaseOrderNotTransmittableException ex, HttpServletRequest request) {
-        if (ex.getReferenceId() == null && ex.getNextAction() == null && ex.getSupportAction() == null) {
-            return respond(HttpStatus.UNPROCESSABLE_ENTITY, ex.getErrorCode(), ex.getMessage(), request);
-        }
-        // #2713: a refusal that names the vendor (referenceId) and what each person does next (ADR-0017).
+        // #2713: a refusal may name the vendor (referenceId) and what each person does next (ADR-0017); the plain
+        // refusals carry nulls there, which guided() passes through.
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .header(X_CORRELATION_ID, correlationId)
-                .body(new ApiError(
+                .body(ApiError.guided(
                         ex.getErrorCode(),
                         ex.getMessage(),
                         HttpStatus.UNPROCESSABLE_ENTITY.value(),
                         Instant.now(clock).toString(),
                         correlationId,
-                        null,
                         ex.getReferenceId(),
                         ex.getNextAction(),
-                        ex.getSupportAction(),
-                        null,
-                        null));
+                        ex.getSupportAction()));
     }
 
     /**

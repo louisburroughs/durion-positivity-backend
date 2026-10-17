@@ -44,22 +44,22 @@ public class SupplierVendorGuard {
      * @throws PurchaseOrderVendorException {@code VENDOR_INACTIVE} when it is inactive
      */
     /**
-     * The vendor's purchasing channel as the copy holds it now (#2713), for stamping an order's {@code supplierRef};
-     * empty when the copy lacks the vendor or the vendor has no channel. Reads only the copy.
+     * The copy row (#2713): for stamping an order's {@code supplierRef} from the vendor's purchasing channel, for
+     * naming the vendor in a refusal, and for {@link #requireActive(UUID, Optional)}; empty when it has not
+     * replicated. Reads only the copy, once.
      */
-    public @NonNull Optional<String> purchaseOrderSupplierRef(@NonNull UUID vendorId) {
-        return vendors.findById(vendorId).map(ExtSupplierVendor::getPurchaseOrderSupplierRef);
-    }
-
-    /** The copy row, for naming the vendor in a refusal; empty when it has not replicated. */
     public @NonNull Optional<ExtSupplierVendor> copyOf(@NonNull UUID vendorId) {
         return vendors.findById(vendorId);
     }
 
     public @NonNull ExtSupplierVendor requireActive(@NonNull UUID vendorId) {
-        ExtSupplierVendor vendor = vendors.findById(vendorId)
-                .orElseThrow(() -> new ReplicationPendingException(
-                        VENDOR_REPLICATION_PENDING, VENDOR_REPLICATION_PENDING_MESSAGE, vendorId));
+        return requireActive(vendorId, vendors.findById(vendorId));
+    }
+
+    /** {@link #requireActive(UUID)} over a copy row the caller already read. */
+    public @NonNull ExtSupplierVendor requireActive(@NonNull UUID vendorId, @NonNull Optional<ExtSupplierVendor> copy) {
+        ExtSupplierVendor vendor = copy.orElseThrow(() -> new ReplicationPendingException(
+                VENDOR_REPLICATION_PENDING, VENDOR_REPLICATION_PENDING_MESSAGE, vendorId));
         if (!vendor.isActive()) {
             throw PurchaseOrderVendorException.inactive(vendor.getVendorNumber());
         }

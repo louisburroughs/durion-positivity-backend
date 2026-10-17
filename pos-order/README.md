@@ -207,17 +207,20 @@ pos-supplier (ADR-0044 R1): it reads its own copy of the vendor master.
   `POST /{poId}/revisions` takes an optional `vendorId`: it changes the vendor of a `DRAFT` order only (another
   vendor on an order past `DRAFT` is 409 `PURCHASE_ORDER_INVALID_STATE`), passes the same guard, and an absent
   `vendorId` keeps the vendor.
-- **Purchasing channel (#2713, Order ruling on #2682).** The copy also holds `purchase_order_supplier_ref` (V10), the
+- **Purchasing channel (#2713, Order ruling on #2682).** The copy also holds `purchase_order_supplier_ref` (V13), the
   alias of the vendor's designated transmission profile in pos-supplier (`supplier.vendor.updated.
   purchaseOrderSupplierRef`, #2712: its one enabled, non-sandbox profile; null for none or several). pos-order stamps
-  it on the order's `supplierRef` at create, at a vendor-changing revise, at approve and, while the order is
-  `NOT_TRANSMITTED`, at transmit, so a vendor that gains its channel after approval becomes sendable without
-  re-approval; after the first send the stamp is frozen (a revision reaches the channel the original did). A vendor
-  without a channel keeps the stamp it had, never a cleared one. Transmit of an order without one is **422
+  it on the order's `supplierRef` at create, at a vendor-changing revise (the new vendor's channel, or none), at
+  approve and, while nothing has reached the vendor (`NOT_TRANSMITTED`, or `NOT_DISPATCHED` after a vendor that was
+  not set up refused the first send, #2492), at transmit, so a vendor that gains or moves its channel before a send
+  reaches it is sent through the channel it has now; once a send reached the vendor the stamp is frozen (a revision
+  reaches the channel the original did). At approve and transmit a vendor without a channel keeps the stamp the order
+  had. A blank alias on the fact is no channel. Transmit of an order without one is **422
   `SUPPLIER_REF_MISSING`** naming the vendor, with `referenceId` = the vendor id, a `nextAction` for the buyer and a
   `supportAction` for the administrator; the copy holds the vendor, so this is a fact, not replication lag. The
   vendor reads and the purchase-order read serve `transmittable` (a boolean, never the alias) so a screen predicts
-  the refusal before Send.
+  the refusal before Send; the purchase-order read answers what transmit would find, so while nothing was sent it
+  also reflects a channel the vendor gained since.
 - **Reads for the purchase-order screens (#2680).** `GET /v1/orders/purchase-order-vendors`
   (`listPurchaseOrderVendors`; `status`, `q` on vendor number or display name, `page`/`size`/`sort` on
   `vendorNumber`, `displayName`, `status` or `vendorId`, default `displayName,asc`, `vendorId` tie-breaker; any other

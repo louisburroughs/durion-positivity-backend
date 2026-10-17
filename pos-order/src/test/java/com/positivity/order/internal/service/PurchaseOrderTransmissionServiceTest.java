@@ -302,15 +302,38 @@ class PurchaseOrderTransmissionServiceTest {
 
         assertThat(po.getSupplierRef()).isEqualTo("acme-parts");
 
-        PurchaseOrderEntity sent = order(PurchaseOrderStatus.APPROVED, TransmissionState.REQUESTED);
-        sent.setSupplierRef("acme-parts");
-        ExtSupplierVendor moved = vendor(sent.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
+        // A revision of a confirmed order is re-sent through the channel the original went to, not a moved one.
+        PurchaseOrderEntity confirmed = order(PurchaseOrderStatus.APPROVED, TransmissionState.CONFIRMED);
+        confirmed.setSupplierRef("acme-parts");
+        confirmed.setTransmissionCount(1);
+        confirmed.setTransmittedVersionNumber(1);
+        confirmed.setVersionNumber(2);
+        ExtSupplierVendor moved = vendor(confirmed.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
         moved.setPurchaseOrderSupplierRef("acme-new");
-        when(vendorRepository.findById(sent.getVendorId())).thenReturn(Optional.of(moved));
-        assertThatThrownBy(() -> service.requestTransmission(PO_ID, ACTOR))
-                .as("a second send is refused on its own grounds; the stamp was not moved")
-                .isInstanceOf(PurchaseOrderNotTransmittableException.class);
-        assertThat(sent.getSupplierRef()).isEqualTo("acme-parts");
+        when(vendorRepository.findById(confirmed.getVendorId())).thenReturn(Optional.of(moved));
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(confirmed.getSupplierRef()).as("the stamp is frozen after a send reached the vendor")
+                .isEqualTo("acme-parts");
+        assertThat(published().intentType()).isEqualTo(SupplierOrderRequestedV1.IntentType.REVISION);
+    }
+
+    @Test
+    @DisplayName("#2713: a re-send after NOT_DISPATCHED takes the channel the administrator has since designated")
+    void notDispatchedResendTakesTheCurrentChannel() {
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_DISPATCHED);
+        po.setSupplierRef("acme-old");
+        po.setTransmissionCount(0);
+        po.setTransmittedVersionNumber(null);
+        ExtSupplierVendor setUp = vendor(po.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
+        setUp.setPurchaseOrderSupplierRef("acme-edi");
+        when(vendorRepository.findById(po.getVendorId())).thenReturn(Optional.of(setUp));
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(po.getSupplierRef()).isEqualTo("acme-edi");
+        assertThat(published().supplierRef()).isEqualTo("acme-edi");
     }
 
     @Test

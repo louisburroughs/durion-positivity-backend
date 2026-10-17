@@ -57,10 +57,11 @@ public class PurchaseOrderResponse {
     @Schema(
             description = "Whether the order has a purchasing channel to be sent through: its vendor's designated"
                     + " transmission profile, stamped at create, vendor-changing revise, approve and (until the first"
-                    + " send) transmit (#2713). False predicts 422 SUPPLIER_REF_MISSING on transmit; the vendor's"
-                    + " administrator designates a purchasing profile in pos-supplier",
+                    + " send) transmit (#2713); while nothing was sent it also reflects a channel the vendor gained"
+                    + " since, which transmit would stamp. False predicts 422 SUPPLIER_REF_MISSING on transmit; the"
+                    + " vendor's administrator designates a purchasing profile in pos-supplier",
             example = "true",
-            requiredMode = NOT_REQUIRED)
+            requiredMode = REQUIRED)
     private boolean transmittable;
 
     @Schema(

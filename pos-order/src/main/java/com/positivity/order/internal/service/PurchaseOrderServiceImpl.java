@@ -526,18 +526,34 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     }
 
     /**
-     * Stamps the vendor's current purchasing channel on the order (#2713) while nothing has been sent: once
-     * transmitted, the stamp is frozen so a revision reaches the channel the original did. A vendor that gained its
-     * channel after approval thereby becomes sendable without re-approval; a vendor without one keeps the stamp it
-     * had, never a cleared one.
+     * Stamps the vendor's current purchasing channel on the order at approve (#2713) while nothing has been sent:
+     * once transmitted, the stamp is frozen so a revision reaches the channel the original did. A vendor that gained
+     * its channel after approval thereby becomes sendable without re-approval; at approve, a vendor without one keeps
+     * the stamp the order had. (Create takes the vendor's channel or none; a vendor-changing revise takes the new
+     * vendor's channel or none, since the old alias belonged to the old vendor.)
      */
     static void stampChannel(@NonNull PurchaseOrderEntity po, @NonNull ExtSupplierVendor vendor) {
         if (po.getTransmissionState() != TransmissionState.NOT_TRANSMITTED) {
             return;
         }
-        if (vendor.getPurchaseOrderSupplierRef() != null) {
+        if (vendor.hasPurchasingChannel()) {
             po.setSupplierRef(vendor.getPurchaseOrderSupplierRef());
         }
+    }
+
+    /**
+     * What a transmit would find (#2713): the stamp, or, while nothing was sent (and after a vendor that was never
+     * set up refused the first send), the channel the vendor copy holds now, since transmit stamps it then.
+     */
+    private boolean transmittable(PurchaseOrderEntity entity) {
+        if (entity.getSupplierRef() != null && !entity.getSupplierRef().isBlank()) {
+            return true;
+        }
+        return PurchaseOrderTransmissionService.stampsAtTransmit(entity.getTransmissionState())
+                && vendorGuard
+                        .copyOf(entity.getVendorId())
+                        .filter(ExtSupplierVendor::hasPurchasingChannel)
+                        .isPresent();
     }
 
     private PurchaseOrderEntity getPoOrThrow(UUID poId) {
@@ -608,8 +624,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .poNumber(entity.getPoNumber())
                 .status(entity.getStatus())
                 .versionNumber(entity.getVersionNumber())
-                .transmittable(entity.getSupplierRef() != null
-                        && !entity.getSupplierRef().isBlank())
+                .transmittable(transmittable(entity))
                 .currency(entity.getCurrency())
                 .subtotalMinor(entity.getSubtotalMinor())
                 .taxMinor(entity.getTaxMinor())
