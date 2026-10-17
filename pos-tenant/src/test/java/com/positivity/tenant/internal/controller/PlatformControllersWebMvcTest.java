@@ -57,7 +57,6 @@ class PlatformControllersWebMvcTest {
         Clock clock() {
             return Clock.fixed(Instant.parse("2026-09-10T12:00:00Z"), ZoneOffset.UTC);
         }
-
     }
 
     @Autowired
