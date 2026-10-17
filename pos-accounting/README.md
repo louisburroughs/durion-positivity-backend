@@ -1740,6 +1740,18 @@ it as absent. Clients treat a missing field as null.
   responses, a replayed `requestId` included. Same resolver and rules; one lookup per response across every
   category's rows. The name is resolved when the response is built: the kept replay copy (`response_json`) never
   holds one, so a replay serves the person's current name.
+- **Tax regime and tax-type labels from configuration (#2679, S33 ruling Q2/Q3; AW48, AW51).** pos-tax's country
+  profile carries an optional display `label` per regime and tax type (`GET /v1/tax/tax-types`); pos-accounting
+  relays it and never invents one: `listTaxRegimes` (`regimes[].label`, `regimes[].taxTypes[].label`),
+  `getInputTaxRecovery` (`regimes[].label`), `listTaxRegistrations` / the registration writes
+  (`registrations[].regimeLabel`), and the vendor-bill read (`taxByType[].label`, `inputTaxRecovery[].taxTypeLabel`
+  and `regimeLabel`). A missing label is null, never the code. `listTaxRegimes` fails as before (503) when pos-tax
+  cannot answer; the reads that answer from accounting's own data degrade to null labels. The bill read also serves
+  `taxTypeChoices[] {taxType, label}` (`accounting:ap:view`): the tax types of the regimes whose recovery is on for
+  the tax country as of the date the approval would post on (AW49), filled only while the bill is `AWAITING_APPROVAL`
+  or `MATCH_EXCEPTION` and states tax, else empty (a tenant without recovery included); null when the recovery flag
+  or the profile cannot be read (unknown, ADR-0017). A guide for the client only: approve and `ACCEPT` validate
+  `taxByType[]` as before (`AP_BILL_TAX_SPLIT_MISMATCH`). No class names a country, regime or tax type.
 - **The people-contact copy** (V25, ADR-0044 §6; the pos-location / pos-customer precedent). pos-accounting never
   joins another database and never calls pos-people-contact or pos-security-service for a name.
   `PeopleContactEventsListener` consumes `people-contact.events.v1`
