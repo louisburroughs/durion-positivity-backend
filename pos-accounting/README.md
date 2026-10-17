@@ -432,6 +432,21 @@ Check order: **hard lock > closed period > override**.
 - **Posting engine** — closed-period autoPost events land in SUSPENDED with
   `failureReasonCode=PERIOD_CLOSED`; the auto-retry loop skips them (as it skips currency holds,
   `CURRENCY_NOT_SUPPORTED`), and they become reprocessable after the period is reopened
+- **Releasing a held Kafka fact (#2620, Accounting ruling of 2026-10-17).** A held fact is releasable by
+  `POST /v1/accounting/events/{eventId}/reprocess` only when a dedicated route re-derives its outcome from the stored
+  payload (`goodsreceipt.recorded` → `GoodsReceiptReprocessor`, `order.session.closed` →
+  `RegisterSessionCloseReprocessor`, `invoice.updated` → `InvoiceRevenueReprocessor`, `payment.payment.settled` held by
+  its application → `reapplySettledPayment`) and the refusing condition can change without a new fact. A currency
+  hold cannot (the ledger currency is fixed per tenant, ADR-0067 PC-9). A routed type re-holds through its own route
+  (an `invoice.updated` row re-held `PERIOD_CLOSED`, `ACCOUNTING_TIME_ZONE_UNSET`, `UNMAPPED_EVENT_TYPE` or
+  `VALIDATION_ERROR` comes back through `InvoiceRevenueReprocessor`); a Kafka row with no route (a settled payment or an
+  invoice held `CURRENCY_NOT_SUPPORTED`) is refused with 409 `ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE` (`nextAction`:
+  released when the ledger accepts the currency, ADR-0067 Stage B1), the row and its reason untouched and no attempt
+  written; the scheduled failed-event retry skips such a row the same way (no failure recorded). No Kafka row
+  (`ingestion_id` set) ever reaches the posting engine, which only serves REST-submitted events with a rule set. A
+  held row that states no currency stays held ("states no currency"). V30 restores the settled-payment rows an earlier
+  reprocess had marked `FAILED / Posting engine error` while still carrying `CURRENCY_NOT_SUPPORTED` to `SUSPENDED`;
+  the attempt history keeps the failed attempts.
 
 ### Hard Lock
 
@@ -1917,6 +1932,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `EXPORT_JOB_NOT_FOUND` | 404 | Referenced report export job does not exist |
 | `DUPLICATE_EVENT` | 409 | Event with this ID has already been processed |
 | `EVENT_NOT_RETRYABLE` | 409 | Retry of an accounting event that is not `FAILED`; the event is left unchanged (#2411) |
+| `ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE` | 409 | A reprocess of a held Kafka fact that no route can release (a settled payment held for its currency, #2620): the row keeps its hold, `nextAction` names what releases it (ADR-0067 Stage B1) |
 | `IDEMPOTENCY_CONFLICT` | 409 | An AP payment idempotency key was reused with a different payload; a remainder-credit `requestId` reused on another payment (#2524) |
 | `PAYMENT_NOT_AVAILABLE` | 409 | Remainder credit on a payment that is not `AVAILABLE` (already fully applied or credited); nothing is written (#2524) |
 | `PAYMENT_REMAINDER_CHANGED` | 422 | The remainder-credit `expectedAmount` no longer matches the payment's unapplied amount (an application intervened); nothing is written, re-read the payment (#2524) |

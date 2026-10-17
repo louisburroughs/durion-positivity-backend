@@ -3,6 +3,8 @@ package com.positivity.supplier.internal.vendor.service;
 import com.positivity.security.common.SecurityContextHelper;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.supplier.internal.client.TaxRegistrationSchemeClient;
+import com.positivity.supplier.internal.client.TaxRegistrationSchemes;
 import com.positivity.supplier.internal.entity.SupplierVendorCreateRequestEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorRemitChangeEntity;
@@ -103,6 +105,7 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
     private final VendorNumberAllocator numberAllocator;
     private final VendorFactPublisher factPublisher;
     private final VendorTaxIdCipher taxIdCipher;
+    private final TaxRegistrationSchemeClient schemeClient;
     private final Clock clock;
 
     // ── Reads ───────────────────────────────────────────────────────────────────────
@@ -577,7 +580,8 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
      * </ul>
      *
      * <p>Every entry that carries a number has its (already upper-cased) scheme and region checked against
-     * {@link VendorTaxRegistrationShapes} (ADR-0072 Decision 2).
+     * {@link VendorTaxRegistrationShapes} (ADR-0072 Decision 2) and then against pos-tax's closed vocabulary (#2623),
+     * read once per request and only when an entry carries a number.
      *
      * <p>Every refusal is a 400 {@code VALIDATION_ERROR} naming {@code taxRegistrations[i].<field>} and never
      * carries the number, the scheme or the region.
@@ -589,38 +593,107 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
             storedById.put(registration.registrationId(), registration);
         }
         Set<UUID> seen = new HashSet<>();
-        List<VendorTaxRegistration> resolved = new ArrayList<>();
+        // Pass 1, nothing sealed yet: the structural rules (cheap, deterministic), then, for an entry carrying a
+        // number, its shape and its place in pos-tax's closed vocabulary (#2623). The vocabulary is read once, at the
+        // first entry that needs it, so a request that cannot succeed never calls pos-tax and a kept registration
+        // never does. Every scheme or region violation is collected and answered together.
+        Map<String, TaxRegistrationSchemes.Scheme> vocabulary = null;
+        List<ApiError.FieldError> schemeViolations = new ArrayList<>();
+        List<Planned> planned = new ArrayList<>();
         for (int i = 0; i < requested.size(); i++) {
             TaxRegistrationDto entry = requested.get(i);
             String field = "taxRegistrations[" + i + "].";
-            if (entry.number() != null) {
-                requireShapes(entry, field);
-            }
             UUID registrationId = entry.registrationId();
+            VendorTaxRegistration existing = null;
             if (registrationId == null) {
                 if (entry.number() == null) {
                     throw fieldInvalid(field + "number", "a new registration needs its number");
                 }
-                resolved.add(seal(tenantId, vendorId, UUIDv7Generator.generate(), entry));
-                continue;
-            }
-            VendorTaxRegistration existing = storedById.get(registrationId);
-            if (existing == null) {
-                throw fieldInvalid(field + "registrationId", "is not a registration of this vendor");
-            }
-            if (!seen.add(registrationId)) {
-                throw fieldInvalid(field + "registrationId", "is sent more than once");
-            }
-            if (entry.number() == null) {
-                if (!existing.scheme().equals(entry.scheme()) || !Objects.equals(existing.region(), entry.region())) {
-                    throw fieldInvalid(field + "number", "re-enter the number to change its scheme or region");
-                }
-                resolved.add(existing);
             } else {
-                resolved.add(seal(tenantId, vendorId, registrationId, entry));
+                existing = storedById.get(registrationId);
+                if (existing == null) {
+                    throw fieldInvalid(field + "registrationId", "is not a registration of this vendor");
+                }
+                if (!seen.add(registrationId)) {
+                    throw fieldInvalid(field + "registrationId", "is sent more than once");
+                }
+                if (entry.number() == null) {
+                    if (!existing.scheme().equals(entry.scheme())
+                            || !Objects.equals(existing.region(), entry.region())) {
+                        throw fieldInvalid(field + "number", "re-enter the number to change its scheme or region");
+                    }
+                    planned.add(new Planned(existing, null, null));
+                    continue;
+                }
             }
+            requireShapes(entry, field);
+            if (vocabulary == null) {
+                vocabulary = schemeClient.fetch(null).byCode();
+            }
+            TaxRegistrationDto canonical = checkScheme(entry, field, vocabulary, schemeViolations);
+            planned.add(
+                    new Planned(null, registrationId == null ? UUIDv7Generator.generate() : registrationId, canonical));
+        }
+        if (!schemeViolations.isEmpty()) {
+            throw new SupplierValidationException(
+                    SupplierValidationException.VALIDATION_ERROR,
+                    "Tax registration refused: " + schemeViolations.size() + " scheme or region "
+                            + (schemeViolations.size() == 1 ? "violation" : "violations"),
+                    schemeViolations);
+        }
+        // Pass 2: seal, only once every entry is known good.
+        List<VendorTaxRegistration> resolved = new ArrayList<>();
+        for (Planned plan : planned) {
+            resolved.add(
+                    plan.kept() != null ? plan.kept() : seal(tenantId, vendorId, plan.registrationId(), plan.entry()));
         }
         return resolved;
+    }
+
+    /** One requested entry after pass 1: a kept registration, or an entry to seal under {@code registrationId}. */
+    private record Planned(
+            @Nullable VendorTaxRegistration kept,
+            @Nullable UUID registrationId,
+            @Nullable TaxRegistrationDto entry) {}
+
+    /**
+     * #2623 rule 6: the scheme is a listed code; the region is required and listed where the scheme is regional, and
+     * absent otherwise. A region sent with the scheme's country prefix ({@code CA-QC}) is read as its subdivision and
+     * stored as the listed code. Messages name the rule only: never the number, the scheme or the region (Security
+     * ruling on #2617, ruling 4). Returns the entry with its canonical region.
+     */
+    private static TaxRegistrationDto checkScheme(
+            TaxRegistrationDto entry,
+            String field,
+            Map<String, TaxRegistrationSchemes.Scheme> vocabulary,
+            List<ApiError.FieldError> violations) {
+        TaxRegistrationSchemes.Scheme scheme = vocabulary.get(entry.scheme());
+        if (scheme == null) {
+            violations.add(new ApiError.FieldError(field + "scheme", "scheme is not a listed code"));
+            return entry;
+        }
+        if (!scheme.regional()) {
+            if (entry.region() != null) {
+                violations.add(new ApiError.FieldError(field + "region", "region not allowed for this scheme"));
+            }
+            return entry;
+        }
+        if (entry.region() == null) {
+            violations.add(new ApiError.FieldError(field + "region", "region required for this scheme"));
+            return entry;
+        }
+        String region = entry.region();
+        String prefix = scheme.countryCode() == null ? null : scheme.countryCode() + "-";
+        if (prefix != null && region.startsWith(prefix)) {
+            region = region.substring(prefix.length());
+        }
+        if (scheme.regions() == null || !scheme.regions().contains(region)) {
+            violations.add(new ApiError.FieldError(field + "region", "region not valid for this scheme"));
+            return entry;
+        }
+        return region.equals(entry.region())
+                ? entry
+                : new TaxRegistrationDto(entry.registrationId(), entry.scheme(), entry.number(), region);
     }
 
     /** The value is never echoed: the message names the rule only. */
@@ -632,7 +705,8 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         }
         if (entry.region() != null
                 && !VendorTaxRegistrationShapes.REGION.matcher(entry.region()).matches()) {
-            throw fieldInvalid(field + "region", "must be two letters, optionally - and one to three letters");
+            throw fieldInvalid(
+                    field + "region", "must be one to three letters, optionally after a country prefix and -");
         }
     }
 

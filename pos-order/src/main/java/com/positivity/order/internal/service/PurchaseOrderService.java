@@ -1,11 +1,14 @@
 package com.positivity.order.internal.service;
 
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
+import com.positivity.order.internal.dto.purchaseorder.CancelPurchaseOrderLineRequest;
+import com.positivity.order.internal.dto.purchaseorder.ClosePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderSummaryResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
+import com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import java.util.List;
@@ -72,4 +75,38 @@ public interface PurchaseOrderService {
 
     @NonNull
     PurchaseOrderResponse cancelPurchaseOrder(@NonNull UUID poId, @NonNull String actorId);
+
+    /**
+     * Reopens a returned quantity of a line for the vendor's replacement shipment (CAP:550 #2635): the quantity
+     * leaves the line's returned figures and is open again; the balance rises by its value; the status is
+     * re-derived; the fact is published. 409 on a {@code CANCELLED} or {@code CLOSED} order, or when the quantity
+     * exceeds what the line has returned; 404 for a line the order does not hold.
+     */
+    @NonNull
+    PurchaseOrderResponse reopenPurchaseOrderLine(
+            @NonNull UUID poId,
+            @NonNull UUID lineId,
+            @NonNull ReopenPurchaseOrderLineRequest request,
+            @NonNull String actorId);
+
+    /**
+     * Cancels a remainder of one line the vendor will not ship (CAP:550 #2635): open and balance fall by the
+     * quantity and its value; {@code CLOSED} once every line is settled; the fact is published. 409 on {@code DRAFT}
+     * (revise instead), {@code CANCELLED} or {@code CLOSED}, or when the quantity exceeds the line's open quantity.
+     */
+    @NonNull
+    PurchaseOrderResponse cancelPurchaseOrderLine(
+            @NonNull UUID poId,
+            @NonNull UUID lineId,
+            @NonNull CancelPurchaseOrderLineRequest request,
+            @NonNull String actorId);
+
+    /**
+     * Short-closes the order (CAP:550 #2635): every remaining open quantity on every line is cancelled and the order
+     * is {@code CLOSED}; the fact is published. 409 on {@code DRAFT}, {@code CANCELLED} or {@code CLOSED}, and, with
+     * {@code nextAction} naming cancel, on an order with nothing received.
+     */
+    @NonNull
+    PurchaseOrderResponse closePurchaseOrder(
+            @NonNull UUID poId, @NonNull ClosePurchaseOrderRequest request, @NonNull String actorId);
 }

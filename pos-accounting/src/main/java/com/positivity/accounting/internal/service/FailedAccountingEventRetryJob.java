@@ -6,6 +6,7 @@ import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.enums.ReprocessingOutcome;
+import com.positivity.accounting.internal.exception.HeldEventNotReleasableException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import com.positivity.tenancy.TenantIterator;
@@ -133,6 +134,11 @@ public class FailedAccountingEventRetryJob {
             }
             warnWhenExhausted(after);
             return true;
+        } catch (HeldEventNotReleasableException e) {
+            // #2620: a Kafka row no route can release keeps its hold as the record; nothing is written, so the row
+            // is not relabeled FAILED / INTERNAL_ERROR by a retry that could never have posted it.
+            log.info("Failed-event retry skips accounting event {}: {}", eventId, e.getMessage());
+            return false;
         } catch (RuntimeException e) {
             log.error("Failed-event retry of accounting event {} failed", eventId, e);
             recordFailure(eventId, e);

@@ -40,6 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
     VendorNumberAllocator.class,
     VendorFactPublisher.class,
     SupplierOutboxEventWriter.class,
+    com.positivity.supplier.internal.client.TaxRegistrationSchemeStubConfig.class,
     SupplierVendorFactTransactionTest.SupportConfig.class
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)

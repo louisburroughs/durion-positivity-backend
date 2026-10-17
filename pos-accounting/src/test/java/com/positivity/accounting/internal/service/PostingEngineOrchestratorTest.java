@@ -1072,6 +1072,23 @@ class PostingEngineOrchestratorTest {
         }
 
         @Test
+        @DisplayName("#2620: a held fact that states no currency stays held (unknown is not functional)")
+        void noCurrency_staysHeld() {
+            holdForCurrency("EUR");
+            testPayload.remove("currencyCode");
+            when(accountingEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+            when(reprocessingAttemptHistoryRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+            PostingResult result = orchestrator.processEvent(testEvent, null, testUserId, true);
+
+            assertThat(result.getFailureReason()).isEqualTo(PostingFailureReason.CURRENCY_NOT_SUPPORTED);
+            assertThat(testEvent.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+            assertThat(testEvent.getFailureDetails()).contains("states no currency");
+            verify(postingRuleEvaluator, never()).evaluateEvent(any(), any());
+            verify(journalEntryService, never()).createJournalEntry(any());
+        }
+
+        @Test
         @DisplayName("A held fact whose currency the ledger now books goes on to rule evaluation")
         void nowLedgerCurrency_proceedsToEvaluation() {
             holdForCurrency("usd");

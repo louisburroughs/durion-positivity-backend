@@ -8,7 +8,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.dto.AccountingEventResponse;
-import com.positivity.accounting.internal.dto.PostingResult;
 import com.positivity.accounting.internal.dto.ReprocessEventRequest;
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
@@ -76,6 +75,8 @@ class EventIngestionSettledPaymentReprocessTest {
         event = new AccountingEvent();
         event.setEventId(EVENT_ID);
         event.setEventType(PaymentSettledV1.EVENT_TYPE);
+        // A Kafka fact row carries the envelope's event id (KafkaFactIngestionRecorder.newEvent).
+        event.setIngestionId(UUID.fromString("0199b000-0000-7000-8000-0000000025e2"));
         event.setSourceSystem("pos-invoice");
         event.setStatus(AccountingEventStatus.SUSPENDED);
         event.setFailureReasonCode("PERIOD_CLOSED");
@@ -85,7 +86,10 @@ class EventIngestionSettledPaymentReprocessTest {
         event.setTransactionDate(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
         event.setReceivedAt(NOW);
         when(accountingEventRepository.findById(EVENT_ID)).thenReturn(Optional.of(event));
-        when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        // Lenient: the #2620 refusal case saves nothing.
+        org.mockito.Mockito.lenient()
+                .when(accountingEventRepository.save(any(AccountingEvent.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -163,16 +167,34 @@ class EventIngestionSettledPaymentReprocessTest {
     }
 
     @Test
-    @DisplayName("a currency-held settled payment keeps today's posting-engine path")
-    void currencyHoldKeepsEnginePath() {
+    @DisplayName(
+            "#2620: a settled payment held for its currency has no release path: 409, the row untouched, no attempt,"
+                    + " never the posting engine")
+    void currencyHoldIsRefusedNotEngineRouted() {
         event.setFailureReasonCode("CURRENCY_NOT_SUPPORTED");
-        when(postingEngineOrchestrator.processEvent(any(), any(), any(), anyBoolean()))
-                .thenReturn(PostingResult.success(null, null));
+        event.setFailureDetails("held: CAD");
+        event.setPayload(new java.util.HashMap<>(java.util.Map.of("currencyCode", "CAD", "amount", "12.50")));
 
-        reprocess("ops-user");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.reprocessEvent(
+                        EVENT_ID, new com.positivity.accounting.internal.dto.ReprocessEventRequest(), "controller"))
+                .isInstanceOfSatisfying(
+                        com.positivity.accounting.internal.exception.HeldEventNotReleasableException.class, e -> {
+                            org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                                    .contains("CURRENCY_NOT_SUPPORTED")
+                                    .contains("no release path");
+                            org.assertj.core.api.Assertions.assertThat(e.getNextAction())
+                                    .contains("CAD")
+                                    .contains("Stage B1");
+                        });
 
-        verify(postingEngineOrchestrator).processEvent(any(), any(), any(), anyBoolean());
-        verify(automaticPaymentApplicationService, never()).reapply(any());
+        org.assertj.core.api.Assertions.assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        org.assertj.core.api.Assertions.assertThat(event.getFailureReasonCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+        org.assertj.core.api.Assertions.assertThat(event.getAttemptCount())
+                .as("unchanged")
+                .isEqualTo(1);
+        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), any(), anyBoolean());
+        verify(reprocessingAttemptHistoryRepository, never()).save(any());
+        verify(accountingEventRepository, never()).save(any());
     }
 
     private AccountingEventResponse reprocess(String user) {

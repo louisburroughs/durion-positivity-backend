@@ -224,6 +224,22 @@ pos:
       US:
         tax-on-resale-goods: HOLD
         self-assess-untaxed-expenses: true
+    # Tax-registration schemes per country (CAP:550 #2623, AW48): the closed vocabulary a vendor's tax registration
+    # is filed under, with each scheme's holder type (BUSINESS or PERSON) and whether a registration belongs to one
+    # region. Every row is a PLACEHOLDER held for expert advice (OI-4), never tax law: which schemes exist, which
+    # identify a person, which are regional and in which regions are undecided. Codes are unique across countries,
+    # so a code alone identifies a scheme; no code or region carries a digit (ADR-0072 Decision 2). Country keys are
+    # upper case (not settable through environment variables). Checked at startup by TaxRegistrationSchemes.
+    registration-schemes:
+      US:
+        - { scheme: EIN, label: "Employer Identification Number (placeholder)", holder-type: BUSINESS, regional: false }
+        - { scheme: SSN, label: "Social Security Number (placeholder)", holder-type: PERSON, regional: false }
+        - { scheme: ITIN, label: "Individual Taxpayer Identification Number (placeholder)", holder-type: PERSON, regional: false }
+      CA:
+        - { scheme: BN, label: "Business Number (placeholder)", holder-type: BUSINESS, regional: false }
+        - { scheme: GST_HST, label: "GST/HST registration (placeholder)", holder-type: BUSINESS, regional: false }
+        - { scheme: QST, label: "Quebec sales tax registration (placeholder)", holder-type: BUSINESS, regional: true, regions: [QC] }
+        - { scheme: SIN, label: "Social Insurance Number (placeholder)", holder-type: PERSON, regional: false }
 
 logging:
   level:
