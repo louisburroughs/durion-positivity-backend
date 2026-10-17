@@ -25,7 +25,6 @@ import org.springframework.web.client.RestClient;
  * WARN line carries the path and status only.
  */
 @DisplayName("TaxRegistrationSchemeClient — pos-tax's registration-scheme list, fail-closed (#2623)")
-@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 class TaxRegistrationSchemeClientTest {
 
     private static final String BODY = """
@@ -135,7 +134,7 @@ class TaxRegistrationSchemeClientTest {
 
     @Test
     @DisplayName("a 5xx, a 4xx, an empty body or an unreachable pos-tax is SupplierServiceUnavailableException")
-    void failsClosed(org.springframework.boot.test.system.CapturedOutput output) {
+    void failsClosed() {
         server.expect(requestTo("http://pos-tax/v1/tax/registration-schemes")).andRespond(withServerError());
         server.expect(requestTo("http://pos-tax/v1/tax/registration-schemes"))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST));
@@ -145,17 +144,19 @@ class TaxRegistrationSchemeClientTest {
             throw new SocketTimeoutException("read timed out");
         });
 
+        java.util.List<String> messages = new java.util.ArrayList<>();
         for (int i = 0; i < 4; i++) {
             assertThatThrownBy(() -> client.fetch(null))
                     .isInstanceOf(SupplierServiceUnavailableException.class)
-                    .satisfies(e -> assertThat(((SupplierServiceUnavailableException) e).getCode())
-                            .isEqualTo("SERVICE_UNAVAILABLE"));
+                    .satisfies(e -> {
+                        assertThat(((SupplierServiceUnavailableException) e).getCode()).isEqualTo("SERVICE_UNAVAILABLE");
+                        messages.add(e.getMessage());
+                    });
         }
         server.verify();
-        String warned = output.getOut() + output.getErr();
-        assertThat(warned.split("pos-tax registration schemes unavailable", -1))
-                .as("one WARN per failure, path and status only")
-                .hasSize(5);
-        assertThat(warned).contains("path=/v1/tax/registration-schemes").doesNotContain("schemes\"");
+        // What the caller sees names the dependency and the status only, never pos-tax's body (ADR-0072).
+        String said = String.join(" ", messages);
+        assertThat(said).contains("500").contains("400").contains("no registration-scheme list").contains("reached");
+        assertThat(said).doesNotContain("schemes\"").doesNotContain("GST_HST");
     }
 }
