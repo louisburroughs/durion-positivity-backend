@@ -4,6 +4,7 @@ import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -13,6 +14,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+import org.springframework.data.annotation.CreatedDate;
 
 /**
  * One {@code POST /v1/accounting/ap/payments/{paymentId}/allocations} request (CAP:550 S17, #2513): the caller's
@@ -22,6 +25,7 @@ import lombok.Setter;
  */
 @Entity
 @Table(name = "ap_payment_allocation_request")
+@EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -42,13 +46,13 @@ public class APPaymentAllocationRequest extends TenantScopedEntity {
     @Column(name = "request_hash", length = 64, nullable = false, updatable = false)
     private String requestHash;
 
+    @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    public APPaymentAllocationRequest(UUID requestId, UUID paymentId, String requestHash, Instant createdAt) {
+    public APPaymentAllocationRequest(UUID requestId, UUID paymentId, String requestHash) {
         this.requestId = requestId;
         this.paymentId = paymentId;
         this.requestHash = requestHash;
-        this.createdAt = createdAt;
     }
 }

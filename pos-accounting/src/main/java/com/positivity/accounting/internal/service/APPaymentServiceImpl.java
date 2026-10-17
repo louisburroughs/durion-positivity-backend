@@ -406,8 +406,7 @@ public class APPaymentServiceImpl implements APPaymentService {
         // Approver ≠ payer on every allocation, cash on delivery included (AW6.2, §4.9).
         payGuard.check(plan.stream().map(PlannedAllocation::bill).toList(), currentUser, payment.getPaymentRef());
         appendAllocations(payment, plan);
-        allocationRequests.save(
-                new APPaymentAllocationRequest(request.getRequestId(), paymentId, hash, Instant.now(clock)));
+        allocationRequests.save(new APPaymentAllocationRequest(request.getRequestId(), paymentId, hash));
         log.info(
                 "CASH AP payment allocated | paymentId={} | bills={} | total={} | unappliedAfter={}",
                 paymentId,

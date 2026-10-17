@@ -227,7 +227,7 @@ class APPaymentServiceTest {
                 .digest();
         when(allocationRequests.findByRequestId(requestId))
                 .thenReturn(Optional.of(new com.positivity.accounting.internal.entity.APPaymentAllocationRequest(
-                        requestId, paymentId, hash, java.time.Instant.parse("2026-10-17T12:00:00Z"))));
+                        requestId, paymentId, hash)));
 
         assertThat(service.allocateCashPayment(paymentId, allocate(requestId, billId, "100.00"), "clerk")
                         .getUnappliedAmount())
