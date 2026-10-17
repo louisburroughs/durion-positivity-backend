@@ -29,5 +29,12 @@ public final class TenantEventTypes {
     /** The tenant reached its terminal state. */
     public static final String DECOMMISSIONED = "tenant.decommissioned";
 
+    /**
+     * A tenant's monthly document-reading allowance (CAP:550 S45, #2619; AW63, AW68): emitted when a tenant is created,
+     * when its tier is assigned, and for every tenant on a tier whose amount changes. Kept off the public projection
+     * (commercial terms never travel on it); payload {@code TenantReadingAllowanceV1}.
+     */
+    public static final String READING_ALLOWANCE_CHANGED = "tenant.reading-allowance.changed";
+
     private TenantEventTypes() {}
 }

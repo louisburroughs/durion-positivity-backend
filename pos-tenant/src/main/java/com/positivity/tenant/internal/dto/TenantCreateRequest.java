@@ -72,4 +72,12 @@ public class TenantCreateRequest {
     @Size(max = 35)
     @SupportedLocale
     private String locale;
+
+    @Schema(
+            description = "The reading tier the tenant starts on (CAP:550 S45); STANDARD when omitted. Must name an"
+                    + " active tier, else 422 READING_TIER_NOT_ASSIGNABLE",
+            example = "STANDARD",
+            requiredMode = NOT_REQUIRED)
+    @Pattern(regexp = "^[A-Z][A-Z0-9_]{1,31}$")
+    private String readingTierCode;
 }

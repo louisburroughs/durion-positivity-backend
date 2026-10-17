@@ -68,6 +68,7 @@ Callers reach it by Eureka name (`http://tenant/internal/v1/tenants`) through a 
 | `tenant.created` | pos-tenant | `TenantCreatedV1`: projection + `initialAdminEmail` (provisioning input) + `locale` (#2618) |
 | `tenant.provisioned` | pos-security-service (plan WS2b) | `TenantProvisionedV1` |
 | `tenant.updated`, `tenant.suspended`, `tenant.reactivated`, `tenant.decommissioned` | pos-tenant | `TenantProjectionV1`: `tenantId`, `slug`, `displayName`, `status`, `locale` (BCP 47, additive since CAP:550 S44 #2618; null on earlier facts means unknown, never a default) |
+| `tenant.reading-allowance.changed` | pos-tenant | `TenantReadingAllowanceV1` (CAP:550 S45, #2619): `tenantId`, `tierCode`, `monthlyAllowance {amount, currencyCode}`, `effectiveAt`; keyed by tenant id, versioned by the tenant row. Emitted on create, on a tier assignment and once per tenant on a tier whose allowance changes. Never part of the projection (commercial terms stay off it); pos-accounting keeps the latest per tenant |
 
 Consumers rebuild their `ext_tenant` row from every payload; account, contact and billing data
 are never published.
@@ -90,6 +91,17 @@ unbound path:
 tenant. Global tables: `db/tenancy-global-tables.txt`.
 
 ## Configuration
+
+- **Reading tiers (CAP:550 S45, #2619; AW63, AW68).** `GET|POST /v1/platform/reading-tiers` and `PATCH
+  /v1/platform/reading-tiers/{code}` (`platform:reading_tier:read` / `platform:reading_tier:manage`, `PLATFORM_ADMIN`
+  only; events `READING_TIER_LIST`, `READING_TIER_CREATE`, `READING_TIER_UPDATE`) manage the catalog: a code
+  (`^[A-Z][A-Z0-9_]{1,31}$`, never changes), a display name, a monthly document-reading allowance (amount with its ISO
+  4217 currency, ADR-0067 PC-3) and an active flag. V5 seeds `STANDARD` (20.00 USD) under the platform tenant. Every
+  tenant is on one tier (`readingTierCode`; `STANDARD` on create unless the request names another; `PATCH` reassigns);
+  only an active, existing tier is assignable (422 `READING_TIER_NOT_ASSIGNABLE`); a duplicate code is 409
+  `READING_TIER_EXISTS`; deactivating a tier a non-decommissioned tenant is on is 409 `READING_TIER_IN_USE`. Tiers are
+  never deleted. A changed allowance publishes one `tenant.reading-allowance.changed` per tenant on the tier in the same
+  transaction; so do create and reassignment.
 
 - `pos.tenant.supported-locales` (`POS_TENANT_SUPPORTED_LOCALES`, default `en-US,es-US,es-MX,fr-CA,fr-FR`): the
   locales a tenant may be set to (CAP:550 S44, #2618; ADR-0030 §2). BCP 47 with a region, compared in canonical case

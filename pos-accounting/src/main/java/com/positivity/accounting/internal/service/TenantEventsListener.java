@@ -29,6 +29,9 @@ import tools.jackson.databind.ObjectMapper;
  * because provisioning records the eventId: a failure anywhere redelivers the fact, the version-guarded upsert
  * repeats harmlessly, and provisioning runs once. Readers of a tenant with no row see {@code en-US}.
  *
+ * <p>{@code tenant.reading-allowance.changed} (#2619) is not a projection fact: it stores the tenant's monthly
+ * document-reading allowance through {@link ReadingAllowanceReplicaWriter}, the same way, and provisions nothing.
+ *
  * <p>The group reads from the earliest offset, so facts retained from before this consumer existed are processed
  * once.
  *
@@ -54,6 +57,7 @@ public class TenantEventsListener {
     private final AccountingTemplateReader templateReader;
     private final AccountingTenantProvisioner provisioner;
     private final TenantLocaleReplicaWriter localeWriter;
+    private final ReadingAllowanceReplicaWriter allowanceWriter;
 
     @KafkaListener(
             topics = "${pos.accounting.kafka.tenant-events-topic:tenant.events.v1}",
@@ -68,6 +72,10 @@ public class TenantEventsListener {
             return;
         }
         String eventType = root.path("eventType").stringValue(null);
+        if (TenantEventTypes.READING_ALLOWANCE_CHANGED.equals(eventType)) {
+            onReadingAllowance(root);
+            return;
+        }
         if (eventType == null || !TenantProjectionEvent.PROJECTION_EVENT_TYPES.contains(eventType)) {
             return;
         }
@@ -116,6 +124,29 @@ public class TenantEventsListener {
         // No catch: every failure propagates, so the container error handler retries with backoff
         // and routes to {topic}.dlq (ADR-0044 §4).
         TenantContext.runAs(tenantId, () -> provisioner.provision(tenantId, eventId, snapshot));
+    }
+
+    /**
+     * {@code tenant.reading-allowance.changed} (#2619): stored in the {@code bill_intake_reading_allowance} replica
+     * under the fact's tenant, guarded by {@code aggregateVersion}, with the eventId recorded in the same transaction.
+     * It never touches provisioning. A malformed fact is logged and dropped without a {@code processed_events} row.
+     */
+    private void onReadingAllowance(JsonNode root) {
+        String eventId = root.path("eventId").stringValue(null);
+        if (eventId == null || eventId.isBlank()) {
+            log.warn("Skipping {} event without eventId", TenantEventTypes.READING_ALLOWANCE_CHANGED);
+            return;
+        }
+        if (processedEventRepository.existsById(eventId)) {
+            return;
+        }
+        Optional<ReadingAllowanceEvent> parsed = ReadingAllowanceEvent.parse(root);
+        if (parsed.isEmpty()) {
+            log.warn("Skipping malformed {} event eventId={}", TenantEventTypes.READING_ALLOWANCE_CHANGED, eventId);
+            return;
+        }
+        ReadingAllowanceEvent fact = parsed.get();
+        TenantContext.runAs(fact.tenantId(), () -> allowanceWriter.applyAndRecord(fact));
     }
 
     private static boolean carriesLocale(JsonNode root) {

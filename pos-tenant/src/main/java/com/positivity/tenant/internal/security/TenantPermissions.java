@@ -35,6 +35,11 @@ public final class TenantPermissions {
     /** Update an account, its contacts and billing profile. */
     public static final String ACCOUNT_UPDATE = "platform:account:update";
 
+    /** #2619: the reading-tier catalog; PLATFORM_ADMIN only, never a tenant role. */
+    public static final String READING_TIER_READ = "platform:reading_tier:read";
+
+    public static final String READING_TIER_MANAGE = "platform:reading_tier:manage";
+
     private TenantPermissions() {
         // Utility class
     }

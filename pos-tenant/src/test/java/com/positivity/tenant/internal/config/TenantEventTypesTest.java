@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.positivity.events.EmitEvent;
 import com.positivity.events.EventTypeRegistration;
 import com.positivity.tenant.internal.controller.PlatformAccountController;
+import com.positivity.tenant.internal.controller.PlatformReadingTierController;
 import com.positivity.tenant.internal.controller.PlatformTenantController;
 import java.lang.reflect.Method;
 import java.util.Arrays;
@@ -18,7 +19,10 @@ class TenantEventTypesTest {
 
     @Test
     void registryMatchesTheControllersExactly() {
-        Set<String> emitted = Stream.of(PlatformTenantController.class, PlatformAccountController.class)
+        Set<String> emitted = Stream.of(
+                        PlatformTenantController.class,
+                        PlatformAccountController.class,
+                        PlatformReadingTierController.class)
                 .flatMap(type -> Arrays.stream(type.getDeclaredMethods()))
                 .map(method -> method.getAnnotation(EmitEvent.class))
                 .filter(java.util.Objects::nonNull)
@@ -29,7 +33,7 @@ class TenantEventTypesTest {
                 .collect(Collectors.toSet());
 
         assertThat(registered).containsExactlyInAnyOrderElementsOf(emitted);
-        assertThat(TenantEventTypes.all()).hasSize(15);
+        assertThat(TenantEventTypes.all()).hasSize(18);
     }
 
     @Test

@@ -1067,13 +1067,16 @@ public enum PermissionCode {
     // ── Security (new) ─────────────────────────────────────────────────────────
     SECURITY__AUDIT_EXPORT__WEBHOOK_MANAGE(563, "security:audit_export:webhook_manage"),
     // ── Order (new) ────────────────────────────────────────────────────────────
-    ORDER__PURCHASE_ORDER__REOPEN(564, "order:purchase_order:reopen");
+    ORDER__PURCHASE_ORDER__REOPEN(564, "order:purchase_order:reopen"),
+    // ── Platform (new) ─────────────────────────────────────────────────────────
+    PLATFORM__READING_TIER__MANAGE(565, "platform:reading_tier:manage"),
+    PLATFORM__READING_TIER__READ(566, "platform:reading_tier:read");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 107;
+    public static final int CATALOG_VERSION = 108;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

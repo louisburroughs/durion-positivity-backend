@@ -791,6 +791,8 @@ FROM (VALUES
     ('platform:tenant:update', 'platform', 'tenant', 'update', 528),
     ('platform:tenant:provision', 'platform', 'tenant', 'provision', 529),
     ('platform:tenant:impersonate', 'platform', 'tenant', 'impersonate', 530),
+    ('platform:reading_tier:manage', 'platform', 'reading_tier', 'manage', 565),
+    ('platform:reading_tier:read', 'platform', 'reading_tier', 'read', 566),
     ('pricing:base_price:create', 'pricing', 'base_price', 'create', 245),
     ('pricing:labor_rate:manage', 'pricing', 'labor_rate', 'manage', 510),
     ('pricing:labor_rate:quote', 'pricing', 'labor_rate', 'quote', 512),

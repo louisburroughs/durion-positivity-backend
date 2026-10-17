@@ -63,6 +63,21 @@ public final class TenantEventTypes {
                     "ACCOUNT_BILLING_PROFILE_PUT", "Create or replace an account's billing profile")
             .build();
 
+    /** #2619: the reading-tier catalog. */
+    public static final EventTypeRegistration READING_TIER_LIST = EventTypeRegistration.search(
+                    "READING_TIER_LIST", "List reading tiers")
+            .build();
+
+    public static final EventTypeRegistration READING_TIER_CREATE = EventTypeRegistration.write(
+                    "READING_TIER_CREATE", "Create a reading tier (a monthly document-reading allowance)")
+            .build();
+
+    public static final EventTypeRegistration READING_TIER_UPDATE = EventTypeRegistration.approval(
+                    "READING_TIER_UPDATE",
+                    "Change a reading tier's name, allowance or active flag; an allowance change publishes one"
+                            + " tenant.reading-allowance.changed per tenant on the tier")
+            .build();
+
     public static List<EventTypeRegistration> all() {
         return List.of(
                 TENANT_CREATE,
@@ -79,6 +94,9 @@ public final class TenantEventTypes {
                 ACCOUNT_CONTACT_ADD,
                 ACCOUNT_CONTACT_UPDATE,
                 ACCOUNT_CONTACT_REMOVE,
-                ACCOUNT_BILLING_PROFILE_PUT);
+                ACCOUNT_BILLING_PROFILE_PUT,
+                READING_TIER_LIST,
+                READING_TIER_CREATE,
+                READING_TIER_UPDATE);
     }
 }

@@ -244,6 +244,20 @@ that carries a locale, with its eventId recorded in the same transaction. A fact
 `TenantLocaleResolver.localeOf(tenantId)` / `localeOfCurrentTenant()` return the stored locale or `en-US` (ADR-0030 §2); S26's
 extraction `localeHint` derives from it. Locale is not money, so nothing fails closed on a missing row.
 
+**Reading allowance (#2619, CAP:550 S45).** `bill_intake_reading_allowance` (V34) is a tenant-scoped replica, one row per
+tenant (`reading_allowance_id` holds the tenant's own id, `UNIQUE (tenant_id)`), of the monthly document-reading allowance
+(`tier_code`, `amount numeric(19,4)` with its `currency`, `effective_at`, `aggregate_version`) that a platform operator's
+reading tier gives the tenant in pos-tenant. The fact is `tenant.reading-allowance.changed` v1 (`TenantReadingAllowanceV1`)
+on `tenant.events.v1`, kept off the public tenant projection. `TenantEventsListener` handles it before the projection
+filter and writes it through `ReadingAllowanceReplicaWriter`, bound to the fact's tenant in its own transaction with the
+eventId recorded in the same transaction; a fact older than the stored `aggregate_version` is ignored (an equal version
+applies, so replay repairs), and a malformed fact is logged and skipped without a `processed_events` row.
+`TenantReadingAllowanceReader.allowanceOf(tenantId)` returns the stored allowance or empty. Empty fails closed: S26's meter
+(#2519) makes no provider call and the draft opens for manual entry with reason `EXTRACTION_ALLOWANCE_UNKNOWN` (a reason code
+that belongs to S26 and is only named here), because the platform never pays for reading it cannot attribute; reading
+resumes once the fact is consumed. Within a month a new amount applies from `effective_at` on and month-to-date usage is
+unchanged (S26's arithmetic).
+
 The provisioner also seeds the policy defaults (three override thresholds, one refund policy, the `UTC`
 accounting time zone of #2558, each only when
 the tenant has none): `DataInitializationService` is a provisioning step, no longer a startup runner, so a

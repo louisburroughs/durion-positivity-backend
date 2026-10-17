@@ -43,6 +43,15 @@ class TenantServiceImplTest {
     private final TenantRepository tenants = mock(TenantRepository.class);
     private final AccountRepository accounts = mock(AccountRepository.class);
     private final TenantFactPublisher facts = mock(TenantFactPublisher.class);
+    private final ReadingTierService readingTiers = mock(ReadingTierService.class);
+    private final com.positivity.tenant.internal.entity.ReadingTierEntity standard =
+            com.positivity.tenant.internal.entity.ReadingTierEntity.builder()
+                    .code("STANDARD")
+                    .displayName("Standard")
+                    .monthlyAllowanceAmount(new java.math.BigDecimal("20.00"))
+                    .monthlyAllowanceCurrency("USD")
+                    .active(true)
+                    .build();
 
     private TenantServiceImpl service;
 
@@ -53,7 +62,24 @@ class TenantServiceImplTest {
                 accounts,
                 facts,
                 new TenantLocales(java.util.List.of("en-US", "es-US", "es-MX", "fr-CA", "fr-FR")),
+                readingTiers,
                 Clock.fixed(NOW, ZoneOffset.UTC));
+        when(readingTiers.requireAssignable(any())).thenAnswer(inv -> {
+            String code = inv.getArgument(0);
+            if (code == null || "STANDARD".equals(code)) {
+                return standard;
+            }
+            if ("PRO".equals(code)) {
+                return com.positivity.tenant.internal.entity.ReadingTierEntity.builder()
+                        .code("PRO")
+                        .displayName("Pro")
+                        .monthlyAllowanceAmount(new java.math.BigDecimal("60.00"))
+                        .monthlyAllowanceCurrency("USD")
+                        .active(true)
+                        .build();
+            }
+            throw new com.positivity.tenant.internal.exception.ReadingTierNotAssignableException("no " + code);
+        });
         when(tenants.saveAndFlush(any())).thenAnswer(invocation -> {
             TenantEntity entity = invocation.getArgument(0);
             if (entity.getId() == null) {
@@ -107,6 +133,49 @@ class TenantServiceImplTest {
         ArgumentCaptor<TenantEntity> saved = ArgumentCaptor.forClass(TenantEntity.class);
         verify(facts).tenantCreated(saved.capture());
         assertThat(saved.getValue().getId()).isEqualTo(response.getId());
+        // #2619: STANDARD by default, with its own allowance fact.
+        assertThat(response.getReadingTierCode()).isEqualTo("STANDARD");
+        verify(facts).readingAllowanceChanged(saved.getValue(), standard);
+    }
+
+    @Test
+    @DisplayName(
+            "#2619: a create naming an inactive or unknown tier is 422 READING_TIER_NOT_ASSIGNABLE before any save")
+    void createRefusesAnUnassignableTier() {
+        when(accounts.existsById(ACCOUNT)).thenReturn(true);
+        when(tenants.existsBySlug("acme")).thenReturn(false);
+        TenantCreateRequest request = createRequest();
+        request.setReadingTierCode("LEGACY");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(request))
+                .isInstanceOf(com.positivity.tenant.internal.exception.ReadingTierNotAssignableException.class);
+        verify(tenants, org.mockito.Mockito.never()).saveAndFlush(any());
+        verify(facts, org.mockito.Mockito.never()).tenantCreated(any());
+    }
+
+    @Test
+    @DisplayName("#2619: a tier assignment on update publishes tenant.updated and the allowance fact; the same tier"
+            + " changes nothing")
+    void updateAssignsATier() {
+        TenantEntity tenant = existing(TenantStatus.ACTIVE);
+        tenant.setReadingTierCode("STANDARD");
+
+        TenantResponse moved = service.update(
+                tenant.getId(),
+                TenantUpdateRequest.builder().readingTierCode("PRO").build());
+
+        assertThat(moved.getReadingTierCode()).isEqualTo("PRO");
+        verify(facts).tenantUpdated(any());
+        verify(facts)
+                .readingAllowanceChanged(
+                        any(), org.mockito.ArgumentMatchers.argThat(tier -> "PRO".equals(tier.getCode())));
+
+        org.mockito.Mockito.clearInvocations(facts);
+        service.update(
+                tenant.getId(),
+                TenantUpdateRequest.builder().readingTierCode("PRO").build());
+        verify(facts, org.mockito.Mockito.never()).tenantUpdated(any());
+        verify(facts, org.mockito.Mockito.never()).readingAllowanceChanged(any(), any());
     }
 
     @Test
