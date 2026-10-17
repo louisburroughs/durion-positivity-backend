@@ -297,7 +297,7 @@ class EventIngestionServiceTest {
                 service, "zoneResolver", TestZoneResolvers.fixed(TestZoneResolvers.CHICAGO, utc));
         java.util.Map<String, Object> undated = new java.util.HashMap<>(testEventMap);
         undated.remove("transactionDate");
-        when(idempotencyService.isKeyProcessed(any(String.class))).thenReturn(false);
+        when(idempotencyService.isKeyActive(any(String.class))).thenReturn(false);
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenAnswer(inv -> {
             AccountingEvent event = inv.getArgument(0);
             event.setReceivedAt(TestZoneResolvers.JAN_31_2330_CHICAGO);
@@ -326,7 +326,7 @@ class EventIngestionServiceTest {
         savedEvent.setStatus(AccountingEventStatus.RECEIVED);
         savedEvent.setReceivedAt(Instant.now(TEST_CLOCK));
 
-        when(idempotencyService.isKeyProcessed(any(String.class))).thenReturn(false); // Not a duplicate
+        when(idempotencyService.isKeyActive(any(String.class))).thenReturn(false); // Not a duplicate
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(savedEvent);
 
         AccountingSequence sequence = new AccountingSequence();
@@ -345,7 +345,7 @@ class EventIngestionServiceTest {
 
         verify(idempotencyService).isKeyProcessed(any(String.class));
         verify(accountingEventRepository).save(any(AccountingEvent.class));
-        verify(idempotencyService).registerKey(any(String.class), any(UUID.class));
+        verify(idempotencyService).registerKey(any(String.class), any(UUID.class), any(java.time.Duration.class));
     }
 
     // ========== Issue #2207: additive EventEnvelopeContract sections ==========

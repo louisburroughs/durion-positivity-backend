@@ -52,8 +52,9 @@ public class IdempotencyKey extends TenantScopedEntity {
     private Instant createdAt;
 
     /**
-     * Historical only (#2595): posting keys never expire, new rows carry null, and nothing reads or deletes by it. Rows
-     * written before V28 keep the value they were given; they are honoured all the same.
+     * Null for a posting key, which never expires (#2595); the end of the window for a REST submission's content-hash
+     * key (24 hours, #2207). Nothing deletes a row. A posting key written before V28 keeps the expiry it was given and
+     * is honoured all the same ({@code IdempotencyService#isKeyProcessed} ignores it).
      */
     @Column
     private Instant expiresAt;

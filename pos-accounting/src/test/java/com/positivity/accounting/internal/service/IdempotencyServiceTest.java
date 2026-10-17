@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,10 +24,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("IdempotencyService Unit Tests")
 class IdempotencyServiceTest {
 
+    private static final java.time.Clock TEST_CLOCK =
+            java.time.Clock.fixed(Instant.parse("2026-10-17T12:00:00Z"), java.time.ZoneOffset.UTC);
+
     @Mock
     private IdempotencyKeyRepository repository;
 
-    @InjectMocks
     private IdempotencyServiceImpl service;
 
     private String testKeyValue;
@@ -36,6 +37,7 @@ class IdempotencyServiceTest {
 
     @BeforeEach
     void setUp() {
+        service = new IdempotencyServiceImpl(repository, TEST_CLOCK);
         testKeyValue = "test-key-" + UUID.fromString("00000000-0000-0000-0000-000000000001");
         testInvoiceId = UUID.fromString("00000000-0000-0000-0000-000000000001");
     }
@@ -69,6 +71,37 @@ class IdempotencyServiceTest {
 
         assertThat(service.isKeyProcessed(testKeyValue)).isFalse();
         verify(repository).findByKeyValue(testKeyValue);
+    }
+
+    @Test
+    @DisplayName("REST window: a windowed key is active inside its window and inactive after it (#2207)")
+    void windowedKeyExpires() {
+        IdempotencyKey inside = new IdempotencyKey(testKeyValue, testInvoiceId);
+        inside.setExpiresAt(Instant.now(TEST_CLOCK).plusSeconds(60));
+        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(inside));
+        assertThat(service.isKeyActive(testKeyValue)).isTrue();
+
+        IdempotencyKey past = new IdempotencyKey(testKeyValue, testInvoiceId);
+        past.setExpiresAt(Instant.now(TEST_CLOCK).minusSeconds(1));
+        when(repository.findByKeyValue(testKeyValue)).thenReturn(Optional.of(past));
+        assertThat(service.isKeyActive(testKeyValue)).isFalse();
+        assertThat(service.isKeyProcessed(testKeyValue))
+                .as("a posting key's presence check ignores any expiry")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("registerKey with a window stores its end (#2207)")
+    void registerKey_withWindow_storesExpiry() {
+        when(repository.saveAndFlush(any(IdempotencyKey.class))).thenAnswer(invocation -> {
+            IdempotencyKey saved = invocation.getArgument(0);
+            assertThat(saved.getExpiresAt()).isEqualTo(Instant.now(TEST_CLOCK).plus(java.time.Duration.ofHours(24)));
+            return saved;
+        });
+
+        service.registerKey(testKeyValue, testInvoiceId, java.time.Duration.ofHours(24));
+
+        verify(repository).saveAndFlush(any(IdempotencyKey.class));
     }
 
     @Test
