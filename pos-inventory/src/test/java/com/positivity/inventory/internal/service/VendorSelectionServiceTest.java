@@ -1,17 +1,27 @@
 package com.positivity.inventory.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.positivity.inventory.internal.entity.DistributorNormalizedInventory;
 import com.positivity.inventory.internal.entity.NormalizedAvailability;
+import com.positivity.inventory.internal.enums.FeedVendorType;
 import com.positivity.inventory.internal.enums.SuggestedVendorType;
+import com.positivity.inventory.internal.enums.VendorStatus;
 import com.positivity.inventory.internal.repository.DistributorNormalizedInventoryRepository;
 import com.positivity.inventory.internal.repository.NormalizedAvailabilityRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,8 +48,35 @@ class VendorSelectionServiceTest {
     @Mock
     private DistributorNormalizedInventoryRepository distributorNormalizedInventoryRepository;
 
+    @Mock
+    private VendorFeedMappingService vendorFeedMappingService;
+
     @InjectMocks
     private VendorSelectionService vendorSelectionService;
+
+    /** CAP:550 S36 (#2525): by default every feed vendor is mapped to an ACTIVE pos-supplier vendor. */
+    @BeforeEach
+    void mapEveryFeedVendor() {
+        lenient()
+                .when(vendorFeedMappingService.resolveAll(any(FeedVendorType.class), anyCollection()))
+                .thenAnswer(inv -> {
+                    FeedVendorType type = inv.getArgument(0);
+                    Collection<String> refs = inv.getArgument(1);
+                    Map<String, VendorFeedMappingService.ResolvedFeedVendor> out = new HashMap<>();
+                    for (String ref : refs) {
+                        out.put(FeedVendorType.canonical(ref), activeVendor(ref));
+                    }
+                    return out;
+                });
+    }
+
+    private static VendorFeedMappingService.ResolvedFeedVendor activeVendor(String ref) {
+        return new VendorFeedMappingService.ResolvedFeedVendor(
+                UUID.nameUUIDFromBytes(ref.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                "V-" + ref.substring(ref.length() - 4),
+                "Vendor " + ref,
+                VendorStatus.ACTIVE);
+    }
 
     private static NormalizedAvailability manufacturerRow(
             UUID manufacturerId, int availableQty, Integer leadMax, BigDecimal price, Instant asOf) {
@@ -94,9 +131,11 @@ class VendorSelectionServiceTest {
         var selection = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
 
         assertThat(selection.chosen()).isNotNull();
-        assertThat(selection.chosen().vendorRefId()).isEqualTo(VENDOR_A);
-        assertThat(selection.selectionReason()).contains("MANUFACTURER " + VENDOR_A + ": avail 40>=12, lead 5d");
-        assertThat(selection.selectionReason()).contains("beat MANUFACTURER " + VENDOR_B + ": avail 8<12, lead 1d");
+        assertThat(selection.chosen().feedVendorRef()).isEqualTo(VENDOR_A.toString());
+        assertThat(selection.selectionReason())
+                .contains("MANUFACTURER " + VENDOR_A + " (vendor V-0001): avail 40>=12, lead 5d");
+        assertThat(selection.selectionReason())
+                .contains("beat MANUFACTURER " + VENDOR_B + " (vendor V-0002): avail 8<12, lead 1d");
     }
 
     @Test
@@ -110,7 +149,7 @@ class VendorSelectionServiceTest {
         var selection = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
 
         assertThat(selection.chosen().sourceType()).isEqualTo(SuggestedVendorType.DISTRIBUTOR);
-        assertThat(selection.chosen().vendorRefId()).isEqualTo(VENDOR_B);
+        assertThat(selection.chosen().feedVendorRef()).isEqualTo(VENDOR_B.toString());
         assertThat(selection.selectionReason()).startsWith("DISTRIBUTOR " + VENDOR_B);
     }
 
@@ -125,7 +164,7 @@ class VendorSelectionServiceTest {
 
         var selection = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
 
-        assertThat(selection.chosen().vendorRefId()).isEqualTo(VENDOR_B);
+        assertThat(selection.chosen().feedVendorRef()).isEqualTo(VENDOR_B.toString());
         assertThat(selection.chosen().unitCostMinor()).isEqualTo(499L);
 
         // And between two priced vendors the cheaper wins.
@@ -134,8 +173,8 @@ class VendorSelectionServiceTest {
                         manufacturerRow(VENDOR_A, 40, 5, new BigDecimal("5.49"), asOf),
                         manufacturerRow(VENDOR_B, 40, 5, new BigDecimal("4.99"), asOf)),
                 List.of());
-        assertThat(vendorSelectionService.selectVendor(PRODUCT_ID, 12).chosen().vendorRefId())
-                .isEqualTo(VENDOR_B);
+        assertThat(vendorSelectionService.selectVendor(PRODUCT_ID, 12).chosen().feedVendorRef())
+                .isEqualTo(VENDOR_B.toString());
     }
 
     @Test
@@ -151,9 +190,9 @@ class VendorSelectionServiceTest {
         var first = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
         var second = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
 
-        assertThat(first.chosen().vendorRefId()).isEqualTo(VENDOR_A);
+        assertThat(first.chosen().feedVendorRef()).isEqualTo(VENDOR_A.toString());
         assertThat(first.chosen().sourceType()).isEqualTo(SuggestedVendorType.DISTRIBUTOR);
-        assertThat(second.chosen().vendorRefId()).isEqualTo(VENDOR_A); // repeatable
+        assertThat(second.chosen().feedVendorRef()).isEqualTo(VENDOR_A.toString()); // repeatable
     }
 
     @Test
@@ -168,7 +207,8 @@ class VendorSelectionServiceTest {
 
         var selection = vendorSelectionService.selectVendor(PRODUCT_ID, 50);
 
-        assertThat(selection.chosen().vendorRefId()).isEqualTo(VENDOR_A); // shortest lead among insufficient
+        assertThat(selection.chosen().feedVendorRef())
+                .isEqualTo(VENDOR_A.toString()); // shortest lead among insufficient
         assertThat(selection.selectionReason()).contains("avail 8<50");
         assertThat(selection.selectionReason()).contains("no candidate covers need 50");
         assertThat(selection.selectionReason()).contains("best lead time chosen despite shortfall");
@@ -194,8 +234,8 @@ class VendorSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("distributor rows with non-UUID ids are excluded — they cannot be PO vendors")
-    void nonUuidDistributorExcluded() {
+    @DisplayName("S36: a non-UUID distributor id is a candidate once mapped; it wins on every criterion here")
+    void nonUuidDistributorIsEligible() {
         Instant asOf = Instant.parse("2026-07-01T00:00:00Z");
         feeds(
                 List.of(manufacturerRow(VENDOR_B, 8, 9, new BigDecimal("4.99"), asOf)),
@@ -203,8 +243,9 @@ class VendorSelectionServiceTest {
 
         var selection = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
 
-        // The non-UUID distributor would have won on every criterion — it must be absent.
-        assertThat(selection.chosen().vendorRefId()).isEqualTo(VENDOR_B);
+        // Before #2525 the free-text id was dropped (it could not be a PO vendor); the mapping key is the feed's text.
+        assertThat(selection.chosen().feedVendorRef()).isEqualTo("ACME-DIST");
+        assertThat(selection.chosen().sourceType()).isEqualTo(SuggestedVendorType.DISTRIBUTOR);
     }
 
     @Test
@@ -225,5 +266,60 @@ class VendorSelectionServiceTest {
 
         assertThat(selection.chosen()).isNull();
         assertThat(selection.selectionReason()).contains("not a catalog product UUID");
+    }
+
+    // ---- CAP:550 S36 (#2525): only mapped, active vendors are candidates ----
+
+    @Test
+    @DisplayName("S36: an unmapped feed vendor is skipped and named; the mapped one wins")
+    void unmappedFeedVendorIsSkippedAndNamed() {
+        Instant now = Instant.parse("2026-10-17T12:00:00Z");
+        when(normalizedAvailabilityRepository.findByProductIdOrderByAsOfDesc(PRODUCT_ID))
+                .thenReturn(List.of(
+                        manufacturerRow(VENDOR_A, 40, 5, new BigDecimal("1.00"), now),
+                        manufacturerRow(VENDOR_B, 80, 1, new BigDecimal("1.00"), now)));
+        when(vendorFeedMappingService.resolveAll(eq(FeedVendorType.MANUFACTURER), anyCollection()))
+                .thenReturn(Map.of(VENDOR_A.toString(), activeVendor(VENDOR_A.toString())));
+
+        VendorSelectionService.VendorSelection selection = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
+
+        assertThat(selection.chosen().feedVendorRef()).isEqualTo(VENDOR_A.toString());
+        assertThat(selection.chosen().vendorNumber()).isEqualTo("V-0001");
+        assertThat(selection.selectionReason()).contains("skipped MANUFACTURER " + VENDOR_B + ": no vendor mapping");
+    }
+
+    @Test
+    @DisplayName("S36: a non-UUID distributor id is eligible once mapped")
+    void nonUuidDistributorIsEligibleWhenMapped() {
+        when(normalizedAvailabilityRepository.findByProductIdOrderByAsOfDesc(PRODUCT_ID))
+                .thenReturn(List.of());
+        when(distributorNormalizedInventoryRepository.findByProductId(PRODUCT_ID))
+                .thenReturn(List.of(distributorRow("DIST-001", 30, 2)));
+
+        VendorSelectionService.VendorSelection selection = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
+
+        assertThat(selection.chosen()).isNotNull();
+        assertThat(selection.chosen().feedVendorRef()).isEqualTo("DIST-001");
+        assertThat(selection.chosen().sourceType()).isEqualTo(SuggestedVendorType.DISTRIBUTOR);
+    }
+
+    @Test
+    @DisplayName("S36: an inactive vendor is skipped; with no eligible candidate the selection is vendor-less")
+    void inactiveVendorLeavesNoEligibleCandidate() {
+        when(normalizedAvailabilityRepository.findByProductIdOrderByAsOfDesc(PRODUCT_ID))
+                .thenReturn(List.of(manufacturerRow(
+                        VENDOR_A, 40, 5, new BigDecimal("1.00"), Instant.parse("2026-10-17T12:00:00Z"))));
+        when(vendorFeedMappingService.resolveAll(eq(FeedVendorType.MANUFACTURER), anyCollection()))
+                .thenReturn(Map.of(
+                        VENDOR_A.toString(),
+                        new VendorFeedMappingService.ResolvedFeedVendor(
+                                UUID.randomUUID(), "V-0001", "Vendor A", VendorStatus.INACTIVE)));
+
+        VendorSelectionService.VendorSelection selection = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
+
+        assertThat(selection.chosen()).isNull();
+        assertThat(selection.selectionReason())
+                .startsWith("no eligible vendor")
+                .contains("skipped MANUFACTURER " + VENDOR_A + ": vendor V-0001 inactive");
     }
 }

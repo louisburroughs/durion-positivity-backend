@@ -1671,13 +1671,13 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 108")
+    @DisplayName("CATALOG_VERSION is 109")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(108);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(109);
     }
 
     @Test
-    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 566")
+    @DisplayName("AUTHORITY_BY_BIT covers all bits 241 through 567")
     void authorityByBitCoversNewEntries() {
         // batch-2: previously missing (bits 241-261)
         assertThat(GatewayPermissionCatalog.authorityForBit(241)).isEqualTo("PERM_accounting:events:reprocess");
@@ -2055,7 +2055,10 @@ class SecurityGatewayConfigTest {
         // catalog v108 (#2619): the reading-tier catalog, PLATFORM_ADMIN only
         assertThat(GatewayPermissionCatalog.authorityForBit(565)).isEqualTo("PERM_platform:reading_tier:manage");
         assertThat(GatewayPermissionCatalog.authorityForBit(566)).isEqualTo("PERM_platform:reading_tier:read");
-        assertThat(GatewayPermissionCatalog.authorityForBit(567)).isNull();
+        // catalog v109 (#2525): maintain the feed vendor to pos-supplier vendor mapping (bit 567)
+        assertThat(GatewayPermissionCatalog.authorityForBit(567))
+                .isEqualTo("PERM_inventory:vendor_feed_mapping:manage");
+        assertThat(GatewayPermissionCatalog.authorityForBit(568)).isNull();
     }
 
     @Test

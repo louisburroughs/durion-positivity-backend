@@ -28,12 +28,25 @@ public class ReplenishmentScanScheduler {
     private final TenantIterator tenantIterator;
 
     private final ReplenishmentService replenishmentService;
+    private final PurchaseSuggestionOrderAttentionService orderAttentionService;
 
     @Scheduled(
             fixedDelayString = "${pos.inventory.replenishment.scan.interval-ms:3600000}",
             initialDelayString = "${pos.inventory.replenishment.scan.initial-delay-ms:600000}")
     public void runScheduledScan() {
-        tenantIterator.forEachActiveTenant(tenantId -> runScanForTenant());
+        tenantIterator.forEachActiveTenant(tenantId -> {
+            runScanForTenant();
+            publishOrderAttention(tenantId);
+        });
+    }
+
+    /** CAP:550 S36 (#2525, PROPOSED 9): the converted-but-refusable gauge, per tenant, after each scan. */
+    private void publishOrderAttention(java.util.UUID tenantId) {
+        try {
+            orderAttentionService.publishAfterScan(tenantId);
+        } catch (Exception ex) {
+            log.warn("Order-attention gauge not published for tenant {}: {}", tenantId, ex.getMessage());
+        }
     }
 
     private void runScanForTenant() {

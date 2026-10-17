@@ -244,7 +244,10 @@ class ShortageResolutionServiceImplTest {
         when(skuCostStateRepository.findByStockItemId(SKU)).thenReturn(Optional.of(costState("20.00")));
         VendorSelectionService.VendorCandidate vendor = new VendorSelectionService.VendorCandidate(
                 com.positivity.inventory.internal.enums.SuggestedVendorType.MANUFACTURER,
+                UUID.randomUUID().toString(),
                 UUID.randomUUID(),
+                "V-1",
+                "Vendor One",
                 100,
                 5,
                 2500L,

@@ -43,8 +43,18 @@ class PurchaseSuggestionScanTest {
 
     private static final String ACTOR = "f4-test";
 
+    /** CAP:550 S36 (#2525): the test profile wires no outbox; the real publisher would refuse the conversion. */
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.positivity.inventory.internal.service.PurchaseOrderCommandPublisher purchaseOrderCommandPublisher;
+
     @Autowired
     private ReplenishmentService replenishmentService;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.ExtSupplierVendorReplicaRepository vendorCopyRepository;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.VendorFeedMappingRepository vendorFeedMappingRepository;
 
     @Autowired
     private PurchaseSuggestionService purchaseSuggestionService;
@@ -110,6 +120,11 @@ class PurchaseSuggestionScanTest {
             Integer minOrderQty,
             int packSize) {
         Instant asOf = Instant.now();
+        FeedVendorMappings.mapActive(
+                vendorCopyRepository,
+                vendorFeedMappingRepository,
+                com.positivity.inventory.internal.enums.FeedVendorType.MANUFACTURER,
+                manufacturerId.toString());
         return normalizedAvailabilityRepository.save(NormalizedAvailability.builder()
                 .productId(productId)
                 .manufacturerId(manufacturerId)
@@ -161,7 +176,7 @@ class PurchaseSuggestionScanTest {
         assertThat(suggestion.getStatus()).isEqualTo(PurchaseSuggestionStatus.SUGGESTED);
         assertThat(suggestion.getSuggestedQuantity()).isEqualTo(17); // max 20 − on-hand 3
         assertThat(suggestion.getSuggestedVendorType()).isEqualTo(SuggestedVendorType.MANUFACTURER);
-        assertThat(suggestion.getVendorRefId()).isEqualTo(manufacturerId);
+        assertThat(suggestion.getFeedVendorRef()).isEqualTo(manufacturerId.toString());
         assertThat(suggestion.getUnitCostMinor()).isEqualTo(499L);
         assertThat(suggestion.getUnitCostCurrency()).isEqualTo("USD");
         assertThat(suggestion.getLeadTimeDays()).isEqualTo(5);

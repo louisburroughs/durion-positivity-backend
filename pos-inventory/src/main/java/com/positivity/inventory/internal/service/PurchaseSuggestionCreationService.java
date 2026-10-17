@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -125,8 +126,11 @@ public class PurchaseSuggestionCreationService {
             return false;
         }
         int previousQuantity = suggestion.getSuggestedQuantity() != null ? suggestion.getSuggestedQuantity() : 0;
+        UUID previousVendorId = suggestion.getVendorId();
         populate(suggestion, policy, rawNeed, fallbackLeadTimeDays);
-        if (suggestion.getSuggestedQuantity() == previousQuantity) {
+        // CAP:550 S36 (#2525): a changed vendor counts as a refresh, not only a changed quantity.
+        if (suggestion.getSuggestedQuantity() == previousQuantity
+                && Objects.equals(previousVendorId, suggestion.getVendorId())) {
             return false;
         }
         purchaseSuggestionRepository.save(suggestion);
@@ -185,7 +189,8 @@ public class PurchaseSuggestionCreationService {
                 chosen != null ? chosen.minOrderQty() : null,
                 chosen != null ? chosen.packSize() : null));
         suggestion.setSuggestedVendorType(chosen != null ? chosen.sourceType() : null);
-        suggestion.setVendorRefId(chosen != null ? chosen.vendorRefId() : null);
+        suggestion.setFeedVendorRef(chosen != null ? chosen.feedVendorRef() : null);
+        suggestion.setVendorId(chosen != null ? chosen.vendorId() : null);
         suggestion.setUnitCostMinor(chosen != null ? chosen.unitCostMinor() : null);
         suggestion.setUnitCostCurrency(chosen != null ? chosen.unitCostCurrency() : null);
         suggestion.setVendorPackSize(chosen != null ? chosen.packSize() : null);
@@ -217,7 +222,7 @@ public class PurchaseSuggestionCreationService {
     private void logOutcome(String action, PurchaseSuggestion suggestion, long rawNeed) {
         log.info(
                 "Purchase suggestion {}: suggestionId={} policyId={} sku={} locationId={} rawNeed={}"
-                        + " suggestedQuantity={} vendorType={} vendorRefId={} unitCostMinor={} leadTimeDays={}"
+                        + " suggestedQuantity={} vendorType={} feedVendorRef={} unitCostMinor={} leadTimeDays={}"
                         + " earliestExpectedDate={} selectionReason=[{}]",
                 action,
                 suggestion.getSuggestionId(),
@@ -227,7 +232,7 @@ public class PurchaseSuggestionCreationService {
                 rawNeed,
                 suggestion.getSuggestedQuantity(),
                 suggestion.getSuggestedVendorType(),
-                suggestion.getVendorRefId(),
+                suggestion.getFeedVendorRef(),
                 suggestion.getUnitCostMinor(),
                 suggestion.getLeadTimeDays(),
                 suggestion.getEarliestExpectedDate(),

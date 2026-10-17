@@ -32,7 +32,8 @@ import org.jspecify.annotations.Nullable;
  * sequence, and the requester learns it from the fact.
  *
  * @param purchaseOrderId      identity the order will be created with, minted by the requester
- * @param vendorId             vendor to order from
+ * @param vendorId             vendor to order from: the pos-supplier vendor id (CAP:550 S36, #2525: pos-inventory
+ *                             resolves it through its feed mapping and its vendor copy and sends only an ACTIVE one)
  * @param currency             ISO 4217 currency for the order's monetary figures
  * @param shipToLocationId     receiving location
  * @param poDate               order date

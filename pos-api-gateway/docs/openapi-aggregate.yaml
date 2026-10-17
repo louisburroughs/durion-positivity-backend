@@ -963,6 +963,12 @@ paths:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1revaluations~1{revaluationId}~1approve
   /v1/inventory/valuation/revaluations/{revaluationId}/reject:
     $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1valuation~1revaluations~1{revaluationId}~1reject
+  /v1/inventory/vendor-feed-mappings:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1vendor-feed-mappings
+  /v1/inventory/vendor-feed-mappings/unmapped:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1vendor-feed-mappings~1unmapped
+  /v1/inventory/vendor-feed-mappings/{mappingId}:
+    $ref: ../../pos-inventory/openapi.yaml#/paths/~1v1~1inventory~1vendor-feed-mappings~1{mappingId}
   /v1/billing/auth/elevate:
     $ref: ../../pos-invoice/openapi.yaml#/paths/~1v1~1billing~1auth~1elevate
   /v1/billing/rules/{partyId}:

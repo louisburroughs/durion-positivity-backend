@@ -175,6 +175,12 @@ pos:
       # this consumer group is its own and unrelated types are skipped, not applied.
       supplier-events-topic: ${POS_INVENTORY_SUPPLIER_EVENTS_TOPIC:supplier.events.v1}
       supplier-events-consumer-group: ${POS_INVENTORY_SUPPLIER_EVENTS_CONSUMER_GROUP:pos-inventory-supplier-events}
+      # The same topic also feeds the vendor copy (CAP:550 S36, #2525): supplier.vendor.updated facts name the
+      # pos-supplier vendors purchase suggestions resolve to. The manifest check counts every fact the listener
+      # marks processed; drift asks pos-supplier to replay the window on supplier-commands-topic.
+      supplier-manifest-topic: ${POS_INVENTORY_SUPPLIER_MANIFEST_TOPIC:supplier.manifest.v1}
+      supplier-manifest-consumer-group: ${POS_INVENTORY_SUPPLIER_MANIFEST_CONSUMER_GROUP:pos-inventory-supplier-manifests}
+      supplier-commands-topic: ${POS_INVENTORY_SUPPLIER_COMMANDS_TOPIC:supplier.commands.v1}
       # Own fact publishing (ADR-0044 §6, #899): availability / storage-location on-hand /
       # lead-time facts via the transactional outbox, with manifests and replay commands.
       events-topic: ${POS_INVENTORY_EVENTS_TOPIC:inventory.events.v1}
@@ -188,6 +194,12 @@ pos:
     location:
       # Window the manual sync endpoint asks pos-location to re-emit (owner caps lookback).
       replay-lookback: ${POS_INVENTORY_LOCATION_REPLAY_LOOKBACK:P30D}
+    purchase-suggestion:
+      # CAP:550 S36 (#2525): a CONVERTED suggestion whose order pos-order has not placed (no row in the
+      # purchase-order copy) this long after conversion reads orderAttention = ORDER_NOT_PLACED.
+      order-placement-grace: ${POS_INVENTORY_PURCHASE_SUGGESTION_ORDER_PLACEMENT_GRACE:PT1H}
+      # How far back the post-scan order-attention gauge looks at CONVERTED suggestions; reads assess any row.
+      attention-lookback: ${POS_INVENTORY_PURCHASE_SUGGESTION_ATTENTION_LOOKBACK:P90D}
     replenishment:
       # Last-resort lead time for the forecast-aware orderpoint trigger (odoo-parity F2,
       # #1040; decision D-4). Precedence: policy override (F3) -> vendor-feed MAX estimate

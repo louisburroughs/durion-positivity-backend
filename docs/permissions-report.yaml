@@ -1,9 +1,9 @@
-generatedAt: "2026-10-17T15:19:26.318104+00:00"
+generatedAt: "2026-10-17T17:15:51.438830+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 533
-  uniquePermissionCount: 533
+  permissionCount: 534
+  uniquePermissionCount: 534
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -392,7 +392,7 @@ manifests:
     domain: "inventory"
     serviceName: "pos-inventory"
     version: "1.0"
-    permissionCount: 57
+    permissionCount: 58
     permissions:
       - name: "inventory:adjustment:approve"
         description: "Approve and post an adjustment to the ledger (creates ADJUSTMENT_IN/OUT events)"
@@ -508,6 +508,8 @@ manifests:
         description: "Adjust valuation"
       - name: "inventory:valuation:view"
         description: "View valuation"
+      - name: "inventory:vendor_feed_mapping:manage"
+        description: "Manage vendor feed mapping"
   - module: "pos-invoice"
     path: "pos-invoice/src/main/resources/permissions.yaml"
     domain: "invoice"
@@ -2606,6 +2608,12 @@ permissions:
     source: "pos-inventory/src/main/resources/permissions.yaml"
   - name: "inventory:valuation:view"
     description: "View valuation"
+    domain: "inventory"
+    serviceName: "pos-inventory"
+    module: "pos-inventory"
+    source: "pos-inventory/src/main/resources/permissions.yaml"
+  - name: "inventory:vendor_feed_mapping:manage"
+    description: "Manage vendor feed mapping"
     domain: "inventory"
     serviceName: "pos-inventory"
     module: "pos-inventory"
