@@ -453,10 +453,15 @@ class GLMappingResolverTest {
         }
 
         private MappingKey key(boolean active) {
+            return key(active, category(true));
+        }
+
+        private MappingKey key(boolean active, PostingCategory category) {
             MappingKey key = new MappingKey();
             key.setMappingKeyId(mappingKeyId);
             key.setKeyName("UNDEPOSITED_FUNDS");
             key.setIsActive(active);
+            key.setPostingCategory(category);
             return key;
         }
 
@@ -492,7 +497,8 @@ class GLMappingResolverTest {
         @Test
         @DisplayName("by id: an inactive posting category is unresolved before any mapping is read")
         void inactiveCategoryById() {
-            when(postingCategoryRepository.findById(postingCategoryId)).thenReturn(Optional.of(category(false)));
+            when(mappingKeyRepository.findWithCategoryById(mappingKeyId))
+                    .thenReturn(Optional.of(key(true, category(false))));
 
             assertThatThrownBy(
                             () -> resolver.resolveGLAccount(postingCategoryId, mappingKeyId, transactionDate, Map.of()))
@@ -503,14 +509,28 @@ class GLMappingResolverTest {
         }
 
         @Test
-        @DisplayName("by id: an inactive mapping key is unresolved; getEffectiveAccount agrees")
+        @DisplayName("by id (the rule-based posting path): an inactive mapping key is unresolved with dimensions too")
         void inactiveKeyById() {
-            when(postingCategoryRepository.findById(postingCategoryId)).thenReturn(Optional.of(category(true)));
-            when(mappingKeyRepository.findById(mappingKeyId)).thenReturn(Optional.of(key(false)));
+            when(mappingKeyRepository.findWithCategoryById(mappingKeyId)).thenReturn(Optional.of(key(false)));
 
-            assertThatThrownBy(() -> resolver.getEffectiveAccount(postingCategoryId, mappingKeyId, transactionDate))
+            assertThatThrownBy(() -> resolver.resolveGLAccount(
+                            postingCategoryId, mappingKeyId, transactionDate, Map.of("location_id", "L1")))
                     .isInstanceOf(GLMappingNotConfiguredException.class)
                     .hasMessageContaining("Mapping key inactive");
+            verify(mappingRepository, never())
+                    .findEffectiveMapping(any(UUID.class), any(UUID.class), any(LocalDateTime.class));
+        }
+
+        @Test
+        @DisplayName("getEffectiveAccount is an audit read: a retired key still answers the account it posted to")
+        void getEffectiveAccountIgnoresTheActiveFlag() {
+            UUID glAccountId = UUID.fromString("00000000-0000-0000-0000-000000001090");
+            when(mappingRepository.findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate))
+                    .thenReturn(Optional.of(createMapping(glAccountId, null)));
+
+            assertThat(resolver.getEffectiveAccount(postingCategoryId, mappingKeyId, transactionDate))
+                    .isEqualTo(glAccountId);
+            verify(mappingKeyRepository, never()).findWithCategoryById(any());
         }
 
         @Test
@@ -529,8 +549,7 @@ class GLMappingResolverTest {
         @Test
         @DisplayName("validateMapping refuses a mapping against an inactive key")
         void validateMappingRefusesInactiveKey() {
-            when(postingCategoryRepository.findById(postingCategoryId)).thenReturn(Optional.of(category(true)));
-            when(mappingKeyRepository.findById(mappingKeyId)).thenReturn(Optional.of(key(false)));
+            when(mappingKeyRepository.findWithCategoryById(mappingKeyId)).thenReturn(Optional.of(key(false)));
             GLMapping mapping = createMapping(UUID.fromString("00000000-0000-0000-0000-000000001090"), null);
 
             assertThatThrownBy(() -> resolver.validateMapping(mapping))

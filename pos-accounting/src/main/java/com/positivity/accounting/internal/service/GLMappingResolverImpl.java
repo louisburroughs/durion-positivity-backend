@@ -158,6 +158,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
                 .orElseThrow(() ->
                         new GLMappingNotConfiguredException("Posting category not configured: " + postingCategoryName));
         if (inactive(category)) {
+            log.warn("GL mapping unresolved: posting category {} is inactive", postingCategoryName);
             throw new GLMappingNotConfiguredException("Posting category inactive: " + postingCategoryName);
         }
 
@@ -166,6 +167,7 @@ public class GLMappingResolverImpl implements GLMappingResolver {
                 .orElseThrow(() -> new GLMappingNotConfiguredException(
                         "Mapping key not configured: " + postingCategoryName + "/" + mappingKeyName));
         if (inactive(mappingKey)) {
+            log.warn("GL mapping unresolved: mapping key {}/{} is inactive", postingCategoryName, mappingKeyName);
             throw new GLMappingNotConfiguredException(
                     "Mapping key inactive: " + postingCategoryName + "/" + mappingKeyName);
         }
@@ -174,11 +176,12 @@ public class GLMappingResolverImpl implements GLMappingResolver {
     }
 
     /**
-     * An inactive posting category or mapping key is unresolved (#2612): it answers exactly as a missing one, 422
-     * {@code GL_MAPPING_NOT_CONFIGURED} (#2601, one code for every case). Deactivation already requires that no
-     * mapping is active, so this closes the gap of a mapping created afterwards against the retired configuration.
-     * A petty-expense category's deactivation keeps its mapping key active on purpose, so movements recorded before
-     * it still post at close (S15 §4.6, never retroactive); that path is not affected.
+     * An inactive posting category or mapping key is unresolved on every posting path (#2612): it answers exactly as
+     * a missing one, 422 {@code GL_MAPPING_NOT_CONFIGURED} (#2601, one code for every case), whatever the posting
+     * date, so a back-dated posting through retired configuration is refused too: deactivation (which refuses while a
+     * mapping is effective today) is the operator's statement that nothing posts there any more. One read: the key
+     * with its category. A petty-expense category's deactivation keeps its mapping key active on purpose, so movements
+     * recorded before it still post at close (S15 §4.6, never retroactive); that path is not affected.
      */
     private void requireActive(UUID postingCategoryId, UUID mappingKeyId) {
         inactiveReason(postingCategoryId, mappingKeyId).ifPresent(reason -> {
@@ -188,17 +191,16 @@ public class GLMappingResolverImpl implements GLMappingResolver {
     }
 
     private Optional<String> inactiveReason(UUID postingCategoryId, UUID mappingKeyId) {
-        Optional<String> category = postingCategoryRepository
-                .findById(postingCategoryId)
-                .filter(GLMappingResolverImpl::inactive)
-                .map(c -> "Posting category inactive: " + c.getCategoryName());
-        if (category.isPresent()) {
-            return category;
-        }
-        return mappingKeyRepository
-                .findById(mappingKeyId)
-                .filter(GLMappingResolverImpl::inactive)
-                .map(k -> "Mapping key inactive: " + k.getKeyName());
+        return mappingKeyRepository.findWithCategoryById(mappingKeyId).flatMap(key -> {
+            PostingCategory category = key.getPostingCategory();
+            if (category != null && inactive(category)) {
+                return Optional.of("Posting category inactive: " + category.getCategoryName());
+            }
+            if (inactive(key)) {
+                return Optional.of("Mapping key inactive: " + key.getKeyName());
+            }
+            return Optional.empty();
+        });
     }
 
     private static boolean inactive(PostingCategory category) {
@@ -434,7 +436,8 @@ public class GLMappingResolverImpl implements GLMappingResolver {
      */
     @Override
     public UUID getEffectiveAccount(UUID postingCategoryId, UUID mappingKeyId, LocalDateTime transactionDate) {
-        requireActive(postingCategoryId, mappingKeyId);
+        // An audit read, deliberately without the active check (#2612): it answers which account a key posted to on
+        // a date, which stays a fact after the key is retired. Posting goes through resolveGLAccount.
         return mappingRepository
                 .findEffectiveMapping(postingCategoryId, mappingKeyId, transactionDate)
                 .map(GLMapping::getGlAccountId)
