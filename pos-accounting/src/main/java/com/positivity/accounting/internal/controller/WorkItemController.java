@@ -53,7 +53,11 @@ public class WorkItemController {
                 "reporting:view:financial-statements",
                 "accounting:je:post"
             })
-    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.AP_APPROVE + "','" + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "','" + AccountingPermissions.AP_PAY + "','" + AccountingPermissions.PAYMENT_APPLY + "','" + AccountingPermissions.DEPOSIT_CREATE + "','" + AccountingPermissions.RECONCILIATION_ADJUST + "','" + AccountingPermissions.RECONCILIATION_APPROVE + "','" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "','" + AccountingPermissions.JE_POST + "')")
+    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.AP_APPROVE + "','"
+            + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "','" + AccountingPermissions.AP_PAY + "','"
+            + AccountingPermissions.PAYMENT_APPLY + "','" + AccountingPermissions.DEPOSIT_CREATE + "','"
+            + AccountingPermissions.RECONCILIATION_ADJUST + "','" + AccountingPermissions.RECONCILIATION_APPROVE + "','"
+            + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "','" + AccountingPermissions.JE_POST + "')")
     @Operation(
             operationId = "listWorkItems",
             summary = "List Work Items",
@@ -114,7 +118,9 @@ public class WorkItemController {
                 "accounting:ap:approve",
                 "accounting:ap:approve_over_limit"
             })
-    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.PAYMENT_APPLY + "','" + AccountingPermissions.PAYMENT_REVERSE + "','" + AccountingPermissions.RECONCILIATION_VIEW + "','" + AccountingPermissions.AP_APPROVE + "','" + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "')")
+    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.PAYMENT_APPLY + "','"
+            + AccountingPermissions.PAYMENT_REVERSE + "','" + AccountingPermissions.RECONCILIATION_VIEW + "','"
+            + AccountingPermissions.AP_APPROVE + "','" + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "')")
     @Operation(
             operationId = "listAutomaticWorkItems",
             summary = "List Work Done Automatically",
