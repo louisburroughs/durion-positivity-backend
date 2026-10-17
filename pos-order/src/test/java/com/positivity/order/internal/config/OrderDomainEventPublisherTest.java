@@ -96,7 +96,8 @@ class OrderDomainEventPublisherTest {
 
     @BeforeEach
     void setUp() {
-        publisher = new OrderDomainEventPublisher(Clock.fixed(NOW, ZoneOffset.UTC), outboxProvider);
+        publisher = new OrderDomainEventPublisher(
+                Clock.fixed(NOW, ZoneOffset.UTC), outboxProvider, new FunctionalCurrency("USD"));
         when(outboxProvider.getIfAvailable()).thenReturn(outboxWriter);
     }
 

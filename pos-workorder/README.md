@@ -713,6 +713,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `NO_APPROVED_ITEMS` | 409 | The estimate has no approved items to promote |
 | `PURCHASE_ORDER_REQUIRED` | 422 | Commercial customer's billing rules require a purchase order that was not supplied |
 | `ESTIMATE_INCOMPLETE` | 422 | A DRAFT estimate was submitted for approval with no customer, no vehicle, no line items, or uncalculated totals (`EstimateIncompleteException`) |
+| `ESTIMATE_TAX_CURRENCY_NOT_SUPPORTED` | 422 | pos-tax refused the estimate's calculation: the functional currency (`pos.workorder.functional-currency`, `POS_WORKORDER_FUNCTIONAL_CURRENCY`, sent on every request since #2644) is not the shop's country profile's (ADR-0067 PC-9) |
+| `ESTIMATE_TAX_JURISDICTION_NOT_CONFIGURED` | 422 | pos-tax has no rates for the shop's location (#2644) |
 | `FRACTIONAL_QUANTITY_NOT_ALLOWED` | 422 | Quantity is not a whole number for a product the catalog declares indivisible |
 | `UOM_CONVERSION_UNDEFINED` | 422 | `uomCode` names no conversion row for the referenced product |
 | `SERVICE_POSITION_INVALID` | 422 | The named bay or mobile unit belongs to a different site than the workorder, is of the other resource kind (a bay named as a mobile unit, or the reverse), or is otherwise not one this workorder can be placed on. An id neither location replica holds is `503 LOCATION_REPLICATION_PENDING`, not this |

@@ -209,6 +209,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `NOT_FOUND` | 404 | Invoice, receipt, artifact, payment intent or billing rules not found |
 | `DEPOSIT_CREDIT_NOT_FOUND` | 404 | Referenced deposit credit does not exist |
 | `INVALID_STATE` | 409 | Invoice state transition is not allowed |
+| `INVOICE_TAX_CURRENCY_NOT_SUPPORTED` | 422 | pos-tax refused the calculation: the tenant's functional currency (`pos.invoice.functional-currency`) is not the destination country profile's (ADR-0067 PC-9; #2644) |
+| `INVOICE_TAX_JURISDICTION_NOT_CONFIGURED` | 422 | pos-tax has no rates for the invoice's destination (#2644) |
 | `CONFLICT` | 409 | General state conflict (e.g. already finalized) |
 | `INVALID_PAYMENT_STATE` | 409 | The payment intent is not in a state that allows the capture, void or refund |
 | `PAYMENT_IDEMPOTENCY_CONFLICT` | 409 | A payment idempotency key was reused with a different payload |
@@ -324,9 +326,9 @@ per country in pos-tax; there is no enum, so a new code needs no code change or 
 - **No read contract change.** No invoice or receipt endpoint, DTO or SDK exposes the breakdown or the type.
 - **Known limitation (louisburroughs/durion-positivity-backend#2644).** The tax client still sends a hard-coded `USD`
   (`InvoiceCurrencySource`), and pos-tax prices a profiled country only in that country's configured currency, so every
-  calculation for such a country is refused with 422 `CURRENCY_NOT_SUPPORTED` even once rates exist. `TaxServiceClient`
-  also does not yet translate pos-tax's 422s (`CURRENCY_NOT_SUPPORTED`, `TAX_JURISDICTION_NOT_CONFIGURED`). #2644 makes
-  the callers send the tenant's functional currency (ADR-0067 R-2/PC-2) and translate those 422s. No rate ships today, so
+  calculation sends the tenant's functional currency (`pos.invoice.functional-currency`, `POS_INVOICE_FUNCTIONAL_CURRENCY`,
+  ADR-0067 R-2; #2644), and `TaxServiceClient` translates pos-tax's 422s into 422 `INVOICE_TAX_CURRENCY_NOT_SUPPORTED` and
+  `INVOICE_TAX_JURISDICTION_NOT_CONFIGURED` (ADR-0017).
   no live invoice is affected.
 
 ## Development

@@ -548,6 +548,8 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `ORDER_CANCEL_REVIEW_REQUIRED` | 500 | The cancellation retry failed again and the order is parked at `CANCEL_REQUIRES_MANUAL_REVIEW`; `nextAction` carries the recovery |
 | `VENDOR_REPLICATION_PENDING` | 503 | The purchase order's vendor is not in pos-order's copy of the pos-supplier vendor master yet (create, approve, a vendor-changing revision, transmit); `Retry-After` is set, retry or seed the copy (ADR-0017 §1, #1994) |
 | `ORDER_TAX_UNAVAILABLE` | 503 | pos-tax could not be reached to price the order |
+| `ORDER_TAX_CURRENCY_NOT_SUPPORTED` | 422 | pos-tax refused the order's calculation: the functional currency (`pos.order.functional-currency`, sent on every request since #2644) is not the destination country profile's (ADR-0067 PC-9) |
+| `ORDER_TAX_JURISDICTION_NOT_CONFIGURED` | 422 | pos-tax has no rates for the order's location (#2644) |
 | `ORDER_INVOICING_UNAVAILABLE` | 503 | pos-invoice could not be reached to complete the order |
 | `TAX_CHECK_UNAVAILABLE` | 503 | A petty expense carried the supplier's number and pos-tax could not check it (unreachable, timed out, failed, or disagreed with pos-order's replicas); `Retry-After` is set (`pos.order.tax-check.retry-after-seconds`); nothing recorded (CAP:550 S32d) |
 | `CASH_MOVEMENT_APPROVAL_UNAVAILABLE` | 503 | pos-security-service's step-up check could not be made (unreachable, timed out, or answered anything but a result or `STEP_UP_DENIED`); `Retry-After` says when to try again (ADR-0017 §1, #2651; `pos.security-service.retry-after-seconds`, default 7 = the client's connect + read timeouts) |

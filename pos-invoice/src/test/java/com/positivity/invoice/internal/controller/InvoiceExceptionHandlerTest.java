@@ -71,6 +71,12 @@ class InvoiceExceptionHandlerTest {
                             handler.handleIllegalState(new IllegalStateException("invoice is POSTED"), request)),
                     Named.of("handleValidation", (HandlerInvocation) request -> handler.handleValidation(
                             new InvoiceRequestValidationException("workorderId is required"), request)),
+                    Named.of("handleTaxRefused", (HandlerInvocation) request -> handler.handleTaxRefused(
+                            new com.positivity.invoice.internal.exception.InvoiceTaxRefusedException(
+                                    com.positivity.invoice.internal.exception.InvoiceTaxRefusedException
+                                            .CURRENCY_NOT_SUPPORTED,
+                                    "CAD is not the profile's currency"),
+                            request)),
                     Named.of("handleManagerApprovalRequired", (HandlerInvocation)
                             request -> handler.handleManagerApprovalRequired(
                                     new ManagerApprovalRequiredException("Manager approval code required"), request)),

@@ -619,6 +619,13 @@ public class GlobalExceptionHandler {
                 HttpStatus.UNPROCESSABLE_ENTITY, EstimateIncompleteException.ERROR_CODE, ex.getMessage(), request);
     }
 
+    /** pos-tax refused the estimate's calculation (#2644): 422 with this module's deterministic code (ADR-0017). */
+    @ExceptionHandler(com.positivity.workorder.internal.exception.EstimateTaxRefusedException.class)
+    public ResponseEntity<ApiError> handleEstimateTaxRefused(
+            com.positivity.workorder.internal.exception.EstimateTaxRefusedException ex, HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.UNPROCESSABLE_ENTITY, ex.getCode(), ex.getMessage(), request);
+    }
+
     @ExceptionHandler(ChangeRequestNotFoundException.class)
     public ResponseEntity<ApiError> handleChangeRequestNotFound(
             ChangeRequestNotFoundException ex, HttpServletRequest request) {

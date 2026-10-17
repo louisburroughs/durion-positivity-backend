@@ -64,6 +64,10 @@ class EstimateSearchByQueryTest {
     @Mock
     private VehicleReferenceService vehicleReferenceService;
 
+    @org.mockito.Spy
+    private com.positivity.workorder.internal.config.FunctionalCurrency functionalCurrency =
+            new com.positivity.workorder.internal.config.FunctionalCurrency("USD");
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 

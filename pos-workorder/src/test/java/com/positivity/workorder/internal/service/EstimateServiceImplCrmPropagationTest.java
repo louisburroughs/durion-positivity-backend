@@ -103,6 +103,10 @@ class EstimateServiceImplCrmPropagationTest {
     @Mock
     private DocumentNumberAllocator documentNumberAllocator;
 
+    @org.mockito.Spy
+    private com.positivity.workorder.internal.config.FunctionalCurrency functionalCurrency =
+            new com.positivity.workorder.internal.config.FunctionalCurrency("USD");
+
     @InjectMocks
     private EstimateServiceImpl estimateService;
 

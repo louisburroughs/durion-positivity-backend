@@ -51,6 +51,10 @@ class EstimateServiceTest {
     @Spy
     Clock clock = TEST_CLOCK;
 
+    @Spy
+    private com.positivity.workorder.internal.config.FunctionalCurrency functionalCurrency =
+            new com.positivity.workorder.internal.config.FunctionalCurrency("USD");
+
     @Mock
     private EstimateRepository estimateRepository;
 

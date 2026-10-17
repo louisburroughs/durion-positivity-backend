@@ -917,6 +917,7 @@ services:
       dockerfile: Dockerfile
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      POS_INVOICE_FUNCTIONAL_CURRENCY: ${POS_INVOICE_FUNCTIONAL_CURRENCY:-${POS_FUNCTIONAL_CURRENCY:-USD}}
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_invoice_db
       # ADR-0062: the pool is the non-owner pos_app role; Flyway alone uses the owner credential.
@@ -1320,7 +1321,7 @@ services:
       <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-primary ]
       # ADR-0067 R-2 (CAP:550 S16): drawer money's functional currency, required (no default in the
       # service). Stage A interim until step A5 reads the tenant's functional currency.
-      POS_ORDER_FUNCTIONAL_CURRENCY: USD
+      POS_ORDER_FUNCTIONAL_CURRENCY: ${POS_ORDER_FUNCTIONAL_CURRENCY:-${POS_FUNCTIONAL_CURRENCY:-USD}}
       # #2584: the step-up check's own secret, shared with pos-security-service only (never the mesh
       # POS_SECURITY_API_SECRET). Unset, every drawer cash-movement approval answers 503.
       POS_SECURITY_STEP_UP_SECRET: ${POS_SECURITY_STEP_UP_SECRET:-}
@@ -1915,6 +1916,7 @@ services:
       - "8090:8080"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      POS_WORKORDER_FUNCTIONAL_CURRENCY: ${POS_WORKORDER_FUNCTIONAL_CURRENCY:-${POS_FUNCTIONAL_CURRENCY:-USD}}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GATEWAY_URL: http://pos-api-gateway:8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_workorder_db
