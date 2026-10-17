@@ -60,6 +60,11 @@ Inventory management service for the Durion Positivity ETSMS platform. Manages s
 - `POST /v1/inventory/putaway/rules` — create a putaway rule (409 if a second enabled `ANY` rule)
 - `PUT /v1/inventory/putaway/rules/{ruleId}` — full replacement of a putaway rule
 - `DELETE /v1/inventory/putaway/rules/{ruleId}` — delete a putaway rule permanently
+- `GET /v1/inventory/vendor-feed-mappings` — list the mappings from manufacturer and distributor feed vendors to pos-supplier vendors (filters: `feedType`, `vendorId`; `inventory:replenishment:manage`)
+- `GET /v1/inventory/vendor-feed-mappings/unmapped` — feed vendors that are unmapped, mapped to a vendor missing from the copy, or mapped to an inactive vendor, with product count and last report (`inventory:replenishment:manage`)
+- `POST /v1/inventory/vendor-feed-mappings` — map a feed vendor to an active pos-supplier vendor (201; `inventory:vendor_feed_mapping:manage`)
+- `PUT /v1/inventory/vendor-feed-mappings/{mappingId}` — re-point a mapping, guarded by its `version` (`inventory:vendor_feed_mapping:manage`)
+- `DELETE /v1/inventory/vendor-feed-mappings/{mappingId}` — remove a mapping (204; `inventory:vendor_feed_mapping:manage`)
 
 ## Location scope (ADR-0061, #1872)
 
@@ -515,7 +520,7 @@ skip it; either way an order event silently reached only one of them.
 
 ## Supplier availability hints (CAP-322, #1312)
 
-`SupplierStockHintEventsListener` consumes `supplier.stockreport.updated` from
+`SupplierEventsListener` consumes `supplier.stockreport.updated` from
 `supplier.events.v1` (producer #1228) into `supplier_stock_hint` — one row per
 `(vendorProfileId, article identity)` holding what that vendor last said about its own stock.
 
@@ -557,6 +562,33 @@ per vendor and never aggregated.
 
 Not in this module: publishing hints onward as an `inventory.supplier-availability.updated` fact
 for estimates. That waits on resolution being settled — see #1312.
+
+## Vendor feed mapping (CAP:550 S36, #2525)
+
+A purchase suggestion names the pos-supplier vendor the shop buys from. The manufacturer feed
+(`normalized_availability`, keyed by `manufacturerId`, a UUID) and the distributor feed
+(`distributor_normalized_inventory`, keyed by `distributorId`, free text) know their own vendors, not
+pos-supplier's, so a mapping joins them.
+
+- **The copy.** `ext_supplier_vendor` holds every pos-supplier vendor, active or inactive, with its number,
+  display name and status. `SupplierEventsListener` writes it from `supplier.vendor.updated` on
+  `supplier.events.v1` through `SupplierVendorReplicaWriter` (schema version 2 or later; a fact older than the
+  held `aggregateVersion` is skipped, an equal one re-applied; a refusal names the constraint only, ADR-0072).
+  `SupplierManifestListener` reconciles every fact the listener marks processed (owner `supplier`) against
+  `supplier.manifest.v1` and asks pos-supplier to replay a drifted window on `supplier.commands.v1`
+  (`pos.inventory.kafka.supplier-manifest-topic`, `-consumer-group`, `supplier-commands-topic`).
+- **The mapping.** `vendor_feed_mapping` holds one row per `(feedType, feedVendorRef)`; `vendor_id` has no foreign
+  key. A manufacturer ref must be a UUID and is stored lower-case; a distributor ref is trimmed and keeps its case.
+  A mapping may name only a vendor the copy holds and that is `ACTIVE` (`VENDOR_NOT_FOUND`, `VENDOR_INACTIVE`).
+- **Suggestions follow the mapping.** Creating, re-pointing or deleting a mapping sets
+  `purchase_suggestion.vendor_id` (null on delete) on the feed vendor's `SUGGESTED` and `ACCEPTED` suggestions in
+  the same transaction. `purchase_suggestion.feed_vendor_ref` is the feed's own id (it was `vendor_ref_id`, a UUID).
+  The suggestion response carries `feedVendorRef`, `vendorId`, `vendorNumber`, `vendorDisplayName`, `vendorStatus`.
+- **Resolution.** `VendorFeedMappingService.resolve` / `resolveAll` return the mapped vendor from the copy in any
+  status, or nothing when the feed vendor is unmapped or the vendor is not in the copy; callers check `status`.
+- **Unmapped list.** `GET .../unmapped` also sets the gauge `inventory.vendor_feed.unmapped{feedType}`.
+- **Permission.** `inventory:vendor_feed_mapping:manage` changes mappings and is granted to `ADMIN`; reads need
+  `inventory:replenishment:manage`.
 
 ## Decimal quantities, gated by the product's declaration (ADR-0055, #1414)
 
@@ -716,6 +748,10 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | Code | Status | Description |
 |------|--------|-------------|
 | `VALIDATION_ERROR` | 400 | Request parameter or body validation failed: bean validation, a type mismatch, an unreadable body, a constraint violation, an invalid availability request, a purchase order that is replicated but not `APPROVED`, an invalid count quantity, or an `IllegalArgumentException` from a service |
+| `VENDOR_FEED_MAPPING_EXISTS` | 409 | The feed vendor already has a mapping (`createVendorFeedMapping`); update it instead |
+| `VENDOR_FEED_MAPPING_NOT_FOUND` | 404 | No vendor feed mapping has the id (`updateVendorFeedMapping`, `deleteVendorFeedMapping`) |
+| `VENDOR_NOT_FOUND` | 422 | The vendor a mapping names is not in the local pos-supplier vendor copy |
+| `VENDOR_INACTIVE` | 422 | The vendor a mapping names is `INACTIVE` |
 | `RECOUNT_LIMIT_EXCEEDED` | 400 | A cycle-count task has already been recounted the maximum number of times |
 | `SOURCE_DOCUMENT_ALREADY_RECEIVED` | 400 | A receiving session was opened for a source document that is already fully received |
 | `WORKORDER_CLOSED` | 400 | The workorder the consumption or pick targets is closed |

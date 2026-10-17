@@ -36,6 +36,19 @@ public interface DistributorNormalizedInventoryRepository extends JpaRepository<
             """)
     LeadTimeAggregate findLeadTimeAggregateByProductId(@Param("productId") UUID productId);
 
+    /**
+     * One row per distributor the feed reports (CAP:550 S36, #2525): its distinct products and when it last reported.
+     * Feeds the unmapped-feed-vendor list.
+     */
+    @Query("""
+            SELECT d.distributorId AS feedVendorRef,
+                   COUNT(DISTINCT d.productId) AS productCount,
+                   MAX(d.updatedAt) AS lastReportedAt
+            FROM DistributorNormalizedInventory d
+            GROUP BY d.distributorId
+            """)
+    List<FeedVendorSummary> summarizeDistributors();
+
     interface LeadTimeAggregate {
         Integer getMinDays();
 

@@ -65,7 +65,7 @@ class PurchaseSuggestionControllerTest {
                 .locationId(UUID.fromString("00000000-0000-0000-0000-000000000072"))
                 .suggestedQuantity(24)
                 .suggestedVendorType("MANUFACTURER")
-                .vendorRefId(UUID.fromString("00000000-0000-0000-0000-000000000073"))
+                .feedVendorRef("00000000-0000-0000-0000-000000000073")
                 .unitCostMinor(499L)
                 .selectionReason("test")
                 .status(status)

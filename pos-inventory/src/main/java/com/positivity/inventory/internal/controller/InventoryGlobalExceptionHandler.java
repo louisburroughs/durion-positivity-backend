@@ -55,6 +55,7 @@ import com.positivity.inventory.internal.exception.TransferLocationNotEligibleEx
 import com.positivity.inventory.internal.exception.TransferOrderNotFoundException;
 import com.positivity.inventory.internal.exception.TransferQuantityExceededException;
 import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentTypeException;
+import com.positivity.inventory.internal.exception.VendorFeedMappingException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
@@ -514,6 +515,12 @@ public class InventoryGlobalExceptionHandler {
         // odoo-parity F4 (#1044): accept/dismiss from a terminal status is a 409
         // conflict.
         return build(HttpStatus.CONFLICT, PurchaseSuggestionStateException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(VendorFeedMappingException.class)
+    public ResponseEntity<ApiError> handleVendorFeedMapping(VendorFeedMappingException ex) {
+        // CAP:550 S36 (#2525): per-case 400/404/409/422 for the vendor feed mapping endpoints, each with its own code.
+        return build(ex.getStatus(), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(InvalidParamCombinationException.class)

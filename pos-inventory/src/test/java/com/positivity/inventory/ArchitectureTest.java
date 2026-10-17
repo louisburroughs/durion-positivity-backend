@@ -210,7 +210,7 @@ public class ArchitectureTest {
      * the hint tables by {@link #supplier_stock_hints_must_not_be_read_outside_their_own_slice}.
      */
     private static final String[] SUPPLIER_HINT_CLASSES = {
-        "com.positivity.inventory.internal.service.SupplierStockHintEventsListener",
+        "com.positivity.inventory.internal.service.SupplierEventsListener",
         "com.positivity.inventory.internal.service.SupplierStockHintServiceImpl",
         "com.positivity.inventory.internal.service.SupplierStockHintResolver"
     };

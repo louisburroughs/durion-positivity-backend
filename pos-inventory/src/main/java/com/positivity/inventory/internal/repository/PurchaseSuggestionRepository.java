@@ -2,12 +2,14 @@ package com.positivity.inventory.internal.repository;
 
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
+import com.positivity.inventory.internal.enums.SuggestedVendorType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -36,6 +38,28 @@ public interface PurchaseSuggestionRepository extends JpaRepository<PurchaseSugg
      * regardless of its current status (a same-day dismissal does not re-suggest).
      */
     boolean existsByPolicyIdAndCreatedAtGreaterThanEqual(UUID policyId, Instant createdAtFrom);
+
+    /**
+     * Points the open suggestions of one feed vendor at a pos-supplier vendor, or at none (CAP:550 S36, #2525): run in
+     * the transaction that creates, re-points or deletes the vendor feed mapping, so a suggestion never shows a vendor
+     * the mapping no longer names. A converted or dismissed suggestion keeps what it had.
+     *
+     * @return the number of suggestions changed
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE PurchaseSuggestion p
+            SET p.vendorId = :vendorId, p.updatedAt = :now
+            WHERE p.suggestedVendorType = :vendorType
+              AND p.feedVendorRef = :feedVendorRef
+              AND p.status IN :statuses
+            """)
+    int updateVendorIdForFeedVendor(
+            @Param("vendorType") SuggestedVendorType vendorType,
+            @Param("feedVendorRef") String feedVendorRef,
+            @Param("statuses") Collection<PurchaseSuggestionStatus> statuses,
+            @Param("vendorId") UUID vendorId,
+            @Param("now") Instant now);
 
     /**
      * Every suggestion whose destination is a reachable site, or a storage location replicated

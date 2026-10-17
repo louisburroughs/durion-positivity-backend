@@ -80,8 +80,21 @@ public class PurchaseSuggestion extends TenantScopedEntity {
     @Enumerated(EnumType.STRING)
     private SuggestedVendorType suggestedVendorType;
 
-    /** Manufacturer or distributor UUID; {@code null} when no vendor was selectable. */
-    private UUID vendorRefId;
+    /**
+     * The feed's own vendor id: the manufacturer UUID (lower-case) or the distributor id as the distributor feed
+     * carries it; {@code null} when no vendor was selectable. Never a pos-supplier id, see {@link #vendorId}.
+     */
+    @Column(name = "feed_vendor_ref", length = 255)
+    private String feedVendorRef;
+
+    /**
+     * The pos-supplier vendor the feed vendor is mapped to (CAP:550 S36, #2525), kept in step with
+     * {@code vendor_feed_mapping} while the suggestion is open; {@code null} while the feed vendor is unmapped.
+     */
+    private UUID vendorId;
+
+    /** When the suggestion became a purchase order; set with status CONVERTED. */
+    private Instant convertedAt;
 
     /** Per-base-unit cost in minor units from the feed price; {@code null} when the feed lacks a price. */
     private Long unitCostMinor;

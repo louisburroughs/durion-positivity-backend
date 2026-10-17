@@ -237,6 +237,27 @@ public final class EventTypes {
                                 "Convert accepted purchase suggestions into a single DRAFT purchase order")
                         .build(),
 
+                // VendorFeedMappingController - 5 events (CAP:550 S36, #2525)
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_VENDOR_FEED_MAPPING_LIST",
+                                "List mappings from feed vendors to pos-supplier vendors")
+                        .build(),
+                EventTypeRegistration.fastRead(
+                                "INVENTORY_VENDOR_FEED_MAPPING_UNMAPPED_LIST",
+                                "List feed vendors with no usable pos-supplier vendor mapping")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_VENDOR_FEED_MAPPING_CREATE",
+                                "Map a feed vendor to a pos-supplier vendor")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_VENDOR_FEED_MAPPING_UPDATE",
+                                "Re-point a feed vendor mapping to another pos-supplier vendor")
+                        .build(),
+                EventTypeRegistration.write(
+                                "INVENTORY_VENDOR_FEED_MAPPING_DELETE", "Remove a feed vendor to vendor mapping")
+                        .build(),
+
                 // StockMovementController - 3 events
                 EventTypeRegistration.write(
                                 "INVENTORY_STOCK_MOVEMENT_CREATE", "Record an inventory stock movement in the ledger")

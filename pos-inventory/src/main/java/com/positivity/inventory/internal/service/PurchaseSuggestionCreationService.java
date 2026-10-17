@@ -185,7 +185,7 @@ public class PurchaseSuggestionCreationService {
                 chosen != null ? chosen.minOrderQty() : null,
                 chosen != null ? chosen.packSize() : null));
         suggestion.setSuggestedVendorType(chosen != null ? chosen.sourceType() : null);
-        suggestion.setVendorRefId(chosen != null ? chosen.vendorRefId() : null);
+        suggestion.setFeedVendorRef(chosen != null ? chosen.vendorRefId().toString() : null);
         suggestion.setUnitCostMinor(chosen != null ? chosen.unitCostMinor() : null);
         suggestion.setUnitCostCurrency(chosen != null ? chosen.unitCostCurrency() : null);
         suggestion.setVendorPackSize(chosen != null ? chosen.packSize() : null);
@@ -217,7 +217,7 @@ public class PurchaseSuggestionCreationService {
     private void logOutcome(String action, PurchaseSuggestion suggestion, long rawNeed) {
         log.info(
                 "Purchase suggestion {}: suggestionId={} policyId={} sku={} locationId={} rawNeed={}"
-                        + " suggestedQuantity={} vendorType={} vendorRefId={} unitCostMinor={} leadTimeDays={}"
+                        + " suggestedQuantity={} vendorType={} feedVendorRef={} unitCostMinor={} leadTimeDays={}"
                         + " earliestExpectedDate={} selectionReason=[{}]",
                 action,
                 suggestion.getSuggestionId(),
@@ -227,7 +227,7 @@ public class PurchaseSuggestionCreationService {
                 rawNeed,
                 suggestion.getSuggestedQuantity(),
                 suggestion.getSuggestedVendorType(),
-                suggestion.getVendorRefId(),
+                suggestion.getFeedVendorRef(),
                 suggestion.getUnitCostMinor(),
                 suggestion.getLeadTimeDays(),
                 suggestion.getEarliestExpectedDate(),

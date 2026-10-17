@@ -6,6 +6,7 @@ import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseS
 import com.positivity.inventory.internal.dto.purchasesuggestion.ConvertPurchaseSuggestionsResponse;
 import com.positivity.inventory.internal.dto.purchasesuggestion.PurchaseSuggestionResponse;
 import com.positivity.inventory.internal.entity.ExtProductUomReplica;
+import com.positivity.inventory.internal.entity.ExtSupplierVendorReplica;
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
@@ -17,6 +18,7 @@ import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PurchaseOrderCommandPublisher;
+import com.positivity.inventory.internal.service.VendorCopyReader;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -29,10 +31,12 @@ import java.util.Currency;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -74,6 +78,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
     private final ForecastSiteResolver forecastSiteResolver;
     private final Clock clock;
     private final LocationScopeService locationScopeService;
+    private final VendorCopyReader vendorCopyReader;
 
     @Override
     @Transactional(readOnly = true)
@@ -94,13 +99,19 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
         }
         // In-memory filter + slice over the full set, mirroring the replenishment policy
         // listing — suggestion volume is per-policy-bounded, so this stays small.
-        List<PurchaseSuggestionResponse> filtered = candidates.stream()
+        List<PurchaseSuggestion> matching = candidates.stream()
                 .filter(suggestion -> statusFilter == null || suggestion.getStatus() == statusFilter)
                 .filter(suggestion -> itemSKU == null || itemSKU.equals(suggestion.getItemSKU()))
                 .filter(suggestion -> locationId == null || locationId.equals(suggestion.getLocationId()))
                 .sorted(Comparator.comparing(
                         PurchaseSuggestion::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(this::toResponse)
+                .toList();
+        Map<UUID, ExtSupplierVendorReplica> vendors = vendorCopyReader.byIds(matching.stream()
+                .map(PurchaseSuggestion::getVendorId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet()));
+        List<PurchaseSuggestionResponse> filtered = matching.stream()
+                .map(suggestion -> toResponse(suggestion, vendors.get(suggestion.getVendorId())))
                 .toList();
         if (pageable.isUnpaged()) {
             return new PageImpl<>(filtered);
@@ -117,7 +128,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
         // ADR-0061 §3 (#1872): the list is narrowed by location, so the by-id read is gated on the
         // loaded suggestion's destination — after the 404, so ids cannot be probed.
         locationScopeService.require(suggestion.getLocationId(), InventoryPermissionRegistry.INVENTORY_VIEW);
-        return toResponse(suggestion);
+        return toResponse(suggestion, vendorOf(suggestion));
     }
 
     @Override
@@ -137,7 +148,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 saved.getItemSKU(),
                 saved.getSuggestedQuantity(),
                 actorId);
-        return toResponse(saved);
+        return toResponse(saved, vendorOf(saved));
     }
 
     @Override
@@ -159,7 +170,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 saved.getItemSKU(),
                 reason,
                 actorId);
-        return toResponse(saved);
+        return toResponse(saved, vendorOf(saved));
     }
 
     @Override
@@ -169,7 +180,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
         List<PurchaseSuggestion> suggestions = loadAllOrThrow(request.getSuggestionIds());
         validateConvertible(suggestions);
 
-        UUID vendorId = suggestions.getFirst().getVendorRefId();
+        UUID vendorId = UUID.fromString(suggestions.getFirst().getFeedVendorRef());
         UUID shipToSite = resolveSingleShipToSite(suggestions);
         // validateConvertible has proven every suggestion carries this same ISO 4217 currency
         // (ADR-0067 DF-5); the canonical upper-case code is what pos-order accepts.
@@ -270,7 +281,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                         suggestion.getSuggestionId(),
                         suggestion.getStatus() != null ? suggestion.getStatus().name() : "unknown");
             }
-            if (suggestion.getVendorRefId() == null || suggestion.getSuggestedVendorType() == null) {
+            if (suggestion.getFeedVendorRef() == null || suggestion.getSuggestedVendorType() == null) {
                 throw PurchaseSuggestionConversionException.missingVendor(suggestion.getSuggestionId());
             }
             if (suggestion.getUnitCostMinor() == null) {
@@ -286,7 +297,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
             }
         }
         long distinctVendors = suggestions.stream()
-                .map(suggestion -> suggestion.getSuggestedVendorType() + ":" + suggestion.getVendorRefId())
+                .map(suggestion -> suggestion.getSuggestedVendorType() + ":" + suggestion.getFeedVendorRef())
                 .distinct()
                 .count();
         if (distinctVendors > 1) {
@@ -380,7 +391,14 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 .orElseThrow(() -> new ResourceNotFoundException(RESOURCE_NAME, suggestionId.toString()));
     }
 
-    private PurchaseSuggestionResponse toResponse(PurchaseSuggestion suggestion) {
+    private @Nullable ExtSupplierVendorReplica vendorOf(PurchaseSuggestion suggestion) {
+        return suggestion.getVendorId() == null
+                ? null
+                : vendorCopyReader.find(suggestion.getVendorId()).orElse(null);
+    }
+
+    private PurchaseSuggestionResponse toResponse(
+            PurchaseSuggestion suggestion, @Nullable ExtSupplierVendorReplica vendor) {
         return PurchaseSuggestionResponse.builder()
                 .suggestionId(suggestion.getSuggestionId())
                 .policyId(suggestion.getPolicyId())
@@ -391,7 +409,11 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                         suggestion.getSuggestedVendorType() != null
                                 ? suggestion.getSuggestedVendorType().name()
                                 : null)
-                .vendorRefId(suggestion.getVendorRefId())
+                .feedVendorRef(suggestion.getFeedVendorRef())
+                .vendorId(suggestion.getVendorId())
+                .vendorNumber(vendor != null ? vendor.getVendorNumber() : null)
+                .vendorDisplayName(vendor != null ? vendor.getDisplayName() : null)
+                .vendorStatus(vendor != null && vendor.getStatus() != null ? vendor.getStatus().name() : null)
                 .unitCostMinor(suggestion.getUnitCostMinor())
                 .unitCostCurrency(suggestion.getUnitCostCurrency())
                 .vendorPackSize(suggestion.getVendorPackSize())

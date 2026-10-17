@@ -161,7 +161,7 @@ class PurchaseSuggestionScanTest {
         assertThat(suggestion.getStatus()).isEqualTo(PurchaseSuggestionStatus.SUGGESTED);
         assertThat(suggestion.getSuggestedQuantity()).isEqualTo(17); // max 20 − on-hand 3
         assertThat(suggestion.getSuggestedVendorType()).isEqualTo(SuggestedVendorType.MANUFACTURER);
-        assertThat(suggestion.getVendorRefId()).isEqualTo(manufacturerId);
+        assertThat(suggestion.getFeedVendorRef()).isEqualTo(manufacturerId.toString());
         assertThat(suggestion.getUnitCostMinor()).isEqualTo(499L);
         assertThat(suggestion.getUnitCostCurrency()).isEqualTo("USD");
         assertThat(suggestion.getLeadTimeDays()).isEqualTo(5);

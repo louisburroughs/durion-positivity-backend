@@ -89,7 +89,7 @@ class PurchaseSuggestionLifecycleTest {
                 .locationId(locationId)
                 .suggestedQuantity(quantity)
                 .suggestedVendorType(vendorRefId != null ? SuggestedVendorType.MANUFACTURER : null)
-                .vendorRefId(vendorRefId)
+                .feedVendorRef(vendorRefId != null ? vendorRefId.toString() : null)
                 .unitCostMinor(unitCostMinor)
                 .unitCostCurrency(unitCostMinor != null ? "USD" : null)
                 .vendorPackSize(vendorPackSize)

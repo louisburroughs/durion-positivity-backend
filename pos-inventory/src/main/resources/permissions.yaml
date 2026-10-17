@@ -119,3 +119,5 @@ permissions:
     description: "Adjust valuation"
   - name: "inventory:valuation:view"
     description: "View valuation"
+  - name: "inventory:vendor_feed_mapping:manage"
+    description: "Manage vendor feed mapping"
