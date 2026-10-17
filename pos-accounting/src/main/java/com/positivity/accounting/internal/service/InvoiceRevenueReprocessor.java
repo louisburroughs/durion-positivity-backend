@@ -76,10 +76,16 @@ public class InvoiceRevenueReprocessor {
         this.postingTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    /** Whether a held row of {@code eventType} with {@code failureReasonCode} is reprocessed here. */
+    /**
+     * Whether a row of {@code eventType} held or failed with {@code failureReasonCode} is reprocessed here: every
+     * {@code invoice.updated} row except one held for its currency (#2620: a currency hold is released by ADR-0067
+     * Stage B1 only, never by a reprocess). A row this reprocessor re-held itself (PERIOD_CLOSED,
+     * ACCOUNTING_TIME_ZONE_UNSET, UNMAPPED_EVENT_TYPE, VALIDATION_ERROR) comes back through its own route; no invoice
+     * fact is ever run through the posting engine.
+     */
     public static boolean handles(@Nullable String eventType, @Nullable String failureReasonCode) {
         return InvoiceUpdatedV1.EVENT_TYPE.equals(eventType)
-                && PostingFailureReason.TAX_TYPE_MISSING.name().equals(failureReasonCode);
+                && !PostingFailureReason.CURRENCY_NOT_SUPPORTED.name().equals(failureReasonCode);
     }
 
     /**
