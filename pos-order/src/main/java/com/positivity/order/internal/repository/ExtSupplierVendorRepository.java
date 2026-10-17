@@ -3,9 +3,12 @@ package com.positivity.order.internal.repository;
 import com.positivity.order.internal.entity.ExtSupplierVendor;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 /**
  * pos-order's vendor copy (CAP:550 S24, #2517). Reads run on the tenant-bound connection, where forced row-level
- * security (ADR-0062) hides every other tenant's vendors, so another tenant's vendor reads as missing.
+ * security (ADR-0062) hides every other tenant's vendors, so another tenant's vendor reads as missing. The
+ * specification executor serves the purchase-order screens' vendor list (#2680).
  */
-public interface ExtSupplierVendorRepository extends JpaRepository<ExtSupplierVendor, UUID> {}
+public interface ExtSupplierVendorRepository
+        extends JpaRepository<ExtSupplierVendor, UUID>, JpaSpecificationExecutor<ExtSupplierVendor> {}

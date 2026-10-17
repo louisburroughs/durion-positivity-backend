@@ -15,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +40,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
+// noRollbackFor (#2677): a GLMappingNotConfiguredException is this bean's answer, not a failure of the caller's
+// transaction. Without it, the exception crossing this proxy marked a participating transaction rollback-only even
+// when the caller caught it, and the caller's commit then failed with UnexpectedRollbackException (a bill read was a
+// 500, a decision's writes were lost). A posting that lets the exception propagate still rolls back at its own
+// boundary.
+@Transactional(noRollbackFor = GLMappingNotConfiguredException.class)
 public class GLMappingResolverImpl implements GLMappingResolver {
 
     /**
@@ -150,6 +156,39 @@ public class GLMappingResolverImpl implements GLMappingResolver {
 
         return resolveGLAccount(
                 category.getPostingCategoryId(), mappingKey.getMappingKeyId(), transactionDate, Map.of());
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Reads every mapping effective on the date and prefers the category default (no dimensions), the one the
+     * name-based posting path falls through to; a key mapped only with dimensions answers its first mapping, as
+     * that path does. Nothing is thrown, not for a miss and not for two effective rows, and nothing is logged at WARN:
+     * the read is not a posting that failed.
+     */
+    @Override
+    @Transactional(readOnly = true, noRollbackFor = GLMappingNotConfiguredException.class)
+    public Optional<UUID> findGLAccount(
+            @NonNull String postingCategoryName,
+            @NonNull String mappingKeyName,
+            @NonNull LocalDateTime transactionDate) {
+        return postingCategoryRepository
+                .findByCategoryName(postingCategoryName)
+                .flatMap(category -> {
+                    UUID categoryId = category.getPostingCategoryId();
+                    return mappingKeyRepository
+                            .findByPostingCategory_PostingCategoryIdAndKeyName(categoryId, mappingKeyName)
+                            .flatMap(key -> categoryDefaultFirst(mappingRepository.findAllEffectiveMappings(
+                                    categoryId, key.getMappingKeyId(), transactionDate)));
+                })
+                .map(GLMapping::getGlAccountId);
+    }
+
+    private static Optional<GLMapping> categoryDefaultFirst(List<GLMapping> effective) {
+        return effective.stream()
+                .filter(m -> m.getDimensions() == null || m.getDimensions().isEmpty())
+                .findFirst()
+                .or(() -> effective.stream().findFirst());
     }
 
     /**

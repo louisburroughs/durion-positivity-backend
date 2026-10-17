@@ -782,11 +782,11 @@ class VendorBillReaderTest {
                         recovery(billId, "GST", "GST_HST", "50.00", "50.00", "TAX_RECOVERABLE_GST_HST", null),
                         recovery(billId, "PST", null, "70.00", "0.00", null, "NOT_RECOVERABLE")));
         UUID account1250 = UUID.randomUUID();
-        when(readResolver.resolveGLAccount(
+        when(readResolver.findGLAccount(
                         VendorBillPostingService.POSTING_CATEGORY,
                         "TAX_RECOVERABLE_GST_HST",
                         java.time.LocalDate.of(2026, 10, 1).atStartOfDay()))
-                .thenReturn(account1250);
+                .thenReturn(java.util.Optional.of(account1250));
         com.positivity.accounting.internal.entity.GLAccount gl =
                 new com.positivity.accounting.internal.entity.GLAccount(account1250);
         gl.setAccountCode("1250");
@@ -810,6 +810,39 @@ class VendorBillReaderTest {
                 .containsExactly(
                         org.assertj.core.groups.Tuple.tuple("GST", new BigDecimal("50.00"), "1250", null),
                         org.assertj.core.groups.Tuple.tuple("PST", new BigDecimal("0.00"), null, "NOT_RECOVERABLE"));
+    }
+
+    @Test
+    @DisplayName("#2677: a recovery key remapped away since posting reads its amount with no account, through the"
+            + " non-throwing lookup (the throwing one would poison the surrounding transaction)")
+    void remappedAwayRecoveryKeyReadsWithoutAnAccount() {
+        UUID billId = UUID.fromString("0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4b07");
+        VendorBillReader reader = taxReader();
+        VendorBill bill = postedBill(billId, "1000.00", "50.00", "1050.00");
+        when(readTaxes.findByVendorBillIdOrderByTaxType(billId)).thenReturn(List.of(statedTax(billId, "GST", "50.00")));
+        when(readRecoveries.findByVendorBillIdOrderByTaxTypeAsc(billId))
+                .thenReturn(
+                        List.of(recovery(billId, "GST", "GST_HST", "50.00", "50.00", "TAX_RECOVERABLE_GST_HST", null)));
+        when(readResolver.findGLAccount(
+                        VendorBillPostingService.POSTING_CATEGORY,
+                        "TAX_RECOVERABLE_GST_HST",
+                        java.time.LocalDate.of(2026, 10, 1).atStartOfDay()))
+                .thenReturn(java.util.Optional.empty());
+
+        com.positivity.accounting.internal.dto.VendorBillResponse read = reader.read(bill);
+
+        assertThat(read.getInputTaxRecovery())
+                .extracting(
+                        VendorBillReview.InputTaxRecovery::taxType,
+                        VendorBillReview.InputTaxRecovery::recoveredAmount,
+                        VendorBillReview.InputTaxRecovery::accountCode,
+                        VendorBillReview.InputTaxRecovery::accountName)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("GST", new BigDecimal("50.00"), null, null));
+        org.mockito.Mockito.verify(readResolver, org.mockito.Mockito.never())
+                .resolveGLAccount(
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.anyString(),
+                        org.mockito.ArgumentMatchers.any());
     }
 
     @Test

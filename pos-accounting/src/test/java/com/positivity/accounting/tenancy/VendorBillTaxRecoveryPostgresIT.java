@@ -15,8 +15,10 @@ import com.positivity.accounting.internal.dto.VendorBillReview;
 import com.positivity.accounting.internal.entity.VendorBill;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
+import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.VendorBillRepository;
+import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.VendorBillApprovalService;
 import com.positivity.accounting.internal.service.VendorBillStatedTax;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -78,6 +80,9 @@ class VendorBillTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
 
     @Autowired
     private VendorBillApprovalService approvals;
+
+    @Autowired
+    private GLMappingResolver glMappingResolver;
 
     @Autowired
     private VendorBillRepository billRows;
@@ -266,6 +271,76 @@ class VendorBillTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
     }
 
     // ---- helpers --------------------------------------------------------------------------------------------
+
+    /**
+     * #2677: a recovery row whose mapping key no longer resolves on the posting date. The read runs inside the
+     * reader's own transaction, and inside every decision command's; the throwing resolver marked it rollback-only
+     * through its proxy even though the reader caught the exception, so the commit failed: the GET was a 500 and a
+     * void's writes were lost. Committing test: the rollback-only mark only shows at a real commit.
+     */
+    @Test
+    @DisplayName("#2677: a posted bill whose recovery key was remapped away reads, and is voided, with the account"
+            + " unresolved; no 500, no lost decision")
+    void remappedRecoveryKeyDoesNotPoisonTheReadTransaction() {
+        UUID recovering = recoveringTenant();
+        UUID billId = billWithTypes(recovering);
+        signIn(CONTROLLER, CONTROLLER_GRANTS);
+        approve(recovering, billId, null);
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        assertThat(owner.update(
+                        "DELETE FROM gl_mapping WHERE tenant_id = ? AND external_code = 'VENDOR_BILL_TAX_RECOVERABLE'",
+                        recovering))
+                .isEqualTo(1);
+
+        VendorBillResponse read = asTenant(recovering, () -> approvals.getBill(billId));
+        assertThat(read.getInputTaxRecovery())
+                .extracting(
+                        VendorBillReview.InputTaxRecovery::taxType,
+                        VendorBillReview.InputTaxRecovery::accountCode,
+                        VendorBillReview.InputTaxRecovery::accountName)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("TT_COST", null, null),
+                        org.assertj.core.groups.Tuple.tuple("TT_RECOVERABLE", null, null));
+        assertThat(read.getInputTaxRecovery().get(1).recoveredAmount())
+                .as("the amount recovered at posting still shows")
+                .isEqualByComparingTo("50.00");
+
+        VendorBillResponse voided = asTenant(
+                recovering,
+                () -> approvals.voidBill(
+                        billId, new VendorBillCommands.VoidBill("Billed twice, the vendor confirmed", null)));
+        assertThat(voided.getStatus()).isEqualTo(VendorBillStatus.VOIDED);
+        assertThat(owner.queryForObject(
+                        "SELECT status FROM vendor_bill WHERE tenant_id = ? AND vendor_bill_id = ?",
+                        String.class,
+                        recovering,
+                        billId))
+                .as("the void committed")
+                .isEqualTo("VOIDED");
+    }
+
+    /**
+     * #2677, root cause: a caller that catches the resolver's refusal inside its own transaction must still be able to
+     * commit. Through the proxy, in a transaction of this test's own, with nothing else in it: the commit itself is
+     * what used to fail ({@code UnexpectedRollbackException}, "marked as rollback-only").
+     */
+    @Test
+    @DisplayName("#2677: a caught GLMappingNotConfiguredException from the resolver proxy no longer poisons the"
+            + " caller's transaction")
+    void caughtResolverRefusalLeavesTheTransactionCommittable() {
+        UUID tenant = tenant();
+        String committed = asTenant(
+                tenant,
+                () -> new TransactionTemplate(transactionManager).execute(_ -> {
+                    assertThatThrownBy(() -> glMappingResolver.resolveGLAccount(
+                                    "VENDOR_BILL",
+                                    "NO_SUCH_KEY_" + tenant.toString().substring(0, 8),
+                                    today().atStartOfDay()))
+                            .isInstanceOf(GLMappingNotConfiguredException.class);
+                    return "committed";
+                }));
+        assertThat(committed).isEqualTo("committed");
+    }
 
     private LocalDate today() {
         return LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC);

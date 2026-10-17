@@ -3,7 +3,9 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.entity.GLMapping;
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 
 public interface GLMappingResolver {
 
@@ -50,6 +52,24 @@ public interface GLMappingResolver {
      *                                  mapping is not configured
      */
     UUID resolveGLAccount(String postingCategoryName, String mappingKeyName, LocalDateTime transactionDate);
+
+    /**
+     * The same lookup as {@link #resolveGLAccount(String, String, LocalDateTime)}, for a read that shows an unmapped
+     * key rather than refusing (#2677): the category, key or effective mapping missing is an empty result, never an
+     * exception, and never a multiplicity error either: of the mappings effective on the date, the category default
+     * (no dimensions) is preferred, else the first. A posting keeps using the throwing form, whose {@code
+     * GLMappingNotConfiguredException} is the refusal; a reader that would show "unmapped" uses this one.
+     *
+     * @param postingCategoryName posting category name
+     * @param mappingKeyName      mapping key name within the category
+     * @param transactionDate     effective date for resolution
+     * @return the GL account id, or empty when the category, the key or a mapping effective on the date is not
+     *         configured
+     */
+    Optional<UUID> findGLAccount(
+            @NonNull String postingCategoryName,
+            @NonNull String mappingKeyName,
+            @NonNull LocalDateTime transactionDate);
 
     /**
      * Validates a GL mapping for consistency and non-overlapping effective dates.
