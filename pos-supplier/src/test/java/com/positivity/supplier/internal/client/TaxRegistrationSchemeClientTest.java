@@ -48,7 +48,6 @@ class TaxRegistrationSchemeClientTest {
                 builder, "pos-tax", "/v1/tax/registration-schemes", java.time.Duration.ZERO, CLOCK);
     }
 
-
     @Test
     @DisplayName("reads the list with the service user and tax:rates:view, by country or for every country")
     void readsTheList() {
@@ -149,14 +148,19 @@ class TaxRegistrationSchemeClientTest {
             assertThatThrownBy(() -> client.fetch(null))
                     .isInstanceOf(SupplierServiceUnavailableException.class)
                     .satisfies(e -> {
-                        assertThat(((SupplierServiceUnavailableException) e).getCode()).isEqualTo("SERVICE_UNAVAILABLE");
+                        assertThat(((SupplierServiceUnavailableException) e).getCode())
+                                .isEqualTo("SERVICE_UNAVAILABLE");
                         messages.add(e.getMessage());
                     });
         }
         server.verify();
         // What the caller sees names the dependency and the status only, never pos-tax's body (ADR-0072).
         String said = String.join(" ", messages);
-        assertThat(said).contains("500").contains("400").contains("no registration-scheme list").contains("reached");
+        assertThat(said)
+                .contains("500")
+                .contains("400")
+                .contains("no registration-scheme list")
+                .contains("reached");
         assertThat(said).doesNotContain("schemes\"").doesNotContain("GST_HST");
     }
 }
