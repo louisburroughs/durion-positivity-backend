@@ -122,7 +122,8 @@ public class VendorFeedMappingController {
             content =
                     @Content(
                             mediaType = "application/json",
-                            schema = @Schema(implementation = UnmappedFeedVendorResponse.class)))
+                            array = @io.swagger.v3.oas.annotations.media.ArraySchema(
+                                    schema = @Schema(implementation = UnmappedFeedVendorResponse.class))))
     @ApiResponse(
             responseCode = "403",
             description = "User lacks inventory:replenishment:manage",
@@ -222,7 +223,7 @@ public class VendorFeedMappingController {
                     Required inputs: mappingId (UUIDv7) path parameter, and a body with vendorId and version; \
                     note is optional and null clears it.
                     Emits an INVENTORY_VENDOR_FEED_MAPPING_UPDATE event and stores the change.
-                    Returns 404 VENDOR_FEED_MAPPING_NOT_FOUND when the mapping does not exist, 409 CONFLICT when \
+                    Returns 404 VENDOR_FEED_MAPPING_NOT_FOUND when the mapping does not exist, 409 VENDOR_FEED_MAPPING_STALE_VERSION when \
                     the version is stale, and 422 VENDOR_NOT_FOUND or VENDOR_INACTIVE when the vendor is unknown \
                     or inactive.
                     """,
@@ -248,7 +249,7 @@ public class VendorFeedMappingController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "CONFLICT: the version is stale, the mapping was changed since it was read",
+            description = "VENDOR_FEED_MAPPING_STALE_VERSION: the version is stale, the mapping was changed since it was read",
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",

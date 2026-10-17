@@ -214,7 +214,7 @@ class VendorFeedMappingControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"vendorId\":\"" + VENDOR_ID + "\",\"version\":0}"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CONFLICT"));
+                .andExpect(jsonPath("$.code").value("VENDOR_FEED_MAPPING_STALE_VERSION"));
     }
 
     @Test

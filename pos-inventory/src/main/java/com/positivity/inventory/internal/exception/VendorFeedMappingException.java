@@ -13,7 +13,7 @@ public class VendorFeedMappingException extends RuntimeException {
     public static final String NOT_FOUND = "VENDOR_FEED_MAPPING_NOT_FOUND";
     public static final String VENDOR_NOT_FOUND = "VENDOR_NOT_FOUND";
     public static final String VENDOR_INACTIVE = "VENDOR_INACTIVE";
-    public static final String STALE_VERSION = "CONFLICT";
+    public static final String STALE_VERSION = "VENDOR_FEED_MAPPING_STALE_VERSION";
     public static final String INVALID_FEED_VENDOR_REF = "VALIDATION_ERROR";
 
     private final String errorCode;

@@ -182,8 +182,7 @@ public class VendorSelectionService {
 
     /** The key the mapping service answers under: trimmed, and lower-case for a manufacturer UUID. */
     private static String normalizedRef(SuggestedVendorType type, String feedVendorRef) {
-        String trimmed = feedVendorRef.trim();
-        return type == SuggestedVendorType.MANUFACTURER ? trimmed.toLowerCase(Locale.ROOT) : trimmed;
+        return FeedVendorType.canonical(feedVendorRef);
     }
 
     private static String skippedSummary(List<String> skipped) {

@@ -134,8 +134,11 @@ public class PurchaseSuggestionOrderAttentionService {
      * next scan suggests nothing for it.
      */
     public @NonNull Map<OrderAttention, Integer> publishAfterScan(@Nullable UUID tenantId) {
+        // Bounded: a CONVERTED row older than the lookback has either an order the facts have long settled or a
+        // history nobody acts on from a gauge; a read still assesses any row on demand.
+        Instant since = Instant.now(clock).minus(settings.attentionLookback());
         List<PurchaseSuggestion> converted =
-                purchaseSuggestionRepository.findByStatus(PurchaseSuggestionStatus.CONVERTED);
+                purchaseSuggestionRepository.findByStatusAndConvertedAtAfter(PurchaseSuggestionStatus.CONVERTED, since);
         Map<OrderAttention, Integer> counts = new EnumMap<>(OrderAttention.class);
         for (OrderAttention reason : OrderAttention.values()) {
             counts.put(reason, 0);

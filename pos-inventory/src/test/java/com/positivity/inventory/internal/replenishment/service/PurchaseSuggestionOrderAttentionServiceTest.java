@@ -3,6 +3,7 @@ package com.positivity.inventory.internal.replenishment.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -51,7 +52,7 @@ class PurchaseSuggestionOrderAttentionServiceTest {
                 orders,
                 vendors,
                 suggestions,
-                new PurchaseSuggestionOrderAttentionSettings(Duration.ofHours(1)),
+                new PurchaseSuggestionOrderAttentionSettings(Duration.ofHours(1), Duration.ofDays(90)),
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 provider);
         when(vendors.byIds(anyCollection())).thenReturn(Map.of());
@@ -136,7 +137,8 @@ class PurchaseSuggestionOrderAttentionServiceTest {
     @DisplayName("after a scan the gauge carries each reason's count for the tenant")
     void publishesGauges() {
         PurchaseSuggestion stale = converted(NOW.minus(Duration.ofHours(2)));
-        when(suggestions.findByStatus(PurchaseSuggestionStatus.CONVERTED)).thenReturn(List.of(stale));
+        when(suggestions.findByStatusAndConvertedAtAfter(eq(PurchaseSuggestionStatus.CONVERTED), any()))
+                .thenReturn(List.of(stale));
         when(orders.findAllById(any())).thenReturn(List.of());
         UUID tenant = UUID.fromString("00000000-0000-0000-0000-0000000000d1");
 

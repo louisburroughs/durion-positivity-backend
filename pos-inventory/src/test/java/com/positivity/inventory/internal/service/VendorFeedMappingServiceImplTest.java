@@ -156,15 +156,15 @@ class VendorFeedMappingServiceImplTest {
     }
 
     @Test
-    @DisplayName("a distributor ref is trimmed but keeps its case and need not be a UUID")
-    void create_distributorRefKeepsCase() {
+    @DisplayName("a distributor ref is trimmed and folded to the canonical lower-case key; it need not be a UUID")
+    void create_distributorRefIsCanonical() {
         when(vendorCopy.find(VENDOR_ID)).thenReturn(Optional.of(vendor(VENDOR_ID, VendorStatus.ACTIVE)));
 
         service.create(request(FeedVendorType.DISTRIBUTOR, " Acme-Dist-01 ", VENDOR_ID));
 
         ArgumentCaptor<VendorFeedMapping> saved = ArgumentCaptor.forClass(VendorFeedMapping.class);
         verify(mappings).saveAndFlush(saved.capture());
-        assertThat(saved.getValue().getFeedVendorRef()).isEqualTo("Acme-Dist-01");
+        assertThat(saved.getValue().getFeedVendorRef()).isEqualTo("acme-dist-01");
     }
 
     @Test
@@ -279,7 +279,7 @@ class VendorFeedMappingServiceImplTest {
         assertThatThrownBy(
                         () -> service.update(MAPPING_ID, new VendorFeedMappingUpdateRequest(OTHER_VENDOR_ID, null, 2L)))
                 .isInstanceOfSatisfying(VendorFeedMappingException.class, e -> {
-                    assertThat(e.getErrorCode()).isEqualTo("CONFLICT");
+                    assertThat(e.getErrorCode()).isEqualTo("VENDOR_FEED_MAPPING_STALE_VERSION");
                     assertThat(e.getStatus().value()).isEqualTo(409);
                 });
         verify(mappings, never()).saveAndFlush(any());
@@ -299,7 +299,7 @@ class VendorFeedMappingServiceImplTest {
                         () -> service.update(MAPPING_ID, new VendorFeedMappingUpdateRequest(OTHER_VENDOR_ID, null, 3L)))
                 .isInstanceOfSatisfying(
                         VendorFeedMappingException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo("CONFLICT"));
+                        e -> assertThat(e.getErrorCode()).isEqualTo("VENDOR_FEED_MAPPING_STALE_VERSION"));
     }
 
     @Test

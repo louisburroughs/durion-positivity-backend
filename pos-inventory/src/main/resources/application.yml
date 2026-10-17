@@ -198,6 +198,8 @@ pos:
       # CAP:550 S36 (#2525): a CONVERTED suggestion whose order pos-order has not placed (no row in the
       # purchase-order copy) this long after conversion reads orderAttention = ORDER_NOT_PLACED.
       order-placement-grace: ${POS_INVENTORY_PURCHASE_SUGGESTION_ORDER_PLACEMENT_GRACE:PT1H}
+      # How far back the post-scan order-attention gauge looks at CONVERTED suggestions; reads assess any row.
+      attention-lookback: ${POS_INVENTORY_PURCHASE_SUGGESTION_ATTENTION_LOOKBACK:P90D}
     replenishment:
       # Last-resort lead time for the forecast-aware orderpoint trigger (odoo-parity F2,
       # #1040; decision D-4). Precedence: policy override (F3) -> vendor-feed MAX estimate

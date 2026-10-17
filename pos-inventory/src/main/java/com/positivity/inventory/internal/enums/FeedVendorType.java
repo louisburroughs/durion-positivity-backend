@@ -13,4 +13,14 @@ public enum FeedVendorType {
     public static FeedVendorType of(SuggestedVendorType suggestedVendorType) {
         return valueOf(suggestedVendorType.name());
     }
+
+    /**
+     * The one key a feed vendor is stored and looked up under (CAP:550 S36, #2525): trimmed and lower-cased for both
+     * feeds, so a manufacturer UUID in any case and a distributor id whose case varies between feed and legacy
+     * {@code uuid::text} rows meet the same mapping. Every caller (selection, mapping writes, resolution, the
+     * unmapped scan) goes through here.
+     */
+    public static String canonical(String feedVendorRef) {
+        return feedVendorRef == null ? "" : feedVendorRef.trim().toLowerCase(java.util.Locale.ROOT);
+    }
 }

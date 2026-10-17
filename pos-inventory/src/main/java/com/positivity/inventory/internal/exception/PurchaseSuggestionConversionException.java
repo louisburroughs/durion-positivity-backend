@@ -28,7 +28,6 @@ public class PurchaseSuggestionConversionException extends RuntimeException {
                 SUGGESTION_PREFIX + suggestionId + " is " + status + "; only ACCEPTED suggestions can be converted");
     }
 
-    /** The listed suggestions do not all share one vendor (one convert = one single-vendor PO). */
     /** CAP:550 S36 (#2525): the suggestion's feed vendor has no mapping to a pos-supplier vendor. */
     public static PurchaseSuggestionConversionException vendorUnmapped(
             UUID suggestionId, String feedType, String feedVendorRef) {
@@ -55,6 +54,7 @@ public class PurchaseSuggestionConversionException extends RuntimeException {
                         + ", which is inactive; re-point the feed mapping or reactivate the vendor, then convert");
     }
 
+    /** The listed suggestions do not all resolve to one vendor (one convert = one single-vendor PO). */
     public static PurchaseSuggestionConversionException vendorMismatch() {
         return new PurchaseSuggestionConversionException(
                 "PURCHASE_SUGGESTION_VENDOR_MISMATCH",

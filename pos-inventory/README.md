@@ -592,6 +592,7 @@ pos-supplier's, so a mapping joins them.
 
 ### Selection, conversion and order attention
 
+- Feed vendor ids are compared under one canonical key (trimmed, lower-case) for both feeds, so a manufacturer UUID in any case and a distributor id whose case differs between the feed and a legacy `uuid::text` row meet the same mapping.
 - A feed vendor is a purchase candidate only when its feed id maps to a vendor that is in the copy and `ACTIVE`;
   the others are skipped and named in the suggestion's `selectionReason` (at most three, then `+n more`). The
   non-UUID distributor filter is gone: the mapping key is the feed's own text. With no eligible candidate an
@@ -611,7 +612,8 @@ pos-supplier's, so a mapping joins them.
   `ORDER_VENDOR_NOT_IN_COPY` (same statuses, vendor absent), `ORDER_NOT_PLACED` (no order row
   `pos.inventory.purchase-suggestion.order-placement-grace`, default `PT1H`, after `converted_at`), else null. The
   list takes `?orderAttention=`. Netting is unchanged. After each scheduled scan the gauge
-  `inventory.purchase_suggestion.order_attention{reason}` is set and a non-zero count is WARN-logged.
+  `inventory.purchase_suggestion.order_attention{reason}` is set over the suggestions converted within
+  `pos.inventory.purchase-suggestion.attention-lookback` (default `P90D`) and a non-zero count is WARN-logged.
 
 ## Decimal quantities, gated by the product's declaration (ADR-0055, #1414)
 
@@ -773,6 +775,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `VALIDATION_ERROR` | 400 | Request parameter or body validation failed: bean validation, a type mismatch, an unreadable body, a constraint violation, an invalid availability request, a purchase order that is replicated but not `APPROVED`, an invalid count quantity, or an `IllegalArgumentException` from a service |
 | `VENDOR_FEED_MAPPING_EXISTS` | 409 | The feed vendor already has a mapping (`createVendorFeedMapping`); update it instead |
 | `VENDOR_FEED_MAPPING_NOT_FOUND` | 404 | No vendor feed mapping has the id (`updateVendorFeedMapping`, `deleteVendorFeedMapping`) |
+| `VENDOR_FEED_MAPPING_STALE_VERSION` | 409 | `updateVendorFeedMapping` carried a `version` older than the row's; re-read the mapping and send its current version |
 | `VENDOR_NOT_FOUND` | 422 | The vendor a mapping names is not in the local pos-supplier vendor copy |
 | `VENDOR_INACTIVE` | 422 | The vendor a mapping names is `INACTIVE` |
 | `RECOUNT_LIMIT_EXCEEDED` | 400 | A cycle-count task has already been recounted the maximum number of times |

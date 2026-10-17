@@ -199,10 +199,11 @@ public class VendorFeedMappingServiceImpl implements VendorFeedMappingService {
     public @NonNull VendorFeedMappingResponse create(@NonNull VendorFeedMappingRequest request) {
         FeedVendorType feedType = request.getFeedType();
         String ref = normalizeFeedRef(feedType, request.getFeedVendorRef());
-        ExtSupplierVendorReplica vendor = requireActiveVendor(request.getVendorId());
+        // The feed vendor's own state first: an existing mapping is "update it instead", whatever vendor is named.
         if (mappings.findByFeedTypeAndFeedVendorRef(feedType, ref).isPresent()) {
             throw VendorFeedMappingException.exists(feedType.name(), ref);
         }
+        ExtSupplierVendorReplica vendor = requireActiveVendor(request.getVendorId());
         VendorFeedMapping mapping = VendorFeedMapping.builder()
                 .feedType(feedType)
                 .feedVendorRef(ref)
@@ -276,9 +277,8 @@ public class VendorFeedMappingServiceImpl implements VendorFeedMappingService {
 
     @Override
     public boolean isMapped(@NonNull FeedVendorType feedType, @NonNull String feedVendorRef) {
-        String trimmed = feedVendorRef.trim();
-        String key = feedType == FeedVendorType.MANUFACTURER ? trimmed.toLowerCase(java.util.Locale.ROOT) : trimmed;
-        return mappings.findByFeedTypeAndFeedVendorRef(feedType, key).isPresent();
+        return mappings.findByFeedTypeAndFeedVendorRef(feedType, FeedVendorType.canonical(feedVendorRef))
+                .isPresent();
     }
 
     @Override
@@ -344,19 +344,18 @@ public class VendorFeedMappingServiceImpl implements VendorFeedMappingService {
         }
         if (feedType == FeedVendorType.MANUFACTURER) {
             try {
-                return UUID.fromString(trimmed).toString().toLowerCase(Locale.ROOT);
+                return FeedVendorType.canonical(UUID.fromString(trimmed).toString());
             } catch (IllegalArgumentException e) {
                 throw VendorFeedMappingException.invalidFeedVendorRef(
                         "feedVendorRef must be a UUID for a MANUFACTURER feed vendor");
             }
         }
-        return trimmed;
+        return FeedVendorType.canonical(trimmed);
     }
 
-    /** The form a feed's own id is compared in: trimmed, and lower-case for a manufacturer UUID. */
+    /** The form a feed's own id is compared in: {@link FeedVendorType#canonical} (trimmed, lower-case). */
     private static String canonicalFeedRef(FeedVendorType feedType, String raw) {
-        String trimmed = raw.trim();
-        return feedType == FeedVendorType.MANUFACTURER ? trimmed.toLowerCase(Locale.ROOT) : trimmed;
+        return FeedVendorType.canonical(raw);
     }
 
     private static @Nullable String blankToNull(@Nullable String value) {

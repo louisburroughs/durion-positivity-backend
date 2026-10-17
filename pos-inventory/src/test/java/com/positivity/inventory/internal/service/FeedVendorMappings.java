@@ -23,9 +23,7 @@ public final class FeedVendorMappings {
             VendorFeedMappingRepository mappings,
             FeedVendorType feedType,
             String feedVendorRef) {
-        String key = feedType == FeedVendorType.MANUFACTURER
-                ? feedVendorRef.trim().toLowerCase(Locale.ROOT)
-                : feedVendorRef.trim();
+        String key = FeedVendorType.canonical(feedVendorRef);
         return mappings.findByFeedTypeAndFeedVendorRef(feedType, key)
                 .map(VendorFeedMapping::getVendorId)
                 .orElseGet(() -> {

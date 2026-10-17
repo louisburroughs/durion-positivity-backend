@@ -122,12 +122,24 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 .map(PurchaseSuggestion::getVendorId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet()));
-        // CAP:550 S36 (#2525): order status and attention are derived on read, never stored.
+        // CAP:550 S36 (#2525): order status and attention are derived on read, never stored. Without an attention
+        // filter only the page is assessed; with one, the whole set must be (the filter decides the page).
+        if (attentionFilter == null) {
+            List<PurchaseSuggestion> pageRows = slice(matching, pageable);
+            Map<UUID, PurchaseSuggestionOrderAttentionService.Assessment> assessments =
+                    orderAttentionService.assess(pageRows);
+            List<PurchaseSuggestionResponse> content = pageRows.stream()
+                    .map(suggestion -> toResponse(
+                            suggestion, vendors.get(suggestion.getVendorId()), assessmentOf(assessments, suggestion)))
+                    .toList();
+            return pageable.isUnpaged()
+                    ? new PageImpl<>(content)
+                    : new PageImpl<>(content, pageable, matching.size());
+        }
         Map<UUID, PurchaseSuggestionOrderAttentionService.Assessment> assessments =
                 orderAttentionService.assess(matching);
         List<PurchaseSuggestionResponse> filtered = matching.stream()
-                .filter(suggestion -> attentionFilter == null
-                        || assessmentOf(assessments, suggestion).attention() == attentionFilter)
+                .filter(suggestion -> assessmentOf(assessments, suggestion).attention() == attentionFilter)
                 .map(suggestion -> toResponse(
                         suggestion, vendors.get(suggestion.getVendorId()), assessmentOf(assessments, suggestion)))
                 .toList();
@@ -150,6 +162,15 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 suggestion,
                 vendorOf(suggestion),
                 assessmentOf(orderAttentionService.assess(List.of(suggestion)), suggestion));
+    }
+
+    private static List<PurchaseSuggestion> slice(List<PurchaseSuggestion> rows, Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return rows;
+        }
+        int fromIndex = Math.min((int) pageable.getOffset(), rows.size());
+        int toIndex = Math.min(fromIndex + pageable.getPageSize(), rows.size());
+        return rows.subList(fromIndex, toIndex);
     }
 
     private static PurchaseSuggestionOrderAttentionService.Assessment assessmentOf(
