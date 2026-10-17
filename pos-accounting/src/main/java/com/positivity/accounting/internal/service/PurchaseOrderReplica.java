@@ -4,8 +4,6 @@ import com.positivity.accounting.internal.entity.ExtOrderPurchaseOrder;
 import com.positivity.accounting.internal.repository.ExtOrderPurchaseOrderRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
-import java.time.Clock;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -24,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class PurchaseOrderReplica {
 
     private final ExtOrderPurchaseOrderRepository orders;
-    private final Clock clock;
 
     /** Upserts the order unless {@code aggregateVersion} is older than the stored one; joins the caller's transaction. */
     @Transactional
@@ -45,7 +42,6 @@ public class PurchaseOrderReplica {
         row.setVendorId(fact.vendorId());
         row.setPaymentTermsId(fact.paymentTermsId());
         row.setAggregateVersion(aggregateVersion);
-        row.setUpdatedAt(Instant.now(clock));
         orders.save(row);
     }
 }

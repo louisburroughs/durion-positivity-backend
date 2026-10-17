@@ -4,6 +4,7 @@ import com.positivity.shared.id.AssignedIdentifier;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -13,6 +14,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * Read-only replica of one pos-order purchase order (#2515, CAP:550 S19; ADR-0044 R3). Written only by the {@code
@@ -25,6 +28,7 @@ import lombok.ToString;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true, callSuper = false)
 @ToString
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "ext_order_purchase_order")
 public class ExtOrderPurchaseOrder extends TenantScopedEntity {
 
@@ -47,6 +51,8 @@ public class ExtOrderPurchaseOrder extends TenantScopedEntity {
     @Column(name = "aggregate_version", nullable = false)
     private long aggregateVersion;
 
+    /** Set by auditing on every write. */
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }

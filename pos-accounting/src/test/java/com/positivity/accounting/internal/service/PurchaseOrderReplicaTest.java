@@ -8,9 +8,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.entity.ExtOrderPurchaseOrder;
 import com.positivity.accounting.internal.repository.ExtOrderPurchaseOrderRepository;
 import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
-import java.time.Clock;
 import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +30,7 @@ class PurchaseOrderReplicaTest {
 
     @BeforeEach
     void setUp() {
-        replica = new PurchaseOrderReplica(
-                repository, Clock.fixed(Instant.parse("2026-10-17T12:00:00Z"), ZoneOffset.UTC));
+        replica = new PurchaseOrderReplica(repository);
         when(repository.findById(any()))
                 .thenAnswer(invocation -> Optional.ofNullable(rows.get(invocation.getArgument(0))));
         when(repository.save(any())).thenAnswer(invocation -> {
@@ -69,7 +66,6 @@ class PurchaseOrderReplicaTest {
         assertThat(row.getVendorId()).isEqualTo(VENDOR);
         assertThat(row.getPoNumber()).isEqualTo("PO-1");
         assertThat(row.getAggregateVersion()).isEqualTo(2);
-        assertThat(row.getUpdatedAt()).isEqualTo(Instant.parse("2026-10-17T12:00:00Z"));
     }
 
     @Test
