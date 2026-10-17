@@ -24,6 +24,8 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -207,13 +209,19 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
                                 .content(BODY.replace("\"USD\"", "\"DOLLARS\"")),
                         MANAGE))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                // #2674: the bean-validation refusal names the field too, through the platform handler.
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("currencyCode"));
         verify(sessionPolicyService, never()).update(any());
     }
 
-    /** #2674: each refusal of the policy rules lands on its field; the page maps these JSON paths. */
-    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
-    @org.junit.jupiter.params.provider.CsvSource({
+    /**
+     * #2674: the handler puts the service's field on the envelope, for every path the page maps. The rules that
+     * choose the field are proven in SessionPolicyServiceImplTest; the currencyCode row is the null/blank case, a
+     * non-ISO code is refused before the service (below).
+     */
+    @ParameterizedTest(name = "{0}")
+    @CsvSource({
         "justification, justification must be at least 10 characters",
         "pettyExpense.allowed, pettyExpense.allowed is required",
         "vendorCod.allowed, vendor cash on delivery cannot be switched on until pos-order holds the vendor list",
