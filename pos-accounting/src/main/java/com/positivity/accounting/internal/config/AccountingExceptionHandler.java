@@ -22,6 +22,7 @@ import com.positivity.accounting.internal.exception.CurrencyNotSupportedExceptio
 import com.positivity.accounting.internal.exception.DefaultGLMappingNotFoundException;
 import com.positivity.accounting.internal.exception.DuplicateAccountCodeException;
 import com.positivity.accounting.internal.exception.EventNotRetryableException;
+import com.positivity.accounting.internal.exception.HeldEventNotReleasableException;
 import com.positivity.accounting.internal.exception.EventValidationException;
 import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLAccountNotFoundException;
@@ -402,6 +403,29 @@ public class AccountingExceptionHandler {
     public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
         String code = resolveStateErrorCode(ex.getMessage());
         return build(HttpStatus.CONFLICT, code, ex.getMessage(), request);
+    }
+
+    /**
+     * A held Kafka fact a reprocess cannot release (#2620): 409 with a {@code nextAction} naming what releases it
+     * (ADR-0067 Stage B1 for a currency hold); the row is untouched.
+     */
+    @ExceptionHandler(HeldEventNotReleasableException.class)
+    public ResponseEntity<ApiError> handleHeldEventNotReleasable(
+            HeldEventNotReleasableException ex, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        ApiError error = new ApiError(
+                HeldEventNotReleasableException.CODE,
+                ex.getMessage(),
+                HttpStatus.CONFLICT.value(),
+                Instant.now(clock).toString(),
+                correlationId,
+                null,
+                null,
+                ex.getNextAction(),
+                null);
+        return new ResponseEntity<>(error, headers, HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(EventNotRetryableException.class)

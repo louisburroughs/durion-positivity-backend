@@ -239,12 +239,18 @@ public class PostingEngineOrchestrator {
             return Optional.empty();
         }
         String currencyCode = foreignPayloadCurrency(event.getPayload());
-        if (currencyCode == null) {
+        if (currencyCode == null && statesACurrency(event.getPayload())) {
+            // Every stated currency is the ledger's: the hold is over, normal evaluation continues.
             return Optional.empty();
         }
-        String details = "Fact is in " + currencyCode + " but the ledger books " + ledgerCurrency.code()
-                + " only; never booked at par (ADR-0067 PC-9). Event re-suspended with"
-                + " CURRENCY_NOT_SUPPORTED until a booking rate or manual handling releases it";
+        // #2620: a held row that states no currency is unknown, not functional. It stays held.
+        String details = currencyCode == null
+                ? "Fact states no currency; the ledger books " + ledgerCurrency.code()
+                        + " only and an unknown currency is never booked at par (ADR-0067 PC-9). Event re-suspended"
+                        + " with CURRENCY_NOT_SUPPORTED"
+                : "Fact is in " + currencyCode + " but the ledger books " + ledgerCurrency.code()
+                        + " only; never booked at par (ADR-0067 PC-9). Event re-suspended with"
+                        + " CURRENCY_NOT_SUPPORTED until a booking rate or manual handling releases it";
         log.warn("Re-suspending currency-held event {}: {}", event.getEventId(), details);
 
         event.setStatus(AccountingEventStatus.SUSPENDED);
@@ -265,6 +271,25 @@ public class PostingEngineOrchestrator {
      * payload.movements[].currencyCode} (a register session held for a drawer movement's currency, #2513); null when
      * every stated currency is the ledger's.
      */
+    /** Whether the fact states any currency at all (its own, or a movement's). */
+    private static boolean statesACurrency(@Nullable Map<String, Object> payload) {
+        if (payload == null) {
+            return false;
+        }
+        if (payload.get(PAYLOAD_CURRENCY_FIELD) != null) {
+            return true;
+        }
+        Object movements = payload.get("movements");
+        if (movements instanceof java.util.Collection<?> rows) {
+            for (Object row : rows) {
+                if (row instanceof Map<?, ?> movement && movement.get(PAYLOAD_CURRENCY_FIELD) != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private @Nullable String foreignPayloadCurrency(@Nullable Map<String, Object> payload) {
         if (payload == null) {
             return null;

@@ -163,16 +163,31 @@ class EventIngestionSettledPaymentReprocessTest {
     }
 
     @Test
-    @DisplayName("a currency-held settled payment keeps today's posting-engine path")
-    void currencyHoldKeepsEnginePath() {
+    @DisplayName("#2620: a settled payment held for its currency has no release path: 409, the row untouched, no attempt,"
+            + " never the posting engine")
+    void currencyHoldIsRefusedNotEngineRouted() {
         event.setFailureReasonCode("CURRENCY_NOT_SUPPORTED");
-        when(postingEngineOrchestrator.processEvent(any(), any(), any(), anyBoolean()))
-                .thenReturn(PostingResult.success(null, null));
+        event.setFailureDetails("held: CAD");
+        event.setPayload(new java.util.HashMap<>(java.util.Map.of("currencyCode", "CAD", "amount", "12.50")));
 
-        reprocess("ops-user");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.reprocessEvent(
+                        EVENT_ID, new com.positivity.accounting.internal.dto.ReprocessEventRequest(), "controller"))
+                .isInstanceOfSatisfying(
+                        com.positivity.accounting.internal.exception.HeldEventNotReleasableException.class, e -> {
+                            org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                                    .contains("CURRENCY_NOT_SUPPORTED")
+                                    .contains("no release path");
+                            org.assertj.core.api.Assertions.assertThat(e.getNextAction())
+                                    .contains("CAD")
+                                    .contains("Stage B1");
+                        });
 
-        verify(postingEngineOrchestrator).processEvent(any(), any(), any(), anyBoolean());
-        verify(automaticPaymentApplicationService, never()).reapply(any());
+        org.assertj.core.api.Assertions.assertThat(event.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        org.assertj.core.api.Assertions.assertThat(event.getFailureReasonCode()).isEqualTo("CURRENCY_NOT_SUPPORTED");
+        org.assertj.core.api.Assertions.assertThat(event.getAttemptCount()).isZero();
+        verify(postingEngineOrchestrator, never()).processEvent(any(), any(), any(), anyBoolean());
+        verify(reprocessingAttemptHistoryRepository, never()).save(any());
+        verify(accountingEventRepository, never()).save(any());
     }
 
     private AccountingEventResponse reprocess(String user) {
