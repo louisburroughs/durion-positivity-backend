@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.repository;
 import com.positivity.accounting.internal.entity.APPayment;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
 import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
@@ -27,6 +28,28 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
      * Find all payments for a vendor bill.
      */
     List<APPayment> findByVendorBill_VendorBillId(UUID vendorBillId);
+
+    /** One vendor's unapplied AP payments in one currency (#2515): the aged-payables netting. */
+    interface VendorUnappliedSum {
+        UUID getVendorId();
+
+        String getVendorName();
+
+        BigDecimal getUnapplied();
+    }
+
+    /**
+     * Unapplied AP payment totals per vendor: payments in {@code currency} whose status is not in {@code excluded} and
+     * whose unapplied amount is above zero and whose payment date is on or before {@code asOfDate}.
+     */
+    @Query("SELECT p.vendorId AS vendorId, MAX(p.vendorName) AS vendorName, SUM(p.unappliedAmount) AS unapplied"
+            + " FROM APPayment p WHERE p.unappliedAmount > 0 AND p.currency = :currency"
+            + " AND p.status NOT IN :excluded AND p.paymentDate <= :asOfDate GROUP BY p.vendorId")
+    @NonNull
+    List<VendorUnappliedSum> sumUnappliedByVendor(
+            @Param("currency") @NonNull String currency,
+            @Param("excluded") @NonNull Collection<APPaymentStatus> excluded,
+            @Param("asOfDate") @NonNull LocalDate asOfDate);
 
     /**
      * Find all payments for a vendor.

@@ -220,7 +220,8 @@ class OrderManifestListenerTest {
                 mock(PlatformTransactionManager.class),
                 TestZoneResolvers.utc(Clock.systemUTC()),
                 mock(RegisterSessionReplica.class),
-                mock(UndepositedSessionProjection.class));
+                mock(UndepositedSessionProjection.class),
+                org.mockito.Mockito.mock(PurchaseOrderReplica.class));
         UUID sessionId = UUID.randomUUID();
         eventsListener.onOrderEvent("""
                 {"eventId":"019104d2-0000-7000-8000-000000000001","eventType":"order.order.completed",

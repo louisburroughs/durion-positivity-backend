@@ -107,7 +107,8 @@ public class PurchaseOrderFactPublisher {
                 order.getGrandTotalMinor(),
                 order.getOpenBalanceMinor(),
                 occurredAt,
-                lines.stream().map(PurchaseOrderFactPublisher::toFactLine).toList());
+                lines.stream().map(PurchaseOrderFactPublisher::toFactLine).toList(),
+                order.getPaymentTermsId());
     }
 
     /**

@@ -14,8 +14,9 @@ import org.jspecify.annotations.NonNull;
  *
  * Buckets the vendor's open (unpaid) APPROVED vendor-bill balances by days past due
  * as of the report date (AW11; CAP:550 S35, #2524). "Past due" is measured from the
- * bill's DUE date, falling back to the bill date when no due date is recorded. Aged
- * Receivables applies the same rule with the invoice date as its fallback. A bill due
+ * bill's DUE date; a bill with no due date ages from its ESTIMATED due date (bill date
+ * plus its payment terms, #2515) and its open amount is also reported as
+ * {@code estimatedDueDateAmount}. Aged Receivables falls back to the invoice date. A bill due
  * today or later is {@code notYetDue}; the four late buckets hold overdue money and
  * {@code overdue} is their sum. A bill dated after the report date did not yet exist
  * and is not reported at all. Open balance per bill is the bill total minus applied
@@ -27,6 +28,12 @@ import org.jspecify.annotations.NonNull;
  * {@code unapproved}, with {@code unapprovedBillCount} and
  * {@code totalIncludingUnapproved}. A vendor with only unapproved bills has a row
  * with zero buckets.
+ *
+ * <p>The vendor's unapplied AP payments (cash on delivery and other payments not yet
+ * allocated to a bill, voided ones excluded, functional currency only) are reported as
+ * {@code unappliedPayments}, a negative amount, and {@code netOwed} is
+ * {@code totalOutstanding + unappliedPayments}. The buckets still sum to
+ * {@code totalOutstanding}.
  */
 @Data
 @Builder
@@ -34,8 +41,9 @@ import org.jspecify.annotations.NonNull;
 @AllArgsConstructor
 @Schema(
         description = "Per-vendor aged payables row with bucketed open vendor-bill balances. Age is measured "
-                + "from the bill due date, falling back to the bill date when no due date is recorded; only "
-                + "APPROVED bills are aged, unapproved bills are reported separately and unaged.")
+                + "from the bill due date, or from an estimated due date (bill date plus payment terms) when "
+                + "none is recorded; only APPROVED bills are aged, unapproved bills are reported separately and "
+                + "unaged. Unapplied vendor payments are reported as a negative amount and netted into netOwed.")
 public class AgedPayablesRow {
 
     /**
@@ -131,4 +139,41 @@ public class AgedPayablesRow {
     @Schema(description = "totalOutstanding + unapproved", example = "4250.00", requiredMode = REQUIRED)
     @NonNull
     private BigDecimal totalIncludingUnapproved;
+
+    /**
+     * Open amount of the vendor's approved bills aged on an estimated due date.
+     */
+    @Schema(
+            description = "Open amount of this vendor's approved bills that have no due date and were aged on an "
+                    + "estimated due date (bill date plus payment terms); part of totalOutstanding, not added to it",
+            example = "200.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    @Builder.Default
+    private BigDecimal estimatedDueDateAmount = BigDecimal.ZERO;
+
+    /**
+     * Minus the vendor's unapplied AP payments.
+     */
+    @Schema(
+            description = "Minus the sum of this vendor's unapplied AP payments (not voided, unapplied amount above "
+                    + "zero, functional currency only); zero or negative",
+            example = "-50.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    @Builder.Default
+    private BigDecimal unappliedPayments = BigDecimal.ZERO;
+
+    /**
+     * totalOutstanding + unappliedPayments.
+     */
+    @Schema(
+            description = "Approved open bills less unapplied AP payments only: totalOutstanding + "
+                    + "unappliedPayments; credit notes and unapproved bills are not netted; negative when the "
+                    + "vendor holds more of our money than it is owed",
+            example = "3900.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    @Builder.Default
+    private BigDecimal netOwed = BigDecimal.ZERO;
 }

@@ -38,6 +38,28 @@ class PurchaseOrderFactPublisherTest {
         assertThat(publishedLine(lineEntity("CASE", null)).conversionFactor()).isNull();
     }
 
+    @Test
+    @DisplayName("the fact carries the order's payment terms (schema 2, #2515), null when it has none")
+    void fact_carriesPaymentTerms() {
+        PurchaseOrderEntity order = PurchaseOrderEntity.builder()
+                .purchaseOrderId(UUID.randomUUID())
+                .poNumber("PO-2515")
+                .vendorId(UUID.randomUUID())
+                .status(PurchaseOrderStatus.APPROVED)
+                .currency("USD")
+                .paymentTermsId("NET45")
+                .build();
+        Instant at = Instant.parse("2026-10-17T12:00:00Z");
+
+        assertThat(PurchaseOrderFactPublisher.toFact(order, List.of(), at).paymentTermsId())
+                .isEqualTo("NET45");
+        order.setPaymentTermsId(null);
+        assertThat(PurchaseOrderFactPublisher.toFact(order, List.of(), at).paymentTermsId())
+                .isNull();
+        assertThat(com.positivity.domainevents.order.PurchaseOrderUpdatedV1.SCHEMA_VERSION)
+                .isEqualTo(2);
+    }
+
     private static PurchaseOrderLine publishedLine(PurchaseOrderLineEntity line) {
         PurchaseOrderEntity order = PurchaseOrderEntity.builder()
                 .purchaseOrderId(UUID.randomUUID())

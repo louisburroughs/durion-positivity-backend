@@ -109,7 +109,9 @@ class FinancialReportingServiceImplTest {
                 displayReferenceResolver,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
-                org.mockito.Mockito.mock(TypedOutputTax.class));
+                org.mockito.Mockito.mock(TypedOutputTax.class),
+                org.mockito.Mockito.mock(EstimatedDueDateService.class),
+                org.mockito.Mockito.mock(com.positivity.accounting.internal.repository.APPaymentRepository.class));
     }
 
     private void aggregatedTotals(TrialBalanceAccountTotal... totals) {

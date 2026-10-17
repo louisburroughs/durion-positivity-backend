@@ -96,4 +96,40 @@ public class AgedPayablesReport {
     @Schema(description = "totals.totalOutstanding + unapproved", example = "800.00", requiredMode = REQUIRED)
     @NonNull
     private BigDecimal totalIncludingUnapproved;
+
+    /**
+     * Open amount aged on an estimated due date across all vendors.
+     */
+    @Schema(
+            description = "Open amount of approved bills aged on an estimated due date across all vendors; part of "
+                    + "totals.totalOutstanding, not added to it",
+            example = "200.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    @Builder.Default
+    private BigDecimal estimatedDueDateAmount = BigDecimal.ZERO;
+
+    /**
+     * Minus all vendors' unapplied AP payments.
+     */
+    @Schema(
+            description = "Minus the sum of every vendor's unapplied AP payments (not voided, functional currency "
+                    + "only); zero or negative",
+            example = "-50.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    @Builder.Default
+    private BigDecimal unappliedPayments = BigDecimal.ZERO;
+
+    /**
+     * totals.totalOutstanding + unappliedPayments.
+     */
+    @Schema(
+            description = "totals.totalOutstanding + unappliedPayments: approved open bills less unapplied AP "
+                    + "payments only; credit notes and unapproved bills are not netted",
+            example = "3900.00",
+            requiredMode = REQUIRED)
+    @NonNull
+    @Builder.Default
+    private BigDecimal netOwed = BigDecimal.ZERO;
 }

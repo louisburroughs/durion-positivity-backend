@@ -106,7 +106,8 @@ class OrderEventsListenerTransactionTest {
                 transactionManager,
                 com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
                 sessionReplica,
-                undepositedSessions);
+                undepositedSessions,
+                org.mockito.Mockito.mock(PurchaseOrderReplica.class));
     }
 
     @AfterEach

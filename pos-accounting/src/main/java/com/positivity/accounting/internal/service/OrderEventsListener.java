@@ -7,6 +7,7 @@ import com.positivity.accounting.internal.enums.PostingFailureReason;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.RegisterSessionContractViolationException;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
+import com.positivity.domainevents.order.PurchaseOrderUpdatedV1;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
 import com.positivity.domainevents.order.RegisterSessionOpenedV1;
 import com.positivity.kafka.common.KafkaRails;
@@ -116,6 +117,9 @@ public class OrderEventsListener {
 
     private final AccountingCalendarZoneResolver zoneResolver;
 
+    /** The purchase-order replica: payment terms for an estimated vendor-bill due date (#2515). */
+    private final PurchaseOrderReplica purchaseOrderReplica;
+
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
@@ -130,7 +134,9 @@ public class OrderEventsListener {
             PlatformTransactionManager transactionManager,
             AccountingCalendarZoneResolver zoneResolver,
             RegisterSessionReplica sessionReplica,
-            UndepositedSessionProjection undepositedSessions) {
+            UndepositedSessionProjection undepositedSessions,
+            PurchaseOrderReplica purchaseOrderReplica) {
+        this.purchaseOrderReplica = purchaseOrderReplica;
         this.zoneResolver = zoneResolver;
         this.sessionReplica = sessionReplica;
         this.sessionPosting = new RegisterSessionClosePosting(
@@ -171,6 +177,11 @@ public class OrderEventsListener {
         }
         if (processedEventRepository.existsById(eventId)) {
             log.debug("Skipping duplicate {} event eventId={}", eventType, eventId);
+            return;
+        }
+        if (PurchaseOrderUpdatedV1.EVENT_TYPE.equals(eventType)) {
+            onPurchaseOrderUpdated(
+                    envelope, eventId, envelope.path("aggregateVersion").longValue(0L));
             return;
         }
         boolean opened = RegisterSessionOpenedV1.EVENT_TYPE.equals(eventType);
@@ -300,6 +311,34 @@ public class OrderEventsListener {
         }
         handlerTransaction.executeWithoutResult(_ -> {
             sessionReplica.opened(fact, aggregateVersion);
+            markProcessed(eventId);
+        });
+    }
+
+    /**
+     * {@code purchaseorder.updated} (#2515): the replica row and the processed mark, in one transaction. A malformed
+     * payload is marked processed in its own; a database failure propagates for retry / DLQ. A schema-1 payload has no
+     * {@code paymentTermsId}, which reads as null.
+     */
+    private void onPurchaseOrderUpdated(@NonNull JsonNode envelope, @NonNull String eventId, long aggregateVersion) {
+        PurchaseOrderUpdatedV1 fact;
+        try {
+            fact = objectMapper.treeToValue(envelope.path("payload"), PurchaseOrderUpdatedV1.class);
+        } catch (DatabindException e) {
+            reject(eventId, e);
+            return;
+        } catch (Exception e) {
+            log.warn("Skipping malformed purchase-order-updated event eventId={}", eventId, e);
+            markInOwnTransaction(eventId);
+            return;
+        }
+        if (fact == null) {
+            log.warn("Skipping purchase-order-updated event without a payload eventId={}", eventId);
+            markInOwnTransaction(eventId);
+            return;
+        }
+        handlerTransaction.executeWithoutResult(_ -> {
+            purchaseOrderReplica.updated(fact, aggregateVersion);
             markProcessed(eventId);
         });
     }

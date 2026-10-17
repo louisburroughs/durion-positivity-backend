@@ -5,14 +5,21 @@ import com.positivity.accounting.internal.bankrec.intake.BankRecException;
 import com.positivity.accounting.internal.bankrec.intake.Justification;
 import com.positivity.accounting.internal.bankrec.service.BankRecPolicy;
 import com.positivity.accounting.internal.bankrec.service.FunctionalCurrency;
+import com.positivity.accounting.internal.dto.AgedThresholdsRequest;
+import com.positivity.accounting.internal.dto.AgedThresholdsResponse;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyRequest;
 import com.positivity.accounting.internal.dto.BankReconciliationPolicyResponse;
+import com.positivity.accounting.internal.dto.CashRequests;
+import com.positivity.accounting.internal.dto.CashSafetyCushionRequest;
+import com.positivity.accounting.internal.dto.CashSafetyCushionResponse;
 import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.AccountingConfiguration;
 import com.positivity.accounting.internal.enums.AccountingPeriodStatus;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneLockedException;
 import com.positivity.accounting.internal.exception.AccountingTimeZoneUnsetException;
+import com.positivity.accounting.internal.exception.CurrencyNotSupportedException;
 import com.positivity.accounting.internal.exception.HardLockDateRegressionException;
+import com.positivity.accounting.internal.exception.IdempotencyConflictException;
 import com.positivity.accounting.internal.exception.InvalidAccountingTimeZoneException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
 import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
@@ -30,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -61,6 +69,18 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
 
     static final String AUDIT_OPERATION_TIME_ZONE_SET = "ACCOUNTING_TIME_ZONE_SET";
 
+    /** One row per changed cash safety cushion (#2515): old to new, with the justification and request id. */
+    static final String AUDIT_OPERATION_CASH_SAFETY_CUSHION_SET = "CASH_SAFETY_CUSHION_SET";
+
+    /** One row per cushion request (entity id = the request id): what makes a replay write nothing. */
+    static final String AUDIT_OPERATION_CASH_SAFETY_CUSHION_REQUEST = "CASH_SAFETY_CUSHION_REQUEST";
+
+    /** One row per changed aged threshold (#2515): old to new, with the justification and request id. */
+    static final String AUDIT_OPERATION_AGED_THRESHOLDS_SET = "AGED_THRESHOLDS_SET";
+
+    /** One row per aged-thresholds request (entity id = the request id). */
+    static final String AUDIT_OPERATION_AGED_THRESHOLDS_REQUEST = "AGED_THRESHOLDS_REQUEST";
+
     /** The one fixed zone a tenant may keep: the provisioning seed (#2558). */
     private static final String UTC = "UTC";
 
@@ -72,6 +92,7 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
     private final BankRecPolicy bankRecPolicy;
     private final FunctionalCurrency functionalCurrency;
     private final AccountingPeriodRepository periodRepository;
+    private final CashAndPayablesSettings cashAndPayablesSettings;
 
     @Override
     @Transactional(readOnly = true)
@@ -345,6 +366,255 @@ public class AccountingConfigurationServiceImpl implements AccountingConfigurati
     }
 
     private String scaled(BigDecimal amount) {
+        return amount.setScale(functionalCurrency.fractionDigits(), RoundingMode.HALF_UP)
+                .toPlainString();
+    }
+
+    // ---- cash safety cushion and aged thresholds (CAP:550 S19, #2515) ---------------------------------------------
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public CashSafetyCushionResponse getCashSafetyCushion() {
+        return CashSafetyCushionResponse.builder()
+                .amount(cashAndPayablesSettings
+                        .cashSafetyCushion()
+                        .map(cushion -> cushion.setScale(functionalCurrency.fractionDigits(), RoundingMode.HALF_UP))
+                        .orElse(null))
+                .currencyCode(functionalCurrency.code())
+                .build();
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public CashSafetyCushionResponse setCashSafetyCushion(@NonNull CashSafetyCushionRequest request) {
+        UUID requestId = requiredRequestId(request.getRequestId());
+        String justification = settingJustification(request.getJustification());
+        CashRequests.requireCurrencyCode(request.getCurrencyCode(), "currencyCode");
+        if (!request.isAmountPresent()) {
+            throw InvalidRequestParameterException.forField("amount", "amount is required; send null to clear it");
+        }
+        BigDecimal amount = request.getAmount();
+        if (amount != null && amount.signum() < 0) {
+            throw InvalidRequestParameterException.forField("amount", "amount must not be negative");
+        }
+        // PC-9: the cushion is one functional-currency amount per tenant; another currency is refused, nothing written.
+        String currencyCode = request.getCurrencyCode();
+        if (!functionalCurrency.code().equals(currencyCode)) {
+            throw new CurrencyNotSupportedException("currencyCode " + currencyCode
+                    + " is not the functional currency " + functionalCurrency.code()
+                    + "; the cash safety cushion is held in the functional currency only");
+        }
+        if (amount != null && amount.stripTrailingZeros().scale() > functionalCurrency.fractionDigits()) {
+            throw InvalidRequestParameterException.forField(
+                    "amount",
+                    "amount has more decimal places than " + functionalCurrency.code() + " allows ("
+                            + functionalCurrency.fractionDigits() + ")");
+        }
+        String newValue = amount == null ? null : scaledAmount(amount);
+        String fingerprint = String.join("|", String.valueOf(newValue), currencyCode, justification);
+        if (replayed(AUDIT_OPERATION_CASH_SAFETY_CUSHION_REQUEST, requestId, fingerprint)) {
+            return getCashSafetyCushion();
+        }
+        String actor = currentActor();
+        AccountingConfiguration row = configurationRepository
+                .findWithLockByConfigKey(CashAndPayablesSettings.CASH_SAFETY_CUSHION)
+                .orElse(null);
+        // The locked raw row decides "unchanged" and is the audited old value: a stored value the tolerant read
+        // treats as unset (negative, unparsable) is still a stored value and must be rewritten or cleared.
+        String oldValue = row != null ? row.getConfigValue() : null;
+        if (!Objects.equals(oldValue, newValue)) {
+            writeSetting(
+                    row,
+                    CashAndPayablesSettings.CASH_SAFETY_CUSHION,
+                    newValue,
+                    AUDIT_OPERATION_CASH_SAFETY_CUSHION_SET,
+                    justification,
+                    actor,
+                    oldValue,
+                    requestId);
+        }
+        recordRequest(AUDIT_OPERATION_CASH_SAFETY_CUSHION_REQUEST, requestId, actor, justification, fingerprint);
+        log.info("Cash safety cushion set by {}: {} -> {} (requestId {})", actor, oldValue, newValue, requestId);
+        return getCashSafetyCushion();
+    }
+
+    @Override
+    @NonNull
+    @Transactional(readOnly = true)
+    public AgedThresholdsResponse getAgedThresholds() {
+        CashAndPayablesSettings.Settings settings = cashAndPayablesSettings.settings();
+        return AgedThresholdsResponse.builder()
+                .undepositedCashAgedDays(settings.undepositedCashAgedDays())
+                .vendorCodUnappliedAgedDays(settings.vendorCodUnappliedAgedDays())
+                .deliveriesNotBilledDays(settings.deliveriesNotBilledDays())
+                .build();
+    }
+
+    @Override
+    @NonNull
+    @Transactional
+    public AgedThresholdsResponse setAgedThresholds(@NonNull AgedThresholdsRequest request) {
+        UUID requestId = requiredRequestId(request.getRequestId());
+        String justification = settingJustification(request.getJustification());
+        Map<String, Integer> requested = new LinkedHashMap<>();
+        requested.put(
+                CashAndPayablesSettings.UNDEPOSITED_CASH_AGED_DAYS,
+                days(
+                        request.getUndepositedCashAgedDays(),
+                        "undepositedCashAgedDays",
+                        CashAndPayablesSettings.MIN_UNDEPOSITED_CASH_AGED_DAYS,
+                        CashAndPayablesSettings.MAX_UNDEPOSITED_CASH_AGED_DAYS));
+        requested.put(
+                CashAndPayablesSettings.VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                days(
+                        request.getVendorCodUnappliedAgedDays(),
+                        "vendorCodUnappliedAgedDays",
+                        CashAndPayablesSettings.MIN_VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                        CashAndPayablesSettings.MAX_VENDOR_COD_UNAPPLIED_AGED_DAYS));
+        requested.put(
+                CashAndPayablesSettings.DELIVERIES_NOT_BILLED_DAYS,
+                days(
+                        request.getDeliveriesNotBilledDays(),
+                        "deliveriesNotBilledDays",
+                        CashAndPayablesSettings.MIN_DELIVERIES_NOT_BILLED_DAYS,
+                        CashAndPayablesSettings.MAX_DELIVERIES_NOT_BILLED_DAYS));
+        String fingerprint =
+                requested.values().stream().map(String::valueOf).collect(Collectors.joining("|")) + "|" + justification;
+        if (replayed(AUDIT_OPERATION_AGED_THRESHOLDS_REQUEST, requestId, fingerprint)) {
+            return getAgedThresholds();
+        }
+        String actor = currentActor();
+        Map<String, Integer> defaults = Map.of(
+                CashAndPayablesSettings.UNDEPOSITED_CASH_AGED_DAYS,
+                CashAndPayablesSettings.DEFAULT_UNDEPOSITED_CASH_AGED_DAYS,
+                CashAndPayablesSettings.VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                CashAndPayablesSettings.DEFAULT_VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                CashAndPayablesSettings.DELIVERIES_NOT_BILLED_DAYS,
+                CashAndPayablesSettings.DEFAULT_DELIVERIES_NOT_BILLED_DAYS);
+        int changed = 0;
+        for (Map.Entry<String, Integer> setting : requested.entrySet()) {
+            // Locked raw row, not the tolerant read: a stored out-of-range value is not the default it reads as.
+            AccountingConfiguration row = configurationRepository
+                    .findWithLockByConfigKey(setting.getKey())
+                    .orElse(null);
+            String newText = Integer.toString(setting.getValue());
+            String oldText = row != null ? row.getConfigValue() : Integer.toString(defaults.get(setting.getKey()));
+            if (oldText.equals(newText)) {
+                continue;
+            }
+            writeSetting(
+                    row,
+                    setting.getKey(),
+                    Integer.toString(setting.getValue()),
+                    AUDIT_OPERATION_AGED_THRESHOLDS_SET,
+                    justification,
+                    actor,
+                    oldText,
+                    requestId);
+            changed++;
+        }
+        recordRequest(AUDIT_OPERATION_AGED_THRESHOLDS_REQUEST, requestId, actor, justification, fingerprint);
+        log.info("Aged thresholds set by {}: {} setting(s) changed (requestId {})", actor, changed, requestId);
+        return getAgedThresholds();
+    }
+
+    /**
+     * Writes one setting (a {@code null} value deletes its row: no row is unset) and audits it old to new with the
+     * justification and request id. The audit row's entity is the setting's row.
+     */
+    private void writeSetting(
+            @Nullable AccountingConfiguration row,
+            String key,
+            @Nullable String newValue,
+            String operation,
+            String justification,
+            String actor,
+            @Nullable String oldValue,
+            UUID requestId) {
+        UUID entityId;
+        if (newValue == null) {
+            entityId = Objects.requireNonNull(row, "a clear of an unset setting is no change")
+                    .getConfigId();
+            configurationRepository.delete(row);
+        } else {
+            AccountingConfiguration target = row;
+            if (target == null) {
+                target = new AccountingConfiguration();
+                target.setConfigKey(key);
+            }
+            target.setConfigValue(newValue);
+            entityId = configurationRepository.save(target).getConfigId();
+        }
+        AccountingAuditLog auditLog = new AccountingAuditLog();
+        auditLog.setEntityType(AUDIT_ENTITY_TYPE);
+        auditLog.setEntityId(entityId);
+        auditLog.setOperation(operation);
+        auditLog.setUserId(actor);
+        auditLog.setJustification(justification);
+        auditLog.setOldValue(key + "=" + (oldValue == null ? "" : oldValue));
+        auditLog.setNewValue(key + "=" + (newValue == null ? "" : newValue) + ";requestId=" + requestId);
+        auditLogRepository.save(auditLog);
+    }
+
+    /** Whether the request id was already served with this body; a reuse with another body is a 409. */
+    private boolean replayed(String requestOperation, UUID requestId, String fingerprint) {
+        Optional<AccountingAuditLog> recorded =
+                auditLogRepository.findFirstByOperationAndEntityId(requestOperation, requestId);
+        if (recorded.isEmpty()) {
+            return false;
+        }
+        if (!fingerprint.equals(recorded.get().getNewValue())) {
+            throw new IdempotencyConflictException("requestId " + requestId
+                    + " was already used for another configuration change; generate a new requestId for a new change");
+        }
+        log.info("Configuration PUT {} replayed; nothing written", requestId);
+        return true;
+    }
+
+    private void recordRequest(
+            String requestOperation, UUID requestId, String actor, String justification, String fingerprint) {
+        AccountingAuditLog row = new AccountingAuditLog();
+        row.setEntityType(AUDIT_ENTITY_TYPE);
+        row.setEntityId(requestId);
+        row.setOperation(requestOperation);
+        row.setUserId(actor);
+        row.setJustification(justification);
+        row.setNewValue(fingerprint);
+        auditLogRepository.save(row);
+    }
+
+    private static UUID requiredRequestId(@Nullable UUID requestId) {
+        if (requestId == null) {
+            throw InvalidRequestParameterException.forField(
+                    "requestId", "requestId is required: a UUID generated once per change");
+        }
+        return requestId;
+    }
+
+    /** A setting change's justification: 400 {@code VALIDATION_ERROR} when blank, 400 {@code JUSTIFICATION_REQUIRED} under 10. */
+    private static String settingJustification(@Nullable String value) {
+        String justification = Justification.required(value, "justification");
+        if (justification.length() > MAX_JUSTIFICATION) {
+            throw InvalidRequestParameterException.forField(
+                    "justification", "justification must not exceed " + MAX_JUSTIFICATION + " characters");
+        }
+        return justification;
+    }
+
+    private static int days(@Nullable Integer value, String field, int min, int max) {
+        if (value == null) {
+            throw InvalidRequestParameterException.forField(field, field + " is required");
+        }
+        if (value < min || value > max) {
+            throw InvalidRequestParameterException.forField(
+                    field, field + " must be between " + min + " and " + max + " days");
+        }
+        return value;
+    }
+
+    private String scaledAmount(BigDecimal amount) {
         return amount.setScale(functionalCurrency.fractionDigits(), RoundingMode.HALF_UP)
                 .toPlainString();
     }

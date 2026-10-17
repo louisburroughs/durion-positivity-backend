@@ -35,6 +35,9 @@ public class AgedReportCsvRenderer {
     /** Payables add the unaged bills not yet approved beside the buckets (AW11; CAP:550 S35, #2524). */
     private static final String UNAPPROVED_COLUMNS = "Unapproved,Unapproved Bills,Total Incl. Unapproved";
 
+    /** Payables also carry the estimate and the unapplied-payment netting (#2515). */
+    private static final String NETTING_COLUMNS = "Estimated Due Date Amount,Unapplied Payments,Net Owed";
+
     /**
      * Render the aged receivables report to CSV.
      *
@@ -84,6 +87,8 @@ public class AgedReportCsvRenderer {
                 .append(BUCKET_COLUMNS)
                 .append(',')
                 .append(UNAPPROVED_COLUMNS)
+                .append(',')
+                .append(NETTING_COLUMNS)
                 .append('\n');
         for (AgedPayablesRow row : report.getRows()) {
             csv.append(CsvFormat.escapeText(row.getVendorId().toString()))
@@ -105,6 +110,12 @@ public class AgedReportCsvRenderer {
                     .append(row.getUnapprovedBillCount())
                     .append(',')
                     .append(amount(row.getTotalIncludingUnapproved()))
+                    .append(',')
+                    .append(amount(row.getEstimatedDueDateAmount()))
+                    .append(',')
+                    .append(amount(row.getUnappliedPayments()))
+                    .append(',')
+                    .append(amount(row.getNetOwed()))
                     .append('\n');
         }
         csv.append("TOTAL,,");
@@ -115,6 +126,12 @@ public class AgedReportCsvRenderer {
                 .append(report.getUnapprovedBillCount())
                 .append(',')
                 .append(amount(report.getTotalIncludingUnapproved()))
+                .append(',')
+                .append(amount(report.getEstimatedDueDateAmount()))
+                .append(',')
+                .append(amount(report.getUnappliedPayments()))
+                .append(',')
+                .append(amount(report.getNetOwed()))
                 .append('\n');
         return csv.toString();
     }

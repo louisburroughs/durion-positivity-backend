@@ -44,6 +44,7 @@ class OrderEventsListenerTest {
     private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
     private final RegisterSessionReplica sessionReplica = mock(RegisterSessionReplica.class);
     private final UndepositedSessionProjection undepositedSessions = mock(UndepositedSessionProjection.class);
+    private final PurchaseOrderReplica purchaseOrderReplica = mock(PurchaseOrderReplica.class);
 
     private OrderEventsListener listener;
 
@@ -62,7 +63,8 @@ class OrderEventsListenerTest {
                 mock(PlatformTransactionManager.class),
                 com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
                 sessionReplica,
-                undepositedSessions);
+                undepositedSessions,
+                purchaseOrderReplica);
     }
 
     private String sessionClosed(String eventId) {
@@ -620,5 +622,59 @@ class OrderEventsListenerTest {
 
         verifyNoInteractions(sessionReplica);
         verify(processedEvents, never()).save(any());
+    }
+
+    // ---- the purchase-order replica (#2515) -----------------------------------------------------------------
+
+    private static final UUID PO_ID = UUID.fromString("00000000-0000-0000-0000-0000000000b1");
+
+    private String purchaseOrderUpdated(String eventId, int schemaVersion, long version, String termsJson) {
+        return """
+                {"eventId":"%s","eventType":"purchaseorder.updated","schemaVersion":%d,
+                 "aggregateId":"%s","aggregateVersion":%d,
+                 "occurredAtUtc":"2026-10-17T08:00:00Z","sourceService":"pos-order",
+                 "payload":{"purchaseOrderId":"%s","poNumber":"PO-7","vendorId":"00000000-0000-0000-0000-0000000000c1",
+                            "status":"APPROVED","occurredAt":"2026-10-17T08:00:00Z","lines":[]%s}}
+                """.formatted(eventId, schemaVersion, PO_ID, version, PO_ID, termsJson);
+    }
+
+    @Test
+    @DisplayName("#2515: a schema-2 purchaseorder.updated fact writes the replica with its terms and version, and is"
+            + " marked processed; it posts and records nothing")
+    void purchaseOrderV2WritesTheReplica() {
+        when(processedEvents.existsById("e-30")).thenReturn(false);
+
+        listener.onOrderEvent(purchaseOrderUpdated("e-30", 2, 4, ",\"paymentTermsId\":\"NET45\""));
+
+        ArgumentCaptor<com.positivity.domainevents.order.PurchaseOrderUpdatedV1> fact =
+                ArgumentCaptor.forClass(com.positivity.domainevents.order.PurchaseOrderUpdatedV1.class);
+        verify(purchaseOrderReplica).updated(fact.capture(), org.mockito.ArgumentMatchers.eq(4L));
+        assertThat(fact.getValue().purchaseOrderId()).isEqualTo(PO_ID);
+        assertThat(fact.getValue().paymentTermsId()).isEqualTo("NET45");
+        verify(processedEvents).save(any());
+        verifyNoInteractions(postingService, movementPostingService, ingestionRecorder);
+    }
+
+    @Test
+    @DisplayName("#2515: a schema-1 purchaseorder.updated fact has no paymentTermsId, which reads as null")
+    void purchaseOrderV1ReadsTermsAsNull() {
+        when(processedEvents.existsById("e-31")).thenReturn(false);
+
+        listener.onOrderEvent(purchaseOrderUpdated("e-31", 1, 2, ""));
+
+        ArgumentCaptor<com.positivity.domainevents.order.PurchaseOrderUpdatedV1> fact =
+                ArgumentCaptor.forClass(com.positivity.domainevents.order.PurchaseOrderUpdatedV1.class);
+        verify(purchaseOrderReplica).updated(fact.capture(), org.mockito.ArgumentMatchers.eq(2L));
+        assertThat(fact.getValue().paymentTermsId()).isNull();
+    }
+
+    @Test
+    @DisplayName("#2515: a redelivered purchaseorder.updated fact is skipped on its processed mark")
+    void purchaseOrderDuplicateIsSkipped() {
+        when(processedEvents.existsById("e-32")).thenReturn(true);
+
+        listener.onOrderEvent(purchaseOrderUpdated("e-32", 2, 4, ""));
+
+        verifyNoInteractions(purchaseOrderReplica);
     }
 }

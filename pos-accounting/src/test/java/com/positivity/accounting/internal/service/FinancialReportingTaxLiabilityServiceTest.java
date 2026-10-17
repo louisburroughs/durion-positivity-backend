@@ -124,7 +124,9 @@ class FinancialReportingTaxLiabilityServiceTest {
                 displayReferenceResolver,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
-                typedOutputTax);
+                typedOutputTax,
+                org.mockito.Mockito.mock(EstimatedDueDateService.class),
+                org.mockito.Mockito.mock(com.positivity.accounting.internal.repository.APPaymentRepository.class));
     }
 
     @Test
