@@ -196,7 +196,7 @@ class APPaymentServiceTest {
         when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(payment));
         when(billRepository.lockByVendorBillIdIn(any())).thenReturn(List.of(bill));
         when(billRepository.findById(billId)).thenReturn(Optional.of(bill));
-        when(allocationRequests.findById(requestId)).thenReturn(Optional.empty());
+        when(allocationRequests.findByRequestId(requestId)).thenReturn(Optional.empty());
         when(paymentRepository.save(any(APPayment.class))).thenAnswer(inv -> inv.getArgument(0));
 
         APPaymentResponse response =
@@ -225,7 +225,7 @@ class APPaymentServiceTest {
                 .field(billId)
                 .field(new BigDecimal("100.00"))
                 .digest();
-        when(allocationRequests.findById(requestId))
+        when(allocationRequests.findByRequestId(requestId))
                 .thenReturn(Optional.of(new com.positivity.accounting.internal.entity.APPaymentAllocationRequest(
                         requestId, paymentId, hash, java.time.Instant.parse("2026-10-17T12:00:00Z"))));
 
@@ -235,9 +235,33 @@ class APPaymentServiceTest {
         verify(allocationRepository, never()).saveAll(any());
 
         assertThatThrownBy(() -> service.allocateCashPayment(paymentId, allocate(requestId, billId, "99.00"), "clerk"))
-                .isInstanceOfSatisfying(
-                        VendorBillException.class,
-                        e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.IDEMPOTENCY_CONFLICT));
+                .isInstanceOf(com.positivity.accounting.internal.exception.IdempotencyConflictException.class);
+        // The replay check sits behind the payment row lock: a racing retry waits and then replays.
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(paymentRepository, allocationRequests);
+        inOrder.verify(paymentRepository).lockById(paymentId);
+        inOrder.verify(allocationRequests).findByRequestId(requestId);
+    }
+
+    @Test
+    @DisplayName("a bill named twice in one allocation request is 400: each line alone would pass the open-amount check")
+    void allocateCashPaymentRefusesADuplicateBill() {
+        UUID paymentId = UUID.randomUUID();
+        UUID billId = UUID.randomUUID();
+        when(paymentRepository.lockById(paymentId)).thenReturn(Optional.of(cashPayment(paymentId, "145.00")));
+        when(allocationRequests.findByRequestId(any())).thenReturn(Optional.empty());
+        com.positivity.accounting.internal.dto.AllocateAPPaymentRequest twice =
+                com.positivity.accounting.internal.dto.AllocateAPPaymentRequest.builder()
+                        .requestId(UUID.randomUUID())
+                        .allocations(List.of(
+                                new ExecuteAPPaymentRequest.AllocationLineRequest(billId, new BigDecimal("60.00")),
+                                new ExecuteAPPaymentRequest.AllocationLineRequest(billId, new BigDecimal("60.00"))))
+                        .build();
+
+        assertThatThrownBy(() -> service.allocateCashPayment(paymentId, twice, "clerk"))
+                .isInstanceOf(com.positivity.accounting.internal.exception.InvalidBillAllocationException.class)
+                .hasMessageContaining("more than once");
+        verify(allocationRepository, never()).saveAll(any());
+        verify(billRepository, never()).lockByVendorBillIdIn(any());
     }
 
     @Test
@@ -249,7 +273,7 @@ class APPaymentServiceTest {
         APPayment ach = cashPayment(achId, "145.00");
         ach.setPaymentMethod(com.positivity.accounting.internal.enums.PaymentMethod.ACH);
         when(paymentRepository.lockById(achId)).thenReturn(Optional.of(ach));
-        when(allocationRequests.findById(any())).thenReturn(Optional.empty());
+        when(allocationRequests.findByRequestId(any())).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.allocateCashPayment(achId, allocate(UUID.randomUUID(), billId, "10.00"), "c"))
                 .isInstanceOfSatisfying(
                         VendorBillException.class,

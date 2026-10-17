@@ -357,18 +357,20 @@ public class APPaymentServiceImpl implements APPaymentService {
             @NonNull UUID paymentId, @NonNull AllocateAPPaymentRequest request, @NonNull String currentUser) {
         lockTimeout.apply();
         String hash = allocationHash(paymentId, request);
+        // The payment row lock first, the replay check behind it: two calls with one requestId serialise here, and
+        // the second sees the first's request row instead of allocating again and colliding on its insert.
+        APPayment payment = paymentRepository.lockById(paymentId).orElseThrow(() -> notFound(paymentId));
         APPaymentAllocationRequest earlier =
-                allocationRequests.findById(request.getRequestId()).orElse(null);
+                allocationRequests.findByRequestId(request.getRequestId()).orElse(null);
         if (earlier != null) {
             if (!earlier.getPaymentId().equals(paymentId)
                     || !earlier.getRequestHash().equals(hash)) {
-                throw new VendorBillException(
-                        VendorBillException.Code.IDEMPOTENCY_CONFLICT,
+                throw new IdempotencyConflictException(
                         "requestId " + request.getRequestId() + " was already used with a different payload");
             }
-            return toResponse(paymentRepository.lockById(paymentId).orElseThrow(() -> notFound(paymentId)));
+            return toResponse(payment);
         }
-        APPayment payment = paymentRepository.lockById(paymentId).orElseThrow(() -> notFound(paymentId));
+        requireDistinctBills(request.getAllocations());
         if (payment.getPaymentMethod() != PaymentMethod.CASH) {
             throw new VendorBillException(
                     VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE,
@@ -393,7 +395,7 @@ public class APPaymentServiceImpl implements APPaymentService {
                     + " exceeds the payment's unapplied amount " + unapplied.toPlainString());
         }
         for (PlannedAllocation planned : plan) {
-            BigDecimal open = calculateOpenAmount(planned.bill().getVendorBillId());
+            BigDecimal open = calculateOpenAmount(planned.bill());
             if (planned.appliedAmount().compareTo(open) > 0) {
                 throw new InvalidBillAllocationException(
                         "Allocation " + planned.appliedAmount().toPlainString()
@@ -413,6 +415,20 @@ public class APPaymentServiceImpl implements APPaymentService {
                 total,
                 payment.getUnappliedAmount());
         return toResponse(payment);
+    }
+
+    /**
+     * One line per bill: a bill named twice would pass the per-line open-amount check with each line alone and end
+     * over-allocated once both are written.
+     */
+    private static void requireDistinctBills(List<ExecuteAPPaymentRequest.AllocationLineRequest> lines) {
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        for (ExecuteAPPaymentRequest.AllocationLineRequest line : lines) {
+            if (line.getVendorBillId() != null && !seen.add(line.getVendorBillId())) {
+                throw new InvalidBillAllocationException(
+                        "Bill " + line.getVendorBillId() + " is named more than once; send one line per bill");
+            }
+        }
     }
 
     private static String allocationHash(UUID paymentId, AllocateAPPaymentRequest request) {
@@ -728,11 +744,14 @@ public class APPaymentServiceImpl implements APPaymentService {
         VendorBill bill = billRepository
                 .findById(vendorBillId)
                 .orElseThrow(() -> new IllegalArgumentException("Bill not found: " + vendorBillId));
+        return calculateOpenAmount(bill);
+    }
 
+    /** The open amount of a bill already loaded (and locked) in this transaction: no re-fetch. */
+    private @NonNull BigDecimal calculateOpenAmount(@NonNull VendorBill bill) {
         // Use aggregate query to sum allocations in database (avoids N+1 and high
         // memory)
-        BigDecimal totalAllocated = allocationRepository.sumAllocatedAmountByVendorBillId(vendorBillId);
-
+        BigDecimal totalAllocated = allocationRepository.sumAllocatedAmountByVendorBillId(bill.getVendorBillId());
         return bill.getTotalAmount().subtract(totalAllocated);
     }
 }

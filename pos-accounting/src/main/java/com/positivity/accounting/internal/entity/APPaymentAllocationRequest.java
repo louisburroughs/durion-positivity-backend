@@ -1,9 +1,10 @@
 package com.positivity.accounting.internal.entity;
 
-import com.positivity.shared.id.AssignedIdentifier;
+import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
@@ -16,8 +17,8 @@ import lombok.Setter;
 /**
  * One {@code POST /v1/accounting/ap/payments/{paymentId}/allocations} request (CAP:550 S17, #2513): the caller's
  * {@code requestId}, the payment it allocated and a hash of its lines, so a replay answers the same payment and
- * another body under the same id is refused (409 {@code IDEMPOTENCY_CONFLICT}). The id is the caller's, so it is
- * assigned, not generated.
+ * another body under the same id is refused (409 {@code IDEMPOTENCY_CONFLICT}). Its own key is generated; the
+ * caller's {@code requestId} is unique per tenant (the #2678 convention), so two tenants may reuse one id.
  */
 @Entity
 @Table(name = "ap_payment_allocation_request")
@@ -27,9 +28,11 @@ import lombok.Setter;
 public class APPaymentAllocationRequest extends TenantScopedEntity {
 
     @Id
-    @AssignedIdentifier(
-            "the caller's requestId: the key a replay of the allocation command is matched on, so minting one"
-                    + " here would make every replay a new allocation")
+    @GeneratedValue
+    @UUIDv7Id
+    @Column(name = "allocation_request_id", nullable = false, updatable = false, columnDefinition = "UUID")
+    private UUID allocationRequestId;
+
     @Column(name = "request_id", nullable = false, updatable = false, columnDefinition = "UUID")
     private UUID requestId;
 

@@ -38,15 +38,7 @@ public interface APPaymentRepository extends JpaRepository<APPayment, UUID> {
      */
     List<APPayment> findByStatus(APPaymentStatus status);
 
-    /** The {@code CASH} payment a drawer movement created, if the movement's session already posted (S17). */
-    Optional<APPayment> findByCashMovementId(@NonNull UUID cashMovementId);
 
-    /**
-     * Unapplied cash-on-delivery payments, oldest first (S17 PROPOSED 8, read support for S19 "Unapplied COD older
-     * than N days" and the aged-payables view).
-     */
-    List<APPayment> findByPaymentMethodAndUnappliedAmountGreaterThanOrderByPaymentDateAscCreatedAtAsc(
-            @NonNull PaymentMethod paymentMethod, @NonNull BigDecimal unappliedAbove);
 
     /**
      * The payment, row-locked to the end of the transaction (CAP:550 S42, #2603): its outbox posting and a

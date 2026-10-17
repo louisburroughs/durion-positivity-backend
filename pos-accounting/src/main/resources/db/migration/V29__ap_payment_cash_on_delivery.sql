@@ -21,15 +21,20 @@ ALTER TABLE public.ap_payment
 -- Follows TENANCY_SCHEMA.md "Adding a table" (ADR-0062).
 CREATE TABLE public.ap_payment_allocation_request (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
+    allocation_request_id uuid NOT NULL,
     request_id uuid NOT NULL,
     payment_id uuid NOT NULL,
     request_hash character varying(64) NOT NULL,
     created_at timestamp(6) with time zone NOT NULL
 );
 ALTER TABLE ONLY public.ap_payment_allocation_request
-    ADD CONSTRAINT ap_payment_allocation_request_pkey PRIMARY KEY (request_id);
+    ADD CONSTRAINT ap_payment_allocation_request_pkey PRIMARY KEY (allocation_request_id);
 ALTER TABLE ONLY public.ap_payment_allocation_request
-    ADD CONSTRAINT ap_payment_allocation_request_tenant_key UNIQUE (tenant_id, request_id);
+    ADD CONSTRAINT ap_payment_allocation_request_tenant_key UNIQUE (tenant_id, allocation_request_id);
+-- The caller's requestId is unique per tenant, never a global key: a tenant's replay check never sees another
+-- tenant's row under RLS, so another tenant reusing the same id must not collide (the #2678 convention).
+ALTER TABLE ONLY public.ap_payment_allocation_request
+    ADD CONSTRAINT uq_ap_payment_allocation_request_request UNIQUE (tenant_id, request_id);
 CREATE INDEX ap_payment_allocation_request_tenant_idx ON public.ap_payment_allocation_request USING btree (tenant_id);
 CREATE INDEX ap_payment_allocation_request_payment_idx
     ON public.ap_payment_allocation_request USING btree (tenant_id, payment_id);

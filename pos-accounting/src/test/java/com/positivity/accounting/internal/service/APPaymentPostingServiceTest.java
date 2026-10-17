@@ -118,6 +118,19 @@ class APPaymentPostingServiceTest {
     }
 
     @Test
+    @DisplayName("a CASH payment without its session-close entry is a defect, not a silent no-op (#2731 review)")
+    void cashPaymentWithoutItsCloseEntryIsRefused() {
+        payment.setPaymentMethod(PaymentMethod.CASH);
+        payment.setStatus(APPaymentStatus.GL_POST_PENDING);
+        payment.setGlJournalEntry(null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.postPending(PAYMENT_ID))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("session-close entry");
+        org.mockito.Mockito.verifyNoInteractions(journalEntries);
+    }
+
+    @Test
     @DisplayName("AC1: 412.00 from the bank with a 1.50 fee → one entry dated payment_date: Dr 2000 412.00 / Dr 6030"
             + " 1.50 / Cr bank 413.50; the payment GL_POSTED with it")
     void entryShape() {

@@ -186,9 +186,10 @@ class APPaymentPreGatewayChecksTest {
     class SlotOne {
 
         @Test
-        @DisplayName("1a: CREDIT_CARD and OTHER → 422 AP_PAYMENT_METHOD_NOT_SUPPORTED (OI-17)")
+        @DisplayName("1a: CREDIT_CARD, OTHER and CASH (minted by the session close only, S17) → 422"
+                + " AP_PAYMENT_METHOD_NOT_SUPPORTED (OI-17)")
         void cardAndOtherAreRefused() {
-            for (PaymentMethod method : List.of(PaymentMethod.CREDIT_CARD, PaymentMethod.OTHER)) {
+            for (PaymentMethod method : List.of(PaymentMethod.CREDIT_CARD, PaymentMethod.OTHER, PaymentMethod.CASH)) {
                 assertThatThrownBy(() -> checks.checkRequest(request(method, "USD", USD_BANK), Optional.of(TODAY)))
                         .isInstanceOf(VendorBillException.class)
                         .extracting(APPaymentPreGatewayChecksTest::code)

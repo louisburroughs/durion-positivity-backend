@@ -118,6 +118,29 @@ class RegisterCashMovementPostingServiceTest {
         return movement(movementId, "PETTY_EXPENSE", "OUT", amount, "USD", category, null, null, receipt);
     }
 
+    /** The clerk id of the COD payment's {@code created_by} is cut to the column (varchar(50)); the memo keeps it. */
+    @Test
+    @DisplayName("#2731 review: a clerk id longer than ap_payment.created_by (50) is cut, not a failed close")
+    void longClerkIdFitsCreatedBy() {
+        UUID vendor = UUID.randomUUID();
+        String longClerk = "clerk-" + "x".repeat(70);
+        Movement cod = new Movement(
+                COD, "VENDOR_COD", "OUT", new BigDecimal("12.00"), "USD", null, vendor, null, null, longClerk, null,
+                null, CLOSED_AT.minusSeconds(3600), null, List.of(), null, null, null);
+        postsReturn(UUID.randomUUID());
+        when(vendorCopies.find(vendor)).thenReturn(java.util.Optional.empty());
+
+        service.postMovements(fact(cod), ENVELOPE_EVENT_ID);
+
+        org.mockito.ArgumentCaptor<com.positivity.accounting.internal.entity.APPayment> saved =
+                org.mockito.ArgumentCaptor.forClass(com.positivity.accounting.internal.entity.APPayment.class);
+        verify(apPaymentRepository).save(saved.capture());
+        assertThat(saved.getValue().getCreatedBy())
+                .hasSize(RegisterCashMovementPostingService.CREATED_BY_MAX)
+                .isEqualTo(longClerk.substring(0, 50));
+        assertThat(saved.getValue().getMemo()).contains(longClerk.substring(0, 40));
+    }
+
     private static Movement movement(
             UUID movementId,
             String reason,
@@ -378,6 +401,7 @@ class RegisterCashMovementPostingServiceTest {
         assertThat(payment.getPaymentRef()).isEqualTo("COD-" + COD);
         assertThat(payment.getVendorId()).isEqualTo(vendor);
         assertThat(payment.getVendorName()).isEqualTo("Acme Parts");
+        assertThat(payment.getCreatedBy()).isEqualTo("clerk-1");
         assertThat(payment.getGrossAmount()).isEqualByComparingTo("145.00");
         assertThat(payment.getUnappliedAmount()).isEqualByComparingTo("145.00");
         assertThat(payment.getFeeAmount()).isEqualByComparingTo("0");
@@ -454,8 +478,8 @@ class RegisterCashMovementPostingServiceTest {
                     + " at close must change the deposit's clearing net too")
     void clearingEffectFollowsEveryDisposition() {
         // One reason per disposition. A disposition added later fails the exhaustive switch below (it no longer
-        // compiles), and a reason moved to another disposition (the vendor cash on delivery half of #2513 moving
-        // VENDOR_COD off SKIP_VENDOR_COD) fails the expectation: either way the deposit side is revisited.
+        // compiles), and a reason moved to another disposition fails the expectation: either way the deposit side
+        // is revisited.
         Map<String, RegisterCashMovementPostingService.Disposition> reasons = Map.of(
                 "PETTY_EXPENSE", RegisterCashMovementPostingService.Disposition.POST_PETTY_EXPENSE,
                 "VENDOR_COD", RegisterCashMovementPostingService.Disposition.POST_VENDOR_COD,
@@ -463,11 +487,8 @@ class RegisterCashMovementPostingServiceTest {
                 "FLOAT_INCREASE", RegisterCashMovementPostingService.Disposition.NOTHING_AT_CLOSE,
                 "FLOAT_DECREASE", RegisterCashMovementPostingService.Disposition.NOTHING_AT_CLOSE,
                 "A_REASON_NOBODY_KNOWS", RegisterCashMovementPostingService.Disposition.UNCLASSIFIED);
-        // SKIP_VENDOR_COD is history (the petty-expense half's placeholder); no reason selects it any more.
         assertThat(reasons.values())
-                .containsAll(java.util.Arrays.stream(RegisterCashMovementPostingService.Disposition.values())
-                        .filter(d -> d != RegisterCashMovementPostingService.Disposition.SKIP_VENDOR_COD)
-                        .toList());
+                .containsAll(java.util.Arrays.asList(RegisterCashMovementPostingService.Disposition.values()));
         reasons.forEach((reason, disposition) -> {
             assertThat(RegisterCashMovementPostingService.dispositionOf(reason))
                     .as(reason)
@@ -477,7 +498,7 @@ class RegisterCashMovementPostingServiceTest {
                         // Dr expense (or Dr 2000) / Cr 1095: a credit of the movement's amount.
                         case POST_PETTY_EXPENSE, POST_VENDOR_COD -> "-12.50";
                         // Not posted at close (yet): nothing reached 1095, so the deposit clears nothing for it.
-                        case SKIP_VENDOR_COD, NOTHING_AT_CLOSE, UNCLASSIFIED -> "0";
+                        case NOTHING_AT_CLOSE, UNCLASSIFIED -> "0";
                     };
             Movement movement =
                     movement(UUID.randomUUID(), reason, "OUT", "12.50", "USD", "SHOP_SUPPLIES", null, null, null);

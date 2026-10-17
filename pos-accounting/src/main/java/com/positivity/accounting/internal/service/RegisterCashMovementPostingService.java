@@ -58,8 +58,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  *   <li>{@code VENDOR_COD} (#2513 COD half, AW41): {@code Dr ACCOUNTS_PAYABLE / Cr CASH_CLEARING} (1095) for the
  *       movement's amount, and in the same transaction an AP payment with method {@code CASH} (gross = unapplied =
  *       the amount, {@code GL_POSTED}, linked to the entry), to which the vendor's approved bill is allocated later
- *       ({@code POST /v1/accounting/ap/payments/{id}/allocations}, which posts nothing). {@code SKIP_VENDOR_COD} is
- *       kept for the record of what the petty-expense half did before this landed; nothing selects it any more.
+ *       ({@code POST /v1/accounting/ap/payments/{id}/allocations}, which posts nothing). Before this half, the
+ *       movement was skipped and counted unposted (PR #2592); pos-order refused the reason until then (#2576).
  *   <li>{@code BANK_DROP}, {@code FLOAT_INCREASE}, {@code FLOAT_DECREASE}: nothing at close (the deposit, S18,
  *       {@link UndepositedSessionProjection}; Change float, S15).
  *   <li>No reason (recorded before S16) or a reason this module does not know: nothing, logged and counted as {@code
@@ -114,7 +114,7 @@ public class RegisterCashMovementPostingService {
     static final String POSTED_METRIC = "accounting.cash_movement.posted";
 
     /**
-     * Movements left unposted that cash did leave the drawer for, by reason: {@code VENDOR_COD}, {@code UNCLASSIFIED}.
+     * Movements left unposted that cash did leave the drawer for, by reason: {@code UNCLASSIFIED}.
      * Any increment must alert: 1095 then misses cash that left the drawer.
      */
     static final String UNPOSTED_METRIC = "accounting.cash_movement.unposted";
@@ -127,8 +127,6 @@ public class RegisterCashMovementPostingService {
         POST_PETTY_EXPENSE,
         /** Posts at close: Dr {@code ACCOUNTS_PAYABLE} / Cr {@code CASH_CLEARING}, and creates the {@code CASH} AP payment. */
         POST_VENDOR_COD,
-        /** The vendor cash on delivery half of #2513 is not built: skipped at ERROR, backfilled by that half. */
-        SKIP_VENDOR_COD,
         /** Posts nothing at close by design: a bank drop or a float change. */
         NOTHING_AT_CLOSE,
         /** No reason (recorded before S16) or one this module does not know: not posted. */
@@ -227,7 +225,6 @@ public class RegisterCashMovementPostingService {
         for (Movement movement : movements) {
             switch (dispositionOf(movement.reason())) {
                 case POST_PETTY_EXPENSE, POST_VENDOR_COD -> toPost.add(movement);
-                case SKIP_VENDOR_COD -> skipVendorCashOnDelivery(fact, movement);
                 case NOTHING_AT_CLOSE ->
                     log.debug(
                             "Drawer movement posts nothing at close | sessionId={} | movementId={} | reason={}",
@@ -443,9 +440,8 @@ public class RegisterCashMovementPostingService {
             problem = "amount " + movement.amount() + " (must be positive)";
         }
         if (problem != null) {
-            throw new RegisterSessionContractViolationException(
-                    (cod ? "Vendor cash-on-delivery movement " : "Petty-expense movement ") + movement.movementId()
-                            + " of session " + fact.sessionId() + " cannot post: " + problem);
+            throw new RegisterSessionContractViolationException(label(movement) + movement.movementId() + " of session "
+                    + fact.sessionId() + " cannot post: " + problem);
         }
         return movement;
     }
@@ -499,7 +495,8 @@ public class RegisterCashMovementPostingService {
         payment.setCashMovementId(movement.movementId());
         payment.setMemo(
                 abbreviate("Cash on delivery paid from register " + fact.terminalId() + " by " + movement.clerkId()));
-        payment.setCreatedBy(movement.clerkId());
+        // ap_payment.created_by is varchar(50); pos-order's clerk id is unbounded. The memo keeps the whole id.
+        payment.setCreatedBy(fit(movement.clerkId(), CREATED_BY_MAX));
         payment.setCreatedAt(Instant.now(clock));
         apPaymentRepository.save(payment);
         log.info(
@@ -519,10 +516,17 @@ public class RegisterCashMovementPostingService {
         Set<UUID> seen = new HashSet<>();
         for (Movement movement : pending) {
             if (!seen.add(movement.movementId())) {
-                throw new RegisterSessionContractViolationException("Petty-expense movement " + movement.movementId()
+                throw new RegisterSessionContractViolationException(label(movement) + movement.movementId()
                         + " of session " + fact.sessionId() + " cannot post: the fact names it more than once");
             }
         }
+    }
+
+    /** How a contract violation names the movement: by what it would have posted as. */
+    private static String label(Movement movement) {
+        return dispositionOf(movement.reason()) == Disposition.POST_VENDOR_COD
+                ? "Vendor cash-on-delivery movement "
+                : "Petty-expense movement ";
     }
 
     private boolean inForeignCurrency(RegisterSessionClosedV1 fact, List<Movement> toPost) {
@@ -565,26 +569,6 @@ public class RegisterCashMovementPostingService {
                 ledgerCurrency.code(),
                 toPost.size(),
                 recorded);
-    }
-
-    /**
-     * The COD half of #2513 is not built: the movement is skipped, at ERROR, and counted on {@value #UNPOSTED_METRIC}
-     * {@code {reason=VENDOR_COD}}, which must alert. Cash left the drawer and 1095 does not show it until the COD half
-     * backfills the movement from the stored close fact (see the class doc).
-     */
-    private void skipVendorCashOnDelivery(RegisterSessionClosedV1 fact, Movement movement) {
-        log.error(
-                "Vendor cash on delivery NOT POSTED: its AP payment posting is not built yet (#2513 COD half; pos-order"
-                        + " keeps the reason off until then, #2576). The COD half backfills it from this fact's"
-                        + " accounting_event payload | sessionId={} | terminalId={} | movementId={} | vendorId={}"
-                        + " | amount={} {}",
-                fact.sessionId(),
-                fact.terminalId(),
-                movement.movementId(),
-                movement.vendorId(),
-                movement.amount(),
-                movement.currencyCode());
-        countAfterCommit(UNPOSTED_METRIC, VENDOR_COD);
     }
 
     private void leaveUnclassified(RegisterSessionClosedV1 fact, Movement movement) {
@@ -631,6 +615,13 @@ public class RegisterCashMovementPostingService {
         } else {
             counter.increment();
         }
+    }
+
+    /** The longest {@code ap_payment.created_by} (varchar(50)). */
+    static final int CREATED_BY_MAX = 50;
+
+    private static String fit(String text, int max) {
+        return text.length() <= max ? text : text.substring(0, max);
     }
 
     private static String abbreviate(String text) {

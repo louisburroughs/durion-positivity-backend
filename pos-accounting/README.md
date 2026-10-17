@@ -981,9 +981,9 @@ schema-1 fact has no movements and posts its over/short alone, as before.
   replay with the same lines answers the same payment, another body 409 `IDEMPOTENCY_CONFLICT`); 400
   `VALIDATION_ERROR` for a bill of another vendor, not `APPROVED`, over its open amount or a total above the unapplied
   amount; 403 `AP_PAYMENT_SELF_APPROVED_BILL` when the caller approved a bill (approver ≠ payer on every allocation,
-  AW6.2); 404; 422 `AP_PAYMENT_NOT_ALLOCATABLE` when the payment is not `CASH` or nothing is unapplied. For S19,
-  `APPaymentRepository#findByPaymentMethodAndUnappliedAmountGreaterThanOrderByPaymentDateAscCreatedAtAsc` lists the
-  unapplied COD payments oldest first. Before this half, a `VENDOR_COD` movement was skipped and counted on
+  AW6.2); 404; 422 `AP_PAYMENT_NOT_ALLOCATABLE` when the payment is not `CASH` or nothing is unapplied; a bill named
+  twice is 400. The pay command refuses `CASH` (422 `AP_PAYMENT_METHOD_NOT_SUPPORTED`): the close posting is the only
+  way a cash payment is made. Before this half, a `VENDOR_COD` movement was skipped and counted on
   `accounting.cash_movement.unposted{reason=VENDOR_COD}`; pos-order refused the reason until then (#2576), so no
   stored close fact carries one and no backfill is needed.
 - **Metrics** — `accounting.cash_movement.posted{reason}` and `accounting.cash_movement.unposted{reason}`, counted
