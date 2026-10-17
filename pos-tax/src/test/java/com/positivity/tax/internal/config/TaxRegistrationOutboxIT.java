@@ -24,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
@@ -47,8 +48,12 @@ import tools.jackson.databind.ObjectMapper;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("pg")
+@ResourceLock(TaxRegistrationOutboxIT.OUTBOX_LOCK)
 @DisplayName("Tax registration outbox, publish and re-send on Postgres (CAP:550 S32c)")
 class TaxRegistrationOutboxIT {
+
+    /** JUnit resource lock for tests that drain the shared Postgres {@code event_outbox} through a publisher. */
+    static final String OUTBOX_LOCK = "pos-tax-outbox";
 
     private static final String TOPIC = "tax.events.v1";
 
