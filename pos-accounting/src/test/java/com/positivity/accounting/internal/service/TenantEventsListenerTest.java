@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.tenancy.PlatformTenant;
 import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.replica.TenantProjectionEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.dao.CannotAcquireLockException;
 import tools.jackson.databind.ObjectMapper;
@@ -37,14 +40,22 @@ class TenantEventsListenerTest {
     private final ProcessedEventRepository processedEvents = mock(ProcessedEventRepository.class);
     private final AccountingTemplateReader reader = mock(AccountingTemplateReader.class);
     private final AccountingTenantProvisioner provisioner = mock(AccountingTenantProvisioner.class);
+    private final TenantLocaleReplicaWriter localeWriter = mock(TenantLocaleReplicaWriter.class);
     private final List<Optional<UUID>> boundAtRead = new ArrayList<>();
     private final List<Optional<UUID>> boundAtProvision = new ArrayList<>();
+    private final List<Optional<UUID>> boundAtLocale = new ArrayList<>();
 
     private TenantEventsListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new TenantEventsListener(new ObjectMapper(), processedEvents, reader, provisioner);
+        listener = new TenantEventsListener(new ObjectMapper(), processedEvents, reader, provisioner, localeWriter);
+        doAnswer(invocation -> boundAtLocale.add(TenantContext.current()))
+                .when(localeWriter)
+                .apply(any());
+        doAnswer(invocation -> boundAtLocale.add(TenantContext.current()))
+                .when(localeWriter)
+                .applyAndRecord(any());
         when(reader.snapshot()).thenAnswer(invocation -> {
             boundAtRead.add(TenantContext.current());
             return SNAPSHOT;
@@ -88,7 +99,7 @@ class TenantEventsListenerTest {
                  "payload":{"tenantId":"%s"}}
                 """.formatted(NEW_TENANT));
 
-        verifyNoInteractions(processedEvents, reader, provisioner);
+        verifyNoInteractions(processedEvents, reader, provisioner, localeWriter);
     }
 
     @Test
@@ -145,6 +156,87 @@ class TenantEventsListenerTest {
                 .isInstanceOf(CannotAcquireLockException.class);
 
         assertThat(TenantContext.current()).contains(PlatformTenant.ID);
+    }
+
+    @Test
+    @DisplayName("tenant.created stores the locale after provisioning, bound to the new tenant")
+    void createdStoresTheLocaleAfterProvisioning() {
+        listener.onTenantEvent(createdWithLocale(EVENT_ID, NEW_TENANT.toString(), "fr-CA"));
+
+        InOrder order = inOrder(provisioner, localeWriter);
+        order.verify(provisioner).provision(NEW_TENANT, EVENT_ID, SNAPSHOT);
+        ArgumentCaptor<TenantProjectionEvent> fact = ArgumentCaptor.forClass(TenantProjectionEvent.class);
+        order.verify(localeWriter).apply(fact.capture());
+        assertThat(fact.getValue().tenantId()).isEqualTo(NEW_TENANT);
+        assertThat(fact.getValue().locale()).isEqualTo("fr-CA");
+        assertThat(boundAtLocale).containsExactly(Optional.of(NEW_TENANT));
+    }
+
+    @Test
+    @DisplayName("tenant.created for the platform tenant is not provisioned but its locale is stored")
+    void platformTenantLocaleIsStored() {
+        listener.onTenantEvent(createdWithLocale(EVENT_ID, PlatformTenant.ID.toString(), "en-US"));
+
+        verify(provisioner, never()).provision(any(), any(), any());
+        verify(localeWriter).apply(any());
+        assertThat(boundAtLocale).containsExactly(Optional.of(PlatformTenant.ID));
+    }
+
+    @Test
+    @DisplayName("tenant.updated with a locale is applied and recorded in one write, bound to its tenant")
+    void updatedStoresTheLocale() {
+        listener.onTenantEvent(updated(EVENT_ID, "de-DE"));
+
+        ArgumentCaptor<TenantProjectionEvent> fact = ArgumentCaptor.forClass(TenantProjectionEvent.class);
+        verify(localeWriter).applyAndRecord(fact.capture());
+        assertThat(fact.getValue().locale()).isEqualTo("de-DE");
+        assertThat(fact.getValue().eventId()).isEqualTo(EVENT_ID);
+        assertThat(boundAtLocale).containsExactly(Optional.of(NEW_TENANT));
+        verifyNoInteractions(reader, provisioner);
+    }
+
+    @Test
+    @DisplayName("a replayed tenant.updated eventId is skipped before the write")
+    void replayedUpdatedIsSkipped() {
+        when(processedEvents.existsById(EVENT_ID)).thenReturn(true);
+
+        listener.onTenantEvent(updated(EVENT_ID, "de-DE"));
+
+        verifyNoInteractions(localeWriter);
+    }
+
+    @Test
+    @DisplayName("tenant.updated without a locale leaves the replica alone and records nothing")
+    void updatedWithoutLocaleIsSkipped() {
+        listener.onTenantEvent(updated(EVENT_ID, null));
+
+        verifyNoInteractions(localeWriter, processedEvents);
+    }
+
+    @Test
+    @DisplayName("tenant.created without a locale still provisions and writes through the guard of the writer")
+    void createdWithoutLocaleStillProvisions() {
+        listener.onTenantEvent(created(EVENT_ID, NEW_TENANT.toString()));
+
+        verify(provisioner).provision(NEW_TENANT, EVENT_ID, SNAPSHOT);
+        ArgumentCaptor<TenantProjectionEvent> fact = ArgumentCaptor.forClass(TenantProjectionEvent.class);
+        verify(localeWriter).apply(fact.capture());
+        assertThat(fact.getValue().locale()).isNull();
+    }
+
+    private static String createdWithLocale(String eventId, String tenantId, String locale) {
+        return """
+                {"eventId":"%s","eventType":"tenant.created","aggregateVersion":1,
+                 "payload":{"tenantId":"%s","slug":"acme","displayName":"Acme","status":"PENDING","locale":"%s"}}
+                """.formatted(eventId, tenantId, locale);
+    }
+
+    private static String updated(String eventId, String locale) {
+        String localeField = locale == null ? "" : ",\"locale\":\"" + locale + "\"";
+        return """
+                {"eventId":"%s","eventType":"tenant.updated","aggregateVersion":3,
+                 "payload":{"tenantId":"%s","slug":"acme","status":"ACTIVE"%s}}
+                """.formatted(eventId, NEW_TENANT, localeField);
     }
 
     private static String created(String eventId, String tenantId) {
