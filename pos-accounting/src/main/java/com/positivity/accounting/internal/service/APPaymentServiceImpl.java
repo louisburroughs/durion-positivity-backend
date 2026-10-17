@@ -1,5 +1,6 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRequestRepository;
 import com.positivity.accounting.internal.entity.APPaymentAllocationRequest;
 import com.positivity.accounting.internal.dto.AllocateAPPaymentRequest;
