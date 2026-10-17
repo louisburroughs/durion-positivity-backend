@@ -492,9 +492,7 @@ public class APPaymentServiceImpl implements APPaymentService {
 
         for (ExecuteAPPaymentRequest.AllocationLineRequest allocationLine : lines) {
             VendorBill bill = validateBillForAllocation(
-                    allocationLine.getVendorBillId(),
-                    locked.get(allocationLine.getVendorBillId()),
-                    vendorId);
+                    allocationLine.getVendorBillId(), locked.get(allocationLine.getVendorBillId()), vendorId);
             if (allocationLine.getAppliedAmount().signum() != 0) {
                 // A line of 0.00 pays nothing: it is no allocation and blocks nothing (#2622 review LOW-3).
                 allocations.add(new PlannedAllocation(bill, allocationLine.getAppliedAmount()));
