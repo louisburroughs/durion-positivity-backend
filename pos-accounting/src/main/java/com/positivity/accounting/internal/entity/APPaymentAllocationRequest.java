@@ -1,6 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
 import com.positivity.tenancy.TenantScopedEntity;
+import com.positivity.shared.id.AssignedIdentifier;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -26,6 +27,8 @@ import lombok.Setter;
 public class APPaymentAllocationRequest extends TenantScopedEntity {
 
     @Id
+    @AssignedIdentifier("the caller's requestId: the key a replay of the allocation command is matched on, so minting one"
+            + " here would make every replay a new allocation")
     @Column(name = "request_id", nullable = false, updatable = false, columnDefinition = "UUID")
     private UUID requestId;
 
