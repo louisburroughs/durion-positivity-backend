@@ -20,7 +20,8 @@ public interface PurchaseOrderVendorService {
      * @throws com.positivity.order.internal.exception.PurchaseOrderRequestValidationException on any other sort
      *     property
      */
-    @NonNull Page<PurchaseOrderVendorResponse> listVendors(
+    @NonNull
+    Page<PurchaseOrderVendorResponse> listVendors(
             @NonNull ListPurchaseOrderVendorsRequest filter, @NonNull Pageable pageable);
 
     /**
@@ -29,5 +30,6 @@ public interface PurchaseOrderVendorService {
      * @throws com.positivity.web.common.ReplicationPendingException {@code VENDOR_REPLICATION_PENDING} when the copy
      *     does not hold the id: it may only not have replicated yet, never a 404 (ADR-0017 §1)
      */
-    @NonNull PurchaseOrderVendorResponse getVendor(@NonNull UUID vendorId);
+    @NonNull
+    PurchaseOrderVendorResponse getVendor(@NonNull UUID vendorId);
 }

@@ -75,11 +75,14 @@ class PurchaseOrderVendorControllerTest extends BaseControllerSliceTest {
             + " passes status, q and a displayName default sort to the service")
     void listAnswersFourFieldsAndPassesFilters() throws Exception {
         when(vendorService.listVendors(any(), any()))
-                .thenReturn(new PageImpl<>(
-                        List.of(vendor(PurchaseOrderVendorStatus.ACTIVE)), PageRequest.of(0, 20), 1));
+                .thenReturn(
+                        new PageImpl<>(List.of(vendor(PurchaseOrderVendorStatus.ACTIVE)), PageRequest.of(0, 20), 1));
 
         String body = mockMvc.perform(withGatewayAuth(
-                        get("/v1/orders/purchase-order-vendors").param("status", "ACTIVE").param("q", "acme"), VIEW))
+                        get("/v1/orders/purchase-order-vendors")
+                                .param("status", "ACTIVE")
+                                .param("q", "acme"),
+                        VIEW))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].vendorId").value(VENDOR_ID.toString()))
                 .andExpect(jsonPath("$.content[0].vendorNumber").value("V-000123"))

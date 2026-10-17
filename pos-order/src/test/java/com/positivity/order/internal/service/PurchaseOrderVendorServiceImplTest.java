@@ -69,8 +69,8 @@ class PurchaseOrderVendorServiceImplTest {
                 PageRequest.of(0, 20, Sort.by(Sort.Order.desc("vendorNumber"), Sort.Order.asc("status"))));
 
         assertThat(sorted.getSort())
-                .isEqualTo(Sort.by(
-                        Sort.Order.desc("vendorNumber"), Sort.Order.asc("status"), Sort.Order.asc("vendorId")));
+                .isEqualTo(
+                        Sort.by(Sort.Order.desc("vendorNumber"), Sort.Order.asc("status"), Sort.Order.asc("vendorId")));
     }
 
     @Test
@@ -115,8 +115,9 @@ class PurchaseOrderVendorServiceImplTest {
         when(vendors.findById(VENDOR_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getVendor(VENDOR_ID))
-                .isInstanceOfSatisfying(ReplicationPendingException.class, e -> assertThat(e.getCode())
-                        .isEqualTo(SupplierVendorGuard.VENDOR_REPLICATION_PENDING));
+                .isInstanceOfSatisfying(
+                        ReplicationPendingException.class,
+                        e -> assertThat(e.getCode()).isEqualTo(SupplierVendorGuard.VENDOR_REPLICATION_PENDING));
     }
 
     @Test

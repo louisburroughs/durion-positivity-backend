@@ -19,16 +19,20 @@ import java.util.UUID;
 @Schema(description = "A vendor of pos-order's vendor copy: the number, name and status a purchase order needs")
 public record PurchaseOrderVendorResponse(
         @Schema(
-                        description = "The pos-supplier vendor id to name on a purchase order",
-                        example = "01960003-0000-7000-8000-000000000001",
-                        requiredMode = REQUIRED)
-                UUID vendorId,
-        @Schema(description = "The vendor number", example = "V-000123", requiredMode = REQUIRED) String vendorNumber,
+                description = "The pos-supplier vendor id to name on a purchase order",
+                example = "01960003-0000-7000-8000-000000000001",
+                requiredMode = REQUIRED)
+        UUID vendorId,
+
+        @Schema(description = "The vendor number", example = "V-000123", requiredMode = REQUIRED)
+        String vendorNumber,
+
         @Schema(description = "The vendor's display name", example = "Acme Tire Supply", requiredMode = REQUIRED)
-                String displayName,
+        String displayName,
+
         @Schema(
-                        description = "ACTIVE vendors take new purchase orders; INACTIVE ones are refused at create,"
-                                + " approve and transmit (422 VENDOR_INACTIVE)",
-                        example = "ACTIVE",
-                        requiredMode = REQUIRED)
-                PurchaseOrderVendorStatus status) {}
+                description = "ACTIVE vendors take new purchase orders; INACTIVE ones are refused at create,"
+                        + " approve and transmit (422 VENDOR_INACTIVE)",
+                example = "ACTIVE",
+                requiredMode = REQUIRED)
+        PurchaseOrderVendorStatus status) {}

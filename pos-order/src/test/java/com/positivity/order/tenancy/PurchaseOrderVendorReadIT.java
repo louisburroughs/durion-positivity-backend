@@ -40,7 +40,8 @@ class PurchaseOrderVendorReadIT extends PostgresTenancyTestBase {
     @Autowired
     private PurchaseOrderVendorService vendorRead;
 
-    private final String token = "VR" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    private final String token =
+            "VR" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     private final UUID activeA = UUID.randomUUID();
     private final UUID inactiveA = UUID.randomUUID();
     private final UUID activeB = UUID.randomUUID();
@@ -115,7 +116,8 @@ class PurchaseOrderVendorReadIT extends PostgresTenancyTestBase {
             assertThat(none.getContent()).isEmpty();
             assertThat(none.getTotalElements()).isZero();
 
-            Page<PurchaseOrderVendorResponse> byNumberDesc = list(null, token, Sort.by(Sort.Order.desc("vendorNumber")));
+            Page<PurchaseOrderVendorResponse> byNumberDesc =
+                    list(null, token, Sort.by(Sort.Order.desc("vendorNumber")));
             assertThat(byNumberDesc.getContent().stream().map(PurchaseOrderVendorResponse::vendorId))
                     .containsExactly(activeA, inactiveA);
         });
@@ -128,8 +130,9 @@ class PurchaseOrderVendorReadIT extends PostgresTenancyTestBase {
             assertThat(vendorRead.getVendor(inactiveA).status()).isEqualTo(PurchaseOrderVendorStatus.INACTIVE);
             assertThatThrownBy(() -> vendorRead.getVendor(activeB))
                     .as("B's vendor is not in A's copy: 503, never 404")
-                    .isInstanceOfSatisfying(ReplicationPendingException.class, e -> assertThat(e.getCode())
-                            .isEqualTo("VENDOR_REPLICATION_PENDING"));
+                    .isInstanceOfSatisfying(
+                            ReplicationPendingException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("VENDOR_REPLICATION_PENDING"));
         });
         asTenant(TENANT_B, () -> {
             assertThat(list(null, token, Sort.unsorted()).getContent().stream()

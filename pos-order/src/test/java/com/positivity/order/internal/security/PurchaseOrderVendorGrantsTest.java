@@ -33,9 +33,7 @@ class PurchaseOrderVendorGrantsTest {
     void purchaseOrderPersonasHoldTheViewGrant() throws IOException {
         Map<String, Set<String>> grants = grants();
         for (String role : PURCHASE_ORDER_PERSONAS) {
-            assertThat(grants)
-                    .as("role %s is seeded", role)
-                    .containsKey(role);
+            assertThat(grants).as("role %s is seeded", role).containsKey(role);
             assertThat(grants.get(role))
                     .as("%s can read the purchase-order vendor copy", role)
                     .contains(PurchaseOrderPermissions.PURCHASE_ORDER_VIEW);

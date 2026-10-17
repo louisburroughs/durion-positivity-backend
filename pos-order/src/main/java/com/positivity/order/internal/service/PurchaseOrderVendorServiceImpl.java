@@ -69,7 +69,8 @@ public class PurchaseOrderVendorServiceImpl implements PurchaseOrderVendorServic
             @NonNull ListPurchaseOrderVendorsRequest filter) {
         Specification<ExtSupplierVendor> spec = (root, query, cb) -> cb.conjunction();
         if (filter.getStatus() != null) {
-            ExtSupplierVendor.Status status = ExtSupplierVendor.Status.valueOf(filter.getStatus().name());
+            ExtSupplierVendor.Status status =
+                    ExtSupplierVendor.Status.valueOf(filter.getStatus().name());
             spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
         }
         String q = filter.getQ() == null ? "" : filter.getQ().trim();
