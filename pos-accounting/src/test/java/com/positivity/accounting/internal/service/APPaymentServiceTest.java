@@ -886,7 +886,7 @@ class APPaymentServiceTest {
                 vendorCopies,
                 billRepository,
                 payGuard,
-                paymentRepository,
+                paymentFailurePersistenceService,
                 paymentGateway);
         order.verify(lockTimeout).apply();
         order.verify(preGatewayChecks).checkRequest(request, Optional.of(BUSINESS_DATE));
@@ -896,7 +896,8 @@ class APPaymentServiceTest {
         order.verify(payGuard).check(List.of(bill), "ana", testPaymentRef);
         order.verify(vendorCopies).requireRemitToUnchanged(eq(List.of(bill)), any(), eq("ana"));
         order.verify(preGatewayChecks).checkPeriodAndMapping(Optional.of(BUSINESS_DATE), new BigDecimal("1.50"), null);
-        order.verify(paymentRepository).save(any(APPayment.class));
+        // The GATEWAY_PENDING row is committed (its own transaction, #2729) after every check and before the gateway.
+        order.verify(paymentFailurePersistenceService).persistGatewayPending(any(APPayment.class));
         order.verify(paymentGateway).executePayment(any());
         assertThat(result.getBankAccountId()).isEqualTo(BANK_ID);
         assertThat(result.getPaymentDate()).isEqualTo(BUSINESS_DATE);
