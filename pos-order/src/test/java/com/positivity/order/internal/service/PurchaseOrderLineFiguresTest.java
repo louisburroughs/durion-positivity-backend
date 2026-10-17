@@ -64,8 +64,8 @@ class PurchaseOrderLineFiguresTest {
     }
 
     @Test
-    @DisplayName("refresh: the balance is Σ lineTotal − Σ accrued − Σ returned value − Σ cancelled value − unallocated")
-    void balanceDerivesFromTheLines() {
+    @DisplayName("refresh derives each line's open quantity and the status; moveBalance never goes below zero")
+    void refreshAndBalance() {
         PurchaseOrderLineEntity a = line("10", 10_000L);
         a.setReceivedQuantity(new BigDecimal("4"));
         a.setReceivedAccruedMinor(4_000L);
@@ -73,14 +73,36 @@ class PurchaseOrderLineFiguresTest {
         b.setCancelledQuantity(new BigDecimal("1"));
         b.setCancelledValueMinor(2_500L);
         PurchaseOrderEntity order = order(PurchaseOrderStatus.APPROVED, a, b);
-        order.setUnallocatedAccruedMinor(300L);
+        order.setOpenBalanceMinor(8_500L);
 
         PurchaseOrderLineFigures.refresh(order);
-
-        assertThat(order.getOpenBalanceMinor()).isEqualTo(15_000L - 4_000L - 2_500L - 300L);
         assertThat(a.getOpenQuantityDecimal()).isEqualByComparingTo("6");
         assertThat(b.getOpenQuantityDecimal()).isEqualByComparingTo("1");
         assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.PARTIALLY_RECEIVED);
+        assertThat(order.getOpenBalanceMinor()).as("refresh leaves the balance alone").isEqualTo(8_500L);
+
+        PurchaseOrderLineFigures.moveBalance(order, -10_000L);
+        assertThat(order.getOpenBalanceMinor()).isZero();
+        PurchaseOrderLineFigures.moveBalance(order, 2_000L);
+        assertThat(order.getOpenBalanceMinor()).isEqualTo(2_000L);
+    }
+
+    @Test
+    @DisplayName("a line written before the figures (open below ordered, figures zero) adopts received = ordered − open")
+    void legacyOpenIsAdopted() {
+        PurchaseOrderLineEntity legacy = line("10", 10_000L);
+        legacy.setOpenQuantityDecimal(new BigDecimal("4"));
+        PurchaseOrderEntity order = order(PurchaseOrderStatus.PARTIALLY_RECEIVED, legacy);
+
+        PurchaseOrderLineFigures.refresh(order);
+
+        assertThat(legacy.getReceivedQuantity()).isEqualByComparingTo("6");
+        assertThat(legacy.getReceivedAccruedMinor()).isEqualTo(6_000L);
+        assertThat(legacy.getOpenQuantityDecimal()).isEqualByComparingTo("4");
+        // Once touched, the stored open quantity no longer drives anything.
+        legacy.setOpenQuantityDecimal(BigDecimal.ONE);
+        PurchaseOrderLineFigures.refresh(order);
+        assertThat(legacy.getOpenQuantityDecimal()).isEqualByComparingTo("4");
     }
 
     @Test
@@ -103,6 +125,7 @@ class PurchaseOrderLineFiguresTest {
 
         l.setCancelledQuantity(BigDecimal.ZERO);
         l.setReturnedQuantity(BigDecimal.ONE);
+        order.setStatus(PurchaseOrderStatus.PARTIALLY_RECEIVED);
         PurchaseOrderLineFigures.refresh(order);
         assertThat(order.getStatus()).as("a credited return settles the line too").isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
     }
@@ -117,7 +140,6 @@ class PurchaseOrderLineFiguresTest {
             PurchaseOrderEntity order = order(terminal, l);
             PurchaseOrderLineFigures.refresh(order);
             assertThat(order.getStatus()).isEqualTo(terminal);
-            assertThat(order.getOpenBalanceMinor()).isZero();
             assertThat(l.getOpenQuantityDecimal()).isEqualByComparingTo("0");
         }
     }

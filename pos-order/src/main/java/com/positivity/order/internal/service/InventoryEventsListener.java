@@ -312,18 +312,18 @@ public class InventoryEventsListener {
                 .filter(line -> line.getLineId() != null)
                 .collect(Collectors.toMap(PurchaseOrderLineEntity::getLineId, Function.identity(), (a, b) -> a));
 
-        // #2635: a receipt adds to the line's received figures; open, balance and status are derived from them.
-        // A line without a poLineId, or naming a line the order does not hold, moves only the balance (as before).
+        // #2635: a receipt adds to the line's received figures; open and status are derived from them, and the
+        // balance takes the receipt's accrual off (as before). A line without a poLineId, or naming a line the order
+        // does not hold, moves only the balance.
         for (GoodsReceiptLine line : receipt.lines()) {
             PurchaseOrderLineEntity orderLine = line.poLineId() == null ? null : linesById.get(line.poLineId());
             if (orderLine == null) {
                 if (line.poLineId() != null) {
                     log.warn("Goods receipt {} references unknown line {}", receipt.receiptId(), line.poLineId());
                 }
-                order.setUnallocatedAccruedMinor(PurchaseOrderLineFigures.zeroIfNull(order.getUnallocatedAccruedMinor())
-                        + line.accruedAmountMinor());
                 continue;
             }
+            PurchaseOrderLineFigures.adoptLegacyOpen(orderLine);
             // Over-receipt: received may exceed ordered; the derived open quantity floors at zero, so the line
             // settles rather than reading downstream as supply flowing the wrong way.
             orderLine.setReceivedQuantity(PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedQuantity())
@@ -332,6 +332,7 @@ public class InventoryEventsListener {
                     + line.accruedAmountMinor());
         }
 
+        PurchaseOrderLineFigures.moveBalance(order, -receipt.totalAccruedAmountMinor());
         if (!PurchaseOrderLineFigures.RECEIVING_STATUSES.contains(order.getStatus())) {
             log.warn(
                     "Goods receipt {} applied to purchase order {} in status {}: quantities and balance recorded, "
@@ -395,19 +396,20 @@ public class InventoryEventsListener {
                 .filter(line -> line.getLineId() != null)
                 .collect(Collectors.toMap(PurchaseOrderLineEntity::getLineId, Function.identity(), (a, b) -> a));
         boolean anyLineMoved = false;
+        long accruedBack = 0L;
         for (VendorReturnRecordedV1.VendorReturnLine line : vendorReturn.lines()) {
             long accrued = PurchaseOrderLineFigures.toMinor(line.accruedAmount(), currency);
+            accruedBack += accrued;
             PurchaseOrderLineEntity orderLine = line.poLineId() == null ? null : linesById.get(line.poLineId());
             if (orderLine == null) {
                 if (line.poLineId() != null) {
                     log.warn(
                             "Vendor return {} references unknown line {}", vendorReturn.vendorReturnId(), line.poLineId());
                 }
-                // The receipt moved only the balance; its return gives that back, never below zero.
-                order.setUnallocatedAccruedMinor(Math.max(
-                        0L, PurchaseOrderLineFigures.zeroIfNull(order.getUnallocatedAccruedMinor()) - accrued));
+                // The receipt moved only the balance; a correction gives that back below.
                 continue;
             }
+            PurchaseOrderLineFigures.adoptLegacyOpen(orderLine);
             BigDecimal openBefore = PurchaseOrderLineFigures.open(orderLine);
             BigDecimal received = PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedQuantity())
                     .subtract(line.quantityReturned());
@@ -431,6 +433,14 @@ public class InventoryEventsListener {
                     vendorReturn.vendorReturnId(),
                     order.getPurchaseOrderId(),
                     order.getStatus());
+        }
+        if (correction) {
+            // The goods are owed again: the receipt's accrual goes back on the balance, bounded by the order's total.
+            long ceiling = order.getGrandTotalMinor() == null ? Long.MAX_VALUE : order.getGrandTotalMinor();
+            PurchaseOrderLineFigures.moveBalance(order, accruedBack);
+            if (order.getOpenBalanceMinor() != null && order.getOpenBalanceMinor() > ceiling) {
+                order.setOpenBalanceMinor(ceiling);
+            }
         }
         PurchaseOrderLineFigures.refresh(order);
         if (correction) {

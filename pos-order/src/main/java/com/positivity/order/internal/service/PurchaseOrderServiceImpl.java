@@ -476,6 +476,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             @NonNull String actorId) {
         PurchaseOrderEntity po = lockedForLineAction(poId);
         PurchaseOrderLineEntity line = lineOf(po, lineId);
+        PurchaseOrderLineFigures.adoptLegacyOpen(line);
         BigDecimal quantity = request.getQuantity();
         BigDecimal returned = PurchaseOrderLineFigures.zeroIfNull(line.getReturnedQuantity());
         if (quantity.compareTo(returned) > 0) {
@@ -487,6 +488,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         line.setReturnedQuantity(returned.subtract(quantity));
         line.setReturnedValueMinor(
                 Math.max(0L, PurchaseOrderLineFigures.zeroIfNull(line.getReturnedValueMinor()) - value));
+        PurchaseOrderLineFigures.moveBalance(po, value);
         log.info(
                 "Purchase order {} line {} reopened for replacement | quantity={} | vendorReturnId={} | by={}",
                 po.getPoNumber(),
@@ -511,6 +513,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     "Revise the purchase order (revisePurchaseOrder) to change its quantities");
         }
         PurchaseOrderLineEntity line = lineOf(po, lineId);
+        PurchaseOrderLineFigures.adoptLegacyOpen(line);
         cancelRemainder(po, line, request.getQuantity());
         log.info(
                 "Purchase order {} line {} remainder cancelled | quantity={} | reason={} | by={}",
@@ -532,6 +535,7 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     "A DRAFT purchase order cannot be closed; cancel it or revise it",
                     "Cancel the purchase order (cancelPurchaseOrder) or revise it (revisePurchaseOrder)");
         }
+        po.getLines().forEach(PurchaseOrderLineFigures::adoptLegacyOpen);
         if (!PurchaseOrderLineFigures.anythingReceived(po)) {
             // Nothing arrived: this is a cancellation, and the order should say so rather than read as CLOSED.
             throw new PurchaseOrderStateConflictException(
@@ -578,9 +582,10 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     + po.getPoNumber() + " has " + open.stripTrailingZeros().toPlainString() + " open; "
                     + quantity.stripTrailingZeros().toPlainString() + " cannot be cancelled");
         }
+        long value = PurchaseOrderLineFigures.valueOf(line, quantity);
         line.setCancelledQuantity(PurchaseOrderLineFigures.zeroIfNull(line.getCancelledQuantity()).add(quantity));
-        line.setCancelledValueMinor(PurchaseOrderLineFigures.zeroIfNull(line.getCancelledValueMinor())
-                + PurchaseOrderLineFigures.valueOf(line, quantity));
+        line.setCancelledValueMinor(PurchaseOrderLineFigures.zeroIfNull(line.getCancelledValueMinor()) + value);
+        PurchaseOrderLineFigures.moveBalance(po, -value);
     }
 
     /** Re-derives the figures, bumps the version, saves and publishes: every per-line action ends here. */

@@ -116,6 +116,9 @@ class PurchaseOrderLineLifecycleTest {
                 .subtotalMinor(10_000L)
                 .taxMinor(0L)
                 .grandTotalMinor(10_000L)
+                .openBalanceMinor(10_000L
+                        - new BigDecimal(received).longValueExact() * 1_000L
+                        - new BigDecimal(returned).longValueExact() * 1_000L)
                 .lines(new ArrayList<>(List.of(line)))
                 .build();
         line.setPurchaseOrder(po);

@@ -97,13 +97,6 @@ public class PurchaseOrderEntity extends TenantScopedEntity {
      */
     private Long openBalanceMinor;
 
-    /**
-     * Accruals of receipt lines that named no line of this order (#2635): they move only the balance, so the derived
-     * balance keeps them here.
-     */
-    @Builder.Default
-    @Column(name = "unallocated_accrued_minor", nullable = false)
-    private Long unallocatedAccruedMinor = 0L;
 
     private UUID shipToLocationId;
 

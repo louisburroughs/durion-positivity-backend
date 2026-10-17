@@ -395,9 +395,10 @@ published figure, now derived (`PurchaseOrderLineFigures`):
 
 - `open = max(0, ordered − received − returned − cancelled)`; a quantity's value is `lineTotalMinor × quantity ÷
   ordered`, HALF_UP to minor units;
-- the balance, ex-tax (#2633): `max(0, Σ lineTotal − Σ receivedAccrued − Σ returnedValue − Σ cancelledValue −
-  unallocatedAccrued)`, the last term being receipts that named no line of the order (`purchase_order.
-  unallocated_accrued_minor`);
+- the balance, ex-tax (#2633), moves with each event and never below zero: a receipt takes its accrual off, a
+  correction puts it back (bounded by the order's total), a reopen puts the quantity's value back, a short-close
+  takes it off; a credited return leaves it alone. A line written before the figures existed (open below ordered,
+  every figure zero) adopts `received = ordered − open` on first touch, as V14 backfills stored rows;
 - the status, from the lines, only from `APPROVED`, `PARTIALLY_RECEIVED` or `FULLY_RECEIVED` (#2634): every line open
   0 → `CLOSED` if anything was short-closed on the order, else `FULLY_RECEIVED`; else Σ received > 0 →
   `PARTIALLY_RECEIVED`; else `APPROVED`. `CANCELLED` and `CLOSED` orders keep their status; the figures still move.
@@ -406,8 +407,8 @@ published figure, now derived (`PurchaseOrderLineFigures`):
 
 | Fact | Effect |
 | --- | --- |
-| `goodsreceipt.recorded` | per line `received += quantityReceived`, `receivedAccrued += accruedAmountMinor` (over-receipt may exceed ordered; open floors at zero); a line without a `poLineId` or naming an unknown line moves only the balance; re-derive; publish `purchaseorder.updated` |
-| `vendorreturn.recorded`, `RECEIPT_CORRECTION` | per line `received −= quantityReturned`, `receivedAccrued −= accruedAmount` (a decimal at the currency exponent, converted with the order's currency); the goods are still owed, so the line reopens from the net received quantity; re-derive; publish |
+| `goodsreceipt.recorded` | per line `received += quantityReceived`, `receivedAccrued += accruedAmountMinor` (over-receipt may exceed ordered; open floors at zero); the balance drops by `totalAccruedAmountMinor` (so a line without a `poLineId` or naming an unknown line moves only the balance); re-derive open and status; publish `purchaseorder.updated` |
+| `vendorreturn.recorded`, `RECEIPT_CORRECTION` | per line `received −= quantityReturned`, `receivedAccrued −= accruedAmount` (a decimal at the currency exponent, converted with the order's currency); the goods are still owed, so the line reopens from the net received quantity and the accrual goes back on the balance; re-derive; publish |
 | `vendorreturn.recorded`, `RETURN_TO_VENDOR` | the same subtraction, then whatever it reopened goes on the line's returned figures (`returned += open' − open`, `returnedValue += accruedAmount`): open, balance and status unchanged, nothing published (credit by default). An unknown `returnKind` is logged and not applied |
 
 **Commands** (every one re-derives the figures, bumps `versionNumber` and publishes `purchaseorder.updated`;

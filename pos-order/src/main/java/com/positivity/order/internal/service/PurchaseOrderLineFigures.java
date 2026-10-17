@@ -15,9 +15,12 @@ import org.jspecify.annotations.Nullable;
  * The per-line figures of a purchase order and what they derive (CAP:550 #2635, Order ruling on #2598):
  *
  * <ul>
- *   <li>{@code open = max(0, ordered − received − returned − cancelled)}, stored on the line and published;
- *   <li>the balance, ex-tax (#2633): {@code max(0, Σ lineTotal − Σ receivedAccrued − Σ returnedValue − Σ
- *       cancelledValue − unallocatedAccrued)}, the last term being receipts that named no line of the order;
+ *   <li>{@code open = max(0, ordered − received − returned − cancelled)}, stored on the line and published. A line
+ *       written before the figures existed (open below ordered, every figure zero) adopts {@code received = ordered −
+ *       open} on first touch, as V14 backfills stored rows;
+ *   <li>the balance, ex-tax (#2633), moves with each event and never below zero: a receipt takes its accrual off, a
+ *       correction puts it back, a reopen puts the quantity's value back, a short-close takes it off; a credited
+ *       return leaves it alone;
  *   <li>the status, from the lines, applied only from {@code APPROVED}, {@code PARTIALLY_RECEIVED} and {@code
  *       FULLY_RECEIVED} (#2634): every line open 0 → {@code CLOSED} if anything was short-closed on the order,
  *       else {@code FULLY_RECEIVED}; else Σ received > 0 → {@code PARTIALLY_RECEIVED}; else {@code APPROVED}.
@@ -56,28 +59,39 @@ public final class PurchaseOrderLineFigures {
     }
 
     /**
-     * Re-derives every line's open quantity and the order's balance from the figures, and the status when the
-     * order is in a receiving status.
+     * A line written before the figures existed: its open quantity is below what was ordered while every figure is
+     * zero. It adopts {@code received = ordered − open} (and that quantity's value as its accrual), the same backfill
+     * V14 applied to stored rows, so a fixture or a row the migration did not see derives the same open quantity.
      */
+    public static void adoptLegacyOpen(@NonNull PurchaseOrderLineEntity line) {
+        BigDecimal open = line.getOpenQuantityDecimal();
+        BigDecimal ordered = line.getQuantityDecimal();
+        if (open == null || ordered == null || open.compareTo(ordered) >= 0) {
+            return;
+        }
+        boolean untouched = zeroIfNull(line.getReceivedQuantity()).signum() == 0
+                && zeroIfNull(line.getReturnedQuantity()).signum() == 0
+                && zeroIfNull(line.getCancelledQuantity()).signum() == 0;
+        if (untouched) {
+            BigDecimal received = ordered.subtract(open.signum() < 0 ? BigDecimal.ZERO : open);
+            line.setReceivedQuantity(received);
+            line.setReceivedAccruedMinor(valueOf(line, received));
+        }
+    }
+
+    /** Re-derives every line's open quantity from the figures, and the status when the order is in a receiving status. */
     public static void refresh(@NonNull PurchaseOrderEntity order) {
-        long total = 0L;
-        long taken = 0L;
         boolean allSettled = true;
         boolean anyReceived = false;
         boolean anyCancelled = false;
         for (PurchaseOrderLineEntity line : order.getLines()) {
+            adoptLegacyOpen(line);
             BigDecimal open = open(line);
             line.setOpenQuantityDecimal(open);
-            total += line.getLineTotalMinor() == null ? 0L : line.getLineTotalMinor();
-            taken += zeroIfNull(line.getReceivedAccruedMinor())
-                    + zeroIfNull(line.getReturnedValueMinor())
-                    + zeroIfNull(line.getCancelledValueMinor());
             allSettled &= open.signum() <= 0;
             anyReceived |= zeroIfNull(line.getReceivedQuantity()).signum() > 0;
             anyCancelled |= zeroIfNull(line.getCancelledQuantity()).signum() > 0;
         }
-        long unallocated = zeroIfNull(order.getUnallocatedAccruedMinor());
-        order.setOpenBalanceMinor(Math.max(0L, total - taken - unallocated));
         if (RECEIVING_STATUSES.contains(order.getStatus())) {
             if (allSettled) {
                 order.setStatus(anyCancelled ? PurchaseOrderStatus.CLOSED : PurchaseOrderStatus.FULLY_RECEIVED);
@@ -85,6 +99,12 @@ public final class PurchaseOrderLineFigures {
                 order.setStatus(anyReceived ? PurchaseOrderStatus.PARTIALLY_RECEIVED : PurchaseOrderStatus.APPROVED);
             }
         }
+    }
+
+    /** Moves the ex-tax balance by {@code deltaMinor} (negative takes off), never below zero. */
+    public static void moveBalance(@NonNull PurchaseOrderEntity order, long deltaMinor) {
+        long balance = zeroIfNull(order.getOpenBalanceMinor());
+        order.setOpenBalanceMinor(Math.max(0L, balance + deltaMinor));
     }
 
     /** Whether anything was received on the order (net of corrections). */
