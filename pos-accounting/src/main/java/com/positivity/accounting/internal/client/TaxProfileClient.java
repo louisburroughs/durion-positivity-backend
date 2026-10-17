@@ -212,7 +212,10 @@ public class TaxProfileClient {
      * @param regime the regime
      * @param regions the regions it covers; empty for the whole country
      */
-    public record Regime(@NonNull String regime, @Nullable List<String> regions, @Nullable String label) {
+    public record Regime(
+            @NonNull String regime,
+            @Nullable List<String> regions,
+            @Nullable String label) {
 
         /** Without a label (#2679). */
         public Regime(@NonNull String regime, @Nullable List<String> regions) {

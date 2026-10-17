@@ -1,25 +1,25 @@
 package com.positivity.accounting.internal.service;
 
-import com.positivity.accounting.internal.client.TaxRegistrationClient;
-import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.client.TaxProfileClient;
+import com.positivity.accounting.internal.client.TaxRegistrationClient;
 import com.positivity.accounting.internal.dto.ChangeTaxRegistrationRequest;
 import com.positivity.accounting.internal.dto.RecordTaxRegistrationRequest;
 import com.positivity.accounting.internal.dto.TaxRegistrationListResponse;
 import com.positivity.accounting.internal.dto.TaxRegistrationView;
 import com.positivity.accounting.internal.entity.ExtTaxRegistration;
+import com.positivity.accounting.internal.exception.TaxServiceUnavailableException;
 import com.positivity.accounting.internal.repository.ExtTaxRegistrationRepository;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import lombok.extern.slf4j.Slf4j;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -66,7 +66,8 @@ public class TaxRegistrationFrontDoorServiceImpl implements TaxRegistrationFront
     public @NonNull TaxRegistrationView update(
             @NonNull UUID registrationId, @NonNull ChangeTaxRegistrationRequest request, @NonNull UUID actor) {
         request.requireValid();
-        return labelled(view(client.update(registrationId, request, actor.toString()).registration()), new HashMap<>());
+        return labelled(
+                view(client.update(registrationId, request, actor.toString()).registration()), new HashMap<>());
     }
 
     /**

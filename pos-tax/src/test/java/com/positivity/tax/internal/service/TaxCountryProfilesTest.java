@@ -176,8 +176,9 @@ class TaxCountryProfilesTest {
             p.put(CA + "regimes[0].label", "x".repeat(100));
         });
 
-        CountryTaxProfile profile =
-                new TaxCountryProfiles(TaxProfileFixtures.bind(properties)).profile("CA").orElseThrow();
+        CountryTaxProfile profile = new TaxCountryProfiles(TaxProfileFixtures.bind(properties))
+                .profile("CA")
+                .orElseThrow();
 
         assertThat(profile.taxTypes()).extracting(t -> t.label()).containsExactly("Fixture levy", null, null, null);
         assertThat(profile.regimes()).extracting(r -> r.label()).containsExactly("x".repeat(100), null);

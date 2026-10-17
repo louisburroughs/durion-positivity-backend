@@ -58,8 +58,8 @@ public class TaxRegimesServiceImpl implements TaxRegimesService {
             if (underRegime == null) {
                 throw unreadable("a tax type names a regime the country does not declare");
             }
-            underRegime.add(new TaxRegimesResponse.TaxType(
-                    taxType.taxType(), taxType.jurisdictionType(), taxType.label()));
+            underRegime.add(
+                    new TaxRegimesResponse.TaxType(taxType.taxType(), taxType.jurisdictionType(), taxType.label()));
         }
 
         List<TaxRegimesResponse.Regime> regimes = answer.regimes().stream()

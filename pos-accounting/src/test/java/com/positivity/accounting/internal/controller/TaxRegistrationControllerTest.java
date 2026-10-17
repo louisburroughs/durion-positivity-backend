@@ -68,6 +68,10 @@ class TaxRegistrationControllerTest {
     @MockitoBean
     private TaxRegistrationClient client;
 
+    /** #2679: the front door reads regime labels from the country profile; unstubbed, every label is null. */
+    @MockitoBean
+    private com.positivity.accounting.internal.client.TaxProfileClient taxProfiles;
+
     @MockitoBean
     private ExtTaxRegistrationRepository registrations;
 

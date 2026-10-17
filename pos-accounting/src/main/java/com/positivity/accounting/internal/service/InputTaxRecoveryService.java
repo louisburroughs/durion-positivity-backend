@@ -25,8 +25,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -239,7 +239,9 @@ public class InputTaxRecoveryService {
             // The read never fails because of pos-tax: whether recovery is on is then unknown, never "off" (AW49).
             log.warn("Input-tax recovery read without the tax configuration: enabled is unknown");
             flagged = flags.regimesUnchecked(today);
-            return flagged.stream().map(flag -> row(flag, null, today, profiles)).toList();
+            return flagged.stream()
+                    .map(flag -> row(flag, null, today, profiles))
+                    .toList();
         }
         for (InputTaxRecoveryFlags.RegimeFlag flag : flagged) {
             rows.add(row(flag, flag.enabled(), today, profiles));

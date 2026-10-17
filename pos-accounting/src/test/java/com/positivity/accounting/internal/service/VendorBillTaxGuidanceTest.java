@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -58,10 +59,12 @@ class VendorBillTaxGuidanceTest {
         when(taxCountry.code()).thenReturn("ZZ");
         when(postingService.postingDate(any()))
                 .thenReturn(new VendorBillPostingService.PostingDate(POSTING, VendorBillPostingDateRule.BILL_DATE));
-        when(flags.regimes(POSTING))
-                .thenReturn(java.util.Arrays.stream(regimes)
+        // doReturn: a test may re-stub after a thenThrow, and when(...) would trip the earlier stub.
+        doReturn(java.util.Arrays.stream(regimes)
                         .map(regime -> new InputTaxRecoveryFlags.RegimeFlag("ZZ", regime, true, null))
-                        .toList());
+                        .toList())
+                .when(flags)
+                .regimes(POSTING);
     }
 
     @Test
@@ -81,7 +84,8 @@ class VendorBillTaxGuidanceTest {
     @Test
     @DisplayName("AC3: recovery off, or a bill past approval, or one stating no tax: empty, and no tax call")
     void emptyWhenNotApplicable() {
-        assertThat(guidance.choices(bill(VendorBillStatus.APPROVED, "12.00"), Optional.of(PROFILE))).isEmpty();
+        assertThat(guidance.choices(bill(VendorBillStatus.APPROVED, "12.00"), Optional.of(PROFILE)))
+                .isEmpty();
         assertThat(guidance.choices(bill(VendorBillStatus.AWAITING_APPROVAL, "0.00"), Optional.of(PROFILE)))
                 .isEmpty();
         verifyNoInteractions(flags, postingService);
@@ -126,7 +130,7 @@ class VendorBillTaxGuidanceTest {
         when(taxProfiles.taxTypes("ZZ")).thenThrow(new TaxServiceUnavailableException("down"));
         assertThat(guidance.profile()).isEmpty();
 
-        when(taxProfiles.taxTypes("ZZ")).thenReturn(PROFILE);
+        doReturn(PROFILE).when(taxProfiles).taxTypes("ZZ");
         assertThat(guidance.profile()).contains(PROFILE);
         assertThat(PROFILE.regimeLabel("ZZ_REGIME_1")).isEqualTo("Regime one");
         assertThat(PROFILE.regimeLabel("ZZ_REGIME_2")).isNull();

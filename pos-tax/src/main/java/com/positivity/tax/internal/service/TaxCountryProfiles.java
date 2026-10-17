@@ -182,7 +182,9 @@ public class TaxCountryProfiles {
                 throw invalid(
                         property + ".regime", "regime " + regime + " is not declared under " + prefix + ".regimes");
             }
-            entries.put(code, new TaxTypeEntry(
+            entries.put(
+                    code,
+                    new TaxTypeEntry(
                             code,
                             regime,
                             jurisdictionType,
@@ -245,7 +247,9 @@ public class TaxCountryProfiles {
             for (int i = 0; i < regions.size(); i++) {
                 normalized.add(regionCode(property + ".regions[" + i + "]", regions.get(i)));
             }
-            entries.put(name, new RegimeEntry(
+            entries.put(
+                    name,
+                    new RegimeEntry(
                             name, List.copyOf(normalized), optionalLabel(property + ".label", profile.getLabel())));
         }
         return List.copyOf(entries.values());

@@ -798,13 +798,14 @@ class VendorBillReaderTest {
         when(readAccounts.findById(account1250)).thenReturn(java.util.Optional.of(gl));
 
         when(readGuidance.profile())
-                .thenReturn(java.util.Optional.of(new com.positivity.accounting.internal.client.TaxProfileClient.TaxTypes(
-                        "ZZ",
-                        "CAD",
-                        List.of(new com.positivity.accounting.internal.client.TaxProfileClient.TaxType(
-                                "GST", "GST_HST", "FEDERAL", true, "Tax type one")),
-                        List.of(new com.positivity.accounting.internal.client.TaxProfileClient.Regime(
-                                "GST_HST", List.of(), "Regime one")))));
+                .thenReturn(
+                        java.util.Optional.of(new com.positivity.accounting.internal.client.TaxProfileClient.TaxTypes(
+                                "ZZ",
+                                "CAD",
+                                List.of(new com.positivity.accounting.internal.client.TaxProfileClient.TaxType(
+                                        "GST", "GST_HST", "FEDERAL", true, "Tax type one")),
+                                List.of(new com.positivity.accounting.internal.client.TaxProfileClient.Regime(
+                                        "GST_HST", List.of(), "Regime one")))));
         when(readGuidance.choices(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
                 .thenReturn(List.of(new VendorBillReview.TaxTypeChoice("GST", "Tax type one")));
 

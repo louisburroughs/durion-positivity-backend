@@ -95,6 +95,7 @@ public record InputTaxRecoveryResponse(
                     requiredMode = REQUIRED)
             @Nullable
             Account account,
+
             @Schema(
                     description = "The regime's configured display label; null when the profile sets none or the tax"
                             + " service did not answer, never the code (#2679)",
