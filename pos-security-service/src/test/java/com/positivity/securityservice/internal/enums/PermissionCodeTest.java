@@ -90,8 +90,8 @@ class PermissionCodeTest {
     // people:employee_pii:view (519), v82's crm:fact:replay (518), v81's people:self:view (517)
     // and v80's catalog:service:ingest (516). Both numbers move together by design: the version
     // bump is what tells a running gateway its cached catalog is stale.
-    private static final int EXPECTED_PERMISSION_COUNT = 564;
-    private static final int EXPECTED_CATALOG_VERSION = 106;
+    private static final int EXPECTED_PERMISSION_COUNT = 565;
+    private static final int EXPECTED_CATALOG_VERSION = 107;
 
     // -------------------------------------------------------------------------
     // AC-1: Catalog size — EXPECTED_PERMISSION_COUNT entries
