@@ -25,6 +25,7 @@ import com.positivity.accounting.internal.dto.CashPositionResponse.NeedsAttentio
 import com.positivity.accounting.internal.dto.UnpaidWalkInSalesResponse;
 import com.positivity.accounting.internal.dto.WalkInOpenInvoice;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.UndepositedSession;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
@@ -34,7 +35,7 @@ import com.positivity.accounting.internal.enums.CashAttentionReason;
 import com.positivity.accounting.internal.enums.PaymentMethod;
 import com.positivity.accounting.internal.enums.UndepositedSessionStatus;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
-import com.positivity.accounting.internal.repository.ExtInvoiceRepository;
+import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.GLAccountRepository;
 import com.positivity.accounting.internal.repository.JournalEntryLineRepository;
 import com.positivity.accounting.internal.repository.UndepositedSessionRepository;
@@ -91,8 +92,7 @@ class CashPositionServiceTest {
     private final APPaymentRepository apPayments = mock(APPaymentRepository.class);
     private final CashOutlookService outlookService = mock(CashOutlookService.class);
     private final UnpaidWalkInSalesService walkInSales = mock(UnpaidWalkInSalesService.class);
-    private final InvoiceBalanceCalculator balanceCalculator = mock(InvoiceBalanceCalculator.class);
-    private final ExtInvoiceRepository extInvoices = mock(ExtInvoiceRepository.class);
+    private final AccountingEventRepository accountingEvents = mock(AccountingEventRepository.class);
     private final CashAndPayablesSettings settings = mock(CashAndPayablesSettings.class);
     private final LedgerCurrency ledgerCurrency = new LedgerCurrency("USD");
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
@@ -143,7 +143,9 @@ class CashPositionServiceTest {
                 .thenReturn(List.of());
         when(apPayments.findUnappliedByMethodBefore(any(), any(), any(), any())).thenReturn(List.of());
         when(walkInSales.read()).thenReturn(walkIn(true, "0.00", 0));
-        when(balanceCalculator.walkInPartyIds()).thenReturn(Set.of());
+        when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
+                .thenReturn(Optional.empty());
+        when(zoneResolver.zone()).thenReturn(ZoneOffset.UTC);
         when(outlookService.outlook(eq(30), any())).thenReturn(outlook(false));
 
         CashAccounts cash = new CashAccounts(
@@ -161,12 +163,12 @@ class CashPositionServiceTest {
                 sources,
                 outlookService,
                 walkInSales,
-                balanceCalculator,
-                extInvoices,
+                accountingEvents,
                 settings,
                 zoneResolver,
                 ledgerCurrency,
-                clock);
+                clock,
+                Duration.ofMinutes(15));
     }
 
     @AfterEach
@@ -540,29 +542,48 @@ class CashPositionServiceTest {
     }
 
     @Test
-    @DisplayName("eventFedAsOf is the newest CASH-party replica write; lagging is never claimed, however old it is")
-    void eventFedAsOfIsTheNewestReplicaWrite() {
-        UUID cash = UUID.fromString("019a0000-0000-7000-8000-00000000ca51");
-        when(balanceCalculator.walkInPartyIds()).thenReturn(Set.of(cash));
-        when(extInvoices.findNewestUpdateByPartyIdIn(Set.of(cash.toString())))
-                .thenReturn(NOW.minus(Duration.ofDays(3)));
+    @DisplayName("a fact received after the lag threshold marks the position lagging; eventFedAsOf is its receivedAt")
+    void laggingWhenTheNewestFactArrivedLate() {
+        Instant received = NOW.minus(Duration.ofMinutes(1));
+        AccountingEvent newest = fact(received, received.minus(Duration.ofMinutes(20)));
+        when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
+                .thenReturn(Optional.of(newest));
 
         CashPositionResponse position = service.read();
 
-        assertThat(position.eventFedAsOf()).isEqualTo(NOW.minus(Duration.ofDays(3)));
-        assertThat(position.lagging())
-                .as("a quiet shop is not a lagging replica")
-                .isFalse();
+        assertThat(position.eventFedAsOf()).isEqualTo(received);
+        assertThat(position.lagging()).isTrue();
     }
 
     @Test
-    @DisplayName("with no CASH party there is no event-fed fact and nothing lags")
-    void noEventFedFact() {
+    @DisplayName("a fact received within the threshold is not lagging, however old; at the threshold exactly it is not")
+    void notLaggingWhenTheNewestFactArrivedPromptly() {
+        Instant received = NOW.minus(Duration.ofDays(3));
+        AccountingEvent newest = fact(received, received.minus(Duration.ofMinutes(5)));
+        when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
+                .thenReturn(Optional.of(newest));
+        assertThat(service.read().lagging())
+                .as("a quiet shop is not a lagging replica")
+                .isFalse();
+
+        AccountingEvent atLimit = fact(received, received.minus(Duration.ofMinutes(15)));
+        when(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(any()))
+                .thenReturn(Optional.of(atLimit));
+        CashPositionResponse atThreshold = service.read();
+        assertThat(atThreshold.eventFedAsOf()).isEqualTo(received);
+        assertThat(atThreshold.lagging()).isFalse();
+    }
+
+    @Test
+    @DisplayName("with no invoice or session fact ingested, eventFedAsOf is null and nothing lags")
+    void noIngestedFact() {
         CashPositionResponse none = service.read();
 
         assertThat(none.eventFedAsOf()).isNull();
         assertThat(none.lagging()).isFalse();
-        verify(extInvoices, never()).findNewestUpdateByPartyIdIn(any());
+        verify(accountingEvents)
+                .findFirstByEventTypeInOrderByReceivedAtDesc(
+                        List.of("invoice.invoice.updated", "order.session.closed"));
     }
 
     // ---- helpers ---------------------------------------------------------------------------------------------
@@ -579,6 +600,13 @@ class CashPositionServiceTest {
                 "n/a",
                 Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList());
         SecurityContextHolder.getContext().setAuthentication(caller);
+    }
+
+    private static AccountingEvent fact(Instant receivedAt, Instant occurredAt) {
+        AccountingEvent event = mock(AccountingEvent.class);
+        when(event.getReceivedAt()).thenReturn(receivedAt);
+        when(event.getTransactionDate()).thenReturn(LocalDateTime.ofInstant(occurredAt, ZoneOffset.UTC));
+        return event;
     }
 
     private static GLAccount bankAccount(UUID id, String code, boolean reconcilable) {

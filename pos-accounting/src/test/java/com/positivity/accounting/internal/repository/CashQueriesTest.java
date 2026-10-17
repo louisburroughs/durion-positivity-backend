@@ -16,6 +16,7 @@ import com.positivity.accounting.internal.bankrec.repository.BankAccountProfileR
 import com.positivity.accounting.internal.bankrec.repository.BankReconciliationOutstandingItemRepository;
 import com.positivity.accounting.internal.bankrec.repository.BankStatementRepository;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ExtInvoice;
 import com.positivity.accounting.internal.entity.GLAccount;
 import com.positivity.accounting.internal.entity.JournalEntry;
@@ -73,6 +74,9 @@ class CashQueriesTest extends BaseIntegrationTest {
 
     @Autowired
     private ExtInvoiceRepository extInvoices;
+
+    @Autowired
+    private AccountingEventRepository accountingEvents;
 
     private GLAccount account(String code, AccountType type, AccountSubtype subtype) {
         GLAccount account = new GLAccount(UUID.randomUUID());
@@ -349,17 +353,13 @@ class CashQueriesTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("the invoice queries match parties trimmed and case-insensitive, as isWalkIn does")
+    @DisplayName("the candidate query matches parties trimmed and case-insensitive, as isWalkIn does")
     void invoiceQueries() {
         String cash = "0199a000-0000-7000-8000-00000000ca51";
         ExtInvoice walkIn = invoice("  " + cash.toUpperCase() + " ", "FINALIZED");
         ExtInvoice customer = invoice("0199a000-0000-7000-8000-00000000d001", "FINALIZED");
         ExtInvoice noParty = invoice(null, "POSTED");
         invoice("0199a000-0000-7000-8000-00000000d002", "DRAFT");
-
-        assertThat(extInvoices.findNewestUpdateByPartyIdIn(Set.of(cash))).isNotNull();
-        assertThat(extInvoices.findNewestUpdateByPartyIdIn(Set.of("0199a000-0000-7000-8000-00000000ffff")))
-                .isNull();
 
         List<ExtInvoice> candidates =
                 extInvoices.findByStatusInExcludingParties(Set.of("FINALIZED", "POSTED"), Set.of(cash));
@@ -370,5 +370,26 @@ class CashQueriesTest extends BaseIntegrationTest {
         assertThat(extInvoices.findByStatusInExcludingParties(Set.of("FINALIZED", "POSTED"), Set.of("-")))
                 .extracting(ExtInvoice::getInvoiceId)
                 .contains(walkIn.getInvoiceId(), customer.getInvoiceId(), noParty.getInvoiceId());
+    }
+
+    private AccountingEvent event(String type) {
+        AccountingEvent event = new AccountingEvent();
+        event.setEventType(type);
+        event.setSourceSystem("CASH_QUERY_TEST");
+        event.setTransactionDate(LocalDateTime.of(2026, 10, 17, 9, 0));
+        event.setPayload(Map.of("k", "v"));
+        return accountingEvents.saveAndFlush(event);
+    }
+
+    @Test
+    @DisplayName("findFirstByEventTypeInOrderByReceivedAtDesc returns an ingestion record of the named types only")
+    void newestIngestedFact() {
+        AccountingEvent invoice = event("invoice.invoice.updated");
+        event("inventory.something.else");
+
+        assertThat(accountingEvents.findFirstByEventTypeInOrderByReceivedAtDesc(
+                        List.of("invoice.invoice.updated", "order.session.closed")))
+                .map(AccountingEvent::getEventId)
+                .contains(invoice.getEventId());
     }
 }

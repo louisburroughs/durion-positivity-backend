@@ -55,7 +55,7 @@ public class CashPositionController {
                     Required inputs: none.
                     Emits an ACCOUNTING_CASH_POSITION_GET event and changes no state; foreign-currency bank \
                     accounts are left out and counted in excludedForeignCurrencyAccounts, and eventFedAsOf names \
-                    the newest replica write behind the unpaid walk-in figure.
+                    when the newest invoice or register session fact arrived and lagging flags a stalled consumer.
                     Returns 200 with the position and 403 when the caller lacks the authority.
                     """,
             tags = {"Cash Position"})

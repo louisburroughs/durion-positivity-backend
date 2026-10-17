@@ -112,4 +112,11 @@ public interface AccountingEventRepository
      * gauge of the received-event drainer (#2435).
      */
     long countByStatusAndReceivedAtBefore(@NonNull AccountingEventStatus status, @NonNull Instant cutoff);
+
+    /**
+     * The most recently received ingestion record among the given event types (#2515, the cash position's replica-lag
+     * proxy), empty when none exists.
+     */
+    @NonNull
+    Optional<AccountingEvent> findFirstByEventTypeInOrderByReceivedAtDesc(@NonNull Collection<String> eventTypes);
 }

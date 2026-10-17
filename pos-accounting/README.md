@@ -495,11 +495,12 @@ signed `amount`, a check negative) and `unmatchedBankLineCount` (unmatched lines
 the baseline, as the bank-accounts list counts them), through `BankPositionFacts` in the reconciliation read model.
 They sit beside the books balance and are never in `total`. Without that permission the fields are absent.
 
-`asOf` is the ledger read instant. `eventFedAsOf` is the newest replica write of a CASH-party invoice (the fact the
-unpaid walk-in balance rests on; null when there is none). `lagging` is always false for now: the ingestion record
-(`AccountingEvent`) stamps when accounting received a fact and the fact's business time, never when the producer
-emitted it, so replica lag cannot be told from a quiet shop; it will carry a measured value once facts carry an
-emission time.
+`asOf` is the ledger read instant. `eventFedAsOf` is when accounting received the newest invoice or register-session
+fact (`receivedAt` of the newest ingestion record of `invoice.invoice.updated` / `order.session.closed`; null when it has
+received none). `lagging` is the replica-lag proxy: true when that fact's `receivedAt` is more than
+`pos.accounting.cash-position.fact-lag` (default `PT15M`) after the fact's business time, which for these facts is the
+source's write time (the record's `transactionDate`, read in the tenant accounting zone). It is an approximation: a
+recognizing invoice fact carries its finalization time, and no fact at all is not lagging.
 
 `needsAttention[]` holds `{code, reason, amount, count, since}`, in this order, each only when it applies:
 
