@@ -3,6 +3,7 @@ package com.positivity.accounting.internal.service;
 import com.positivity.accounting.internal.dto.JournalEntryCreateRequest;
 import com.positivity.accounting.internal.dto.JournalEntryResponse;
 import com.positivity.accounting.internal.entity.APPayment;
+import com.positivity.accounting.internal.entity.AccountingAuditLog;
 import com.positivity.accounting.internal.entity.EventOutbox;
 import com.positivity.accounting.internal.entity.JournalEntry;
 import com.positivity.accounting.internal.enums.APPaymentStatus;
@@ -15,6 +16,7 @@ import com.positivity.accounting.internal.exception.GLAccountNotActiveException;
 import com.positivity.accounting.internal.exception.GLMappingNotConfiguredException;
 import com.positivity.accounting.internal.exception.VendorBillException;
 import com.positivity.accounting.internal.repository.APPaymentRepository;
+import com.positivity.accounting.internal.repository.AccountingAuditLogRepository;
 import com.positivity.accounting.internal.repository.EventOutboxRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -87,9 +89,16 @@ public class APPaymentPostingService {
     private final EventOutboxRepository outbox;
     private final AccountingPeriodGate periodGate;
     private final AccountingCalendarZoneResolver zoneResolver;
+    private final AccountingAuditLogRepository auditLogs;
 
     /** {@code posting_date_rule} of an entry dated the retry's business date because the payment date is hard-locked. */
     public static final String DEFERRED_PAST_HARD_LOCK = "DEFERRED_PAST_HARD_LOCK";
+
+    /**
+     * The retry caller's leave to date the entry past a hard lock (#2729, AW42): who gave it and why. Recorded on the
+     * {@code AP_PAYMENT_GL_POSTING_DEFERRED} audit row, written inside the posting transaction.
+     */
+    public record Deferral(@NonNull String justification, @NonNull String user) {}
 
     /**
      * The outbox delivery: posts a {@code GL_POST_PENDING} payment. A payment already posted, or left {@code
@@ -124,18 +133,21 @@ public class APPaymentPostingService {
      */
     @Transactional
     public @NonNull UUID retry(@NonNull UUID paymentId, @Nullable String overrideJustification) {
-        return retry(paymentId, overrideJustification, false);
+        return retry(paymentId, overrideJustification, null);
     }
 
     /**
      * {@link #retry(UUID, String)} with the #2729 remedies: a {@code GL_POST_PENDING} payment whose outbox row is
-     * {@code FAILED} (its retries exhausted while the refusal could not be recorded) is retryable too, and {@code
-     * deferPastHardLock} dates the entry on the retry's business date when the payment's own date is hard-locked
-     * (AW42: never back into the original period); the payment then records {@value #DEFERRED_PAST_HARD_LOCK}.
+     * {@code FAILED} (its retries exhausted while the refusal could not be recorded) is retryable too, and a {@code
+     * deferral} dates the entry on the retry's business date when the payment's own date is hard-locked (AW42: never
+     * back into the original period); the payment then records {@value #DEFERRED_PAST_HARD_LOCK} and the audit row
+     * is written in this transaction, with the entry.
+     *
+     * @param deferral the caller's leave to post past a hard lock, or null to refuse a hard-locked date as before
      */
     @Transactional
     public @NonNull UUID retry(
-            @NonNull UUID paymentId, @Nullable String overrideJustification, boolean deferPastHardLock) {
+            @NonNull UUID paymentId, @Nullable String overrideJustification, @Nullable Deferral deferral) {
         lockTimeout.apply();
         APPayment payment =
                 payments.lockById(paymentId).orElseThrow(() -> new EntityNotFoundException("AP payment not found"));
@@ -155,7 +167,7 @@ public class APPaymentPostingService {
                             + "; only a payment whose posting failed (GL_POST_FAILED, or GL_POST_PENDING with its"
                             + " outbox row FAILED) can be posted again" + remedy);
         }
-        return post(payment, overrideJustification, false, deferPastHardLock);
+        return post(payment, overrideJustification, false, deferral);
     }
 
     /**
@@ -189,14 +201,14 @@ public class APPaymentPostingService {
      * @param applyRecordedOverride true on the outbox delivery only: the payer's stored override applies
      */
     private UUID post(APPayment payment, @Nullable String callerOverride, boolean applyRecordedOverride) {
-        return post(payment, callerOverride, applyRecordedOverride, false);
+        return post(payment, callerOverride, applyRecordedOverride, null);
     }
 
     private UUID post(
             APPayment payment,
             @Nullable String callerOverride,
             boolean applyRecordedOverride,
-            boolean deferPastHardLock) {
+            @Nullable Deferral deferral) {
         UUID paymentId = payment.getPaymentId();
         if (payment.getPaymentMethod() == PaymentMethod.CASH) {
             // A drawer cash-on-delivery payment (S17, #2513; AW41 ruling 2): its session-close entry
@@ -231,7 +243,7 @@ public class APPaymentPostingService {
         String label =
                 payment.getPaymentRef() + (payment.getVendorName() == null ? "" : " to " + payment.getVendorName());
         boolean deferred = false;
-        if (deferPastHardLock && periodGate.isHardLocked(payment.getPaymentDate())) {
+        if (deferral != null && periodGate.isHardLocked(payment.getPaymentDate())) {
             // #2729 (AW42): the cash left the bank on payment_date, but that period is final. The entry is dated the
             // retry's business date, says where it came from, and the payment records the rule; the locked period
             // keeps the payment as a reconciling item.
@@ -280,6 +292,19 @@ public class APPaymentPostingService {
             payment.setPostingDateRule(DEFERRED_PAST_HARD_LOCK);
         }
         markPosted(payment, posted.getJournalEntryId());
+        if (deferred) {
+            // Atomic with the entry: a deferred posting never commits without its audit row (#2729 review).
+            AccountingAuditLog row = new AccountingAuditLog();
+            row.setEntityType("AP_PAYMENT");
+            row.setEntityId(paymentId);
+            row.setOperation("AP_PAYMENT_GL_POSTING_DEFERRED");
+            row.setUserId(deferral.user());
+            row.setJustification(deferral.justification());
+            row.setOldValue("paymentDate=" + payment.getPaymentDate());
+            row.setNewValue("journalEntryId=" + posted.getJournalEntryId() + ";postedOn=" + transactionDate.toLocalDate()
+                    + ";rule=" + DEFERRED_PAST_HARD_LOCK);
+            auditLogs.save(row);
+        }
         log.info(
                 "AP payment posted | paymentId={} | paymentDate={} | postedOn={} | journalEntryId={}",
                 paymentId,

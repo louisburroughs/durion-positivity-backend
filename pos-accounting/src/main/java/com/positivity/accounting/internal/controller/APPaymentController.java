@@ -101,8 +101,11 @@ public class APPaymentController {
                 eligible account exists, and feeAmount, overrideJustification (10-1000 chars, honoured with \
                 accounting:period:override), paymentSource, memo and explicit allocations are optional.
                 Emits an AP_PAYMENT_EXECUTE event; the call is idempotent on paymentRef, replaying the same ref with \
-                the same payload (the bank account compared as resolved) as a 200 instead of paying twice, and a \
-                gateway failure or timeout leaves no payment behind, so the same paymentRef is simply sent again.
+                the same payload (the bank account compared as resolved) as a 200 instead of paying twice. A gateway \
+                decline leaves the payment GATEWAY_FAILED (the paymentRef is spent at the gateway too); no gateway \
+                answer (a timeout) leaves it GATEWAY_PENDING with nothing allocated or posted, and the same \
+                paymentRef sent again resumes it (the gateway replays under the same idempotency key), or an \
+                operator who knows the outcome reconciles it with reconcileApPaymentGateway (#2729).
                 Returns 400 VALIDATION_ERROR for a malformed body, an unknown currency code, a refused allocation \
                 or fieldErrors[bankAccountId], 403 AP_PAYMENT_SELF_APPROVED_BILL, 409 IDEMPOTENCY_CONFLICT, \
                 LOCK_TIMEOUT or VENDOR_PAYMENT_DETAILS_CHANGED (naming each bill and the vendor number), 422 \
@@ -366,7 +369,7 @@ public class APPaymentController {
     @EmitEvent(id = "ACCOUNTING_AP_PAYMENT_ALLOCATE", apiVersion = "1")
     @Operation(
             operationId = "allocateApPayment",
-            summary = "Allocate a cash-on-delivery AP payment to the vendor's approved bills",
+            summary = "Allocate an AP payment's unapplied amount to the vendor's approved bills",
             description = """
                     Use when a vendor paid cash on delivery from a register drawer (an AP payment with method CASH, \
                     created at session close, CAP:550 S17) and the vendor's bill has since been approved: apply the \
@@ -384,7 +387,8 @@ public class APPaymentController {
                     bill, an amount above the bill's open amount or a total above the unapplied amount; 403 \
                     AP_PAYMENT_SELF_APPROVED_BILL when the caller approved one of the bills; 404 when the payment \
                     does not exist; 409 IDEMPOTENCY_CONFLICT when the requestId was used with another body; 422 \
-                    AP_PAYMENT_NOT_ALLOCATABLE when the payment is not CASH or nothing of it is unapplied.
+                    AP_PAYMENT_NOT_ALLOCATABLE when nothing of the payment is unapplied (only a drawer \
+                    cash-on-delivery payment or a gateway orphan reconciled CHARGED carries an unapplied amount).
                     """,
             tags = {"AP Payments"})
     @ApiResponse(responseCode = "200", description = "Allocated; the payment with its unapplied amount reduced")
@@ -407,7 +411,7 @@ public class APPaymentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "AP_PAYMENT_NOT_ALLOCATABLE: not a CASH payment, or nothing unapplied",
+            description = "AP_PAYMENT_NOT_ALLOCATABLE: nothing unapplied on this payment",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PreAuthorize("hasAuthority('" + AccountingPermissions.AP_PAY + "')")
     public ResponseEntity<APPaymentResponse> allocateApPayment(

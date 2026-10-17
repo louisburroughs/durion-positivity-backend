@@ -97,10 +97,19 @@ public class APPaymentServiceImpl implements APPaymentService {
         // Check idempotency: if paymentRef exists, validate payload match and return
         // existing
         Optional<APPayment> existingPayment = paymentRepository.findByPaymentRef(request.getPaymentRef());
+        APPayment orphan = null;
         if (existingPayment.isPresent()) {
             APPayment existing = existingPayment.get();
             validateIdempotency(existing, request);
-            return toResponse(existing);
+            if (existing.getStatus() != APPaymentStatus.GATEWAY_PENDING) {
+                return toResponse(existing);
+            }
+            // #2729: a GATEWAY_PENDING row is the orphan of an earlier send that got no gateway answer (the row is
+            // committed before the gateway call, below). The resend of the same paymentRef resumes it: the same
+            // pre-gateway block, then the gateway again under the same idempotency key (S42 AC12, #2627: the replay
+            // books the payment once). An operator who knows the outcome reconciles it instead
+            // (reconcileApPaymentGateway).
+            orphan = existing;
         }
 
         // ---- The pre-gateway block (CAP:550 S13, #2510; ruling 6048398147 item 4; S42, #2603) ----------------------
@@ -150,29 +159,43 @@ public class APPaymentServiceImpl implements APPaymentService {
                 businessDate, request.getFeeAmount(), request.getOverrideJustification()); // slot 5
         // ---- end of the pre-gateway block -------------------------------------------------------------------
 
-        // Create payment entity
-        APPayment payment = new APPayment();
-        payment.setPaymentRef(request.getPaymentRef());
-        payment.setVendorId(request.getVendorId());
-        payment.setVendorName(vendor.getDisplayName());
-        payment.setGrossAmount(request.getGrossAmount());
-        payment.setFeeAmount(request.getFeeAmount());
-        payment.setCurrency(request.getCurrency().trim().toUpperCase(Locale.ROOT));
-        payment.setPaymentMethod(request.getPaymentMethod());
-        payment.setMemo(request.getMemo());
-        payment.setBankAccountId(bankAccountId);
-        payment.setPaymentDate(execution.date());
-        if (execution.overrideAccepted()) {
-            // The override travels with the payment (ruling 5 of #2603): its posting applies it as the payer.
-            payment.setPeriodOverrideJustification(request.getOverrideJustification());
-            payment.setPeriodOverrideBy(currentUser);
+        APPayment payment;
+        if (orphan == null) {
+            // Create payment entity
+            payment = new APPayment();
+            payment.setPaymentRef(request.getPaymentRef());
+            payment.setVendorId(request.getVendorId());
+            payment.setVendorName(vendor.getDisplayName());
+            payment.setGrossAmount(request.getGrossAmount());
+            payment.setFeeAmount(request.getFeeAmount());
+            payment.setCurrency(request.getCurrency().trim().toUpperCase(Locale.ROOT));
+            payment.setPaymentMethod(request.getPaymentMethod());
+            payment.setMemo(request.getMemo());
+            payment.setBankAccountId(bankAccountId);
+            payment.setPaymentDate(execution.date());
+            if (execution.overrideAccepted()) {
+                // The override travels with the payment (ruling 5 of #2603): its posting applies it as the payer.
+                payment.setPeriodOverrideJustification(request.getOverrideJustification());
+                payment.setPeriodOverrideBy(currentUser);
+            }
+            payment.setCreatedBy(currentUser);
+            // The GATEWAY_PENDING row is committed before the gateway call (#2729), in a transaction of its own: a
+            // crash or timeout between the call and its answer leaves a visible orphan (resumed by a resend of the
+            // same paymentRef, or reconciled by an operator) instead of nothing. The bill locks of slot 2 stay held.
+            payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
+            payment = paymentFailurePersistenceService.persistGatewayPending(payment);
+        } else {
+            // The resend: the orphan's row, locked (a second resend waits here, then sees the outcome and returns it).
+            UUID orphanId = orphan.getPaymentId();
+            payment = paymentRepository.lockById(orphanId).orElseThrow(() -> notFound(orphanId));
+            if (payment.getStatus() != APPaymentStatus.GATEWAY_PENDING) {
+                return toResponse(payment);
+            }
+            if (execution.overrideAccepted()) {
+                payment.setPeriodOverrideJustification(request.getOverrideJustification());
+                payment.setPeriodOverrideBy(currentUser);
+            }
         }
-        payment.setStatus(APPaymentStatus.INITIATED);
-        payment.setCreatedBy(currentUser);
-
-        // Execute payment through gateway with idempotency
-        payment.setStatus(APPaymentStatus.GATEWAY_PENDING);
-        payment = paymentRepository.save(payment);
 
         try {
             String paymentSource = request.getPaymentSource();
@@ -236,12 +259,24 @@ public class APPaymentServiceImpl implements APPaymentService {
             // a gateway failure: the payment rolls back and is not marked GATEWAY_FAILED.
             throw e;
         } catch (Exception e) {
-            // Gateway-level failures: persist failure state in separate transaction for
-            // audit/idempotency
-            // Best effort: keep failure state even when gateway call fails.
-            paymentFailurePersistenceService.persistGatewayFailure(payment.getPaymentId(), e.getMessage());
-            // Exception carries context and will be logged in exception handler
-            throw new PaymentGatewayException("Payment gateway communication failure", request.getPaymentRef(), e);
+            if (payment.getStatus() == APPaymentStatus.GATEWAY_FAILED) {
+                // The gateway answered: declined. Recorded in a transaction of its own (this one rolls back); the
+                // paymentRef is spent at the gateway too (the same idempotency key replays the same answer).
+                paymentFailurePersistenceService.persistGatewayFailure(payment.getPaymentId(), e.getMessage());
+                throw new PaymentGatewayException(e.getMessage(), request.getPaymentRef(), e);
+            }
+            // No answer (a timeout, a connection failure): whether money moved is unknown, so the committed
+            // GATEWAY_PENDING row stays as the orphan (#2729). A resend of the same paymentRef resumes it under the
+            // same gateway idempotency key; an operator who knows the outcome reconciles it.
+            log.warn(
+                    "AP payment {} got no gateway answer; its GATEWAY_PENDING row awaits a resend or a reconcile: {}",
+                    request.getPaymentRef(),
+                    e.getMessage());
+            throw new PaymentGatewayException(
+                    "Payment gateway communication failure; the outcome is unknown. Resend the same paymentRef to"
+                            + " complete the payment, or reconcile it with reconcileApPaymentGateway",
+                    request.getPaymentRef(),
+                    e);
         }
     }
 
@@ -331,17 +366,15 @@ public class APPaymentServiceImpl implements APPaymentService {
             return toResponse(payment);
         }
         requireDistinctBills(request.getAllocations());
-        if (payment.getPaymentMethod() != PaymentMethod.CASH) {
-            throw new VendorBillException(
-                    VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE,
-                    "AP payment " + payment.getPaymentRef() + " is a " + payment.getPaymentMethod()
-                            + " payment; only a drawer cash-on-delivery (CASH) payment is allocated later");
-        }
+        // What is allocated later is an unapplied amount, whichever way the money moved: a drawer cash-on-delivery
+        // (CASH) payment (S17, #2513), or a gateway orphan reconciled CHARGED (#2729). A payment the pay command
+        // allocated in full has nothing unapplied.
         BigDecimal unapplied = payment.getUnappliedAmount() == null ? BigDecimal.ZERO : payment.getUnappliedAmount();
         if (unapplied.signum() <= 0) {
             throw new VendorBillException(
                     VendorBillException.Code.AP_PAYMENT_NOT_ALLOCATABLE,
-                    "AP payment " + payment.getPaymentRef() + " has nothing unapplied");
+                    "AP payment " + payment.getPaymentRef() + " has nothing unapplied; only a drawer cash-on-delivery"
+                            + " (CASH) payment or a gateway orphan reconciled CHARGED carries an unapplied amount");
         }
         // The same plan as the pay command's explicit allocations: bills locked in id order, each APPROVED and the
         // vendor's, zero lines ignored; the total bounded by what is still unapplied (not the gross).
@@ -368,7 +401,7 @@ public class APPaymentServiceImpl implements APPaymentService {
         appendAllocations(payment, plan);
         allocationRequests.save(new APPaymentAllocationRequest(request.getRequestId(), paymentId, hash));
         log.info(
-                "CASH AP payment allocated | paymentId={} | bills={} | total={} | unappliedAfter={}",
+                "AP payment allocated | paymentId={} | bills={} | total={} | unappliedAfter={}",
                 paymentId,
                 plan.size(),
                 total,
@@ -695,12 +728,12 @@ public class APPaymentServiceImpl implements APPaymentService {
                 saved,
                 "AP_PAYMENT_RECONCILE_GATEWAY",
                 currentUser,
+                request.getJustification(),
                 before,
                 saved.getStatus().name() + ";outcome=" + request.getGatewayOutcome()
                         + (saved.getGatewayTransactionId() == null
                                 ? ""
-                                : ";gatewayTransactionId=" + saved.getGatewayTransactionId())
-                        + ";justification=" + request.getJustification());
+                                : ";gatewayTransactionId=" + saved.getGatewayTransactionId()));
         log.info(
                 "AP payment reconciled with the gateway | paymentId={} | outcome={} | status={} | by={}",
                 paymentId,
@@ -727,17 +760,26 @@ public class APPaymentServiceImpl implements APPaymentService {
         };
     }
 
-    private void audit(APPayment payment, String operation, String user, String oldValue, String newValue) {
+    private void audit(
+            APPayment payment, String operation, String user, String justification, String oldValue, String newValue) {
         AccountingAuditLog row = new AccountingAuditLog();
         row.setEntityType("AP_PAYMENT");
         row.setEntityId(payment.getPaymentId());
         row.setOperation(operation);
         row.setUserId(user);
+        row.setJustification(justification);
         row.setOldValue(oldValue);
-        row.setNewValue(newValue.length() > 2000 ? newValue.substring(0, 2000) : newValue);
+        row.setNewValue(newValue);
         auditLogs.save(row);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Runs no transaction of its own: the posting's ({@link APPaymentPostingService#retry}) rolls back on a refusal,
+     * and the refusal's code is then recorded in a transaction of its own, so the payment stays {@code GL_POST_FAILED}
+     * with the new reason. A deferred posting's audit row is written by the posting, inside its transaction.
+     */
     @Override
     public @NonNull APPaymentResponse retryGLPosting(
             @NonNull UUID paymentId, @NonNull APPaymentGLPostingRetryRequest request, @NonNull String currentUser) {
@@ -749,40 +791,10 @@ public class APPaymentServiceImpl implements APPaymentService {
                     VendorBillException.Code.AP_PAYMENT_DEFER_JUSTIFICATION_REQUIRED,
                     "deferPastHardLock needs a justification: the entry will be dated today, not the payment's date");
         }
+        APPaymentPostingService.Deferral deferral =
+                defer ? new APPaymentPostingService.Deferral(request.getJustification().trim(), currentUser) : null;
         try {
-            postingService.retry(paymentId, request.getOverrideJustification(), defer);
-        } catch (RuntimeException e) {
-            APPaymentPostingService.refusalCode(e)
-                    .ifPresent(code -> paymentFailurePersistenceService.persistGLPostRefusal(paymentId, code));
-            throw e;
-        }
-        APPayment posted = paymentRepository
-                .findById(paymentId)
-                .orElseThrow(() -> new IllegalStateException("AP payment " + paymentId + " vanished after posting"));
-        if (defer && APPaymentPostingService.DEFERRED_PAST_HARD_LOCK.equals(posted.getPostingDateRule())) {
-            audit(
-                    posted,
-                    "AP_PAYMENT_GL_POSTING_DEFERRED",
-                    currentUser,
-                    "paymentDate=" + posted.getPaymentDate(),
-                    "journalEntryId=" + posted.getGlJournalEntryId() + ";rule="
-                            + APPaymentPostingService.DEFERRED_PAST_HARD_LOCK + ";justification="
-                            + request.getJustification());
-        }
-        return toResponse(posted);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * <p>Runs no transaction of its own: the posting's ({@link APPaymentPostingService#retry}) rolls back on a refusal,
-     * and the refusal's code is then recorded in a transaction of its own, so the payment stays {@code GL_POST_FAILED}
-     * with the new reason.
-     */
-    @Override
-    public @NonNull APPaymentResponse retryGLPosting(@NonNull UUID paymentId, @Nullable String overrideJustification) {
-        try {
-            postingService.retry(paymentId, overrideJustification);
+            postingService.retry(paymentId, request.getOverrideJustification(), deferral);
         } catch (RuntimeException e) {
             APPaymentPostingService.refusalCode(e)
                     .ifPresent(code -> paymentFailurePersistenceService.persistGLPostRefusal(paymentId, code));

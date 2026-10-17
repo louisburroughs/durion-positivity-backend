@@ -66,6 +66,8 @@ class APPaymentPostingServiceTest {
             mock(com.positivity.accounting.internal.repository.EventOutboxRepository.class);
     private final AccountingPeriodGate periodGate = mock(AccountingPeriodGate.class);
     private final AccountingCalendarZoneResolver zoneResolver = mock(AccountingCalendarZoneResolver.class);
+    private final com.positivity.accounting.internal.repository.AccountingAuditLogRepository auditLogs =
+            mock(com.positivity.accounting.internal.repository.AccountingAuditLogRepository.class);
 
     private APPaymentPostingService service;
     private APPayment payment;
@@ -81,7 +83,8 @@ class APPaymentPostingServiceTest {
                 lockTimeout,
                 outbox,
                 periodGate,
-                zoneResolver);
+                zoneResolver,
+                auditLogs);
         payment = new APPayment(PAYMENT_ID);
         payment.setPaymentRef("PAY-412");
         payment.setVendorName("Acme Brakes");
@@ -313,7 +316,7 @@ class APPaymentPostingServiceTest {
                         PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.PENDING))
                 .thenReturn(0L);
 
-        assertThat(service.retry(PAYMENT_ID, null, false)).isEqualTo(ENTRY);
+        assertThat(service.retry(PAYMENT_ID, null, null)).isEqualTo(ENTRY);
         assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
     }
 
@@ -326,7 +329,7 @@ class APPaymentPostingServiceTest {
                         PAYMENT_ID, com.positivity.accounting.internal.entity.EventOutbox.OutboxStatus.FAILED))
                 .thenReturn(0L);
 
-        assertThatThrownBy(() -> service.retry(PAYMENT_ID, null, false))
+        assertThatThrownBy(() -> service.retry(PAYMENT_ID, null, null))
                 .isInstanceOfSatisfying(
                         VendorBillException.class,
                         e -> assertThat(e.getCode()).isEqualTo(VendorBillException.Code.AP_PAYMENT_NOT_RETRYABLE))
@@ -344,19 +347,31 @@ class APPaymentPostingServiceTest {
         java.time.LocalDate today = PAID_ON.plusMonths(2);
         when(zoneResolver.today()).thenReturn(today);
 
-        assertThat(service.retry(PAYMENT_ID, null, true)).isEqualTo(ENTRY);
+        APPaymentPostingService.Deferral leave =
+                new APPaymentPostingService.Deferral("October is final after the audit; posting in December", "ana");
+        assertThat(service.retry(PAYMENT_ID, null, leave)).isEqualTo(ENTRY);
         JournalEntryCreateRequest entry = created();
         assertThat(entry.getTransactionDate()).isEqualTo(today.atStartOfDay());
         assertThat(entry.getDescription()).contains("paid " + PAID_ON).contains("after the hard lock");
         assertThat(payment.getPostingDateRule()).isEqualTo(APPaymentPostingService.DEFERRED_PAST_HARD_LOCK);
         assertThat(payment.getStatus()).isEqualTo(APPaymentStatus.GL_POSTED);
+        // The audit row is written with the entry, in the posting transaction (#2729 review).
+        verify(auditLogs)
+                .save(org.mockito.ArgumentMatchers.argThat(row -> "AP_PAYMENT_GL_POSTING_DEFERRED".equals(
+                                row.getOperation())
+                        && PAYMENT_ID.equals(row.getEntityId())
+                        && "ana".equals(row.getUserId())
+                        && leave.justification().equals(row.getJustification())
+                        && row.getOldValue().contains(PAID_ON.toString())
+                        && row.getNewValue().contains(today.toString())));
 
-        // Not hard-locked: the flag changes nothing.
+        // Not hard-locked: the leave changes nothing and nothing more is audited.
         payment.setStatus(APPaymentStatus.GL_POST_FAILED);
         payment.setPostingDateRule(null);
         when(periodGate.isHardLocked(PAID_ON)).thenReturn(false);
-        service.retry(PAYMENT_ID, null, true);
+        service.retry(PAYMENT_ID, null, leave);
         assertThat(payment.getPostingDateRule()).isNull();
+        verify(auditLogs, org.mockito.Mockito.times(1)).save(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

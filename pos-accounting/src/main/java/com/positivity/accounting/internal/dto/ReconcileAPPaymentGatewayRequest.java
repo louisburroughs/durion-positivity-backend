@@ -42,7 +42,7 @@ public class ReconcileAPPaymentGatewayRequest {
     private GatewayOutcome gatewayOutcome;
 
     @Nullable
-    @Size(max = 255)
+    @Size(max = 200)
     @Schema(
             description = "The gateway's transaction id; required with CHARGED",
             example = "ch_3Q2abcDEF",
