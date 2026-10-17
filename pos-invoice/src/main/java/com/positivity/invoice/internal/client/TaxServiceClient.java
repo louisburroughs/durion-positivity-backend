@@ -2,12 +2,12 @@ package com.positivity.invoice.internal.client;
 
 import com.positivity.invoice.internal.config.InvoiceCurrencySource;
 import com.positivity.invoice.internal.exception.InvoiceTaxRefusedException;
-import com.positivity.tax.common.error.TaxRefusals;
-import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
+import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
 import com.positivity.tax.common.dto.TaxLineItem;
 import com.positivity.tax.common.enums.TaxReferenceType;
+import com.positivity.tax.common.error.TaxRefusals;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;

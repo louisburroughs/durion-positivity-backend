@@ -1,9 +1,9 @@
 package com.positivity.order.internal.client;
 
 import com.positivity.order.internal.exception.OrderTaxRefusedException;
-import com.positivity.tax.common.error.TaxRefusals;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
+import com.positivity.tax.common.error.TaxRefusals;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
