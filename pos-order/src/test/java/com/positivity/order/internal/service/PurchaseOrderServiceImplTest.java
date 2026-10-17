@@ -18,8 +18,8 @@ import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderReques
 import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
-import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
+import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
@@ -843,7 +843,8 @@ class PurchaseOrderServiceImplTest {
             when(purchaseOrderRepository.findById(PO_ID)).thenReturn(Optional.of(draft));
             when(vendorRepository.findById(VENDOR_ID)).thenReturn(Optional.of(vendorWithChannel("edi-main")));
 
-            PurchaseOrderResponse approved = service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR);
+            PurchaseOrderResponse approved =
+                    service.approvePurchaseOrder(PO_ID, new ApprovePurchaseOrderRequest(), ACTOR);
 
             assertThat(approved.isTransmittable()).isTrue();
             assertThat(draft.getSupplierRef()).isEqualTo("edi-main");
@@ -887,7 +888,7 @@ class PurchaseOrderServiceImplTest {
         void frozenAfterSend() {
             PurchaseOrderEntity sent = existingOrder(PurchaseOrderStatus.APPROVED);
             sent.setSupplierRef("edi-old");
-            sent.setTransmissionState(TransmissionState.TRANSMITTED);
+            sent.setTransmissionState(TransmissionState.REQUESTED);
             PurchaseOrderServiceImpl.stampChannel(sent, vendorWithChannel("edi-new"));
             assertThat(sent.getSupplierRef()).isEqualTo("edi-old");
         }

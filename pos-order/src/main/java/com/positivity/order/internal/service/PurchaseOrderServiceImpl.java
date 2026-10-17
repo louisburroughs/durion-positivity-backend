@@ -16,8 +16,8 @@ import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
 import com.positivity.order.internal.entity.PurchaseOrderLineEntity;
 import com.positivity.order.internal.entity.PurchaseOrderTransmissionEvent;
-import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
+import com.positivity.order.internal.enums.TransmissionState;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
@@ -608,7 +608,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .poNumber(entity.getPoNumber())
                 .status(entity.getStatus())
                 .versionNumber(entity.getVersionNumber())
-                .transmittable(entity.getSupplierRef() != null && !entity.getSupplierRef().isBlank())
+                .transmittable(entity.getSupplierRef() != null
+                        && !entity.getSupplierRef().isBlank())
                 .currency(entity.getCurrency())
                 .subtotalMinor(entity.getSubtotalMinor())
                 .taxMinor(entity.getTaxMinor())

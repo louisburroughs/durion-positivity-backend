@@ -282,7 +282,8 @@ class PurchaseOrderTransmissionServiceTest {
                 .isInstanceOfSatisfying(PurchaseOrderNotTransmittableException.class, refused -> {
                     assertThat(refused.getErrorCode()).isEqualTo("SUPPLIER_REF_MISSING");
                     assertThat(refused.getMessage()).contains("V-000123").contains("Acme Parts");
-                    assertThat(refused.getReferenceId()).isEqualTo(po.getVendorId().toString());
+                    assertThat(refused.getReferenceId())
+                            .isEqualTo(po.getVendorId().toString());
                     assertThat(refused.getNextAction()).contains("administrator");
                     assertThat(refused.getSupportAction()).isNotBlank();
                 });
@@ -301,7 +302,7 @@ class PurchaseOrderTransmissionServiceTest {
 
         assertThat(po.getSupplierRef()).isEqualTo("acme-parts");
 
-        PurchaseOrderEntity sent = order(PurchaseOrderStatus.APPROVED, TransmissionState.TRANSMITTED);
+        PurchaseOrderEntity sent = order(PurchaseOrderStatus.APPROVED, TransmissionState.REQUESTED);
         sent.setSupplierRef("acme-parts");
         ExtSupplierVendor moved = vendor(sent.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
         moved.setPurchaseOrderSupplierRef("acme-new");

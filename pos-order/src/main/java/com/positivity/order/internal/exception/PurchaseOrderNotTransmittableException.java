@@ -1,9 +1,9 @@
 package com.positivity.order.internal.exception;
 
-import org.jspecify.annotations.Nullable;
-import org.jspecify.annotations.NonNull;
-import java.util.UUID;
 import java.util.List;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Thrown when a purchase order cannot be sent to its vendor (CAP-320 #1330).

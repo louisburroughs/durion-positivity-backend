@@ -37,10 +37,11 @@ public record PurchaseOrderVendorResponse(
                 example = "ACTIVE",
                 requiredMode = REQUIRED)
         PurchaseOrderVendorStatus status,
+
         @Schema(
-                        description = "Whether the vendor has a purchasing channel (a designated transmission profile"
-                                + " in pos-supplier, #2713): an order to it can be sent; false predicts 422"
-                                + " SUPPLIER_REF_MISSING on transmit",
-                        example = "true",
-                        requiredMode = REQUIRED)
-                boolean transmittable) {}
+                description = "Whether the vendor has a purchasing channel (a designated transmission profile"
+                        + " in pos-supplier, #2713): an order to it can be sent; false predicts 422"
+                        + " SUPPLIER_REF_MISSING on transmit",
+                example = "true",
+                requiredMode = REQUIRED)
+        boolean transmittable) {}

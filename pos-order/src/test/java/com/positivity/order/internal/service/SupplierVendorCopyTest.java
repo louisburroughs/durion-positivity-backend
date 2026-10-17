@@ -170,13 +170,16 @@ class SupplierVendorCopyTest {
     @DisplayName("#2713: the vendor's purchasing channel is copied when the fact carries it, null when it does not")
     void purchasingChannelIsCopied() {
         String withChannel = v2Fact("018f0a1b-0000-7000-8000-000000000011", 5L, "ACTIVE")
-                .replace("\"occurredAt\":\"2026-10-07T09:00:00Z\"}}",
+                .replace(
+                        "\"occurredAt\":\"2026-10-07T09:00:00Z\"}}",
                         "\"occurredAt\":\"2026-10-07T09:00:00Z\",\"purchaseOrderSupplierRef\":\"edi-main\"}}");
         listener.onSupplierEvent(withChannel);
         assertThat(saved().getPurchaseOrderSupplierRef()).isEqualTo("edi-main");
 
         listener.onSupplierEvent(v2Fact("018f0a1b-0000-7000-8000-000000000012", 6L, "ACTIVE"));
-        assertThat(saved().getPurchaseOrderSupplierRef()).as("an older producer, or no channel: null").isNull();
+        assertThat(saved().getPurchaseOrderSupplierRef())
+                .as("an older producer, or no channel: null")
+                .isNull();
     }
 
     @Test
