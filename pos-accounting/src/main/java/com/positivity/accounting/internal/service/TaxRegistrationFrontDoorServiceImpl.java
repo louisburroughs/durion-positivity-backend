@@ -21,7 +21,6 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * {@link TaxRegistrationFrontDoorService} (CAP:550 S32c). The writes hold no transaction and store nothing here:
@@ -80,8 +79,7 @@ public class TaxRegistrationFrontDoorServiceImpl implements TaxRegistrationFront
                 .orElse(null);
     }
 
-    private static TaxRegistrationView view(
-            ExtTaxRegistration row, LocalDate reference, @Nullable String regimeLabel) {
+    private static TaxRegistrationView view(ExtTaxRegistration row, LocalDate reference, @Nullable String regimeLabel) {
         return new TaxRegistrationView(
                 row.getRegistrationId(),
                 row.getCountryCode(),

@@ -39,7 +39,8 @@ class VendorBillTaxGuidanceTest {
     private final TaxCountry taxCountry = mock(TaxCountry.class);
     private final InputTaxRecoveryFlags flags = mock(InputTaxRecoveryFlags.class);
     private final VendorBillPostingService postingService = mock(VendorBillPostingService.class);
-    private final VendorBillTaxGuidance guidance = new VendorBillTaxGuidance(profiles, taxCountry, flags, postingService);
+    private final VendorBillTaxGuidance guidance =
+            new VendorBillTaxGuidance(profiles, taxCountry, flags, postingService);
 
     private static TaxProfileClient.TaxTypes profile(String currency) {
         return new TaxProfileClient.TaxTypes(
@@ -93,8 +94,10 @@ class VendorBillTaxGuidanceTest {
             asked.incrementAndGet();
             return Optional.of(profile("XTS"));
         };
-        assertThat(guidance.choices(bill(VendorBillStatus.APPROVED, "12.00"), counting)).isEmpty();
-        assertThat(guidance.choices(bill(VendorBillStatus.AWAITING_APPROVAL, "0.00"), counting)).isEmpty();
+        assertThat(guidance.choices(bill(VendorBillStatus.APPROVED, "12.00"), counting))
+                .isEmpty();
+        assertThat(guidance.choices(bill(VendorBillStatus.AWAITING_APPROVAL, "0.00"), counting))
+                .isEmpty();
         assertThat(asked).hasValue(0);
         verifyNoInteractions(flags, postingService);
     }
@@ -109,12 +112,14 @@ class VendorBillTaxGuidanceTest {
         registered(
                 new InputTaxRecoveryFlags.RegimeFlag("YY", "ZZ_REGIME_1", true, IN_EFFECT),
                 new InputTaxRecoveryFlags.RegimeFlag("ZZ", "ZZ_REGIME_2", false, null));
-        assertThat(guidance.choices(bill(VendorBillStatus.AWAITING_APPROVAL, "12.00"), () -> Optional.of(profile("XTS"))))
+        assertThat(guidance.choices(
+                        bill(VendorBillStatus.AWAITING_APPROVAL, "12.00"), () -> Optional.of(profile("XTS"))))
                 .as("another country's registration, and a lapsed one of the tax country, do not count")
                 .isEmpty();
 
         registered(new InputTaxRecoveryFlags.RegimeFlag("ZZ", "ZZ_REGIME_1", false, IN_EFFECT));
-        assertThat(guidance.choices(bill(VendorBillStatus.AWAITING_APPROVAL, "12.00"), () -> Optional.of(profile("ZZD"))))
+        assertThat(guidance.choices(
+                        bill(VendorBillStatus.AWAITING_APPROVAL, "12.00"), () -> Optional.of(profile("ZZD"))))
                 .as("the country's currency is not the functional currency: recovery off")
                 .isEmpty();
     }
@@ -124,7 +129,8 @@ class VendorBillTaxGuidanceTest {
     void nullWhenTheProfileIsUnknown() {
         registered(new InputTaxRecoveryFlags.RegimeFlag("ZZ", "ZZ_REGIME_1", false, IN_EFFECT));
 
-        assertThat(guidance.choices(bill(VendorBillStatus.AWAITING_APPROVAL, "12.00"), Optional::empty)).isNull();
+        assertThat(guidance.choices(bill(VendorBillStatus.AWAITING_APPROVAL, "12.00"), Optional::empty))
+                .isNull();
     }
 
     @Test

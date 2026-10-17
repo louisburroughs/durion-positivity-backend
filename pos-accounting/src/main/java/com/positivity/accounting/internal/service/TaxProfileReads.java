@@ -26,7 +26,7 @@ public class TaxProfileReads {
     static final Duration FRESH_FOR = Duration.ofSeconds(60);
     static final Duration MISS_REMEMBERED_FOR = Duration.ofSeconds(15);
 
-    private record Cached(@Nullable TaxProfileClient.TaxTypes profile, Instant expires) {}
+    private record Cached(TaxProfileClient.@Nullable TaxTypes profile, Instant expires) {}
 
     private final TaxProfileClient taxProfiles;
     private final Clock clock;

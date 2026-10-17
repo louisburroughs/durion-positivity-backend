@@ -215,7 +215,8 @@ public class VendorBillReader {
                                 tax.getTaxType(),
                                 tax.getAmount(),
                                 tax.getSource().name(),
-                                taxProfile.get()
+                                taxProfile
+                                        .get()
                                         .map(p -> p.taxTypeLabel(tax.getTaxType()))
                                         .orElse(null)))
                         .toList())
@@ -886,10 +887,12 @@ public class VendorBillReader {
                                     account.map(GLAccount::getAccountName).orElse(null),
                                     row.getRecoveryWithheldReason())
                             .withLabels(
-                                    taxProfile.get()
+                                    taxProfile
+                                            .get()
                                             .map(p -> p.taxTypeLabel(row.getTaxType()))
                                             .orElse(null),
-                                    taxProfile.get()
+                                    taxProfile
+                                            .get()
                                             .map(p -> p.regimeLabel(row.getRegime()))
                                             .orElse(null));
                 })
