@@ -36,19 +36,20 @@ final class CashRoundingCheck {
             throw new CashRoundingInvalidException("cashIncrement must be greater than zero");
         }
         if (settledAmount.remainder(cashIncrement).signum() != 0) {
-            throw new CashRoundingInvalidException("settledAmount " + settledAmount
-                    + " is not a multiple of cashIncrement " + cashIncrement);
+            throw new CashRoundingInvalidException(
+                    "settledAmount " + settledAmount + " is not a multiple of cashIncrement " + cashIncrement);
         }
         if (settledAmount.subtract(amount).compareTo(cashRoundingAmount) != 0) {
-            throw new CashRoundingInvalidException(
-                    "cashRoundingAmount must equal settledAmount minus amount (" + settledAmount.subtract(amount) + ")");
+            throw new CashRoundingInvalidException("cashRoundingAmount must equal settledAmount minus amount ("
+                    + settledAmount.subtract(amount) + ")");
         }
         BigDecimal halfIncrement = cashIncrement.divide(BigDecimal.valueOf(2));
         if (cashRoundingAmount.abs().compareTo(halfIncrement) > 0) {
             throw new CashRoundingInvalidException(
                     "cashRoundingAmount " + cashRoundingAmount + " exceeds half of cashIncrement " + cashIncrement);
         }
-        BigDecimal expected = amount.divide(cashIncrement, 0, RoundingMode.HALF_UP).multiply(cashIncrement);
+        BigDecimal expected =
+                amount.divide(cashIncrement, 0, RoundingMode.HALF_UP).multiply(cashIncrement);
         if (expected.compareTo(settledAmount) != 0) {
             throw new CashRoundingInvalidException("settledAmount " + settledAmount + " is not amount " + amount
                     + " rounded HALF_UP to the nearest " + cashIncrement + " (expected " + expected + ")");

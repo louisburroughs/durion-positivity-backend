@@ -10,18 +10,18 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
+import com.positivity.invoice.internal.config.InvoiceCurrencySource;
 import com.positivity.invoice.internal.dto.InitiatePaymentRequest;
 import com.positivity.invoice.internal.dto.InitiatePaymentResponse;
 import com.positivity.invoice.internal.dto.PaymentIntentResponse;
+import com.positivity.invoice.internal.dto.RecordCashPaymentRequest;
 import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
 import com.positivity.invoice.internal.enums.PaymentFlow;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
-import com.positivity.invoice.internal.enums.RefundStatus;
-import com.positivity.invoice.internal.config.InvoiceCurrencySource;
-import com.positivity.invoice.internal.dto.RecordCashPaymentRequest;
 import com.positivity.invoice.internal.enums.PaymentMethodType;
+import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.exception.CashRoundingInvalidException;
 import com.positivity.invoice.internal.exception.InvalidPaymentStateException;
 import com.positivity.invoice.internal.exception.InvoiceNotFoundException;
@@ -717,11 +717,7 @@ class PaymentServiceImplTest {
         }
 
         private RecordCashPaymentRequest cashRequest(
-                BigDecimal amount,
-                BigDecimal settled,
-                BigDecimal rounding,
-                BigDecimal increment,
-                String currency) {
+                BigDecimal amount, BigDecimal settled, BigDecimal rounding, BigDecimal increment, String currency) {
             RecordCashPaymentRequest request = new RecordCashPaymentRequest();
             request.setIdempotencyKey(CASH_KEY);
             request.setAmount(amount);

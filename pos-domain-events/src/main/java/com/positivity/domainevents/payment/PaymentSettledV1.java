@@ -104,7 +104,6 @@ public record PaymentSettledV1(
                 null);
     }
 
-
     public static final String EVENT_TYPE = "payment.payment.settled";
     public static final int SCHEMA_VERSION = 2;
 }

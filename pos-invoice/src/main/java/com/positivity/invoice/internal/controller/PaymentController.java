@@ -179,7 +179,8 @@ public class PaymentController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "PAYMENT_IDEMPOTENCY_CONFLICT when the idempotencyKey was already used with a different payload",
+            description =
+                    "PAYMENT_IDEMPOTENCY_CONFLICT when the idempotencyKey was already used with a different payload",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
@@ -199,9 +200,7 @@ public class PaymentController {
                                     @Content(
                                             mediaType = "application/json",
                                             examples = {
-                                                @ExampleObject(
-                                                        name = "CAD tender rounded to the nickel",
-                                                        value = """
+                                                @ExampleObject(name = "CAD tender rounded to the nickel", value = """
                                                                         {"idempotencyKey":"cash-018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a51",
                                                                          "amount":149.98,"settledAmount":150.00,
                                                                          "cashRoundingAmount":0.02,"cashIncrement":0.05,
@@ -210,9 +209,7 @@ public class PaymentController {
                                                                          "terminalId":"REG-01",
                                                                          "cashierId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a61"}
                                                                         """),
-                                                @ExampleObject(
-                                                        name = "USD tender, no rounding",
-                                                        value = """
+                                                @ExampleObject(name = "USD tender, no rounding", value = """
                                                                         {"idempotencyKey":"cash-018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4a52",
                                                                          "amount":149.99,"settledAmount":149.99,
                                                                          "cashRoundingAmount":0.00,"currencyCode":"USD"}

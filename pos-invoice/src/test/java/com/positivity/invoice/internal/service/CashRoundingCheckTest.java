@@ -49,7 +49,8 @@ class CashRoundingCheckTest {
                 Arguments.of("zero increment", "149.98", "149.98", "0.00", "0", "greater than zero"),
                 Arguments.of("negative increment", "149.98", "149.98", "0.00", "-0.05", "greater than zero"),
                 Arguments.of("no increment but settled differs", "149.99", "150.00", "0.01", null, "settledAmount"),
-                Arguments.of("no increment but rounding non-zero", "149.99", "149.99", "0.01", null, "cashRoundingAmount"));
+                Arguments.of(
+                        "no increment but rounding non-zero", "149.99", "149.99", "0.01", null, "cashRoundingAmount"));
     }
 
     @ParameterizedTest(name = "{0}")

@@ -45,7 +45,10 @@ public class InitiatePaymentResponse {
     @Schema(description = "Gateway provider identifier (e.g., stripe)", example = "stripe", requiredMode = NOT_REQUIRED)
     private String gatewayProvider;
 
-    @Schema(description = "CARD (gateway capture) or CASH (register tender, ADR-0067 A8)", example = "CARD", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "CARD (gateway capture) or CASH (register tender, ADR-0067 A8)",
+            example = "CARD",
+            requiredMode = NOT_REQUIRED)
     private PaymentMethodType methodType;
 
     @Schema(
@@ -60,7 +63,10 @@ public class InitiatePaymentResponse {
             requiredMode = NOT_REQUIRED)
     private BigDecimal cashRoundingAmount;
 
-    @Schema(description = "Cash tender only: the increment applied; absent when the currency has none", example = "0.05", requiredMode = NOT_REQUIRED)
+    @Schema(
+            description = "Cash tender only: the increment applied; absent when the currency has none",
+            example = "0.05",
+            requiredMode = NOT_REQUIRED)
     private BigDecimal cashIncrement;
 
     @Schema(

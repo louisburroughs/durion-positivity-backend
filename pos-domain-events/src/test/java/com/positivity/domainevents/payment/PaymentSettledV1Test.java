@@ -127,6 +127,7 @@ class PaymentSettledV1Test {
                 new BigDecimal("0.05"));
         org.assertj.core.api.Assertions.assertThat(cash.settledAmount().subtract(cash.amount()))
                 .isEqualByComparingTo(cash.cashRoundingAmount());
-        org.assertj.core.api.Assertions.assertThat(PaymentSettledV1.SCHEMA_VERSION).isEqualTo(2);
+        org.assertj.core.api.Assertions.assertThat(PaymentSettledV1.SCHEMA_VERSION)
+                .isEqualTo(2);
     }
 }

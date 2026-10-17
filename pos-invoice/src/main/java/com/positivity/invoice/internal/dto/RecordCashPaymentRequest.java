@@ -22,8 +22,9 @@ import org.jspecify.annotations.Nullable;
  * and publishes {@code payment.payment.settled} with the three additive fields.
  */
 @Data
-@Schema(description = "Record a cash tender taken at the register: the amount applied, the cash taken after rounding"
-        + " and the signed rounding")
+@Schema(
+        description = "Record a cash tender taken at the register: the amount applied, the cash taken after rounding"
+                + " and the signed rounding")
 public class RecordCashPaymentRequest {
 
     @NotBlank

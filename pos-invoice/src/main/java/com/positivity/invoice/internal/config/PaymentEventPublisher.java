@@ -102,7 +102,9 @@ public class PaymentEventPublisher {
                 invoice.getOrderId(),
                 invoice.getWorkorderId(),
                 invoice.getPartyId(),
-                paymentIntent.getMethodType() == null ? GATEWAY_METHOD_TYPE : paymentIntent.getMethodType().name(),
+                paymentIntent.getMethodType() == null
+                        ? GATEWAY_METHOD_TYPE
+                        : paymentIntent.getMethodType().name(),
                 paymentIntent.getCapturedAmount(),
                 currencySource.currencyCode(),
                 paymentIntent.getGatewayProvider(),
