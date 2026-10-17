@@ -15,6 +15,7 @@ import java.util.UUID;
  * @param vendorNumber the vendor's number, as pos-supplier assigns it
  * @param displayName the vendor's display name; CONFIDENTIAL under ADR-0072, never logged
  * @param status the vendor's status; only ACTIVE vendors pass the purchase-order vendor guard
+ * @param transmittable whether the vendor has a purchasing channel (#2713); the alias itself is not served
  */
 @Schema(description = "A vendor of pos-order's vendor copy: the number, name and status a purchase order needs")
 public record PurchaseOrderVendorResponse(
@@ -35,4 +36,12 @@ public record PurchaseOrderVendorResponse(
                         + " approve and transmit (422 VENDOR_INACTIVE)",
                 example = "ACTIVE",
                 requiredMode = REQUIRED)
-        PurchaseOrderVendorStatus status) {}
+        PurchaseOrderVendorStatus status,
+
+        @Schema(
+                description = "Whether the vendor has a purchasing channel (a designated transmission profile"
+                        + " in pos-supplier, #2713): an order to it can be sent; false predicts 422"
+                        + " SUPPLIER_REF_MISSING on transmit",
+                example = "true",
+                requiredMode = REQUIRED)
+        boolean transmittable) {}

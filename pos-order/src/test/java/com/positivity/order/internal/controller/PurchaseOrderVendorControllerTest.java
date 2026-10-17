@@ -54,7 +54,7 @@ class PurchaseOrderVendorControllerTest extends BaseControllerSliceTest {
     private PurchaseOrderVendorService vendorService;
 
     private static PurchaseOrderVendorResponse vendor(PurchaseOrderVendorStatus status) {
-        return new PurchaseOrderVendorResponse(VENDOR_ID, "V-000123", "Acme Tire Supply", status);
+        return new PurchaseOrderVendorResponse(VENDOR_ID, "V-000123", "Acme Tire Supply", status, false);
     }
 
     @Test
@@ -94,7 +94,7 @@ class PurchaseOrderVendorControllerTest extends BaseControllerSliceTest {
                 .getContentAsString();
         JsonNode item = new ObjectMapper().readTree(body).get("content").get(0);
         assertThat(item.properties().stream().map(java.util.Map.Entry::getKey))
-                .containsExactlyInAnyOrder("vendorId", "vendorNumber", "displayName", "status");
+                .containsExactlyInAnyOrder("vendorId", "vendorNumber", "displayName", "status", "transmittable");
 
         ArgumentCaptor<ListPurchaseOrderVendorsRequest> filter =
                 ArgumentCaptor.forClass(ListPurchaseOrderVendorsRequest.class);

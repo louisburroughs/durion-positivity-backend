@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -273,16 +274,69 @@ class PurchaseOrderTransmissionServiceTest {
     }
 
     @Test
-    @DisplayName("an order naming no supplier profile has nobody to send to")
+    @DisplayName("#2713: an order whose vendor has no purchasing channel is refused naming the vendor")
     void missingSupplierRefIsRefused() {
         PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
         po.setSupplierRef(null);
 
-        // vendorId cannot stand in: it holds a manufacturer or distributor id that bears no
-        // relationship to a supplier profile.
         assertThatThrownBy(() -> service.requestTransmission(PO_ID, ACTOR))
-                .isInstanceOf(PurchaseOrderNotTransmittableException.class)
-                .hasMessageContaining("SUPPLIER_REF_MISSING");
+                .isInstanceOfSatisfying(PurchaseOrderNotTransmittableException.class, refused -> {
+                    assertThat(refused.getErrorCode()).isEqualTo("SUPPLIER_REF_MISSING");
+                    assertThat(refused.getMessage()).contains("V-000123").contains("Acme Parts");
+                    assertThat(refused.getReferenceId())
+                            .isEqualTo(po.getVendorId().toString());
+                    assertThat(refused.getNextAction()).contains("administrator");
+                    assertThat(refused.getSupportAction()).isNotBlank();
+                });
+    }
+
+    @Test
+    @DisplayName("#2713: a vendor that gained its channel after approval is sent through it; the stamp is then frozen")
+    void channelGainedAfterApprovalIsStampedAtTransmit() {
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_TRANSMITTED);
+        po.setSupplierRef(null);
+        ExtSupplierVendor withChannel = vendor(po.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
+        withChannel.setPurchaseOrderSupplierRef("acme-parts");
+        when(vendorRepository.findById(po.getVendorId())).thenReturn(Optional.of(withChannel));
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(po.getSupplierRef()).isEqualTo("acme-parts");
+
+        // A revision of a confirmed order is re-sent through the channel the original went to, not a moved one.
+        clearInvocations(outboxEventWriter);
+        PurchaseOrderEntity confirmed = order(PurchaseOrderStatus.APPROVED, TransmissionState.CONFIRMED);
+        confirmed.setSupplierRef("acme-parts");
+        confirmed.setTransmissionCount(1);
+        confirmed.setTransmittedVersionNumber(1);
+        confirmed.setVersionNumber(2);
+        ExtSupplierVendor moved = vendor(confirmed.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
+        moved.setPurchaseOrderSupplierRef("acme-new");
+        when(vendorRepository.findById(confirmed.getVendorId())).thenReturn(Optional.of(moved));
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(confirmed.getSupplierRef())
+                .as("the stamp is frozen after a send reached the vendor")
+                .isEqualTo("acme-parts");
+        assertThat(published().intentType()).isEqualTo(SupplierOrderRequestedV1.IntentType.REVISION);
+    }
+
+    @Test
+    @DisplayName("#2713: a re-send after NOT_DISPATCHED takes the channel the administrator has since designated")
+    void notDispatchedResendTakesTheCurrentChannel() {
+        PurchaseOrderEntity po = order(PurchaseOrderStatus.APPROVED, TransmissionState.NOT_DISPATCHED);
+        po.setSupplierRef("acme-old");
+        po.setTransmissionCount(0);
+        po.setTransmittedVersionNumber(null);
+        ExtSupplierVendor setUp = vendor(po.getVendorId(), ExtSupplierVendor.Status.ACTIVE);
+        setUp.setPurchaseOrderSupplierRef("acme-edi");
+        when(vendorRepository.findById(po.getVendorId())).thenReturn(Optional.of(setUp));
+
+        service.requestTransmission(PO_ID, ACTOR);
+
+        assertThat(po.getSupplierRef()).isEqualTo("acme-edi");
+        assertThat(published().supplierRef()).isEqualTo("acme-edi");
     }
 
     @Test
