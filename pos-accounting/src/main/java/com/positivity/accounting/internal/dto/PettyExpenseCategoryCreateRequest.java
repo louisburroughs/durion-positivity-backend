@@ -64,16 +64,16 @@ public record PettyExpenseCategoryCreateRequest(
      */
     public void requireValid() {
         if (code == null || !CODE.matcher(code).matches()) {
-            throw new InvalidRequestParameterException(
-                    "code is required: 1 to 40 upper case letters, digits or underscores");
+            throw InvalidRequestParameterException.forField(
+                    "code", "code is required: 1 to 40 upper case letters, digits or underscores");
         }
         PettyExpenseCategoryUpdateRequest.requireLabel(label, examples);
         if (glAccountId == null) {
-            throw new InvalidRequestParameterException("glAccountId is required");
+            throw InvalidRequestParameterException.forField("glAccountId", "glAccountId is required");
         }
         CashRequests.requireJustification(justification, "justification");
         if (requestId == null) {
-            throw new InvalidRequestParameterException("requestId is required");
+            throw InvalidRequestParameterException.forField("requestId", "requestId is required");
         }
     }
 }

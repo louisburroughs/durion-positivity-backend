@@ -13,6 +13,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -66,6 +67,38 @@ public class PettyExpenseCategoryChange extends TenantScopedEntity {
 
     @Column(name = "new_value", columnDefinition = "TEXT", nullable = false, updatable = false)
     private String newValue;
+
+    // ---- the change as values (#2675): filled when the row is written; null on rows written before V27 and on
+    // DEACTIVATE rows, whose values are the status codes in old_value / new_value.
+
+    @Column(name = "old_label", length = 100, updatable = false)
+    private String oldLabel;
+
+    @Column(name = "new_label", length = 100, updatable = false)
+    private String newLabel;
+
+    @Column(name = "old_examples", length = 500, updatable = false)
+    private String oldExamples;
+
+    @Column(name = "new_examples", length = 500, updatable = false)
+    private String newExamples;
+
+    @Column(name = "old_account_number", length = 20, updatable = false)
+    private String oldAccountNumber;
+
+    /** The replaced account's name at the moment of the change: the history is the audit trail. */
+    @Column(name = "old_account_name", length = 100, updatable = false)
+    private String oldAccountName;
+
+    @Column(name = "new_account_number", length = 20, updatable = false)
+    private String newAccountNumber;
+
+    @Column(name = "new_account_name", length = 100, updatable = false)
+    private String newAccountName;
+
+    /** CREATE: the business date the first mapping applies from; REMAP: the requested {@code effectiveFrom}. */
+    @Column(name = "effective_from", updatable = false)
+    private LocalDate effectiveFrom;
 
     @Column(name = "actor", length = 50, nullable = false, updatable = false)
     private String actor;

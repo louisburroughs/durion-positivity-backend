@@ -1072,6 +1072,12 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                     assertThat(h.actor()).isEqualTo("controller.cfo");
                     assertThat(h.oldValue()).isEqualTo("Staff meals");
                     assertThat(h.newValue()).isEqualTo("Staff meals and coffee");
+                    // #2675 AC5: the rename as values, old and new label and examples.
+                    assertThat(h.oldLabel()).isEqualTo("Staff meals");
+                    assertThat(h.newLabel()).isEqualTo("Staff meals and coffee");
+                    assertThat(h.newExamples()).isNull();
+                    assertThat(h.effectiveFrom()).isNull();
+                    assertThat(h.newAccountNumber()).isNull();
                 });
 
         // AC9: deactivate; the mapping still resolves; a second deactivation is 409.
@@ -1107,9 +1113,34 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         assertThatThrownBy(() -> asTenant(tenant, () -> categories.create(create("TIRE_DISPOSAL", revenue))))
                 .extracting(e -> ((CashSetupException) e).getCode())
                 .isEqualTo(CashSetupException.Code.PETTY_EXPENSE_ACCOUNT_NOT_ELIGIBLE);
-        PettyExpenseCategoryResponse created = asTenant(tenant, () -> categories.create(create("TIRE_DISPOSAL", misc)));
+        PettyExpenseCategoryCreateRequest tireDisposal = create("TIRE_DISPOSAL", misc);
+        PettyExpenseCategoryResponse created = asTenant(tenant, () -> categories.create(tireDisposal));
         assertThat(created.currentAccount().accountCode()).isEqualTo("6360");
         LocalDate today = LocalDate.ofInstant(clock.instant(), java.time.ZoneOffset.UTC); // the tenant's zone is UTC
+        // #2675 AC4: the CREATE row as values; AC7: the replay serves the same values.
+        String miscName = asTenant(
+                tenant, () -> glAccounts.findByAccountCode("6360").orElseThrow().getAccountName());
+        assertThat(created.history())
+                .filteredOn(h -> h.changeType() == PettyExpenseCategoryChangeType.CREATE)
+                .singleElement()
+                .satisfies(h -> {
+                    assertThat(h.newLabel()).isEqualTo("Tire disposal");
+                    assertThat(h.newExamples()).isEqualTo("Scrap tire hauler fees");
+                    assertThat(h.newAccountNumber()).isEqualTo("6360");
+                    assertThat(h.newAccountName()).isEqualTo(miscName);
+                    assertThat(h.effectiveFrom()).isEqualTo(today);
+                    assertThat(h.oldAccountNumber()).isNull();
+                });
+        PettyExpenseCategoryResponse createdAgain = asTenant(tenant, () -> categories.create(tireDisposal));
+        assertThat(createdAgain.replayed()).isTrue();
+        assertThat(createdAgain.history())
+                .filteredOn(h -> h.changeType() == PettyExpenseCategoryChangeType.CREATE)
+                .singleElement()
+                .satisfies(h -> {
+                    assertThat(h.newAccountNumber()).isEqualTo("6360");
+                    assertThat(h.newAccountName()).isEqualTo(miscName);
+                    assertThat(h.effectiveFrom()).isEqualTo(today);
+                });
         assertThat(asTenant(
                         tenant,
                         () -> code(resolver.resolveGLAccount(
@@ -1133,6 +1164,20 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         assertThat(moved.currentAccount().accountCode()).isEqualTo("6340");
         assertThat(moved.laterAccount().accountCode()).isEqualTo("6360");
         assertThat(moved.laterAccount().effectiveFrom()).isEqualTo(nextMonth);
+        // #2675 AC6: the REMAP row as values, both accounts with their names and the effective date.
+        String suppliesName = asTenant(
+                tenant, () -> glAccounts.findByAccountCode("6340").orElseThrow().getAccountName());
+        assertThat(moved.history())
+                .filteredOn(h -> h.changeType() == PettyExpenseCategoryChangeType.REMAP)
+                .singleElement()
+                .satisfies(h -> {
+                    assertThat(h.oldAccountNumber()).isEqualTo("6340");
+                    assertThat(h.oldAccountName()).isEqualTo(suppliesName);
+                    assertThat(h.newAccountNumber()).isEqualTo("6360");
+                    assertThat(h.newAccountName()).isEqualTo(miscName);
+                    assertThat(h.effectiveFrom()).isEqualTo(nextMonth);
+                    assertThat(h.oldLabel()).isNull();
+                });
         assertThat(asTenant(
                         tenant,
                         () -> code(resolver.resolveGLAccount(

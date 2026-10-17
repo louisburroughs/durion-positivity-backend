@@ -69,27 +69,28 @@ public record PettyExpenseCategoryTaxRecoveryRequest(
      */
     public void requireValid() {
         if (taxRecoverable == null) {
-            throw new InvalidRequestParameterException("taxRecoverable is required");
+            throw InvalidRequestParameterException.forField("taxRecoverable", "taxRecoverable is required");
         }
         if (taxRecoverable) {
             if (recoverablePercent == null
                     || recoverablePercent.signum() <= 0
                     || recoverablePercent.compareTo(HUNDRED) > 0
                     || Math.max(0, recoverablePercent.stripTrailingZeros().scale()) > PERCENT_SCALE) {
-                throw new InvalidRequestParameterException(
+                throw InvalidRequestParameterException.forField(
+                        "recoverablePercent",
                         "recoverablePercent is required when taxRecoverable is true, and must be above 0 and at most"
                                 + " 100 with at most two decimals");
             }
         } else if (recoverablePercent != null) {
-            throw new InvalidRequestParameterException(
-                    "recoverablePercent must be absent when taxRecoverable is false");
+            throw InvalidRequestParameterException.forField(
+                    "recoverablePercent", "recoverablePercent must be absent when taxRecoverable is false");
         }
         CashRequests.requireJustification(justification, "justification");
         if (requestId == null) {
-            throw new InvalidRequestParameterException("requestId is required");
+            throw InvalidRequestParameterException.forField("requestId", "requestId is required");
         }
         if (version == null || version < 0) {
-            throw new InvalidRequestParameterException("version is required and must not be negative");
+            throw InvalidRequestParameterException.forField("version", "version is required and must not be negative");
         }
     }
 }

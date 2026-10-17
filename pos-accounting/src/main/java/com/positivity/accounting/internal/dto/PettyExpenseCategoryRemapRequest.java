@@ -43,14 +43,14 @@ public record PettyExpenseCategoryRemapRequest(
      */
     public void requireValid() {
         if (glAccountId == null) {
-            throw new InvalidRequestParameterException("glAccountId is required");
+            throw InvalidRequestParameterException.forField("glAccountId", "glAccountId is required");
         }
         if (effectiveFrom == null) {
-            throw new InvalidRequestParameterException("effectiveFrom is required");
+            throw InvalidRequestParameterException.forField("effectiveFrom", "effectiveFrom is required");
         }
         CashRequests.requireJustification(justification, "justification");
         if (requestId == null) {
-            throw new InvalidRequestParameterException("requestId is required");
+            throw InvalidRequestParameterException.forField("requestId", "requestId is required");
         }
     }
 }
