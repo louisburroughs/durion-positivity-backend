@@ -56,6 +56,7 @@ public class VendorSelectionService {
 
     /** Runner-up entries recorded in the selection reason (keeps the column bounded). */
     private static final int MAX_RUNNERS_UP_IN_REASON = 3;
+
     private static final int MAX_SKIPPED_IN_REASON = 3;
 
     private final NormalizedAvailabilityRepository normalizedAvailabilityRepository;
@@ -93,7 +94,9 @@ public class VendorSelectionService {
             @Nullable Integer minOrderQty,
             @Nullable Integer packSize) {}
 
-    private record Screened(@NonNull List<VendorCandidate> eligible, @NonNull List<String> skipped) {}
+    private record Screened(
+            @NonNull List<VendorCandidate> eligible,
+            @NonNull List<String> skipped) {}
 
     /**
      * Selection outcome: the chosen candidate ({@code null} when the SKU has no usable feed
@@ -157,8 +160,8 @@ public class VendorSelectionService {
                 continue;
             }
             if (!vendor.isActive()) {
-                skipped.add("skipped " + c.sourceType() + " " + c.feedVendorRef() + ": vendor "
-                        + vendor.vendorNumber() + " inactive");
+                skipped.add("skipped " + c.sourceType() + " " + c.feedVendorRef() + ": vendor " + vendor.vendorNumber()
+                        + " inactive");
                 continue;
             }
             eligible.add(new VendorCandidate(
@@ -221,7 +224,9 @@ public class VendorSelectionService {
         // CAP:550 S36 (#2525): the mapping key is the feed's own text, so a non-UUID distributor id is eligible.
         Map<String, DistributorNormalizedInventory> freshestPerDistributor = new LinkedHashMap<>();
         for (DistributorNormalizedInventory row : distributorNormalizedInventoryRepository.findByProductId(productId)) {
-            String distributorRef = row.getDistributorId() == null ? null : row.getDistributorId().trim();
+            String distributorRef = row.getDistributorId() == null
+                    ? null
+                    : row.getDistributorId().trim();
             if (distributorRef == null || distributorRef.isEmpty()) {
                 continue;
             }

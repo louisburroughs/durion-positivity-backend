@@ -43,7 +43,8 @@ public class PurchaseSuggestionOrderAttentionService {
     private static final Set<String> OPEN_ORDER_STATUSES = Set.of("DRAFT", "APPROVED", "PARTIALLY_RECEIVED");
 
     /** What the read shows beside a CONVERTED suggestion. */
-    public record Assessment(@Nullable String orderStatus, @Nullable OrderAttention attention) {
+    public record Assessment(
+            @Nullable String orderStatus, @Nullable OrderAttention attention) {
         static final Assessment NONE = new Assessment(null, null);
     }
 
@@ -90,7 +91,8 @@ public class PurchaseSuggestionOrderAttentionService {
                 .map(ExtPurchaseOrderReplica::getVendorId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        Map<UUID, ExtSupplierVendorReplica> vendors = vendorIds.isEmpty() ? Map.of() : vendorCopyReader.byIds(vendorIds);
+        Map<UUID, ExtSupplierVendorReplica> vendors =
+                vendorIds.isEmpty() ? Map.of() : vendorCopyReader.byIds(vendorIds);
         Instant now = Instant.now(clock);
         for (PurchaseSuggestion suggestion : converted) {
             ExtPurchaseOrderReplica order = suggestion.getConvertedPurchaseOrderId() == null
@@ -108,8 +110,7 @@ public class PurchaseSuggestionOrderAttentionService {
             Instant now) {
         if (order == null) {
             Instant convertedAt = suggestion.getConvertedAt();
-            boolean overdue = convertedAt != null
-                    && now.isAfter(convertedAt.plus(settings.orderPlacementGrace()));
+            boolean overdue = convertedAt != null && now.isAfter(convertedAt.plus(settings.orderPlacementGrace()));
             return new Assessment(null, overdue ? OrderAttention.ORDER_NOT_PLACED : null);
         }
         String status = order.getStatus();

@@ -30,7 +30,6 @@ import com.positivity.inventory.internal.service.VendorFeedMappingService.Resolv
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,8 +110,9 @@ class PurchaseSuggestionConversionResolutionTest {
 
     private static ConvertPurchaseSuggestionsRequest request(PurchaseSuggestion... suggestions) {
         ConvertPurchaseSuggestionsRequest request = new ConvertPurchaseSuggestionsRequest();
-        request.setSuggestionIds(
-                java.util.Arrays.stream(suggestions).map(PurchaseSuggestion::getSuggestionId).toList());
+        request.setSuggestionIds(java.util.Arrays.stream(suggestions)
+                .map(PurchaseSuggestion::getSuggestionId)
+                .toList());
         return request;
     }
 
@@ -124,8 +124,10 @@ class PurchaseSuggestionConversionResolutionTest {
     @DisplayName("AC 7: an unmapped feed vendor is 422 PURCHASE_SUGGESTION_VENDOR_UNMAPPED; nothing written")
     void unmapped() {
         PurchaseSuggestion s = accepted(SuggestedVendorType.DISTRIBUTOR, "DIST-001");
-        when(vendorFeedMappingService.resolve(FeedVendorType.DISTRIBUTOR, "DIST-001")).thenReturn(Optional.empty());
-        when(vendorFeedMappingService.isMapped(FeedVendorType.DISTRIBUTOR, "DIST-001")).thenReturn(false);
+        when(vendorFeedMappingService.resolve(FeedVendorType.DISTRIBUTOR, "DIST-001"))
+                .thenReturn(Optional.empty());
+        when(vendorFeedMappingService.isMapped(FeedVendorType.DISTRIBUTOR, "DIST-001"))
+                .thenReturn(false);
 
         assertThatThrownBy(() -> service.convertPurchaseSuggestions(request(s), "buyer"))
                 .isInstanceOf(PurchaseSuggestionConversionException.class)
@@ -140,8 +142,10 @@ class PurchaseSuggestionConversionResolutionTest {
     @DisplayName("AC 7: a mapped vendor missing from the copy is 422 VENDOR_NOT_FOUND")
     void mappedButNotInCopy() {
         PurchaseSuggestion s = accepted(SuggestedVendorType.DISTRIBUTOR, "DIST-001");
-        when(vendorFeedMappingService.resolve(FeedVendorType.DISTRIBUTOR, "DIST-001")).thenReturn(Optional.empty());
-        when(vendorFeedMappingService.isMapped(FeedVendorType.DISTRIBUTOR, "DIST-001")).thenReturn(true);
+        when(vendorFeedMappingService.resolve(FeedVendorType.DISTRIBUTOR, "DIST-001"))
+                .thenReturn(Optional.empty());
+        when(vendorFeedMappingService.isMapped(FeedVendorType.DISTRIBUTOR, "DIST-001"))
+                .thenReturn(true);
 
         assertThatThrownBy(() -> service.convertPurchaseSuggestions(request(s), "buyer"))
                 .extracting(e -> ((PurchaseSuggestionConversionException) e).getErrorCode())
@@ -181,7 +185,8 @@ class PurchaseSuggestionConversionResolutionTest {
     }
 
     @Test
-    @DisplayName("AC 7: on success the request names the resolved vendor and each suggestion stores it with convertedAt")
+    @DisplayName(
+            "AC 7: on success the request names the resolved vendor and each suggestion stores it with convertedAt")
     void successStoresVendorAndConvertedAt() {
         PurchaseSuggestion s = accepted(SuggestedVendorType.DISTRIBUTOR, "DIST-001");
         when(vendorFeedMappingService.resolve(FeedVendorType.DISTRIBUTOR, "DIST-001"))

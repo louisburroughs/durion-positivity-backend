@@ -10,9 +10,8 @@ import com.positivity.inventory.internal.entity.ExtSupplierVendorReplica;
 import com.positivity.inventory.internal.entity.PurchaseSuggestion;
 import com.positivity.inventory.internal.enums.FeedVendorType;
 import com.positivity.inventory.internal.enums.OrderAttention;
-import com.positivity.inventory.internal.enums.SuggestedVendorType;
-import com.positivity.inventory.internal.service.VendorFeedMappingService;
 import com.positivity.inventory.internal.enums.PurchaseSuggestionStatus;
+import com.positivity.inventory.internal.enums.SuggestedVendorType;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
 import com.positivity.inventory.internal.exception.ResourceNotFoundException;
@@ -23,6 +22,7 @@ import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PurchaseOrderCommandPublisher;
 import com.positivity.inventory.internal.service.VendorCopyReader;
+import com.positivity.inventory.internal.service.VendorFeedMappingService;
 import com.positivity.shared.id.UUIDv7Generator;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -460,7 +460,7 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
     private PurchaseSuggestionResponse toResponse(
             PurchaseSuggestion suggestion,
             @Nullable ExtSupplierVendorReplica vendor,
-            @NonNull PurchaseSuggestionOrderAttentionService.Assessment assessment) {
+            PurchaseSuggestionOrderAttentionService.Assessment assessment) {
         return PurchaseSuggestionResponse.builder()
                 .suggestionId(suggestion.getSuggestionId())
                 .policyId(suggestion.getPolicyId())
@@ -489,7 +489,8 @@ public class PurchaseSuggestionServiceImpl implements PurchaseSuggestionService 
                 .dismissalReason(suggestion.getDismissalReason())
                 .convertedPurchaseOrderId(suggestion.getConvertedPurchaseOrderId())
                 .orderStatus(assessment.orderStatus())
-                .orderAttention(assessment.attention() != null ? assessment.attention().name() : null)
+                .orderAttention(
+                        assessment.attention() != null ? assessment.attention().name() : null)
                 .createdAt(suggestion.getCreatedAt())
                 .updatedAt(suggestion.getUpdatedAt())
                 .build();

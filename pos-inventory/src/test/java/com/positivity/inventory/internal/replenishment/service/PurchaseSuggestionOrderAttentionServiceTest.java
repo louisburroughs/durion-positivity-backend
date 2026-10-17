@@ -110,13 +110,15 @@ class PurchaseSuggestionOrderAttentionServiceTest {
                 .isEqualTo(OrderAttention.ORDER_VENDOR_NOT_IN_COPY);
 
         when(vendors.byIds(anyCollection())).thenReturn(Map.of(VENDOR, vendor(VendorStatus.ACTIVE)));
-        PurchaseSuggestionOrderAttentionService.Assessment ok = service.assess(List.of(s)).get(s.getSuggestionId());
+        PurchaseSuggestionOrderAttentionService.Assessment ok =
+                service.assess(List.of(s)).get(s.getSuggestionId());
         assertThat(ok.attention()).isNull();
         assertThat(ok.orderStatus()).isEqualTo("DRAFT");
 
         when(orders.findAllById(any())).thenReturn(List.of(order("CANCELLED", VENDOR)));
         when(vendors.byIds(anyCollection())).thenReturn(Map.of(VENDOR, vendor(VendorStatus.INACTIVE)));
-        assertThat(service.assess(List.of(s)).get(s.getSuggestionId()).attention()).isNull();
+        assertThat(service.assess(List.of(s)).get(s.getSuggestionId()).attention())
+                .isNull();
     }
 
     @Test

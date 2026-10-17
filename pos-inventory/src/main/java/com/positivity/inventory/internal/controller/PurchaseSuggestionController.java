@@ -100,8 +100,8 @@ public class PurchaseSuggestionController {
                     @RequestParam(required = false)
                     String orderAttention,
             @ParameterObject @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(purchaseSuggestionService.listPurchaseSuggestions(
-                status, sku, locationId, orderAttention, pageable));
+        return ResponseEntity.ok(
+                purchaseSuggestionService.listPurchaseSuggestions(status, sku, locationId, orderAttention, pageable));
     }
 
     @GetMapping("/{suggestionId}")
