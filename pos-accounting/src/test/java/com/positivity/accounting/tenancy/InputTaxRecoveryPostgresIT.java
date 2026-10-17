@@ -11,6 +11,7 @@ import com.positivity.accounting.internal.service.KafkaFactIngestionRecorder;
 import com.positivity.accounting.internal.service.OrderEventsListener;
 import com.positivity.accounting.internal.service.RegisterCashMovementPostingService;
 import com.positivity.accounting.internal.service.RegisterOverShortPostingService;
+import com.positivity.accounting.internal.service.PurchaseOrderReplica;
 import com.positivity.accounting.internal.service.RegisterSessionReplica;
 import com.positivity.accounting.internal.service.UndepositedSessionProjection;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
@@ -110,7 +111,8 @@ class InputTaxRecoveryPostgresIT extends PostgresTenancyTestBase {
                 transactionManager,
                 zoneResolver,
                 sessionReplica,
-                undepositedSessions);
+                undepositedSessions,
+                org.mockito.Mockito.mock(PurchaseOrderReplica.class));
         closedAt = Instant.now(clock).truncatedTo(ChronoUnit.SECONDS).minus(2, ChronoUnit.HOURS);
         when(taxProfiles.taxTypes("CA")).thenReturn(new TaxProfileClient.TaxTypes("CA", "CAD", List.of(), List.of()));
     }
