@@ -36,28 +36,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Work Items", description = "What needs a person in accounting, and what was done automatically")
 public class WorkItemController {
 
-    /** The permissions of the item types: a caller with none of them has nothing to see. */
-    private static final String ITEM_AUTHORITIES = "hasAnyAuthority('"
-            + AccountingPermissions.AP_APPROVE
-            + "','" + AccountingPermissions.AP_APPROVE_OVER_LIMIT
-            + "','" + AccountingPermissions.AP_PAY
-            + "','" + AccountingPermissions.PAYMENT_APPLY
-            + "','" + AccountingPermissions.DEPOSIT_CREATE
-            + "','" + AccountingPermissions.RECONCILIATION_ADJUST
-            + "','" + AccountingPermissions.RECONCILIATION_APPROVE
-            + "','" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS
-            + "','" + AccountingPermissions.JE_POST
-            + "')";
-
-    /** What the automatic list shows, one kind per permission group: a caller with none of them has nothing to see. */
-    private static final String AUTOMATIC_AUTHORITIES = "hasAnyAuthority('"
-            + AccountingPermissions.PAYMENT_APPLY
-            + "','" + AccountingPermissions.PAYMENT_REVERSE
-            + "','" + AccountingPermissions.RECONCILIATION_VIEW
-            + "','" + AccountingPermissions.AP_APPROVE
-            + "','" + AccountingPermissions.AP_APPROVE_OVER_LIMIT
-            + "')";
-
     private final WorkItemService workItemService;
     private final WorkItemAutomaticService automaticService;
 
@@ -75,7 +53,7 @@ public class WorkItemController {
                 "reporting:view:financial-statements",
                 "accounting:je:post"
             })
-    @PreAuthorize(ITEM_AUTHORITIES)
+    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.AP_APPROVE + "','" + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "','" + AccountingPermissions.AP_PAY + "','" + AccountingPermissions.PAYMENT_APPLY + "','" + AccountingPermissions.DEPOSIT_CREATE + "','" + AccountingPermissions.RECONCILIATION_ADJUST + "','" + AccountingPermissions.RECONCILIATION_APPROVE + "','" + AccountingPermissions.REPORTING_VIEW_FINANCIAL_STATEMENTS + "','" + AccountingPermissions.JE_POST + "')")
     @Operation(
             operationId = "listWorkItems",
             summary = "List Work Items",
@@ -136,7 +114,7 @@ public class WorkItemController {
                 "accounting:ap:approve",
                 "accounting:ap:approve_over_limit"
             })
-    @PreAuthorize(AUTOMATIC_AUTHORITIES)
+    @PreAuthorize("hasAnyAuthority('" + AccountingPermissions.PAYMENT_APPLY + "','" + AccountingPermissions.PAYMENT_REVERSE + "','" + AccountingPermissions.RECONCILIATION_VIEW + "','" + AccountingPermissions.AP_APPROVE + "','" + AccountingPermissions.AP_APPROVE_OVER_LIMIT + "')")
     @Operation(
             operationId = "listAutomaticWorkItems",
             summary = "List Work Done Automatically",
