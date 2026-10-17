@@ -564,7 +564,18 @@ public class PurchaseOrderController {
     public ResponseEntity<PurchaseOrderResponse> reopenPurchaseOrderLine(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
             @Parameter(description = "Purchase order line identifier", required = true) @PathVariable UUID lineId,
-            @Valid @RequestBody ReopenPurchaseOrderLineRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The quantity to reopen and, optionally, the vendor return it belongs to.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Reopen two units", value = """
+                                                {"quantity":2,"vendorReturnId":"019a0000-0000-7000-8000-000000002635"}
+                                                """)))
+                    @Valid
+                    @RequestBody
+                    ReopenPurchaseOrderLineRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.reopenPurchaseOrderLine(poId, lineId, request, actorUserId));
@@ -584,8 +595,8 @@ public class PurchaseOrderController {
                     #2635): the line's cancelled figures take the quantity and its value, open and balance fall by \
                     the same, the status is re-derived (CLOSED once every line is settled with a short-closed \
                     remainder) and the order's state is published, so receiving expects nothing more for it.
-                    Use this tool for one line; use closePurchaseOrder to cancel every remainder at once, and \
-                    cancelPurchaseOrder for an order nothing arrived on.
+                    Use this tool for one line; do not use it for every remainder at once (closePurchaseOrder) or \
+                    for an order nothing arrived on (cancelPurchaseOrder instead).
                     Preconditions: the order is APPROVED, PARTIALLY_RECEIVED or FULLY_RECEIVED (a DRAFT is \
                     revised, not short-closed); the line belongs to the order; quantity is at most the line's open \
                     quantity.
@@ -624,7 +635,18 @@ public class PurchaseOrderController {
     public ResponseEntity<PurchaseOrderResponse> cancelPurchaseOrderLine(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
             @Parameter(description = "Purchase order line identifier", required = true) @PathVariable UUID lineId,
-            @Valid @RequestBody CancelPurchaseOrderLineRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "The quantity to cancel and why the vendor will not ship it.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Cancel five units", value = """
+                                                {"quantity":5,"reason":"Vendor discontinued the item"}
+                                                """)))
+                    @Valid
+                    @RequestBody
+                    CancelPurchaseOrderLineRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.cancelPurchaseOrderLine(poId, lineId, request, actorUserId));
@@ -643,8 +665,8 @@ public class PurchaseOrderController {
                     Short-closes a purchase order something was received on (CAP:550 #2635): every remaining open \
                     quantity on every line is cancelled with its value, the balance falls to what was received, the \
                     order is CLOSED and its state is published, so receiving expects nothing more.
-                    Use this tool when the vendor will not ship the rest; use cancelPurchaseOrderLine for one line \
-                    and cancelPurchaseOrder for an order nothing arrived on.
+                    Use this tool when the vendor will not ship the rest; do not use it for one line \
+                    (cancelPurchaseOrderLine) or for an order nothing arrived on (cancelPurchaseOrder instead).
                     Preconditions: the order is APPROVED, PARTIALLY_RECEIVED or FULLY_RECEIVED and something was \
                     received on it.
                     Required inputs: poId path parameter and a reason.
@@ -680,7 +702,18 @@ public class PurchaseOrderController {
             content = @Content(mediaType = "application/json", schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<PurchaseOrderResponse> closePurchaseOrder(
             @Parameter(description = "Purchase order identifier", required = true) @PathVariable UUID poId,
-            @Valid @RequestBody ClosePurchaseOrderRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(
+                            description = "Why the remaining open quantity is cancelled.",
+                            required = true,
+                            content =
+                                    @Content(
+                                            mediaType = "application/json",
+                                            examples = @ExampleObject(name = "Short-close with a reason", value = """
+                                                {"reason":"Vendor will not ship the rest"}
+                                                """)))
+                    @Valid
+                    @RequestBody
+                    ClosePurchaseOrderRequest request) {
         String actorUserId = SecurityContextHelper.getCurrentUsername()
                 .orElseThrow(() -> new IllegalStateException(NO_CURRENT_USER));
         return ResponseEntity.ok(purchaseOrderService.closePurchaseOrder(poId, request, actorUserId));

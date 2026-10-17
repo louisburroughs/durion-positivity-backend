@@ -315,16 +315,15 @@ public class SupplierVendorController {
                     NET120) and defaultCurrency (ISO 4217); vendorNumber is optional and allocated as V-000001,
                     V-000002 and so on when omitted, and never changes afterwards; taxRegistrations and remitTo
                     are optional, and each new registration needs its number, which is encrypted at once and
-                    never returned (the response shows last4).
+                    never returned (the response shows last4), and a listed scheme (#2623): a code of
+                    listSupplierVendorTaxRegistrationSchemes (stored as that code), with region required and
+                    listed where the scheme is regional and absent otherwise.
                     Emits a SUPPLIER_VENDOR_CREATE audit event and queues one supplier.vendor.updated fact in the
                     same transaction; a remitTo given here is stored as version 1 without approval.
                     Send a requestId (a UUID the client mints) to make the create idempotent: a retry after a
                     timeout or 5xx with the same requestId and the same payload answers the original 201 body and
-                    creates nothing; the same requestId with another payload is refused. Reuse a requestId only for
-                    an identical payload.
-                    Every registration entered with a number is filed under a listed scheme (#2623): scheme is
-                    one of listSupplierVendorTaxRegistrationSchemes' codes (stored as that code), and region is
-                    required and listed where the scheme is regional, absent otherwise.
+                    creates nothing; the same requestId with another payload is refused, so reuse a requestId only
+                    for an identical payload.
                     Returns 201 with the vendor, 400 VALIDATION_ERROR when a field is missing or malformed or a
                     registration's scheme or region is not listed (fieldErrors names taxRegistrations[i].scheme or
                     .region; every violation is reported), 409 SUPPLIER_VENDOR_NUMBER_TAKEN when the number is in
@@ -383,10 +382,10 @@ public class SupplierVendorController {
                     default currency, and publishes supplier.vendor.updated.
                     Use this tool to correct or complete a vendor; do not use it for the remit-to, which needs a
                     remit-to change a second person approves, or for the status, which is deactivation and
-                    reactivation. The vendorNumber never changes.
+                    reactivation, and the vendorNumber never changes.
                     Preconditions: the vendor must exist, and version must be the version the caller read.
                     Required inputs: vendorId (UUIDv7) path parameter plus the full body, because every field is
-                    replaced; omitting taxRegistrations clears them. Send a stored registration's registrationId
+                    replaced; omitting taxRegistrations clears them; send a stored registration's registrationId
                     without number to keep it (its scheme and region must be unchanged), with number to replace
                     the number, and send a new registration without registrationId and with its number.
                     Emits a SUPPLIER_VENDOR_UPDATE audit event and queues one supplier.vendor.updated fact in the
