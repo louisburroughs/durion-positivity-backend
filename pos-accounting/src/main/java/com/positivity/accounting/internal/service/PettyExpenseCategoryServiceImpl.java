@@ -510,8 +510,8 @@ public class PettyExpenseCategoryServiceImpl implements PettyExpenseCategoryServ
 
     private PettyExpenseCategoryResponse view(PettyExpenseCategory category, LocalDate today) {
         // One category's rows only (#2675 review): the table also keeps every kept response_json.
-        List<PettyExpenseCategoryChange> history =
-                changes.findByPettyExpenseCategoryIdOrderByChangedAtAscChangeIdAsc(category.getPettyExpenseCategoryId());
+        List<PettyExpenseCategoryChange> history = changes.findByPettyExpenseCategoryIdOrderByChangedAtAscChangeIdAsc(
+                category.getPettyExpenseCategoryId());
         return view(category, history, today);
     }
 
