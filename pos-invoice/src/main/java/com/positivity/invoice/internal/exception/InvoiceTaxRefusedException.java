@@ -1,6 +1,8 @@
 package com.positivity.invoice.internal.exception;
 
+import com.positivity.tax.common.error.TaxRefusals;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /**
  * pos-tax refused the calculation for a reason the caller must answer deterministically (#2644, ADR-0017):
@@ -24,11 +26,11 @@ public class InvoiceTaxRefusedException extends RuntimeException {
     }
 
     /** The caller's code for one of pos-tax's 422 codes, or null when pos-tax's code is not one of them. */
-    public static String translate(String taxCode) {
-        if ("CURRENCY_NOT_SUPPORTED".equals(taxCode)) {
+    public static @Nullable String translate(@Nullable String taxCode) {
+        if (TaxRefusals.CURRENCY_NOT_SUPPORTED.equals(taxCode)) {
             return CURRENCY_NOT_SUPPORTED;
         }
-        if ("TAX_JURISDICTION_NOT_CONFIGURED".equals(taxCode)) {
+        if (TaxRefusals.TAX_JURISDICTION_NOT_CONFIGURED.equals(taxCode)) {
             return JURISDICTION_NOT_CONFIGURED;
         }
         return null;

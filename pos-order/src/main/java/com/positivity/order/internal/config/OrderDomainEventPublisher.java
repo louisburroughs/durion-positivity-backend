@@ -41,10 +41,10 @@ public class OrderDomainEventPublisher {
     private static final String ORDER_DOMAIN = "order";
 
     private static final String SOURCE_SERVICE = "pos-order";
-    private static final String CURRENCY = "USD";
 
     private final Clock clock;
     private final ObjectProvider<OutboxEventWriter> outboxEventWriter;
+    private final FunctionalCurrency functionalCurrency;
 
     public void publishOrderCancelled(@NonNull SalesOrder order) {
         OutboxEventWriter writer = outboxEventWriter.getIfAvailable();
@@ -100,7 +100,8 @@ public class OrderDomainEventPublisher {
                 order.getVehicleId(),
                 order.getClerkId(),
                 order.getTerminalId(),
-                CURRENCY,
+                // The tenant's functional currency (ADR-0067 R-2; #2644): what the order's amounts are in.
+                functionalCurrency.code(),
                 order.getSubtotal(),
                 order.getDiscountTotal(),
                 order.getTaxTotal(),

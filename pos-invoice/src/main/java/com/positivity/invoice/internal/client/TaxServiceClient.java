@@ -2,6 +2,7 @@ package com.positivity.invoice.internal.client;
 
 import com.positivity.invoice.internal.config.InvoiceCurrencySource;
 import com.positivity.invoice.internal.exception.InvoiceTaxRefusedException;
+import com.positivity.tax.common.error.TaxRefusals;
 import com.positivity.tax.common.dto.TaxCalculationRequest;
 import com.positivity.tax.common.dto.TaxCalculationRequest.TaxAddress;
 import com.positivity.tax.common.dto.TaxCalculationResponse;
@@ -19,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 @Component
@@ -123,15 +125,18 @@ public class TaxServiceClient {
                 // #2644 (ADR-0017): pos-tax's configuration refusals become this module's deterministic codes;
                 // anything else keeps the client's own exception.
                 .onStatus(status -> status.value() == 422, (req, res) -> {
-                    String translated = InvoiceTaxRefusedException.translate(
-                            errorCodeOf(new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8)));
-                    if (translated != null) {
+                    byte[] body = res.getBody().readAllBytes();
+                    String translated = InvoiceTaxRefusedException.translate(TaxRefusals.codeOf(body));
+                    if (translated == null) {
+                        // Any other 422 keeps the client's previous behaviour: the status exception with its body.
+                        throw HttpClientErrorException.create(
+                                res.getStatusCode(), res.getStatusText(), res.getHeaders(), body, StandardCharsets.UTF_8);
+                    }
                         throw new InvoiceTaxRefusedException(
                                 translated,
                                 "pos-tax refused the calculation for " + request.getCurrencyCode() + " at "
                                         + destination.getCountryCode() + "/" + destination.getPostalCode()
                                         + ": " + translated);
-                    }
                 })
                 .body(TaxCalculationResponse.class);
 
@@ -142,17 +147,6 @@ public class TaxServiceClient {
         return response;
     }
 
-    /** pos-tax's 422 codes a caller must answer deterministically (#2644, ADR-0017). */
-    private static final java.util.regex.Pattern ERROR_CODE =
-            java.util.regex.Pattern.compile("\"code\"\\s*:\\s*\"([A-Z_]+)\"");
-
-    static @Nullable String errorCodeOf(@Nullable String body) {
-        if (body == null) {
-            return null;
-        }
-        java.util.regex.Matcher matcher = ERROR_CODE.matcher(body);
-        return matcher.find() ? matcher.group(1) : null;
-    }
 
     @NonNull
     private BigDecimal safeMoney(@Nullable BigDecimal value, @NonNull BigDecimal fallback) {

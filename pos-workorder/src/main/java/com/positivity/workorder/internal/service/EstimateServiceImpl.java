@@ -95,7 +95,6 @@ public class EstimateServiceImpl implements EstimateService {
     private final FunctionalCurrency functionalCurrency;
 
     // Configuration defaults
-    private static final String DEFAULT_CURRENCY = "USD";
     private static final long ESTIMATE_NUMBER_SEQUENCE_START = 1000;
 
     // Tax category constants
@@ -276,7 +275,9 @@ public class EstimateServiceImpl implements EstimateService {
                         .orElseThrow(() -> new WorkorderRequestValidationException(
                                 "locationId is required: none was provided and the current user has no primary "
                                         + "location assignment to derive one from"));
-        String currencyUomId = request.getCurrencyUomId() != null ? request.getCurrencyUomId() : DEFAULT_CURRENCY;
+        // The tenant's functional currency (ADR-0067 R-2; #2644), the same one the estimate's tax request states.
+        String currencyUomId =
+                request.getCurrencyUomId() != null ? request.getCurrencyUomId() : functionalCurrency.code();
 
         // Generate unique estimate number
         String estimateNumber = generateEstimateNumber(locationId);
@@ -1306,6 +1307,10 @@ public class EstimateServiceImpl implements EstimateService {
             subtotal = taxResponse.getSubtotal();
             taxAmount = taxResponse.getTotalTax();
             total = taxResponse.getTotal();
+        } catch (com.positivity.workorder.internal.exception.EstimateTaxRefusedException refused) {
+            // #2644 (ADR-0017): a configuration refusal is not an outage; it reaches the caller as its 422 code
+            // instead of a taxPending estimate that would hide a misconfigured currency or jurisdiction for ever.
+            throw refused;
         } catch (RuntimeException ex) {
             // Decision D-T5: flag-and-continue. The tax service is unavailable — do NOT invent
             // a rate or silently flip to test mode (the old FALLBACK_TAX_RATE=8.25% bug). Compute
