@@ -3,7 +3,6 @@ package com.positivity.accounting.internal.controller;
 import static org.hamcrest.Matchers.hasItem;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -207,7 +206,10 @@ class APPaymentPostingControllerTest extends BaseIntegrationTest {
         @Test
         @DisplayName("200 with no body: the payment GL_POSTED")
         void postsWithoutABody() throws Throwable {
-            when(apPaymentService.retryGLPosting(eq(PAYMENT_ID), any(com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest.class), any()))
+            when(apPaymentService.retryGLPosting(
+                            eq(PAYMENT_ID),
+                            any(com.positivity.accounting.internal.dto.APPaymentGLPostingRetryRequest.class),
+                            any()))
                     .thenReturn(payment(APPaymentStatus.GL_POSTED));
 
             mockMvc.perform(withAuth(post(RETRY, PAYMENT_ID), "accounting:je:post"))
