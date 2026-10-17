@@ -5,6 +5,7 @@ import com.positivity.invoice.internal.entity.Invoice;
 import com.positivity.invoice.internal.entity.PaymentIntent;
 import com.positivity.invoice.internal.entity.RefundRecord;
 import com.positivity.invoice.internal.enums.PaymentIntentStatus;
+import com.positivity.invoice.internal.enums.PaymentMethodType;
 import com.positivity.invoice.internal.enums.RefundReason;
 import com.positivity.invoice.internal.enums.RefundStatus;
 import com.positivity.invoice.internal.enums.VoidReason;
@@ -102,6 +103,7 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
         // ADR-0061 §3 (#2226): scope check lives here, after the existence check, so a denial
         // cannot be used to probe which payment intent ids exist.
         requireLocationInReach(InvoicePermissions.PAYMENT_VOID, paymentIntent.getInvoice());
+        requireGatewayTender(paymentIntent);
 
         if (paymentIntent.getStatus() != PaymentIntentStatus.AUTHORIZED) {
             throw new InvalidPaymentStateException(
@@ -205,7 +207,21 @@ public class PaymentReversalServiceImpl implements PaymentReversalService {
             throw new InvalidPaymentStateException(
                     "Payment must be CAPTURED to refund, current: " + paymentIntent.getStatus());
         }
+        requireGatewayTender(paymentIntent);
         return paymentIntent;
+    }
+
+    /**
+     * ADR-0067 A8 (#2662): a CASH tender never went through the processor, so the gateway void and refund paths
+     * cannot reverse it (the stub would claim money moved that is still in the drawer). Cash refunds are the A8
+     * follow-up on {@code PaymentReversedV1}; until it lands a cash intent is not reversible here.
+     */
+    private static void requireGatewayTender(PaymentIntent paymentIntent) {
+        if (paymentIntent.getMethodType() == PaymentMethodType.CASH) {
+            throw new InvalidPaymentStateException(
+                    "A cash tender cannot be voided or refunded through the payment gateway; cash refunds are"
+                            + " handled at the register (ADR-0067 A8 follow-up)");
+        }
     }
 
     /**

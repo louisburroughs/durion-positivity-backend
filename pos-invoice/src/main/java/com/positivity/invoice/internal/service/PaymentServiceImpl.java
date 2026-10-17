@@ -40,6 +40,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -135,10 +136,18 @@ public class PaymentServiceImpl implements PaymentService {
                 invoiceRepository.findById(invoiceId).orElseThrow(() -> new InvoiceNotFoundException(invoiceId));
         requireLocationInReach(InvoicePermissions.PAYMENT_PROCESS, invoice);
         requireParty(invoice, "cash tender");
+        // BILL-DEC-010 applies to every tender, not only card: the limit is on the amount applied.
+        if (exceedsPaymentLimit(request.getAmount())
+                && !SecurityContextHelper.hasAuthority(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE)) {
+            throw new AccessDeniedException(MISSING_AUTHORITY + InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
+        }
+        // Interim per-module source of the functional currency (ADR-0067 R-2, #2644) until the tenant carries
+        // it (#2583); pos-invoice records and publishes every amount in it, so the drawer's cash must be in it.
         String currency = currencySource.currencyCode();
         if (!currency.equals(request.getCurrencyCode())) {
             throw new CashRoundingInvalidException("currencyCode " + request.getCurrencyCode()
-                    + " is not the invoice currency " + currency + "; the drawer currency must match the invoice");
+                    + " is not the functional currency " + currency
+                    + " pos-invoice records in; cash is tendered in the drawer's functional currency");
         }
         CashRoundingCheck.verify(
                 request.getAmount(),
@@ -163,7 +172,15 @@ public class PaymentServiceImpl implements PaymentService {
         intent.setGatewayProvider("register");
         intent.setGatewayReference(
                 request.getSessionId() == null ? null : request.getSessionId().toString());
-        PaymentIntent saved = paymentIntentRepository.save(intent);
+        PaymentIntent saved;
+        try {
+            saved = paymentIntentRepository.saveAndFlush(intent);
+        } catch (DataIntegrityViolationException raced) {
+            // Two first-time requests with the same key: the loser hits UNIQUE(tenant_id, idempotency_key).
+            // 409 rather than 500; the register's retry replays the winner.
+            throw new PaymentIdempotencyConflictException(
+                    "Idempotency key is being recorded by a concurrent request; retry to replay it", raced);
+        }
         paymentEventPublisher.publishPaymentSettled(saved);
         log.info(
                 "Cash tender recorded: invoice={} intent={} amount={} settled={} rounding={} increment={} currency={}",
@@ -184,7 +201,8 @@ public class PaymentServiceImpl implements PaymentService {
                 && existing.getMethodType() == PaymentMethodType.CASH
                 && sameAmount(existing.getCapturedAmount(), request.getAmount())
                 && sameAmount(existing.getSettledAmount(), request.getSettledAmount())
-                && sameAmount(existing.getCashRoundingAmount(), request.getCashRoundingAmount());
+                && sameAmount(existing.getCashRoundingAmount(), request.getCashRoundingAmount())
+                && sameAmount(existing.getCashIncrement(), request.getCashIncrement());
         if (!same) {
             throw new PaymentIdempotencyConflictException(
                     "Idempotency key was already used with a different payment request");
@@ -391,7 +409,11 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private static boolean exceedsPaymentLimit(@NonNull InitiatePaymentRequest request) {
-        return request.getAmount().compareTo(PAYMENT_LIMIT_THRESHOLD) > 0;
+        return exceedsPaymentLimit(request.getAmount());
+    }
+
+    private static boolean exceedsPaymentLimit(@NonNull BigDecimal amount) {
+        return amount.compareTo(PAYMENT_LIMIT_THRESHOLD) > 0;
     }
 
     /** ADR-0061 §3 (#2226, #2215): gates a payment read on the invoice's location, mirroring

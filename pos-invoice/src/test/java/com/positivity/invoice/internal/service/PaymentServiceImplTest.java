@@ -60,6 +60,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -736,7 +737,7 @@ class PaymentServiceImplTest {
             when(currencySource.currencyCode()).thenReturn("CAD");
             when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
             when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
-            when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(paymentIntentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
             InitiatePaymentResponse response = paymentService.recordCashPayment(INVOICE_ID, cadRequest());
 
@@ -747,7 +748,7 @@ class PaymentServiceImplTest {
             assertThat(response.getCashRoundingAmount()).isEqualByComparingTo("0.02");
             assertThat(response.getCashIncrement()).isEqualByComparingTo("0.05");
             ArgumentCaptor<PaymentIntent> saved = ArgumentCaptor.forClass(PaymentIntent.class);
-            verify(paymentIntentRepository).save(saved.capture());
+            verify(paymentIntentRepository).saveAndFlush(saved.capture());
             assertThat(saved.getValue().getPaymentToken()).isNull();
             assertThat(saved.getValue().getMethodType()).isEqualTo(PaymentMethodType.CASH);
             assertThat(saved.getValue().getAuthorizedAmount()).isEqualByComparingTo("149.98");
@@ -761,7 +762,7 @@ class PaymentServiceImplTest {
             when(currencySource.currencyCode()).thenReturn("USD");
             when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
             when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
-            when(paymentIntentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(paymentIntentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
             var request = cashRequest(
                     new BigDecimal("149.99"), new BigDecimal("149.99"), new BigDecimal("0.00"), null, "USD");
 
@@ -788,7 +789,7 @@ class PaymentServiceImplTest {
             InitiatePaymentResponse response = paymentService.recordCashPayment(INVOICE_ID, cadRequest());
 
             assertThat(response.getPaymentIntentId()).isEqualTo(PAYMENT_INTENT_ID);
-            verify(paymentIntentRepository, never()).save(any());
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
             verifyNoInteractions(paymentEventPublisher, gatewayPort, currencySource);
         }
 
@@ -836,7 +837,7 @@ class PaymentServiceImplTest {
             assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
                     .isInstanceOf(CashRoundingInvalidException.class)
                     .hasMessageContaining("CAD");
-            verify(paymentIntentRepository, never()).save(any());
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
             verifyNoInteractions(paymentEventPublisher);
         }
 
@@ -855,7 +856,7 @@ class PaymentServiceImplTest {
 
             assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, request))
                     .isInstanceOf(CashRoundingInvalidException.class);
-            verify(paymentIntentRepository, never()).save(any());
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
             verifyNoInteractions(paymentEventPublisher);
         }
 
@@ -869,8 +870,67 @@ class PaymentServiceImplTest {
 
             assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
                     .isInstanceOf(InvoicePartyRequiredException.class);
-            verify(paymentIntentRepository, never()).save(any());
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
             verifyNoInteractions(paymentEventPublisher, currencySource);
+        }
+
+        @Test
+        void replayWithAnotherIncrementIsAnIdempotencyConflict() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            PaymentIntent existing = new PaymentIntent();
+            existing.setInvoice(invoice(INVOICE_ID));
+            existing.setMethodType(PaymentMethodType.CASH);
+            existing.setCapturedAmount(new BigDecimal("149.98"));
+            existing.setSettledAmount(new BigDecimal("150.00"));
+            existing.setCashRoundingAmount(new BigDecimal("0.02"));
+            existing.setCashIncrement(new BigDecimal("0.10"));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.of(existing));
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(PaymentIdempotencyConflictException.class);
+        }
+
+        @Test
+        void aboveTheLimitNeedsTheOverrideAuthority() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            var request = cashRequest(
+                    new BigDecimal("600.00"), new BigDecimal("600.00"), new BigDecimal("0.00"), null, "USD");
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, request))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining(InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
+            verify(paymentIntentRepository, never()).saveAndFlush(any());
+            verifyNoInteractions(paymentEventPublisher, currencySource);
+        }
+
+        @Test
+        void aboveTheLimitWithTheOverrideRecords() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS, InvoicePermissions.PAYMENT_LIMIT_OVERRIDE);
+            when(currencySource.currencyCode()).thenReturn("USD");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            when(paymentIntentRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+            var request = cashRequest(
+                    new BigDecimal("600.00"), new BigDecimal("600.00"), new BigDecimal("0.00"), null, "USD");
+
+            assertThat(paymentService.recordCashPayment(INVOICE_ID, request).getCapturedAmount())
+                    .isEqualByComparingTo("600.00");
+        }
+
+        @Test
+        void aConcurrentFirstTimeRequestWithTheSameKeyIsAConflictNotAFailure() {
+            withAuthorities(InvoicePermissions.PAYMENT_PROCESS);
+            when(currencySource.currencyCode()).thenReturn("CAD");
+            when(invoiceRepository.findById(INVOICE_ID)).thenReturn(Optional.of(invoice(INVOICE_ID)));
+            when(paymentIntentRepository.findByIdempotencyKey(CASH_KEY)).thenReturn(Optional.empty());
+            when(paymentIntentRepository.saveAndFlush(any()))
+                    .thenThrow(new DataIntegrityViolationException("uq_payment_intent_idempotency_key"));
+
+            assertThatThrownBy(() -> paymentService.recordCashPayment(INVOICE_ID, cadRequest()))
+                    .isInstanceOf(PaymentIdempotencyConflictException.class);
+            verifyNoInteractions(paymentEventPublisher);
         }
 
         @Test

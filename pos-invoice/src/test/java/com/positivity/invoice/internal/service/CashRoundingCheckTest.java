@@ -41,10 +41,10 @@ class CashRoundingCheckTest {
 
     static Stream<Arguments> invalidTriples() {
         return Stream.of(
-                Arguments.of("settled not a multiple of the increment", "149.98", "149.98", "0.00", "0.05", "multiple"),
+                Arguments.of("settled not a multiple of the increment", "149.98", "149.98", "0.00", "0.05", "HALF_UP"),
                 Arguments.of("rounding not settled minus amount", "149.98", "150.00", "0.03", "0.05", "minus amount"),
-                Arguments.of("rounded the wrong way", "149.98", "149.95", "-0.03", "0.05", "half"),
-                Arguments.of("rounded a whole increment away", "149.98", "150.05", "0.07", "0.05", "half"),
+                Arguments.of("rounded the wrong way", "149.98", "149.95", "-0.03", "0.05", "HALF_UP"),
+                Arguments.of("rounded a whole increment away", "149.98", "150.05", "0.07", "0.05", "HALF_UP"),
                 Arguments.of("half-way rounded down (HALF_UP owed)", "149.925", "149.90", "-0.025", "0.05", "HALF_UP"),
                 Arguments.of("zero increment", "149.98", "149.98", "0.00", "0", "greater than zero"),
                 Arguments.of("negative increment", "149.98", "149.98", "0.00", "-0.05", "greater than zero"),

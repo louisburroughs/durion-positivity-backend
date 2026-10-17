@@ -147,8 +147,9 @@ public class PaymentController {
                     do not use initiatePayment, which takes card tender through the gateway, and do not round here, \
                     because pos-order owns the cash increment and the HALF_UP rounding at the register.
                     Preconditions: the invoice must exist and must name a customer (partyId); currencyCode must be \
-                    the invoice's currency; the caller needs the invoice:payment:process authority scoped to the \
-                    invoice's location (ADR-0061).
+                    the functional currency pos-invoice records in; the caller needs the invoice:payment:process \
+                    authority scoped to the invoice's location (ADR-0061) and invoice:payment:limit_override when \
+                    the amount exceeds 500.00.
                     Required inputs: idempotencyKey, amount (the invoice amount applied), settledAmount (the cash \
                     taken), cashRoundingAmount (settledAmount minus amount, 0 when no increment applies), currencyCode \
                     and, when the currency rounds, cashIncrement; sessionId, terminalId and cashierId are optional \
@@ -160,8 +161,9 @@ public class PaymentController {
                     additive fields so pos-accounting can post the rounding.
                     Returns 201 with the intent, 403 when the authority is missing or the location is outside the \
                     caller's reach, 404 when the invoice does not exist, 409 when the idempotencyKey was already used \
-                    with a different payload, 422 with INVOICE_PARTY_REQUIRED when the invoice has no customer and \
-                    422 with CASH_ROUNDING_INVALID when the triple or the currency does not hold together.
+                    with a different payload or is being recorded concurrently, 422 with INVOICE_PARTY_REQUIRED \
+                    when the invoice has no customer and 422 with CASH_ROUNDING_INVALID when the triple or the \
+                    currency does not hold together.
                     """)
     @ApiResponse(responseCode = "201", description = "Cash payment recorded")
     @ApiResponse(
@@ -185,7 +187,7 @@ public class PaymentController {
     @ApiResponse(
             responseCode = "422",
             description = "CASH_ROUNDING_INVALID when settledAmount, cashRoundingAmount and cashIncrement do not agree"
-                    + " or currencyCode is not the invoice's currency; INVOICE_PARTY_REQUIRED when the invoice has no"
+                    + " or currencyCode is not the functional currency; INVOICE_PARTY_REQUIRED when the invoice has no"
                     + " customer",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public InitiatePaymentResponse recordCashPayment(

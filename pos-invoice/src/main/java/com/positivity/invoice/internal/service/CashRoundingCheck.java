@@ -35,19 +35,12 @@ final class CashRoundingCheck {
         if (cashIncrement.signum() <= 0) {
             throw new CashRoundingInvalidException("cashIncrement must be greater than zero");
         }
-        if (settledAmount.remainder(cashIncrement).signum() != 0) {
-            throw new CashRoundingInvalidException(
-                    "settledAmount " + settledAmount + " is not a multiple of cashIncrement " + cashIncrement);
-        }
         if (settledAmount.subtract(amount).compareTo(cashRoundingAmount) != 0) {
             throw new CashRoundingInvalidException("cashRoundingAmount must equal settledAmount minus amount ("
                     + settledAmount.subtract(amount) + ")");
         }
-        BigDecimal halfIncrement = cashIncrement.divide(BigDecimal.valueOf(2));
-        if (cashRoundingAmount.abs().compareTo(halfIncrement) > 0) {
-            throw new CashRoundingInvalidException(
-                    "cashRoundingAmount " + cashRoundingAmount + " exceeds half of cashIncrement " + cashIncrement);
-        }
+        // One recompute covers the grid and the half-increment bound: a HALF_UP result is on the grid and never
+        // more than half an increment from the amount, so an equal settledAmount satisfies both.
         BigDecimal expected =
                 amount.divide(cashIncrement, 0, RoundingMode.HALF_UP).multiply(cashIncrement);
         if (expected.compareTo(settledAmount) != 0) {
