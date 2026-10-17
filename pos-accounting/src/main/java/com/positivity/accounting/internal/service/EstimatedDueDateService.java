@@ -93,8 +93,8 @@ public class EstimatedDueDateService {
             }
             Objects.requireNonNull(bill.getBillDate(), "bill date");
             LocalDate billDate = bill.getBillDate().toLocalDate();
-            OptionalInt days =
-                    CashAndPayablesSettings.termsDays(bill.getPurchaseOrderId() == null ? null : poTerms.get(bill.getPurchaseOrderId()));
+            OptionalInt days = CashAndPayablesSettings.termsDays(
+                    bill.getPurchaseOrderId() == null ? null : poTerms.get(bill.getPurchaseOrderId()));
             TermsSource source = TermsSource.PURCHASE_ORDER;
             if (days.isEmpty()) {
                 days = CashAndPayablesSettings.termsDays(vendorTerms.get(bill.getVendorId()));

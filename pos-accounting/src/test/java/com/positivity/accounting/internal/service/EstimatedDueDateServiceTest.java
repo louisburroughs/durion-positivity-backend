@@ -143,7 +143,20 @@ class EstimatedDueDateServiceTest {
 
     @ParameterizedTest
     @ValueSource(
-            strings = {"", " ", "NET0", "NET121", "NET", "NET-5", "NET_30", "NET  30", "2/10 NET 30", "soon", "30", "NET030"})
+            strings = {
+                "",
+                " ",
+                "NET0",
+                "NET121",
+                "NET",
+                "NET-5",
+                "NET_30",
+                "NET  30",
+                "2/10 NET 30",
+                "soon",
+                "30",
+                "NET030"
+            })
     @DisplayName("anything else does not parse")
     void doesNotParse(String terms) {
         assertThat(CashAndPayablesSettings.termsDays(terms)).isEmpty();
