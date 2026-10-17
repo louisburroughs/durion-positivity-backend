@@ -91,6 +91,10 @@ public final class EventTypes {
                     .build(),
             EventTypeRegistration.write("ORDER_CHECKOUT", "Order checked out to PENDING_PAYMENT with invoice created")
                     .build(),
+            EventTypeRegistration.write(
+                            "ORDER_CASH_TENDER_RECORD",
+                            "Register cash tender rounded to the cash increment and recorded on the invoice")
+                    .build(),
             EventTypeRegistration.write("ORDER_VOID", "Unsettled order voided with its invoice cancelled")
                     .build(),
             EventTypeRegistration.write("ORDER_SESSION_OPEN", "Register session opened for a terminal")

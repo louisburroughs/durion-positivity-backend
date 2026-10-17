@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.domainevents.location.LocationAncestry.AncestorSets;
 import com.positivity.domainevents.order.RegisterSessionClosedV1;
+import com.positivity.order.internal.config.CashIncrements;
 import com.positivity.order.internal.config.OrderDomainEventPublisher;
 import com.positivity.order.internal.dto.RegisterSessionSummary;
 import com.positivity.order.internal.dto.SessionReport;
@@ -140,6 +141,7 @@ class RegisterSessionServiceImplTest {
                 new com.positivity.order.internal.service.ActorDisplayNames(org.mockito.Mockito.mock(
                         com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository.class)),
                 new SupplierVendorGuard(vendorCopies),
+                new CashIncrements(Map.of("CAD", new BigDecimal("0.05"))),
                 clock,
                 meters);
         org.mockito.Mockito.lenient().when(sessionPolicyService.current()).thenReturn(DEFAULT_POLICY);

@@ -46,6 +46,9 @@ import org.jspecify.annotations.Nullable;
  * @param closedAt when the session reached CLOSED
  * @param movements every cash movement of the session in the order recorded (schema version 2); null
  *     on a version-1 message
+ * @param cashRoundingTotal ADR-0067 A8 (#2662): signed Σ of the cash rounding over the session's CASH tenders
+ *     (positive when customers paid more than due), informational for the Z-report and the deposit
+ *     reconciliation; null on a message published before A8 (read as 0). Rounding never reaches over/short.
  */
 public record RegisterSessionClosedV1(
         @NonNull UUID sessionId,
@@ -63,10 +66,49 @@ public record RegisterSessionClosedV1(
         @NonNull BigDecimal cashMovementTotal,
         @NonNull Instant openedAt,
         @NonNull Instant closedAt,
-        @Nullable List<Movement> movements) {
+        @Nullable List<Movement> movements,
+        @Nullable BigDecimal cashRoundingTotal) {
 
     public static final String EVENT_TYPE = "order.session.closed";
     public static final int SCHEMA_VERSION = 2;
+
+    /** Shape before ADR-0067 A8 (#2662): no {@code cashRoundingTotal}. Additive inside schema version 2. */
+    public RegisterSessionClosedV1(
+            @NonNull UUID sessionId,
+            @NonNull String terminalId,
+            @Nullable UUID locationId,
+            @NonNull String openedByClerkId,
+            @Nullable String closedByClerkId,
+            @NonNull BigDecimal openingFloat,
+            @NonNull BigDecimal countedCash,
+            @NonNull BigDecimal theoreticalCash,
+            @NonNull BigDecimal overShort,
+            boolean varianceApproved,
+            @NonNull String currencyCode,
+            @NonNull List<TenderTotal> tenderTotals,
+            @NonNull BigDecimal cashMovementTotal,
+            @NonNull Instant openedAt,
+            @NonNull Instant closedAt,
+            @Nullable List<Movement> movements) {
+        this(
+                sessionId,
+                terminalId,
+                locationId,
+                openedByClerkId,
+                closedByClerkId,
+                openingFloat,
+                countedCash,
+                theoreticalCash,
+                overShort,
+                varianceApproved,
+                currencyCode,
+                tenderTotals,
+                cashMovementTotal,
+                openedAt,
+                closedAt,
+                movements,
+                null);
+    }
 
     /**
      * Net settled amount for one tender method over the session.
