@@ -44,6 +44,7 @@ class PostingFailureReasonTest {
                 .containsExactlyInAnyOrder(
                         PostingFailureReason.PERIOD_CLOSED,
                         PostingFailureReason.CURRENCY_NOT_SUPPORTED,
+                        PostingFailureReason.CASH_ROUNDING_INVALID,
                         PostingFailureReason.VALIDATION_ERROR,
                         PostingFailureReason.MISSING_AMOUNT,
                         PostingFailureReason.TAX_TYPE_MISSING,

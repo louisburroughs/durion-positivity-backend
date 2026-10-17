@@ -481,7 +481,13 @@ class AutomaticPaymentApplicationServiceTest {
         assertThat(result.outcome()).isEqualTo(Outcome.APPLIED);
         verify(paymentApplicationService)
                 .applyAutomatically(
-                        eq(INTENT), eq(INVOICE), any(), eq("PAYMENT_SETTLED:" + INTENT), eq(SETTLED_AT), any());
+                        eq(INTENT),
+                        eq(INVOICE),
+                        any(),
+                        eq("PAYMENT_SETTLED:" + INTENT),
+                        eq(SETTLED_AT),
+                        any(),
+                        any());
         verify(paymentApplicationService, never())
                 .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
         verifyNoInteractions(recorder);
@@ -496,7 +502,8 @@ class AutomaticPaymentApplicationServiceTest {
         assertThatThrownBy(() -> service.reapply(stored))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("never recorded");
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), anyString(), any(), any());
+        verify(paymentApplicationService, never())
+                .applyAutomatically(any(), any(), any(), anyString(), any(), any(), any());
     }
 
     @Test
