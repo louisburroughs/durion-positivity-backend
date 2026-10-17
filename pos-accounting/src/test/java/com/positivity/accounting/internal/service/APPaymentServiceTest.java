@@ -130,7 +130,8 @@ class APPaymentServiceTest {
         // Default: allocationRepository.saveAll returns empty list
         when(allocationRepository.saveAll(any())).thenReturn(List.of());
         // Default: no bill has been allocated anything yet (S17 allocation tests re-derive the open amount)
-        when(allocationRepository.sumAllocatedAmountByVendorBillId(any(UUID.class))).thenReturn(BigDecimal.ZERO);
+        when(allocationRepository.sumAllocatedAmountByVendorBillId(any(UUID.class)))
+                .thenReturn(BigDecimal.ZERO);
         // Default: the locked APPROVED bills of the vendor are none (#2509 review, A3)
         when(billRepository.lockByVendorIdAndStatus(any(UUID.class), any(VendorBillStatus.class)))
                 .thenReturn(List.of());
