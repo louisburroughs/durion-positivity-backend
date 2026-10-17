@@ -822,13 +822,16 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
         ProfileSpec live = withSandbox(michelinSpec(), new Sandbox(false, null));
         bootstrap.reconcile(properties(live));
         assertThat(vendorFacts()).as("the vendor fact is republished").isEqualTo(facts + 1);
-        long republished = vendorRepository.findById(michelinVendorId).orElseThrow().getVersion();
+        long republished =
+                vendorRepository.findById(michelinVendorId).orElseThrow().getVersion();
         assertThat(republished).as("under a higher aggregateVersion").isGreaterThan(version);
         assertThat(lastVendorFact())
                 .as("the fact carries the raised version, the channel and the bootstrap actor")
                 .satisfies(envelope -> {
                     assertThat(envelope.path("aggregateVersion").asLong()).isEqualTo(republished);
-                    assertThat(envelope.path("payload").path("purchaseOrderSupplierRef").asText())
+                    assertThat(envelope.path("payload")
+                                    .path("purchaseOrderSupplierRef")
+                                    .asText())
                             .isEqualTo("michelin-eu");
                     assertThat(envelope.path("actor").asText()).isEqualTo(SupplierYamlBootstrap.BOOTSTRAP_ACTOR);
                 });
