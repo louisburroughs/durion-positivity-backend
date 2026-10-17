@@ -349,15 +349,20 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         return rerunPosting(event, request.getMappingVersionToUse(), triggeredByUserId);
     }
 
-    /** The 409 of a held Kafka row no route can release (#2620): the row and its reason stay as they are. */
+    /**
+     * The 409 of a held or failed Kafka row no route can release (#2620): the row and its reason stay as they are.
+     * The message names the row's status (a FAILED row reaches this from the retry endpoint too).
+     */
     private static HeldEventNotReleasableException notReleasable(AccountingEvent event) {
         String reason = event.getFailureReasonCode() == null ? "no reason" : event.getFailureReasonCode();
-        String message = "Event " + event.getEventId() + " (" + event.getEventType() + ") is held with " + reason
-                + " and has no release path by reprocess; it is not run through the posting engine";
+        String state = event.getStatus() == AccountingEventStatus.FAILED ? "is FAILED with " : "is held with ";
+        String message = "Event " + event.getEventId() + " (" + event.getEventType() + ") " + state + reason
+                + " and has no release path by reprocess or retry; it is not run through the posting engine";
         String nextAction;
         if (PostingFailureReason.CURRENCY_NOT_SUPPORTED.name().equals(reason)) {
-            Object currency =
-                    event.getPayload() == null ? null : event.getPayload().get("currencyCode");
+            Object currency = event.getPayload() == null
+                    ? null
+                    : event.getPayload().get(PostingEngineOrchestrator.PAYLOAD_CURRENCY_FIELD);
             nextAction = "Released when the tenant's ledger accepts " + (currency == null ? "that currency" : currency)
                     + " (ADR-0067 Stage B1 replays the stored fact); no action now";
         } else {
@@ -397,7 +402,7 @@ public class EventIngestionServiceImpl implements EventIngestionService {
         }
 
         // A settled payment held by its automatic application (#2503) re-runs that decision from the
-        // stored fact, never the posting engine; a currency hold keeps the engine path below.
+        // stored fact, never the posting engine; a currency hold is refused by the #2620 fence below.
         if (PaymentSettledV1.EVENT_TYPE.equals(event.getEventType())
                 && AutomaticPaymentApplicationService.REPROCESSABLE_REASONS.contains(event.getFailureReasonCode())) {
             return reapplySettledPayment(event, triggeredByUserId);
@@ -419,8 +424,9 @@ public class EventIngestionServiceImpl implements EventIngestionService {
             }
         }
 
-        // An invoice held because its output tax cannot be posted by type (CAP:550 S32d, AW50) re-runs revenue
-        // recognition from the stored fact, never the posting engine: no rule set exists for an invoice fact.
+        // An invoice held because its output tax cannot be posted by type (CAP:550 S32d, AW50), or re-held by this
+        // route for its period, zone, mapping or payload, re-runs revenue recognition from the stored fact, never the
+        // posting engine: no rule set exists for an invoice fact. Its currency hold is refused by the fence below.
         if (InvoiceRevenueReprocessor.handles(event.getEventType(), event.getFailureReasonCode())) {
             try {
                 return reprocessInvoiceRevenue(event, triggeredByUserId);

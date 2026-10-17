@@ -437,13 +437,16 @@ Check order: **hard lock > closed period > override**.
   payload (`goodsreceipt.recorded` → `GoodsReceiptReprocessor`, `order.session.closed` →
   `RegisterSessionCloseReprocessor`, `invoice.updated` → `InvoiceRevenueReprocessor`, `payment.payment.settled` held by
   its application → `reapplySettledPayment`) and the refusing condition can change without a new fact. A currency
-  hold cannot (the ledger currency is fixed per tenant, ADR-0067 PC-9): a routed type re-holds through its own route; a
-  Kafka row with no route (`payment.payment.settled` / `CURRENCY_NOT_SUPPORTED`) is refused with 409
-  `ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE` (`nextAction`: released when the ledger accepts the currency, ADR-0067 Stage
-  B1), the row and its reason untouched and no attempt written. No Kafka row (`ingestion_id` set) ever reaches the
-  posting engine, which only serves REST-submitted events with a rule set. A held row that states no currency stays
-  held ("states no currency"). V30 restores the rows an earlier reprocess had marked `FAILED / Posting engine error`
-  to `SUSPENDED / CURRENCY_NOT_SUPPORTED`; the attempt history keeps the failed attempts.
+  hold cannot (the ledger currency is fixed per tenant, ADR-0067 PC-9). A routed type re-holds through its own route
+  (an `invoice.updated` row re-held `PERIOD_CLOSED`, `ACCOUNTING_TIME_ZONE_UNSET`, `UNMAPPED_EVENT_TYPE` or
+  `VALIDATION_ERROR` comes back through `InvoiceRevenueReprocessor`); a Kafka row with no route (a settled payment or an
+  invoice held `CURRENCY_NOT_SUPPORTED`) is refused with 409 `ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE` (`nextAction`:
+  released when the ledger accepts the currency, ADR-0067 Stage B1), the row and its reason untouched and no attempt
+  written; the scheduled failed-event retry skips such a row the same way (no failure recorded). No Kafka row
+  (`ingestion_id` set) ever reaches the posting engine, which only serves REST-submitted events with a rule set. A
+  held row that states no currency stays held ("states no currency"). V30 restores the settled-payment rows an earlier
+  reprocess had marked `FAILED / Posting engine error` while still carrying `CURRENCY_NOT_SUPPORTED` to `SUSPENDED`;
+  the attempt history keeps the failed attempts.
 
 ### Hard Lock
 

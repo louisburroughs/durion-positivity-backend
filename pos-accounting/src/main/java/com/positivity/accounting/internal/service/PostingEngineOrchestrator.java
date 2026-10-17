@@ -65,7 +65,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class PostingEngineOrchestrator {
 
     /** The payload field a currency-held fact states its currency in (ADR-0067 E-3). */
-    private static final String PAYLOAD_CURRENCY_FIELD = "currencyCode";
+    /** The payload field naming a fact's currency; the #2620 fence reads it for its {@code nextAction} too. */
+    static final String PAYLOAD_CURRENCY_FIELD = "currencyCode";
 
     /** The payload list a register-session close fact states its drawer movements in, each with its own currency. */
     private static final String PAYLOAD_MOVEMENTS_FIELD = "movements";
@@ -266,11 +267,6 @@ public class PostingEngineOrchestrator {
         return Optional.of(PostingResult.failure(PostingFailureReason.CURRENCY_NOT_SUPPORTED, details));
     }
 
-    /**
-     * The first currency a held fact states that is not the ledger's: its {@code currencyCode}, else a {@code
-     * payload.movements[].currencyCode} (a register session held for a drawer movement's currency, #2513); null when
-     * every stated currency is the ledger's.
-     */
     /** Whether the fact states any currency at all (its own, or a movement's). */
     private static boolean statesACurrency(@Nullable Map<String, Object> payload) {
         if (payload == null) {
@@ -290,6 +286,11 @@ public class PostingEngineOrchestrator {
         return false;
     }
 
+    /**
+     * The first currency a held fact states that is not the ledger's: its {@code currencyCode}, else a {@code
+     * payload.movements[].currencyCode} (a register session held for a drawer movement's currency, #2513); null when
+     * every stated currency is the ledger's.
+     */
     private @Nullable String foreignPayloadCurrency(@Nullable Map<String, Object> payload) {
         if (payload == null) {
             return null;

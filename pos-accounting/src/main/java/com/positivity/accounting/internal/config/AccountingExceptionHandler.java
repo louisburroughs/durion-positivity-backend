@@ -412,20 +412,7 @@ public class AccountingExceptionHandler {
     @ExceptionHandler(HeldEventNotReleasableException.class)
     public ResponseEntity<ApiError> handleHeldEventNotReleasable(
             HeldEventNotReleasableException ex, HttpServletRequest request) {
-        String correlationId = resolveCorrelationId(request);
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(X_CORRELATION_ID, correlationId);
-        ApiError error = new ApiError(
-                HeldEventNotReleasableException.CODE,
-                ex.getMessage(),
-                HttpStatus.CONFLICT.value(),
-                Instant.now(clock).toString(),
-                correlationId,
-                null,
-                null,
-                ex.getNextAction(),
-                null);
-        return new ResponseEntity<>(error, headers, HttpStatus.CONFLICT);
+        return build(HttpStatus.CONFLICT, HeldEventNotReleasableException.CODE, ex.getMessage(), ex.getNextAction(), request);
     }
 
     @ExceptionHandler(EventNotRetryableException.class)
@@ -922,6 +909,17 @@ public class AccountingExceptionHandler {
                 ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId),
                 headers,
                 status);
+    }
+
+    /** {@link #build(HttpStatus, String, String, HttpServletRequest)} with a {@code nextAction} (ADR-0017). */
+    private ResponseEntity<ApiError> build(
+            HttpStatus status, String code, String message, String nextAction, HttpServletRequest request) {
+        String correlationId = resolveCorrelationId(request);
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(X_CORRELATION_ID, correlationId);
+        ApiError error = new ApiError(
+                code, message, status.value(), Instant.now(clock).toString(), correlationId, null, null, nextAction, null);
+        return new ResponseEntity<>(error, headers, status);
     }
 
     private String resolveCorrelationId(HttpServletRequest request) {

@@ -15,6 +15,7 @@ import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.entity.ReprocessingAttemptHistory;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
 import com.positivity.accounting.internal.enums.PostingFailureReason;
+import com.positivity.accounting.internal.exception.HeldEventNotReleasableException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ReprocessingAttemptHistoryRepository;
 import com.positivity.tenancy.TenantIterator;
@@ -191,5 +192,27 @@ class FailedAccountingEventRetryJobTest {
         verify(historyRepository).save(history.capture());
         assertThat(history.getValue().getTriggeredByUserId()).isEqualTo("SYSTEM_RETRY_JOB");
         assertThat(history.getValue().getAttemptedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    @DisplayName("a held Kafka row no route can release is skipped untouched: no failure recorded, no history row (#2620)")
+    void notReleasable_skippedWithoutRecording() {
+        stubCandidates(EVENT_ID);
+        AccountingEvent held = failed(1);
+        held.setStatus(AccountingEventStatus.SUSPENDED);
+        held.setFailureReasonCode("UNMAPPED_EVENT_TYPE");
+        when(eventRepository.findWithLockByEventIdAndStatusIn(eq(EVENT_ID), any()))
+                .thenReturn(Optional.of(held));
+        doThrow(new HeldEventNotReleasableException("no release path", "Correct the fact at its owner"))
+                .when(eventIngestionService)
+                .reprocessEvent(eq(EVENT_ID), any(), any());
+
+        assertThat(job.retryBoundTenant()).isZero();
+
+        verify(eventRepository, never()).findById(any());
+        verify(historyRepository, never()).save(any());
+        assertThat(held.getStatus()).isEqualTo(AccountingEventStatus.SUSPENDED);
+        assertThat(held.getFailureReasonCode()).isEqualTo("UNMAPPED_EVENT_TYPE");
+        assertThat(held.getAttemptCount()).isEqualTo(1);
     }
 }
