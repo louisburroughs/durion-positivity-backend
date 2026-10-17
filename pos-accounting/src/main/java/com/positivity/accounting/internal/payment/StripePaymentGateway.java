@@ -163,7 +163,8 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             Charge charge = result.getData().get(0);
             return Optional.of(toResponse(charge, mapChargeStatus(charge)));
         } catch (StripeException e) {
-            throw new PaymentGatewayException("Failed to search Stripe charges for payment reference: " + paymentRef, e);
+            throw new PaymentGatewayException(
+                    "Failed to search Stripe charges for payment reference: " + paymentRef, e);
         }
     }
 

@@ -65,10 +65,14 @@ class LocalPaymentGatewayTest {
         GatewayPaymentResponse paid = pay("PAY-2-PENDING");
         assertThat(paid.getStatus()).isEqualTo(GatewayPaymentStatus.PENDING);
         clock.now = T0.plusSeconds(59);
-        assertThat(gateway.getPaymentStatus(paid.getTransactionId()).orElseThrow().getStatus())
+        assertThat(gateway.getPaymentStatus(paid.getTransactionId())
+                        .orElseThrow()
+                        .getStatus())
                 .isEqualTo(GatewayPaymentStatus.PENDING);
         clock.now = T0.plusSeconds(60);
-        assertThat(gateway.getPaymentStatus(paid.getTransactionId()).orElseThrow().getStatus())
+        assertThat(gateway.getPaymentStatus(paid.getTransactionId())
+                        .orElseThrow()
+                        .getStatus())
                 .isEqualTo(GatewayPaymentStatus.SUCCEEDED);
     }
 
@@ -79,7 +83,8 @@ class LocalPaymentGatewayTest {
         assertThat(paid.getStatus()).isEqualTo(GatewayPaymentStatus.DECLINED);
         assertThat(paid.getFailureCode()).isEqualTo("LOCAL_DECLINE");
         clock.now = T0.plus(Duration.ofDays(1));
-        GatewayPaymentResponse read = gateway.getPaymentStatus(paid.getTransactionId()).orElseThrow();
+        GatewayPaymentResponse read =
+                gateway.getPaymentStatus(paid.getTransactionId()).orElseThrow();
         assertThat(read.getStatus()).isEqualTo(GatewayPaymentStatus.DECLINED);
         assertThat(read.getFailureCode()).isEqualTo("LOCAL_DECLINE");
     }
@@ -90,10 +95,13 @@ class LocalPaymentGatewayTest {
         GatewayPaymentResponse paid = pay("PAY-4-RETURN");
         assertThat(paid.getStatus()).isEqualTo(GatewayPaymentStatus.SUCCEEDED);
         clock.now = T0.plusSeconds(30);
-        assertThat(gateway.getPaymentStatus(paid.getTransactionId()).orElseThrow().getStatus())
+        assertThat(gateway.getPaymentStatus(paid.getTransactionId())
+                        .orElseThrow()
+                        .getStatus())
                 .isEqualTo(GatewayPaymentStatus.SUCCEEDED);
         clock.now = T0.plusSeconds(61);
-        GatewayPaymentResponse read = gateway.getPaymentStatus(paid.getTransactionId()).orElseThrow();
+        GatewayPaymentResponse read =
+                gateway.getPaymentStatus(paid.getTransactionId()).orElseThrow();
         assertThat(read.getStatus()).isEqualTo(GatewayPaymentStatus.FAILED);
         assertThat(read.getFailureCode()).isEqualTo("LOCAL_RETURN");
     }
@@ -101,12 +109,14 @@ class LocalPaymentGatewayTest {
     @Test
     @DisplayName("findByReference answers the settled outcome of a ref; an ref with a local_ prefix is the same ref")
     void findsByReference() throws Exception {
-        assertThat(gateway.findByReference("PAY-5").orElseThrow().getStatus()).isEqualTo(GatewayPaymentStatus.SUCCEEDED);
+        assertThat(gateway.findByReference("PAY-5").orElseThrow().getStatus())
+                .isEqualTo(GatewayPaymentStatus.SUCCEEDED);
         assertThat(gateway.findByReference("PAY-5-PENDING").orElseThrow().getStatus())
                 .isEqualTo(GatewayPaymentStatus.SUCCEEDED);
         assertThat(gateway.findByReference("local_PAY-5-RETURN").orElseThrow().getFailureCode())
                 .isEqualTo("LOCAL_RETURN");
-        GatewayPaymentResponse declined = gateway.findByReference("PAY-5-DECLINE").orElseThrow();
+        GatewayPaymentResponse declined =
+                gateway.findByReference("PAY-5-DECLINE").orElseThrow();
         assertThat(declined.getStatus()).isEqualTo(GatewayPaymentStatus.DECLINED);
         assertThat(declined.getTransactionId()).isEqualTo("local_PAY-5-DECLINE");
         assertThat(gateway.findByReference(" ")).isEmpty();

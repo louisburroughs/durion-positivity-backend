@@ -44,10 +44,10 @@ public class LocalPaymentGateway implements PaymentGatewayProvider {
     private final Clock clock;
     private final Duration settleAfter;
 
-    public LocalPaymentGateway(
-            Clock clock, @Value("${payment.gateway.local.settle-after:PT1M}") Duration settleAfter) {
+    public LocalPaymentGateway(Clock clock, @Value("${payment.gateway.local.settle-after:PT1M}") Duration settleAfter) {
         if (settleAfter == null || settleAfter.isNegative()) {
-            throw new IllegalStateException("payment.gateway.local.settle-after must not be negative, was " + settleAfter);
+            throw new IllegalStateException(
+                    "payment.gateway.local.settle-after must not be negative, was " + settleAfter);
         }
         this.clock = clock;
         this.settleAfter = settleAfter;
@@ -84,7 +84,8 @@ public class LocalPaymentGateway implements PaymentGatewayProvider {
             return Optional.empty();
         }
         boolean settled = chargedAtMillis == null
-                || !clock.instant().isBefore(Instant.ofEpochMilli(chargedAtMillis).plus(settleAfter));
+                || !clock.instant()
+                        .isBefore(Instant.ofEpochMilli(chargedAtMillis).plus(settleAfter));
         return Optional.of(outcome(transactionId, ref, settled));
     }
 
@@ -108,7 +109,8 @@ public class LocalPaymentGateway implements PaymentGatewayProvider {
             return response(transactionId, GatewayPaymentStatus.DECLINED, DECLINE_CODE);
         }
         if (ref.endsWith(PENDING_SUFFIX)) {
-            return response(transactionId, settled ? GatewayPaymentStatus.SUCCEEDED : GatewayPaymentStatus.PENDING, null);
+            return response(
+                    transactionId, settled ? GatewayPaymentStatus.SUCCEEDED : GatewayPaymentStatus.PENDING, null);
         }
         if (ref.endsWith(RETURN_SUFFIX) && settled) {
             return response(transactionId, GatewayPaymentStatus.FAILED, RETURN_CODE);
@@ -123,7 +125,8 @@ public class LocalPaymentGateway implements PaymentGatewayProvider {
         return Long.valueOf(digits);
     }
 
-    private static GatewayPaymentResponse response(String transactionId, GatewayPaymentStatus status, String failureCode) {
+    private static GatewayPaymentResponse response(
+            String transactionId, GatewayPaymentStatus status, String failureCode) {
         return GatewayPaymentResponse.builder()
                 .transactionId(transactionId)
                 .status(status)

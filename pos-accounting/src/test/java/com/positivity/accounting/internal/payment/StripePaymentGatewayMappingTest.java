@@ -13,8 +13,8 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Stripe gateway: payment_ref metadata, failure code mapping and charge search query (#2642)")
 class StripePaymentGatewayMappingTest {
 
-    private final StripePaymentGateway gateway =
-            new StripePaymentGateway("sk_test_dummy_key_for_unit_tests", "", 24, Duration.ofSeconds(5), Duration.ofSeconds(20));
+    private final StripePaymentGateway gateway = new StripePaymentGateway(
+            "sk_test_dummy_key_for_unit_tests", "", 24, Duration.ofSeconds(5), Duration.ofSeconds(20));
 
     @Test
     @DisplayName("the idempotency key (the paymentRef) is stamped as metadata.payment_ref")
