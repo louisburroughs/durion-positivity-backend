@@ -474,7 +474,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             @NonNull UUID lineId,
             @NonNull ReopenPurchaseOrderLineRequest request,
             @NonNull String actorId) {
-        PurchaseOrderEntity po = lockedForLineAction(poId);        PurchaseOrderLineEntity line = lineOf(po, lineId);
+        PurchaseOrderEntity po = lockedForLineAction(poId);
+        PurchaseOrderLineEntity line = lineOf(po, lineId);
         BigDecimal quantity = request.getQuantity();
         BigDecimal returned = PurchaseOrderLineFigures.zeroIfNull(line.getReturnedQuantity());
         if (quantity.compareTo(returned) > 0) {
@@ -509,7 +510,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new PurchaseOrderStateConflictException(
                     "A DRAFT purchase order has no remainder to cancel; revise its lines instead",
                     "Revise the purchase order (revisePurchaseOrder) to change its quantities");
-        }        PurchaseOrderLineEntity line = lineOf(po, lineId);
+        }
+        PurchaseOrderLineEntity line = lineOf(po, lineId);
         cancelRemainder(po, line, request.getQuantity());
         if (!PurchaseOrderLineFigures.anythingReceived(po) && PurchaseOrderLineFigures.allSettled(po)) {
             // Nothing ever arrived and this cancel would settle every line: that is a cancellation of the order, not a
@@ -538,7 +540,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             throw new PurchaseOrderStateConflictException(
                     "A DRAFT purchase order cannot be closed; cancel it or revise it",
                     "Cancel the purchase order (cancelPurchaseOrder) or revise it (revisePurchaseOrder)");
-        }        if (!PurchaseOrderLineFigures.anythingReceived(po)) {
+        }
+        if (!PurchaseOrderLineFigures.anythingReceived(po)) {
             // Nothing arrived: this is a cancellation, and the order should say so rather than read as CLOSED.
             throw new PurchaseOrderStateConflictException(
                     "Nothing has been received on purchase order " + po.getPoNumber()
@@ -550,7 +553,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
             if (open.signum() > 0) {
                 cancelRemainder(po, line, open);
             }
-        }        log.info("Purchase order {} closed | reason={} | by={}", po.getPoNumber(), request.getReason(), actorId);
+        }
+        log.info("Purchase order {} closed | reason={} | by={}", po.getPoNumber(), request.getReason(), actorId);
         return finishLineAction(po, actorId, PurchaseOrderStatus.CLOSED);
     }
 

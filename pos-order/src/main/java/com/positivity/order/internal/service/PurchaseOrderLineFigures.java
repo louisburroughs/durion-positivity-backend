@@ -130,10 +130,11 @@ public final class PurchaseOrderLineFigures {
      * corrections). An order whose receipts were all returned still had deliveries, so it closes rather than cancels.
      */
     public static boolean anythingReceived(@NonNull PurchaseOrderEntity order) {
-        return order.getLines().stream().anyMatch(line -> zeroIfNull(line.getReceivedQuantity())
-                        .add(zeroIfNull(line.getReturnedQuantity()))
-                        .signum()
-                > 0);
+        return order.getLines().stream()
+                .anyMatch(line -> zeroIfNull(line.getReceivedQuantity())
+                                .add(zeroIfNull(line.getReturnedQuantity()))
+                                .signum()
+                        > 0);
     }
 
     /** Whether every line's open quantity is zero. */

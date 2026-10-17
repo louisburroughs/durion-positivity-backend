@@ -391,7 +391,7 @@ public class InventoryEventsListener {
                     vendorReturn.vendorReturnId(),
                     vendorReturn.purchaseOrderId());
             return;
-        }        // accruedAmount is a decimal at the exponent of the fact's own currency (ADR-0067 PC-5 (a)); the order's
+        } // accruedAmount is a decimal at the exponent of the fact's own currency (ADR-0067 PC-5 (a)); the order's
         // currency only stands in when the fact states none.
         String currency = vendorReturn.currencyCode() != null ? vendorReturn.currencyCode() : order.getCurrency();
         Map<UUID, PurchaseOrderLineEntity> linesById = order.getLines().stream()
@@ -417,8 +417,8 @@ public class InventoryEventsListener {
             BigDecimal received = PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedQuantity())
                     .subtract(line.quantityReturned());
             orderLine.setReceivedQuantity(received.signum() < 0 ? BigDecimal.ZERO : received);
-            orderLine.setReceivedAccruedMinor(Math.max(
-                    0L, PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedAccruedMinor()) - accrued));
+            orderLine.setReceivedAccruedMinor(
+                    Math.max(0L, PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedAccruedMinor()) - accrued));
             if (!correction) {
                 // Credit: the whole returned quantity moves from received to returned, so the derived open quantity
                 // is what it was (an over-received line stays settled) and a reopen may later take all of it back.
