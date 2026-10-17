@@ -320,7 +320,8 @@ Posted entries carry a sequential `entryNumber` in the format `JE-{YYYYMM}-{seq}
 - Errors: `JE_ALREADY_REVERSED` (409, includes double-reversal races), `JE_NOT_POSTED` (409),
   `PERIOD_CLOSED` / `PERIOD_HARD_LOCKED` (422, see the period gate below)
 - Register float entries (#2571, AW32): a relocation entry is never reversed (409
-  `FLOAT_RELOCATION_NOT_REVERSIBLE`); a go-live or Change float entry of a register that has moved may
+  `FLOAT_RELOCATION_NOT_REVERSIBLE`), nor is the reversal of a go-live or Change float entry (409
+  `FLOAT_REVERSAL_NOT_REVERSIBLE`, #2607: set the float again instead); a go-live or Change float entry of a register that has moved may
   not be reversed before its latest move (422 `FLOAT_REVERSAL_BEFORE_RELOCATION`), and when its 1080
   line sits at a location the register has left, the reversal also posts, on its own date, the
   reclass that brings the reversed amount to the register's current location (422
@@ -887,7 +888,8 @@ logged, never returned). It posts Dr 1080 {register, to} / Cr 1080 {register, fr
 dated the move; a zero float moves without an entry. New codes: 404 `FLOAT_REGISTER_NOT_FOUND`, 422
 `FLOAT_RELOCATION_SAME_LOCATION`, `FLOAT_RELOCATION_DATE_INVALID`, `FLOAT_AMOUNT_NEGATIVE`,
 `FLOAT_DATE_BEFORE_RELOCATION` (a later go-live or Change float dated before the move),
-`FLOAT_REGISTER_SESSION_OPEN`, 409 `FLOAT_RELOCATION_NOT_REVERSIBLE`, 422
+`FLOAT_REGISTER_SESSION_OPEN`, 409 `FLOAT_RELOCATION_NOT_REVERSIBLE`, 409
+`FLOAT_REVERSAL_NOT_REVERSIBLE` (#2607: a float entry's reversal is never reversed itself), 422
 `FLOAT_REVERSAL_BEFORE_RELOCATION`.
 
 A move may not be dated before any float entry of the register — every go-live, change, relocation
