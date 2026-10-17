@@ -205,7 +205,7 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
         assertThat(count(tenant, "petty_expense_category")).isEqualTo(9);
 
         assertThat(asTenant(tenant, () -> settings.settings()))
-                .isEqualTo(new CashAndPayablesSettings.Settings("NET30", null));
+                .isEqualTo(new CashAndPayablesSettings.Settings("NET30", null, 3, 14, 30));
     }
 
     @Test

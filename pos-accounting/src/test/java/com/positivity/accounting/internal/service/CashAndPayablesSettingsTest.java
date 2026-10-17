@@ -23,7 +23,7 @@ class CashAndPayablesSettingsTest {
     void defaultsStandInForAbsentRows() {
         when(configuration.findByConfigKeyIn(anyCollection())).thenReturn(List.of());
 
-        assertThat(settings.settings()).isEqualTo(new CashAndPayablesSettings.Settings("NET30", null));
+        assertThat(settings.settings()).isEqualTo(new CashAndPayablesSettings.Settings("NET30", null, 3, 14, 30));
         assertThat(settings.apDefaultTerms()).isEqualTo("NET30");
         assertThat(settings.cashSafetyCushion()).isEmpty();
     }
@@ -34,11 +34,28 @@ class CashAndPayablesSettingsTest {
         when(configuration.findByConfigKeyIn(anyCollection()))
                 .thenReturn(List.of(row("AP_DEFAULT_TERMS", "NET15"), row("CASH_SAFETY_CUSHION", "2500.00")));
         assertThat(settings.settings())
-                .isEqualTo(new CashAndPayablesSettings.Settings("NET15", new BigDecimal("2500.00")));
+                .isEqualTo(new CashAndPayablesSettings.Settings("NET15", new BigDecimal("2500.00"), 3, 14, 30));
 
         assertThat(CashAndPayablesSettings.parseCushion("lots")).isEmpty();
         assertThat(CashAndPayablesSettings.parseCushion("-1")).isEmpty();
         assertThat(CashAndPayablesSettings.parseTerms(" ")).isEqualTo("NET30");
+    }
+
+    @Test
+    @DisplayName("#2515: stored aged thresholds win; an out-of-range or unreadable one reads as its default")
+    void agedThresholds() {
+        when(configuration.findByConfigKeyIn(anyCollection()))
+                .thenReturn(List.of(
+                        row("UNDEPOSITED_CASH_AGED_DAYS", "7"),
+                        row("VENDOR_COD_UNAPPLIED_AGED_DAYS", "91"),
+                        row("DELIVERIES_NOT_BILLED_DAYS", "soon")));
+
+        assertThat(settings.undepositedCashAgedDays()).isEqualTo(7);
+        assertThat(settings.vendorCodUnappliedAgedDays()).isEqualTo(14);
+        assertThat(settings.deliveriesNotBilledDays()).isEqualTo(30);
+        assertThat(CashAndPayablesSettings.parseDays("K", "6", 30, 7, 120)).isEqualTo(30);
+        assertThat(CashAndPayablesSettings.parseDays("K", " 7 ", 30, 7, 120)).isEqualTo(7);
+        assertThat(CashAndPayablesSettings.parseDays("K", "120", 30, 7, 120)).isEqualTo(120);
     }
 
     private static AccountingConfiguration row(String key, String value) {

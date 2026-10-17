@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.config.DatabaseDialectSupport;
 import com.positivity.accounting.internal.dto.AgedPayablesReport;
+import com.positivity.accounting.internal.dto.AgedPayablesRow;
 import com.positivity.accounting.internal.dto.AgedReceivablesReport;
 import com.positivity.accounting.internal.dto.GeneralLedgerAccountSection;
 import com.positivity.accounting.internal.dto.GeneralLedgerLine;
@@ -122,6 +123,18 @@ class FinancialReportingG2ServiceTest {
     @Mock
     private DisplayReferenceResolver displayReferenceResolver;
 
+    @Mock
+    private com.positivity.accounting.internal.repository.ExtOrderPurchaseOrderRepository purchaseOrderCopies;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.ExtSupplierVendorRepository vendorCopies;
+
+    @Mock
+    private CashAndPayablesSettings cashSettings;
+
+    @Mock
+    private com.positivity.accounting.internal.repository.APPaymentRepository apPaymentRepository;
+
     private FinancialReportingServiceImpl service;
 
     @BeforeEach
@@ -142,7 +155,10 @@ class FinancialReportingG2ServiceTest {
                 displayReferenceResolver,
                 Clock.fixed(FIXED_NOW, ZoneOffset.UTC),
                 new com.positivity.accounting.internal.config.LedgerCurrency("USD"),
-                org.mockito.Mockito.mock(TypedOutputTax.class));
+                org.mockito.Mockito.mock(TypedOutputTax.class),
+                new EstimatedDueDateService(purchaseOrderCopies, vendorCopies, cashSettings),
+                apPaymentRepository);
+        org.mockito.Mockito.lenient().when(cashSettings.apDefaultTerms()).thenReturn("NET30");
     }
 
     // ================= General Ledger =================
@@ -695,8 +711,8 @@ class FinancialReportingG2ServiceTest {
     }
 
     @Test
-    @DisplayName("Aged AP: no due date falls back to bill date for aging")
-    void agedPayablesNoDueDateFallsBackToBillDate() {
+    @DisplayName("Aged AP: no due date ages from the estimate (tenant default NET30 here), not the bill date (#2515)")
+    void agedPayablesNoDueDateAgesFromTheEstimate() {
         UUID vendorId = UUID.randomUUID();
         VendorBill bill = new VendorBill(UUID.randomUUID());
         bill.setVendorId(vendorId);
@@ -713,7 +729,100 @@ class FinancialReportingG2ServiceTest {
 
         AgedPayablesReport report = service.generateAgedPayables(AS_OF);
 
-        assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("250.00");
+        // Due = bill date + 30 = 45 days before AS_OF: 31-60, where the bill date (75 days) would say 61-90.
+        assertThat(report.getTotals().getDays31To60()).isEqualByComparingTo("250.00");
+        assertThat(report.getTotals().getDays61To90()).isEqualByComparingTo("0");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("250.00");
+        assertThat(report.getRows().getFirst().getEstimatedDueDateAmount()).isEqualByComparingTo("250.00");
+        assertThat(report.getEstimatedDueDateAmount()).isEqualByComparingTo("250.00");
+        // The mutation guard: the estimate is never written to the bill.
+        assertThat(bill.getDueDate()).isNull();
+    }
+
+    @Test
+    @DisplayName("Aged AP: the PO's terms beat the vendor's and the tenant's; a bill with a real due date has no estimate")
+    void agedPayablesEstimateUsesThePurchaseOrderTermsFirst() {
+        UUID vendorId = UUID.randomUUID();
+        UUID poId = UUID.randomUUID();
+        VendorBill onPo = apBill(vendorId, "Acme", new BigDecimal("100.00"), AS_OF.minusDays(40), null);
+        onPo.setPurchaseOrderId(poId);
+        VendorBill real = apBill(vendorId, "Acme", new BigDecimal("50.00"), AS_OF.minusDays(40), AS_OF.plusDays(5));
+        com.positivity.accounting.internal.entity.ExtOrderPurchaseOrder po =
+                new com.positivity.accounting.internal.entity.ExtOrderPurchaseOrder();
+        po.setPurchaseOrderId(poId);
+        po.setPaymentTermsId("Net 10");
+        when(purchaseOrderCopies.findAllById(any())).thenReturn(List.of(po));
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(onPo, real));
+        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
+                .thenReturn(List.of());
+
+        AgedPayablesReport report = service.generateAgedPayables(AS_OF);
+
+        // PO bill: due bill date + 10 = 30 days before AS_OF -> 1-30; the dated bill is not yet due.
+        assertThat(report.getTotals().getDays1To30()).isEqualByComparingTo("100.00");
+        assertThat(report.getTotals().getNotYetDue()).isEqualByComparingTo("50.00");
+        assertThat(report.getRows().getFirst().getEstimatedDueDateAmount()).isEqualByComparingTo("100.00");
+        assertThat(onPo.getDueDate()).isNull();
+    }
+
+    @Test
+    @DisplayName("Aged AP: unapplied payments net into netOwed, buckets keep summing to totalOutstanding, and a vendor"
+            + " holding only an unapplied payment still has a row (#2515)")
+    void agedPayablesNetsUnappliedPayments() {
+        UUID vendorId = UUID.randomUUID();
+        UUID prepaidOnly = UUID.randomUUID();
+        VendorBill bill = apBill(vendorId, "Acme", new BigDecimal("400.00"), AS_OF.minusDays(60), AS_OF.minusDays(10));
+        when(vendorBillRepository.findByStatusIn(any())).thenReturn(List.of(bill));
+        when(apPaymentAllocationRepository.sumAllocatedAmountByVendorBillIdIn(any()))
+                .thenReturn(List.of());
+        when(apPaymentRepository.sumUnappliedByVendor(eq("USD"), any()))
+                .thenReturn(List.of(
+                        unappliedSum(vendorId, "Acme", "150.00"), unappliedSum(prepaidOnly, "Cod Vendor", "75.00")));
+
+        AgedPayablesReport report = service.generateAgedPayables(AS_OF);
+
+        AgedPayablesRow acme = report.getRows().stream()
+                .filter(r -> r.getVendorId().equals(vendorId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(acme.getTotalOutstanding()).isEqualByComparingTo("400.00");
+        assertThat(acme.getUnappliedPayments()).isEqualByComparingTo("-150.00");
+        assertThat(acme.getNetOwed()).isEqualByComparingTo("250.00");
+        assertThat(acme.getDays1To30()
+                        .add(acme.getNotYetDue())
+                        .add(acme.getDays31To60())
+                        .add(acme.getDays61To90())
+                        .add(acme.getDays90Plus()))
+                .isEqualByComparingTo(acme.getTotalOutstanding());
+        AgedPayablesRow cod = report.getRows().stream()
+                .filter(r -> r.getVendorId().equals(prepaidOnly))
+                .findFirst()
+                .orElseThrow();
+        assertThat(cod.getTotalOutstanding()).isEqualByComparingTo("0");
+        assertThat(cod.getNetOwed()).isEqualByComparingTo("-75.00");
+        assertThat(report.getTotals().getTotalOutstanding()).isEqualByComparingTo("400.00");
+        assertThat(report.getUnappliedPayments()).isEqualByComparingTo("-225.00");
+        assertThat(report.getNetOwed()).isEqualByComparingTo("175.00");
+    }
+
+    private static com.positivity.accounting.internal.repository.APPaymentRepository.VendorUnappliedSum unappliedSum(
+            UUID vendorId, String name, String amount) {
+        return new com.positivity.accounting.internal.repository.APPaymentRepository.VendorUnappliedSum() {
+            @Override
+            public UUID getVendorId() {
+                return vendorId;
+            }
+
+            @Override
+            public String getVendorName() {
+                return name;
+            }
+
+            @Override
+            public BigDecimal getUnapplied() {
+                return new BigDecimal(amount);
+            }
+        };
     }
 
     @Test

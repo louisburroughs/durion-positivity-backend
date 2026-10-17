@@ -39,9 +39,11 @@ import com.positivity.accounting.internal.enums.DisplayReferenceType;
 import com.positivity.accounting.internal.enums.NormalSide;
 import com.positivity.accounting.internal.enums.OperationType;
 import com.positivity.accounting.internal.enums.StatementType;
+import com.positivity.accounting.internal.enums.APPaymentStatus;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.InvalidDateRangeException;
 import com.positivity.accounting.internal.exception.InvalidRequestParameterException;
+import com.positivity.accounting.internal.repository.APPaymentRepository;
 import com.positivity.accounting.internal.repository.APPaymentAllocationRepository;
 import com.positivity.accounting.internal.repository.AccountingSequenceRepository;
 import com.positivity.accounting.internal.repository.CreditMemoRepository;
@@ -173,6 +175,10 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             VendorBillStatus.MATCH_EXCEPTION,
             VendorBillStatus.AWAITING_APPROVAL);
 
+    /** AP payments whose unapplied amount is not counted against payables: voided and returned ones (#2515). */
+    private static final Set<APPaymentStatus> UNCOUNTED_PAYMENT_STATUSES =
+            Set.of(APPaymentStatus.VOIDED, APPaymentStatus.RETURNED);
+
     /** Reconciliation tolerance for the GL-drift flag (1 cent). */
     private static final BigDecimal RECON_TOLERANCE = new BigDecimal("0.01");
 
@@ -192,6 +198,8 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
     private final Clock clock;
     private final LedgerCurrency ledgerCurrency;
     private final TypedOutputTax typedOutputTax;
+    private final EstimatedDueDateService estimatedDueDates;
+    private final APPaymentRepository apPaymentRepository;
 
     public FinancialReportingServiceImpl(
             JournalEntryRepository journalEntryRepository,
@@ -209,7 +217,11 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
             DisplayReferenceResolver displayReferenceResolver,
             Clock clock,
             LedgerCurrency ledgerCurrency,
-            TypedOutputTax typedOutputTax) {
+            TypedOutputTax typedOutputTax,
+            EstimatedDueDateService estimatedDueDates,
+            APPaymentRepository apPaymentRepository) {
+        this.estimatedDueDates = estimatedDueDates;
+        this.apPaymentRepository = apPaymentRepository;
         this.journalEntryRepository = journalEntryRepository;
         this.statementLineMappingRepository = statementLineMappingRepository;
         this.accountingSequenceRepository = accountingSequenceRepository;
@@ -790,7 +802,7 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         // As-of semantics (finding 10): an item whose DOCUMENT (bill) date is after asOfDate
         // did not exist yet and is excluded; everything that did exist is bucketed on asOfDate,
         // not-yet-due items in `notYetDue`. Aging basis is the due date, falling back to the
-        // document date — the same rule generateAgedReceivables uses. Only APPROVED bills are aged
+        // estimated due date of a bill with none (#2515); receivables fall back to the document date. Only APPROVED bills are aged
         // (AW11): a bill not yet approved is reported beside the buckets, unaged.
         // KNOWN LIMITATION: the open balance is the bill's CURRENT balance (total minus all
         // allocations to date), not a balance reconstructed as-of asOfDate. A true
@@ -806,6 +818,12 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                         .collect(Collectors.toMap(
                                 APPaymentAllocationRepository.VendorBillAllocationSum::getVendorBillId,
                                 APPaymentAllocationRepository.VendorBillAllocationSum::getAllocated));
+
+        // Approved bills without a due date age from their estimate (#2515): terms from the PO copy, the vendor
+        // copy, or the tenant default, loaded in one query each. Nothing is written to the bill.
+        Map<VendorBill, EstimatedDueDateService.EstimatedDueDate> estimates = estimatedDueDates.estimateAll(bills.stream()
+                .filter(bill -> APPROVED_PAYABLE_STATUSES.contains(bill.getStatus()))
+                .toList());
 
         Map<UUID, VendorAging> byVendor = new LinkedHashMap<>();
         for (VendorBill bill : bills) {
@@ -838,9 +856,26 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 aging.unapprovedBillCount++;
                 continue;
             }
-            LocalDate agingDate = payableAgingDate(bill);
+            EstimatedDueDateService.EstimatedDueDate estimate = estimates.get(bill);
+            LocalDate agingDate = estimate != null ? estimate.dueDate() : payableAgingDate(bill);
+            if (estimate != null) {
+                aging.estimatedDueDateAmount = aging.estimatedDueDateAmount.add(openBalance);
+            }
             long daysPastDue = ChronoUnit.DAYS.between(agingDate, asOfDate);
             aging.buckets.add(daysPastDue, openBalance);
+        }
+
+        // Unapplied AP payments net against what is owed (durion#551 ruling, item 4): voided and returned ones are
+        // gone, a foreign-currency one is never summed into ledger totals (ADR-0067 PC-9). A vendor with only an
+        // unapplied payment still gets a row, so the rows add up to the report's netOwed.
+        for (APPaymentRepository.VendorUnappliedSum unapplied : apPaymentRepository.sumUnappliedByVendor(
+                ledgerCurrency.code(), UNCOUNTED_PAYMENT_STATUSES)) {
+            if (unapplied.getUnapplied() == null || unapplied.getUnapplied().signum() <= 0) {
+                continue;
+            }
+            VendorAging aging =
+                    byVendor.computeIfAbsent(unapplied.getVendorId(), key -> new VendorAging(unapplied.getVendorName()));
+            aging.unappliedPayments = unapplied.getUnapplied().negate();
         }
 
         List<AgedPayablesRow> rows = byVendor.entrySet().stream()
@@ -860,6 +895,9 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                             .unapproved(aging.unapproved)
                             .unapprovedBillCount(aging.unapprovedBillCount)
                             .totalIncludingUnapproved(totalOutstanding.add(aging.unapproved))
+                            .estimatedDueDateAmount(aging.estimatedDueDateAmount)
+                            .unappliedPayments(aging.unappliedPayments)
+                            .netOwed(totalOutstanding.add(aging.unappliedPayments))
                             .build();
                 })
                 .sorted(Comparator.comparing(
@@ -874,6 +912,12 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
         int unapprovedBillCount = byVendor.values().stream()
                 .mapToInt(aging -> aging.unapprovedBillCount)
                 .sum();
+        BigDecimal estimatedDueDateAmount = byVendor.values().stream()
+                .map(aging -> aging.estimatedDueDateAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal unappliedPayments = byVendor.values().stream()
+                .map(aging -> aging.unappliedPayments)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         log.info(
                 "Aged payables generated as of {}: vendors={}, totalOutstanding={}, unapprovedBills={}",
@@ -890,6 +934,9 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
                 .unapproved(unapproved)
                 .unapprovedBillCount(unapprovedBillCount)
                 .totalIncludingUnapproved(totals.getTotalOutstanding().add(unapproved))
+                .estimatedDueDateAmount(estimatedDueDateAmount)
+                .unappliedPayments(unappliedPayments)
+                .netOwed(totals.getTotalOutstanding().add(unappliedPayments))
                 .build();
     }
 
@@ -1566,13 +1613,16 @@ public class FinancialReportingServiceImpl implements FinancialReportingService 
 
     /**
      * Per-vendor aging accumulator carrying the vendor's display name, the aged buckets of its
-     * approved bills and the unaged open amount of its bills not yet approved.
+     * approved bills, the part of them aged on an estimate, its unapplied payments (negative) and the
+     * unaged open amount of its bills not yet approved.
      */
     private static final class VendorAging {
         private final String vendorName;
         private final AgingBuckets buckets = new AgingBuckets();
         private BigDecimal unapproved = BigDecimal.ZERO;
         private int unapprovedBillCount;
+        private BigDecimal estimatedDueDateAmount = BigDecimal.ZERO;
+        private BigDecimal unappliedPayments = BigDecimal.ZERO;
 
         VendorAging(String vendorName) {
             this.vendorName = vendorName;

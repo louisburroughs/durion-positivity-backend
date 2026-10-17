@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Two tenant settings of the accounting workspace (#2511; SPEC-accounting-workspace §7.1 "Seed"), read
+ * Tenant settings of the accounting workspace (#2511; SPEC-accounting-workspace §7.1 "Seed"), read
  * from {@code accounting_configuration} as {@code BankRecPolicy} reads its keys: an absent row means
  * the key's default, so no row is seeded.
  *
@@ -25,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@value #AP_DEFAULT_TERMS}: the payment terms a vendor bill gets when nothing else names
  *       them; default {@value #DEFAULT_AP_TERMS}, the form {@code BillingRuleRefResponse} documents.
  *   <li>{@value #CASH_SAFETY_CUSHION}: the cash the 30-day outlook keeps aside (S19); default unset.
+ *   <li>The three aged-item thresholds of S19 (#2515): {@value #UNDEPOSITED_CASH_AGED_DAYS} (default 3, 1..30),
+ *       {@value #VENDOR_COD_UNAPPLIED_AGED_DAYS} (14, 1..90) and {@value #DELIVERIES_NOT_BILLED_DAYS} (30, 7..120).
+ *       A stored value outside its range reads as the default, with a warning.
  * </ul>
  *
  * <p>{@value #AP_DEFAULT_TERMS} is written through the AP approval policy (CAP:550 S13, #2510; AW33,
@@ -54,24 +57,113 @@ public class CashAndPayablesSettings {
     /** The longest {@code NET<n>} the vocabulary allows. */
     public static final int MAX_NET_DAYS = 120;
 
+    /** {@code accounting_configuration} key: days an undeposited register session may wait before it is aged. */
+    public static final String UNDEPOSITED_CASH_AGED_DAYS = "UNDEPOSITED_CASH_AGED_DAYS";
+
+    /** {@code accounting_configuration} key: days a vendor cash-on-delivery payment may sit unapplied. */
+    public static final String VENDOR_COD_UNAPPLIED_AGED_DAYS = "VENDOR_COD_UNAPPLIED_AGED_DAYS";
+
+    /** {@code accounting_configuration} key: days a goods receipt may wait for its approved bill. */
+    public static final String DELIVERIES_NOT_BILLED_DAYS = "DELIVERIES_NOT_BILLED_DAYS";
+
+    /** Default and range of {@link #UNDEPOSITED_CASH_AGED_DAYS}. */
+    public static final int DEFAULT_UNDEPOSITED_CASH_AGED_DAYS = 3;
+
+    public static final int MIN_UNDEPOSITED_CASH_AGED_DAYS = 1;
+    public static final int MAX_UNDEPOSITED_CASH_AGED_DAYS = 30;
+
+    /** Default and range of {@link #VENDOR_COD_UNAPPLIED_AGED_DAYS}. */
+    public static final int DEFAULT_VENDOR_COD_UNAPPLIED_AGED_DAYS = 14;
+
+    public static final int MIN_VENDOR_COD_UNAPPLIED_AGED_DAYS = 1;
+    public static final int MAX_VENDOR_COD_UNAPPLIED_AGED_DAYS = 90;
+
+    /** Default and range of {@link #DELIVERIES_NOT_BILLED_DAYS}. */
+    public static final int DEFAULT_DELIVERIES_NOT_BILLED_DAYS = 30;
+
+    public static final int MIN_DELIVERIES_NOT_BILLED_DAYS = 7;
+    public static final int MAX_DELIVERIES_NOT_BILLED_DAYS = 120;
+
     private static final Pattern NET_TERMS = Pattern.compile("NET([1-9][0-9]{0,2})");
 
     private final AccountingConfigurationRepository configuration;
 
     /** The effective settings; the defaults stand in for absent rows. */
     public record Settings(
-            @NonNull String apDefaultTerms, @Nullable BigDecimal cashSafetyCushion) {}
+            @NonNull String apDefaultTerms,
+            @Nullable BigDecimal cashSafetyCushion,
+            int undepositedCashAgedDays,
+            int vendorCodUnappliedAgedDays,
+            int deliveriesNotBilledDays) {}
 
-    /** Both settings, read in one query. */
+    /** All settings, read in one query. */
     public @NonNull Settings settings() {
         Map<String, String> stored = new HashMap<>();
         for (AccountingConfiguration row :
-                configuration.findByConfigKeyIn(List.of(AP_DEFAULT_TERMS, CASH_SAFETY_CUSHION))) {
+                configuration.findByConfigKeyIn(List.of(
+                        AP_DEFAULT_TERMS,
+                        CASH_SAFETY_CUSHION,
+                        UNDEPOSITED_CASH_AGED_DAYS,
+                        VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                        DELIVERIES_NOT_BILLED_DAYS))) {
             stored.put(row.getConfigKey(), row.getConfigValue());
         }
         return new Settings(
                 parseTerms(stored.get(AP_DEFAULT_TERMS)),
-                parseCushion(stored.get(CASH_SAFETY_CUSHION)).orElse(null));
+                parseCushion(stored.get(CASH_SAFETY_CUSHION)).orElse(null),
+                parseDays(
+                        UNDEPOSITED_CASH_AGED_DAYS,
+                        stored.get(UNDEPOSITED_CASH_AGED_DAYS),
+                        DEFAULT_UNDEPOSITED_CASH_AGED_DAYS,
+                        MIN_UNDEPOSITED_CASH_AGED_DAYS,
+                        MAX_UNDEPOSITED_CASH_AGED_DAYS),
+                parseDays(
+                        VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                        stored.get(VENDOR_COD_UNAPPLIED_AGED_DAYS),
+                        DEFAULT_VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                        MIN_VENDOR_COD_UNAPPLIED_AGED_DAYS,
+                        MAX_VENDOR_COD_UNAPPLIED_AGED_DAYS),
+                parseDays(
+                        DELIVERIES_NOT_BILLED_DAYS,
+                        stored.get(DELIVERIES_NOT_BILLED_DAYS),
+                        DEFAULT_DELIVERIES_NOT_BILLED_DAYS,
+                        MIN_DELIVERIES_NOT_BILLED_DAYS,
+                        MAX_DELIVERIES_NOT_BILLED_DAYS));
+    }
+
+    /** Days an undeposited session may wait before it ages (S19 work items); default 3, range 1..30. */
+    public int undepositedCashAgedDays() {
+        return settings().undepositedCashAgedDays();
+    }
+
+    /** Days a vendor cash-on-delivery payment may sit unapplied; default 14, range 1..90. */
+    public int vendorCodUnappliedAgedDays() {
+        return settings().vendorCodUnappliedAgedDays();
+    }
+
+    /** Days a goods receipt may wait for its approved bill; default 30, range 7..120. */
+    public int deliveriesNotBilledDays() {
+        return settings().deliveriesNotBilledDays();
+    }
+
+    /**
+     * The effective day count of a stored value: the value when it is an integer within {@code min..max}, the default
+     * when there is none, and the default with a warning for anything else, as {@link #parseTerms} treats a bad value.
+     */
+    static int parseDays(@NonNull String key, @Nullable String value, int defaultDays, int min, int max) {
+        if (value == null || value.isBlank()) {
+            return defaultDays;
+        }
+        try {
+            int days = Integer.parseInt(value.trim());
+            if (days >= min && days <= max) {
+                return days;
+            }
+        } catch (NumberFormatException e) {
+            // falls through to the warning
+        }
+        log.warn("{} holds '{}', not an integer from {} to {}; using {}", key, value, min, max, defaultDays);
+        return defaultDays;
     }
 
     /** The tenant's default vendor payment terms. */

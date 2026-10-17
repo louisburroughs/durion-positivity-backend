@@ -50,9 +50,9 @@ class AgedReportCsvRendererTest {
                 Report,As-Of Date
                 AGED_PAYABLES,2026-06-30
 
-                Vendor ID,Vendor Name,Not Yet Due,1-30 Days,31-60 Days,61-90 Days,90+ Days,Overdue,Total Outstanding,Unapproved,Unapproved Bills,Total Incl. Unapproved
-                d10217f9-3ec6-46b9-9c87-e7066c100c25,Global Parts Supply,2500.00,700.00,750.00,0.00,0.00,1450.00,3950.00,300.00,2,4250.00
-                TOTAL,,2500.00,700.00,750.00,0.00,0.00,1450.00,3950.00,300.00,2,4250.00
+                Vendor ID,Vendor Name,Not Yet Due,1-30 Days,31-60 Days,61-90 Days,90+ Days,Overdue,Total Outstanding,Unapproved,Unapproved Bills,Total Incl. Unapproved,Estimated Due Date Amount,Unapplied Payments,Net Owed
+                d10217f9-3ec6-46b9-9c87-e7066c100c25,Global Parts Supply,2500.00,700.00,750.00,0.00,0.00,1450.00,3950.00,300.00,2,4250.00,200.00,-50.00,3900.00
+                TOTAL,,2500.00,700.00,750.00,0.00,0.00,1450.00,3950.00,300.00,2,4250.00,200.00,-50.00,3900.00
                 """;
         assertEquals(expected, renderer.render(payables()));
     }
@@ -141,6 +141,9 @@ class AgedReportCsvRendererTest {
                         .unapproved(new BigDecimal("300.00"))
                         .unapprovedBillCount(2)
                         .totalIncludingUnapproved(new BigDecimal("4250.00"))
+                        .estimatedDueDateAmount(new BigDecimal("200.00"))
+                        .unappliedPayments(new BigDecimal("-50.00"))
+                        .netOwed(new BigDecimal("3900.00"))
                         .build()))
                 .totals(AgingSummary.builder()
                         .notYetDue(new BigDecimal("2500.00"))
@@ -154,6 +157,9 @@ class AgedReportCsvRendererTest {
                 .unapproved(new BigDecimal("300.00"))
                 .unapprovedBillCount(2)
                 .totalIncludingUnapproved(new BigDecimal("4250.00"))
+                .estimatedDueDateAmount(new BigDecimal("200.00"))
+                .unappliedPayments(new BigDecimal("-50.00"))
+                .netOwed(new BigDecimal("3900.00"))
                 .build();
     }
 }
