@@ -631,7 +631,8 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
                 vocabulary = schemeClient.fetch(null).byCode();
             }
             TaxRegistrationDto canonical = checkScheme(entry, field, vocabulary, schemeViolations);
-            planned.add(new Planned(null, registrationId == null ? UUIDv7Generator.generate() : registrationId, canonical));
+            planned.add(
+                    new Planned(null, registrationId == null ? UUIDv7Generator.generate() : registrationId, canonical));
         }
         if (!schemeViolations.isEmpty()) {
             throw new SupplierValidationException(
@@ -643,14 +644,17 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         // Pass 2: seal, only once every entry is known good.
         List<VendorTaxRegistration> resolved = new ArrayList<>();
         for (Planned plan : planned) {
-            resolved.add(plan.kept() != null ? plan.kept() : seal(tenantId, vendorId, plan.registrationId(), plan.entry()));
+            resolved.add(
+                    plan.kept() != null ? plan.kept() : seal(tenantId, vendorId, plan.registrationId(), plan.entry()));
         }
         return resolved;
     }
 
     /** One requested entry after pass 1: a kept registration, or an entry to seal under {@code registrationId}. */
     private record Planned(
-            @Nullable VendorTaxRegistration kept, @Nullable UUID registrationId, @Nullable TaxRegistrationDto entry) {}
+            @Nullable VendorTaxRegistration kept,
+            @Nullable UUID registrationId,
+            @Nullable TaxRegistrationDto entry) {}
 
     /**
      * #2623 rule 6: the scheme is a listed code; the region is required and listed where the scheme is regional, and
@@ -701,7 +705,8 @@ public class SupplierVendorServiceImpl implements SupplierVendorService {
         }
         if (entry.region() != null
                 && !VendorTaxRegistrationShapes.REGION.matcher(entry.region()).matches()) {
-            throw fieldInvalid(field + "region", "must be one to three letters, optionally after a country prefix and -");
+            throw fieldInvalid(
+                    field + "region", "must be one to three letters, optionally after a country prefix and -");
         }
     }
 

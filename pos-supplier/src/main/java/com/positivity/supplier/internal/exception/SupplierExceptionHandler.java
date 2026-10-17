@@ -185,7 +185,8 @@ public class SupplierExceptionHandler {
     @ExceptionHandler(SupplierServiceUnavailableException.class)
     public ResponseEntity<ApiError> handleServiceUnavailable(
             SupplierServiceUnavailableException ex, HttpServletRequest request) {
-        ResponseEntity<ApiError> response = build(HttpStatus.SERVICE_UNAVAILABLE, ex.getCode(), ex.getMessage(), request);
+        ResponseEntity<ApiError> response =
+                build(HttpStatus.SERVICE_UNAVAILABLE, ex.getCode(), ex.getMessage(), request);
         HttpHeaders headers = new HttpHeaders();
         headers.putAll(response.getHeaders());
         headers.add(HttpHeaders.RETRY_AFTER, String.valueOf(SERVICE_UNAVAILABLE_RETRY_AFTER_SECONDS));

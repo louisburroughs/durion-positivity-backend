@@ -1037,8 +1037,7 @@ class SupplierVendorServiceImplTest extends PostgresSliceTestBase {
             SupplierValidationException both = refusal(() -> createWith(
                     new TaxRegistrationDto(null, "TAXID", GST, null),
                     new TaxRegistrationDto(null, "QST", QST_NUMBER, "ON")));
-            assertThat(fields(both))
-                    .containsExactly("taxRegistrations[0].scheme", "taxRegistrations[1].region");
+            assertThat(fields(both)).containsExactly("taxRegistrations[0].scheme", "taxRegistrations[1].region");
             String said = both.getMessage() + both.getFieldErrors();
             assertThat(said).doesNotContain(GST).doesNotContain(QST_NUMBER).doesNotContain("TAXID");
             assertThat(both.getFieldErrors())

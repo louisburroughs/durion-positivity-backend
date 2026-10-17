@@ -85,7 +85,8 @@ class TaxRegistrationSchemeClientTest {
     }
 
     @Test
-    @DisplayName("the full list is cached for the TTL; a country read and an expired cache read pos-tax again; a failure never fills it")
+    @DisplayName(
+            "the full list is cached for the TTL; a country read and an expired cache read pos-tax again; a failure never fills it")
     void cachesTheFullList() {
         java.util.concurrent.atomic.AtomicReference<java.time.Instant> now =
                 new java.util.concurrent.atomic.AtomicReference<>(java.time.Instant.parse("2026-10-17T12:00:00Z"));
@@ -120,7 +121,9 @@ class TaxRegistrationSchemeClientTest {
         assertThatThrownBy(() -> caching.fetch(null)).isInstanceOf(SupplierServiceUnavailableException.class);
         assertThat(caching.fetch(null).schemes()).hasSize(2);
         assertThat(caching.fetch(null).schemes()).as("served from the cache").hasSize(2);
-        assertThat(caching.fetch("CA").schemes()).as("a country read is not cached").hasSize(2);
+        assertThat(caching.fetch("CA").schemes())
+                .as("a country read is not cached")
+                .hasSize(2);
         now.set(now.get().plusSeconds(61));
         assertThat(caching.fetch(null).schemes()).as("expired: read again").hasSize(2);
         cached.verify();
