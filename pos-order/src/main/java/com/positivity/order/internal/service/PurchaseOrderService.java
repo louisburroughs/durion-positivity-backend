@@ -1,6 +1,9 @@
 package com.positivity.order.internal.service;
 
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
+import com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest;
+import com.positivity.order.internal.dto.purchaseorder.CancelPurchaseOrderLineRequest;
+import com.positivity.order.internal.dto.purchaseorder.ClosePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
@@ -82,7 +85,7 @@ public interface PurchaseOrderService {
     PurchaseOrderResponse reopenPurchaseOrderLine(
             @NonNull UUID poId,
             @NonNull UUID lineId,
-            @NonNull com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest request,
+            @NonNull ReopenPurchaseOrderLineRequest request,
             @NonNull String actorId);
 
     /**
@@ -93,7 +96,7 @@ public interface PurchaseOrderService {
     PurchaseOrderResponse cancelPurchaseOrderLine(
             @NonNull UUID poId,
             @NonNull UUID lineId,
-            @NonNull com.positivity.order.internal.dto.purchaseorder.CancelPurchaseOrderLineRequest request,
+            @NonNull CancelPurchaseOrderLineRequest request,
             @NonNull String actorId);
 
     /**
@@ -103,6 +106,6 @@ public interface PurchaseOrderService {
      */
     PurchaseOrderResponse closePurchaseOrder(
             @NonNull UUID poId,
-            @NonNull com.positivity.order.internal.dto.purchaseorder.ClosePurchaseOrderRequest request,
+            @NonNull ClosePurchaseOrderRequest request,
             @NonNull String actorId);
 }
