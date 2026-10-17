@@ -825,16 +825,12 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
         long republished =
                 vendorRepository.findById(michelinVendorId).orElseThrow().getVersion();
         assertThat(republished).as("under a higher aggregateVersion").isGreaterThan(version);
-        assertThat(lastVendorFact())
-                .as("the fact carries the raised version, the channel and the bootstrap actor")
-                .satisfies(envelope -> {
-                    assertThat(envelope.path("aggregateVersion").asLong()).isEqualTo(republished);
-                    assertThat(envelope.path("payload")
-                                    .path("purchaseOrderSupplierRef")
-                                    .asText())
-                            .isEqualTo("michelin-eu");
-                    assertThat(envelope.path("actor").asText()).isEqualTo(SupplierYamlBootstrap.BOOTSTRAP_ACTOR);
-                });
+        // The fact carries the raised version, the channel and the bootstrap actor.
+        tools.jackson.databind.JsonNode envelope = lastVendorFact();
+        assertThat(envelope.path("aggregateVersion").asLong()).isEqualTo(republished);
+        assertThat(envelope.path("payload").path("purchaseOrderSupplierRef").asText())
+                .isEqualTo("michelin-eu");
+        assertThat(envelope.path("actor").asText()).isEqualTo(SupplierYamlBootstrap.BOOTSTRAP_ACTOR);
 
         // Unchanged YAML: no designation moved, nothing republished.
         bootstrap.reconcile(properties(live));
