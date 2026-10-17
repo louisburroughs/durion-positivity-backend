@@ -5,6 +5,7 @@ import com.positivity.order.internal.exception.PurchaseOrderNotTransmittableExce
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
 import com.positivity.order.internal.exception.PurchaseOrderVendorException;
+import com.positivity.order.internal.exception.PurchaseOrderVersionConflictException;
 import com.positivity.order.internal.exception.UomConversionUndefinedException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
@@ -92,6 +93,16 @@ public class PurchaseOrderExceptionHandler {
     public ResponseEntity<ApiError> handleInvalidState(
             PurchaseOrderStateConflictException ex, HttpServletRequest request) {
         return respond(HttpStatus.CONFLICT, "PURCHASE_ORDER_INVALID_STATE", ex.getMessage(), request);
+    }
+
+    /**
+     * A revise or approve built on a stale version of the order (#2681): 409 {@code PURCHASE_ORDER_VERSION_CONFLICT},
+     * its own code because the remedy (re-read, re-apply) differs from a lifecycle refusal's.
+     */
+    @ExceptionHandler(PurchaseOrderVersionConflictException.class)
+    public ResponseEntity<ApiError> handleVersionConflict(
+            PurchaseOrderVersionConflictException ex, HttpServletRequest request) {
+        return respond(HttpStatus.CONFLICT, "PURCHASE_ORDER_VERSION_CONFLICT", ex.getMessage(), request);
     }
 
     /**

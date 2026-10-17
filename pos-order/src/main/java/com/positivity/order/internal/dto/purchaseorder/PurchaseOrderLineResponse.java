@@ -70,6 +70,20 @@ public class PurchaseOrderLineResponse {
     private BigDecimal openQuantityDecimal;
 
     @Schema(
+            description = "Tax code the line was written with; null when none. Returned so a read, edited and revised"
+                    + " line keeps it (#2681)",
+            example = "TAX-STD",
+            requiredMode = NOT_REQUIRED)
+    private String taxCodeId;
+
+    @Schema(
+            description = "GL account the line was written with; null when none. Returned so a read, edited and"
+                    + " revised line keeps it (#2681)",
+            example = "5000",
+            requiredMode = NOT_REQUIRED)
+    private String glAccountId;
+
+    @Schema(
             description = "UoM the line was keyed in when it differed from the product's base UoM",
             example = "CASE",
             requiredMode = NOT_REQUIRED)

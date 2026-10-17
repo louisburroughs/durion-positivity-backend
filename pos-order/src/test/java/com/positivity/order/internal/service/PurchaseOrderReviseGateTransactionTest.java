@@ -167,6 +167,7 @@ class PurchaseOrderReviseGateTransactionTest {
         line.setQuantity(new BigDecimal("4"));
         line.setUnitCostMinor(1_200L);
         RevisePurchaseOrderRequest request = new RevisePurchaseOrderRequest();
+        request.setExpectedVersionNumber(1);
         request.setRevisionReason("vendor changed the price");
         request.setPoDate(LocalDate.of(2026, 10, 11));
         request.setLines(List.of(line));

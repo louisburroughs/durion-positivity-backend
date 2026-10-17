@@ -19,6 +19,7 @@ import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import com.positivity.order.internal.exception.PurchaseOrderNotFoundException;
 import com.positivity.order.internal.exception.PurchaseOrderRequestValidationException;
 import com.positivity.order.internal.exception.PurchaseOrderStateConflictException;
+import com.positivity.order.internal.exception.PurchaseOrderVersionConflictException;
 import com.positivity.order.internal.repository.PurchaseOrderLineRepository;
 import com.positivity.order.internal.repository.PurchaseOrderRepository;
 import com.positivity.order.internal.repository.PurchaseOrderTransmissionEventRepository;
@@ -361,7 +362,14 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Transactional
     public @NonNull PurchaseOrderResponse approvePurchaseOrder(
             @NonNull UUID poId, @NonNull ApprovePurchaseOrderRequest request, @NonNull String actorId) {
-        PurchaseOrderEntity po = getPoOrThrow(poId);
+        // Under the row lock, like revise, so an approval and a revision take turns and the version an approver
+        // read is the version that is approved (#2681).
+        PurchaseOrderEntity po = purchaseOrderRepository
+                .findByIdForUpdate(poId)
+                .orElseThrow(() -> new PurchaseOrderNotFoundException(poId));
+        if (request.getExpectedVersionNumber() != null) {
+            requireVersion(po, request.getExpectedVersionNumber());
+        }
         if (po.getStatus() != PurchaseOrderStatus.DRAFT) {
             throw new PurchaseOrderStateConflictException("Only DRAFT purchase orders can be approved");
         }
@@ -384,19 +392,28 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
     @Transactional
     public @NonNull PurchaseOrderResponse revisePurchaseOrder(
             @NonNull UUID poId, @NonNull RevisePurchaseOrderRequest request, @NonNull String actorId) {
+        if (request.getExpectedVersionNumber() == null) {
+            throw new PurchaseOrderRequestValidationException(
+                    "expectedVersionNumber is required: the versionNumber the revision was built on");
+        }
         PurchaseOrderEntity po = purchaseOrderRepository
                 .findByIdForUpdate(poId)
                 .orElseThrow(() -> new PurchaseOrderNotFoundException(poId));
+        // Checked under the row lock and incremented in the same transaction, so two revisions built on the same
+        // version cannot both commit: the second waits for the lock, reads the new version and is refused (#2681).
+        int priorVersion = requireVersion(po, request.getExpectedVersionNumber());
         requireRevisable(po);
         reviseVendor(po, request.getVendorId());
-        int priorVersion = po.getVersionNumber() == null ? 1 : po.getVersionNumber();
 
         po.setVersionNumber(priorVersion + 1);
         po.setPoDate(request.getPoDate());
         po.setPaymentTermsId(request.getPaymentTermsId());
         po.setExpectedDeliveryDate(request.getExpectedDeliveryDate());
         po.setShipToLocationId(request.getShipToLocationId());
-        po.setRequestedBy(request.getRequestedBy());
+        // The order's requester, not the reviser (who is the actor): kept unless deliberately corrected (#2681).
+        if (request.getRequestedBy() != null) {
+            po.setRequestedBy(request.getRequestedBy());
+        }
         po.setComment(request.getComment());
 
         TotalsAndLines totalsAndLines = buildLineEntities(request.getLines());
@@ -481,6 +498,19 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
         }
         vendorGuard.requireActive(vendorId);
         po.setVendorId(vendorId);
+    }
+
+    /**
+     * The stored version, once it is the one the caller built on (#2681). The caller holds the order's row lock, so
+     * the comparison and the write that follows are one atomic step against any other revise or approve.
+     */
+    private static int requireVersion(@NonNull PurchaseOrderEntity po, int expectedVersionNumber) {
+        int current = po.getVersionNumber() == null ? 1 : po.getVersionNumber();
+        if (current != expectedVersionNumber) {
+            throw new PurchaseOrderVersionConflictException(
+                    po.getPurchaseOrderId(), po.getPoNumber(), expectedVersionNumber, current);
+        }
+        return current;
     }
 
     private PurchaseOrderEntity getPoOrThrow(UUID poId) {
@@ -584,6 +614,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                 .lineTotalMinor(line.getLineTotalMinor())
                 .taxMinor(safeLong(line.getTaxMinor()))
                 .openQuantityDecimal(line.getOpenQuantityDecimal())
+                .taxCodeId(line.getTaxCodeId())
+                .glAccountId(line.getGlAccountId())
                 .documentUom(line.getDocumentUom())
                 .documentQuantity(line.getDocumentQuantity())
                 .conversionFactor(line.getConversionFactor())
