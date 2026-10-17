@@ -985,6 +985,14 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
                     supplierRef, "Display " + supplierRef, enabled, sandbox, 5000, 30000, 3, null, null, vendor);
         }
 
+        /** Only the vendor facts: a profile write queues other outbox rows of its own. */
+        private long vendorFacts() {
+            return outboxRepository.findAll().stream()
+                    .filter(row -> com.positivity.domainevents.supplier.SupplierVendorUpdatedV1.EVENT_TYPE.equals(
+                            row.getEventType()))
+                    .count();
+        }
+
         private UUID activeVendor(String number) {
             return vendorRepository
                     .saveAndFlush(com.positivity.supplier.internal.entity.SupplierVendorEntity.builder()
@@ -1003,32 +1011,32 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
         @DisplayName("one enabled non-sandbox profile is the channel; a second one unseats it; disabling restores it")
         void designationFollowsTheProfiles() {
             UUID vendor = activeVendor("CHANNEL-1");
-            long facts = outboxRepository.count();
+            long facts = vendorFacts();
 
             assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor)).isEmpty();
             var first = adminService.createProfile(profileFor("channel-one", vendor, true, false));
             assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor)).contains("channel-one");
-            assertThat(outboxRepository.count()).as("the vendor fact is republished").isEqualTo(facts + 1);
+            assertThat(vendorFacts()).as("the vendor fact is republished").isEqualTo(facts + 1);
 
             adminService.createProfile(profileFor("channel-sandbox", vendor, true, true));
             assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor))
                     .as("a sandbox profile is never the channel and moves nothing")
                     .contains("channel-one");
-            assertThat(outboxRepository.count()).isEqualTo(facts + 1);
+            assertThat(vendorFacts()).isEqualTo(facts + 1);
 
             var second = adminService.createProfile(profileFor("channel-two", vendor, true, false));
             assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor))
                     .as("two enabled profiles: none designated until the owner's mechanics exist")
                     .isEmpty();
-            assertThat(outboxRepository.count()).isEqualTo(facts + 2);
+            assertThat(vendorFacts()).isEqualTo(facts + 2);
 
             adminService.updateProfile(second.vendorProfileId(), profileFor("channel-two", vendor, false, false));
             assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor)).contains("channel-one");
-            assertThat(outboxRepository.count()).isEqualTo(facts + 3);
+            assertThat(vendorFacts()).isEqualTo(facts + 3);
 
             adminService.deleteProfile(first.vendorProfileId());
             assertThat(purchasingProfile.purchaseOrderSupplierRef(vendor)).isEmpty();
-            assertThat(outboxRepository.count()).isEqualTo(facts + 4);
+            assertThat(vendorFacts()).isEqualTo(facts + 4);
         }
 
         @Test
@@ -1037,13 +1045,13 @@ class SupplierProfileAdminServiceImplTest extends PostgresSliceTestBase {
             UUID one = activeVendor("CHANNEL-A");
             UUID two = activeVendor("CHANNEL-B");
             var profile = adminService.createProfile(profileFor("channel-ab", one, true, false));
-            long facts = outboxRepository.count();
+            long facts = vendorFacts();
 
             adminService.updateProfile(profile.vendorProfileId(), profileFor("channel-ab", two, true, false));
 
             assertThat(purchasingProfile.purchaseOrderSupplierRef(one)).isEmpty();
             assertThat(purchasingProfile.purchaseOrderSupplierRef(two)).contains("channel-ab");
-            assertThat(outboxRepository.count()).isEqualTo(facts + 2);
+            assertThat(vendorFacts()).isEqualTo(facts + 2);
         }
     }
 }
