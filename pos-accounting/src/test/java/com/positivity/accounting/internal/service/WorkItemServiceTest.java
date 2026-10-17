@@ -1236,11 +1236,10 @@ class WorkItemServiceTest {
     }
 
     @Test
-    @DisplayName("only the returned page is completed: one evidence read, one lines read, one preview per page bill")
+    @DisplayName("only the returned page is completed: one preview per page bill, one creator-first read")
     void onlyThePageIsCompleted() {
         for (int i = 0; i < 6; i++) {
             VendorBill bill = reviewBill(VendorBillStatus.AWAITING_APPROVAL, "100.00", "bob");
-            bill.setOriginEventType(VendorBillReader.ORIGIN_GOODS_RECEIVED);
             bill.setSubmittedAt(Instant.parse("2026-10-06T10:00:00Z").plusSeconds(i * 86400L));
         }
 
@@ -1249,11 +1248,26 @@ class WorkItemServiceTest {
 
         assertThat(page.items()).hasSize(2);
         assertThat(page.countsByArea()).containsEntry(WorkItemArea.BILLS, 6);
-        org.mockito.Mockito.verify(approvalPreview, org.mockito.Mockito.times(2))
-                .preview(any());
+        org.mockito.Mockito.verify(approvalPreview, org.mockito.Mockito.times(2)).preview(any());
+        org.mockito.Mockito.verify(vendorCopies, org.mockito.Mockito.times(1)).creatorsFirstBillVendors(any(), any());
+    }
+
+    @Test
+    @DisplayName("the match evidence and lines of a page of goods-receipt bills are read once each, not per bill")
+    void evidenceIsBatched() {
+        for (int i = 0; i < 6; i++) {
+            VendorBill bill = reviewBill(VendorBillStatus.PENDING_RECEIPT_MATCH, "100.00", "bob");
+            bill.setOriginEventType(VendorBillReader.ORIGIN_GOODS_RECEIVED);
+        }
+
+        signIn("carol", CLERK);
+        WorkItemsResponse page = service.list(null, null, 6);
+
+        assertThat(page.items()).hasSize(6);
         org.mockito.Mockito.verify(evidence, org.mockito.Mockito.times(1)).findByVendorBillIdIn(any());
         org.mockito.Mockito.verify(billLines, org.mockito.Mockito.times(1)).findByVendorBill_VendorBillIdIn(any());
-        org.mockito.Mockito.verify(vendorCopies, org.mockito.Mockito.times(1)).creatorsFirstBillVendors(any(), any());
+        org.mockito.Mockito.verify(evidence, org.mockito.Mockito.never())
+                .findFirstByVendorBillIdOrderByRecordedAtDescMatchEvidenceIdDesc(any());
     }
 
     @Test

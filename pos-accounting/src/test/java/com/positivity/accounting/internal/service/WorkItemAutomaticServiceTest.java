@@ -213,7 +213,7 @@ class WorkItemAutomaticServiceTest {
                         VendorBillApproverKind.SYSTEM, START_OF_TODAY))
                 .thenReturn(List.of(bill));
 
-        signIn(AccountingPermissions.PAYMENT_REVERSE);
+        signIn(AccountingPermissions.RECONCILIATION_VIEW, AccountingPermissions.AP_APPROVE);
         List<AutomaticWorkItem> items = service.list(null, null, null).items();
 
         assertThat(items)

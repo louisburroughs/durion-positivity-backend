@@ -130,6 +130,9 @@ public class BillWorkItemSource {
     /** The item type of a review bill for this caller; null when the caller may not act on it. */
     private static @Nullable WorkItemType typeOf(
             VendorBill bill, boolean hasCandidates, ApApprovalPolicy.Settings settings) {
+        if (!REVIEW.contains(bill.getStatus())) {
+            return null;
+        }
         if (bill.getStatus() == VendorBillStatus.AWAITING_APPROVAL) {
             boolean mayApprove = VendorBillDecisions.mayTake(VendorBillAction.APPROVE)
                     && VendorBillDecisions.mayDecideTier(settings.tier(bill.getTotalAmount()));
