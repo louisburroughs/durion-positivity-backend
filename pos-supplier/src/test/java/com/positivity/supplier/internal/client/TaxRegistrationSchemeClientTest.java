@@ -9,16 +9,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import com.positivity.supplier.internal.exception.SupplierServiceUnavailableException;
 import java.net.SocketTimeoutException;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -30,6 +25,7 @@ import org.springframework.web.client.RestClient;
  * WARN line carries the path and status only.
  */
 @DisplayName("TaxRegistrationSchemeClient — pos-tax's registration-scheme list, fail-closed (#2623)")
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 class TaxRegistrationSchemeClientTest {
 
     private static final String BODY = """
@@ -44,8 +40,6 @@ class TaxRegistrationSchemeClientTest {
 
     private MockRestServiceServer server;
     private TaxRegistrationSchemeClient client;
-    private ListAppender<ILoggingEvent> logs;
-    private Logger logger;
 
     @BeforeEach
     void setUp() {
@@ -53,22 +47,8 @@ class TaxRegistrationSchemeClientTest {
         server = MockRestServiceServer.bindTo(builder).build();
         client = new TaxRegistrationSchemeClient(
                 builder, "pos-tax", "/v1/tax/registration-schemes", java.time.Duration.ZERO, CLOCK);
-        logger = (Logger) LoggerFactory.getLogger(TaxRegistrationSchemeClient.class);
-        logs = new ListAppender<>();
-        logs.start();
-        logger.addAppender(logs);
-        // The test logging configuration may silence this package; the WARN lines are what this test is about.
-        levelBefore = logger.getLevel();
-        logger.setLevel(ch.qos.logback.classic.Level.WARN);
     }
 
-    private ch.qos.logback.classic.Level levelBefore;
-
-    @AfterEach
-    void tearDown() {
-        logger.detachAppender(logs);
-        logger.setLevel(levelBefore);
-    }
 
     @Test
     @DisplayName("reads the list with the service user and tax:rates:view, by country or for every country")
@@ -155,7 +135,7 @@ class TaxRegistrationSchemeClientTest {
 
     @Test
     @DisplayName("a 5xx, a 4xx, an empty body or an unreachable pos-tax is SupplierServiceUnavailableException")
-    void failsClosed() {
+    void failsClosed(org.springframework.boot.test.system.CapturedOutput output) {
         server.expect(requestTo("http://pos-tax/v1/tax/registration-schemes")).andRespond(withServerError());
         server.expect(requestTo("http://pos-tax/v1/tax/registration-schemes"))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST));
@@ -172,12 +152,10 @@ class TaxRegistrationSchemeClientTest {
                             .isEqualTo("SERVICE_UNAVAILABLE"));
         }
         server.verify();
-        assertThat(logs.list).hasSize(4).allSatisfy(event -> {
-            assertThat(event.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
-            assertThat(event.getFormattedMessage())
-                    .contains("path=/v1/tax/registration-schemes")
-                    .contains("status=")
-                    .doesNotContain("schemes\"");
-        });
+        String warned = output.getOut() + output.getErr();
+        assertThat(warned.split("pos-tax registration schemes unavailable", -1))
+                .as("one WARN per failure, path and status only")
+                .hasSize(5);
+        assertThat(warned).contains("path=/v1/tax/registration-schemes").doesNotContain("schemes\"");
     }
 }
