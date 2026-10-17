@@ -182,7 +182,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(versioned(2, settled(null)));
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository).save(any(ProcessedEvent.class));
             assertThat(count("payment.settled.party_missing_defect")).isEqualTo(1.0);
             assertThat(count("payment.settled.unmappable")).isZero();
@@ -209,7 +209,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(versioned(1, settled(null)));
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             assertThat(count("payment.settled.unmappable")).isEqualTo(1.0);
             assertThat(count("payment.settled.party_missing_defect")).isZero();
             assertThat(logs.list).noneMatch(event -> event.getLevel() == Level.ERROR);
@@ -264,7 +264,7 @@ class SettlementEventsListenerPaymentSettledTest {
         @DisplayName(
                 "maps a payment.payment.settled event onto handlePaymentCleared, with its invoice and method (#2502)")
         void mapsAndDelegates() {
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(new ReceivablePayment());
 
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
@@ -279,7 +279,8 @@ class SettlementEventsListenerPaymentSettledTest {
                             org.mockito.ArgumentMatchers.eq(Instant.parse("2026-08-27T00:00:00Z")),
                             org.mockito.ArgumentMatchers.eq(UUID.fromString(EVENT_ID)),
                             org.mockito.ArgumentMatchers.eq(INVOICE_ID),
-                            org.mockito.ArgumentMatchers.eq("CARD"));
+                            org.mockito.ArgumentMatchers.eq("CARD"),
+                            any());
             // BigDecimal.equals() is scale-sensitive; the JSON round-trip through the envelope is not
             // guaranteed to preserve trailing zeros, so amount equivalence is asserted by value.
             assertThat(amountCaptor.getValue()).isEqualByComparingTo("150.00");
@@ -291,7 +292,7 @@ class SettlementEventsListenerPaymentSettledTest {
                 + " before the processed mark")
         void recordedPaymentIsAppliedAutomaticallyBeforeTheMark() {
             ReceivablePayment recorded = new ReceivablePayment();
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(recorded);
 
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
@@ -300,7 +301,7 @@ class SettlementEventsListenerPaymentSettledTest {
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(
                     paymentApplicationService, automaticPaymentApplicationService, processedEventRepository);
             order.verify(paymentApplicationService)
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             order.verify(automaticPaymentApplicationService)
                     .applySettled(
                             org.mockito.ArgumentMatchers.same(recorded),
@@ -318,7 +319,7 @@ class SettlementEventsListenerPaymentSettledTest {
         void storedRefundsAreReleasedAfterTheApplicationBeforeTheMark() {
             ReceivablePayment recorded = new ReceivablePayment();
             recorded.setPaymentId(PAYMENT_INTENT_ID);
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(recorded);
 
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
@@ -330,7 +331,7 @@ class SettlementEventsListenerPaymentSettledTest {
                     processedEventRepository);
             order.verify(paymentIntentLock).lock(PAYMENT_INTENT_ID);
             order.verify(paymentApplicationService)
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             order.verify(automaticPaymentApplicationService).applySettled(any(), any(), any());
             order.verify(paymentApplicationService)
                     .releaseRefundsRecordedBeforePayment(PAYMENT_INTENT_ID, UUID.fromString(EVENT_ID));
@@ -340,7 +341,7 @@ class SettlementEventsListenerPaymentSettledTest {
         @Test
         @DisplayName("#2503: an automatic-application failure propagates unmarked, for container retry/DLQ")
         void automaticApplicationFailurePropagatesUnmarked() {
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenReturn(new ReceivablePayment());
             doThrow(new IllegalStateException("conflict"))
                     .when(automaticPaymentApplicationService)
@@ -386,7 +387,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(envelope(EVENT_ID, cash("9.98", "9.95", "-0.03", "0.05")));
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             verify(ingestionRecorder)
                     .recordSuspended(
                             org.mockito.ArgumentMatchers.eq("pos-invoice"),
@@ -405,7 +406,7 @@ class SettlementEventsListenerPaymentSettledTest {
         @Test
         @DisplayName("A8: a cash tender whose triple holds is recorded for the applied amount (#2662)")
         void validCashRoundingIsRecordedForTheAppliedAmount() {
-            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any()))
                     .thenAnswer(inv -> {
                         ReceivablePayment payment = new ReceivablePayment();
                         payment.setPaymentId(PAYMENT_INTENT_ID);
@@ -424,7 +425,8 @@ class SettlementEventsListenerPaymentSettledTest {
                             any(),
                             any(),
                             org.mockito.ArgumentMatchers.eq(INVOICE_ID),
-                            org.mockito.ArgumentMatchers.eq("CASH"));
+                            org.mockito.ArgumentMatchers.eq("CASH"),
+                            org.mockito.ArgumentMatchers.eq(new BigDecimal("0.02")));
             verify(automaticPaymentApplicationService)
                     .applySettled(any(), any(), org.mockito.ArgumentMatchers.eq(EVENT_ID));
             verify(ingestionRecorder, never())
@@ -439,7 +441,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(envelope(EVENT_ID, eur));
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             verify(ingestionRecorder)
                     .recordCurrencyHeld(
                             org.mockito.ArgumentMatchers.eq("pos-invoice"),
@@ -496,7 +498,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString())));
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository, never()).save(any(ProcessedEvent.class));
         }
 
@@ -506,7 +508,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(envelope(EVENT_ID, settled(null)));
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
@@ -516,7 +518,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(envelope(EVENT_ID, settled("not-a-uuid")));
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
@@ -548,7 +550,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(msg);
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             verify(processedEventRepository).save(any(ProcessedEvent.class));
         }
 
@@ -561,7 +563,7 @@ class SettlementEventsListenerPaymentSettledTest {
             listener().onPaymentEvent(envelope(nonUuidEventId, settled(PARTY_UUID.toString())));
 
             verify(paymentApplicationService, never())
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
             ArgumentCaptor<ProcessedEvent> captor = ArgumentCaptor.forClass(ProcessedEvent.class);
             verify(processedEventRepository).save(captor.capture());
             assertThat(captor.getValue().getEventId()).isEqualTo(nonUuidEventId);
@@ -572,7 +574,7 @@ class SettlementEventsListenerPaymentSettledTest {
         void propagatesServiceFailureUnmarked() {
             doThrow(new RuntimeException("db unavailable"))
                     .when(paymentApplicationService)
-                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
             assertThatThrownBy(() -> listener().onPaymentEvent(envelope(EVENT_ID, settled(PARTY_UUID.toString()))))
                     .isInstanceOf(RuntimeException.class)

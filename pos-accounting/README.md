@@ -898,10 +898,13 @@ exactly as before.
   `SUSPENDED / CASH_ROUNDING_INVALID` with no `ReceivablePayment` and no posting, is skipped by the scheduled retry, and
   a reprocess or retry answers 409 `ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE` (no release path, #2620; the payload
   never changes, so correct the payment at its source and have the fact republished). A fact that passes is recorded
-  for `amount`, and its automatic application carries the rounding to the cash-receipt entry: Dr 1090 Undeposited
-  Funds `amount + cashRoundingAmount` / Cr 1200 AR `amount` / Cr 6050 `CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE` the
-  rounding when the customer paid more than due, Dr 6050 when the shop absorbed it (AC 20: 10.00 / 9.98 / 0.02). A
-  fact without the triple (card, or published before A8) posts the two lines as before. Cash refunds are out of A8.
+  for `amount` with the rounding kept on the `receivable_payment` (`cash_rounding_amount`, V35) until the payment's
+  first cash-receipt entry books it, whichever that is: an application (automatic or manual) or a customer-credit
+  issuance. That entry debits 1090 Undeposited Funds `amount + cashRoundingAmount`, credits 1200 AR (or 2300 Customer
+  Credit) `amount`, and books the rounding to 6050 `CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE` (credit when the
+  customer paid more than due, debit when the shop absorbed it; AC 20: 10.00 / 9.98 / 0.02); `cash_rounding_posted`
+  marks it so no second entry repeats it, and an entry too small to absorb a negative rounding leaves it for the next.
+  A fact without the triple (card, or published before A8) posts the two lines as before. Cash refunds are out of A8.
   Release gate: no production tenant whose currency has a cash-rounding increment (CAD first) takes cash until all
   three A8 PRs (pos-invoice #2743, pos-order, this) are merged.
 - **Flyway.** `V23__input_tax_recovery.sql`.
