@@ -132,6 +132,58 @@ class PaymentApplicationGLPostingEventHandlerTest {
         assertThat(descriptionCaptor.getValue()).contains(APPLICATION_REQUEST_ID);
     }
 
+    /** ADR-0067 A8 (#2662, AC 20): Dr cash 10.00 / Cr AR 9.98 / Cr 6050 0.02 through the three-line posting. */
+    @Test
+    @DisplayName("a cash tender with rounding posts the three-line entry through the CASH_ROUNDING mapping")
+    void cashRounding_postsThreeLineEntry() {
+        stubAccountResolution();
+        UUID cashRoundingAccountId = UUID.fromString("00000000-0000-0000-0000-000000006050");
+        when(glMappingResolver.resolveGLAccount(
+                        eq("CASH_ROUNDING"), eq("CASH_ROUNDING_DIFFERENCE"), any(LocalDateTime.class)))
+                .thenReturn(cashRoundingAccountId);
+        when(glPostingService.postPaymentApplication(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class)))
+                .thenReturn(postedEntry);
+        PaymentApplicationGLPostingEvent rounded = PaymentApplicationGLPostingEvent.builder()
+                .eventId(testEvent.getEventId())
+                .applicationRequestId(APPLICATION_REQUEST_ID)
+                .paymentId(testEvent.getPaymentId())
+                .customerId(testEvent.getCustomerId())
+                .currency("CAD")
+                .appliedAmount(new BigDecimal("9.98"))
+                .applicationTimestamp(testEvent.getApplicationTimestamp())
+                .cashRoundingAmount(new BigDecimal("0.02"))
+                .build();
+
+        handler.onPaymentApplicationGLPosting(rounded);
+
+        verify(glPostingService)
+                .postPaymentApplication(
+                        eq(UUID.fromString(APPLICATION_REQUEST_ID)),
+                        eq(undepositedFundsAccountId),
+                        eq(arAccountId),
+                        eq(new BigDecimal("9.98")),
+                        eq(cashRoundingAccountId),
+                        eq(new BigDecimal("0.02")),
+                        any(LocalDateTime.class),
+                        org.mockito.ArgumentMatchers.contains("cash rounding"));
+        verify(glPostingService, never())
+                .postPaymentApplication(
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(UUID.class),
+                        any(BigDecimal.class),
+                        any(LocalDateTime.class),
+                        any(String.class));
+    }
+
     @Test
     @DisplayName("happy path registers idempotency key after successful post")
     void happyPath_registersIdempotencyKey() {

@@ -361,6 +361,74 @@ class SettlementEventsListenerPaymentSettledTest {
             verify(automaticPaymentApplicationService, never()).applySettled(any(), any(), any());
         }
 
+        private PaymentSettledV1 cash(String amount, String settled, String rounding, String increment) {
+            return new PaymentSettledV1(
+                    PAYMENT_INTENT_ID,
+                    INVOICE_ID,
+                    "INV-1001",
+                    null,
+                    null,
+                    PARTY_UUID.toString(),
+                    "CASH",
+                    new BigDecimal(amount),
+                    "USD",
+                    "register",
+                    null,
+                    Instant.parse("2026-08-27T00:00:00Z"),
+                    settled == null ? null : new BigDecimal(settled),
+                    rounding == null ? null : new BigDecimal(rounding),
+                    increment == null ? null : new BigDecimal(increment));
+        }
+
+        @Test
+        @DisplayName("A8: a cash tender whose rounding triple does not hold is held CASH_ROUNDING_INVALID (#2662)")
+        void invalidCashRoundingIsHeldNotMaterialized() {
+            listener().onPaymentEvent(envelope(EVENT_ID, cash("9.98", "9.95", "-0.03", "0.05")));
+
+            verify(paymentApplicationService, never())
+                    .handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any());
+            verify(ingestionRecorder)
+                    .recordSuspended(
+                            org.mockito.ArgumentMatchers.eq("pos-invoice"),
+                            org.mockito.ArgumentMatchers.eq(PaymentSettledV1.EVENT_TYPE),
+                            org.mockito.ArgumentMatchers.eq(EVENT_ID),
+                            org.mockito.ArgumentMatchers.eq(PAYMENT_INTENT_ID),
+                            any(),
+                            any(),
+                            org.mockito.ArgumentMatchers.eq(
+                                    com.positivity.accounting.internal.enums.AccountingEventStatus.SUSPENDED),
+                            org.mockito.ArgumentMatchers.eq("CASH_ROUNDING_INVALID"),
+                            org.mockito.ArgumentMatchers.contains("HALF_UP"));
+            verify(processedEventRepository).save(any(ProcessedEvent.class));
+        }
+
+        @Test
+        @DisplayName("A8: a cash tender whose triple holds is recorded for the applied amount (#2662)")
+        void validCashRoundingIsRecordedForTheAppliedAmount() {
+            when(paymentApplicationService.handlePaymentCleared(any(), any(), any(), any(), any(), any(), any(), any()))
+                    .thenAnswer(inv -> {
+                        ReceivablePayment payment = new ReceivablePayment();
+                        payment.setPaymentId(PAYMENT_INTENT_ID);
+                        payment.setCustomerId(PARTY_UUID);
+                        return payment;
+                    });
+
+            listener().onPaymentEvent(envelope(EVENT_ID, cash("9.98", "10.00", "0.02", "0.05")));
+
+            verify(paymentApplicationService)
+                    .handlePaymentCleared(
+                            org.mockito.ArgumentMatchers.eq(PAYMENT_INTENT_ID),
+                            org.mockito.ArgumentMatchers.eq(PARTY_UUID),
+                            org.mockito.ArgumentMatchers.eq("USD"),
+                            org.mockito.ArgumentMatchers.eq(new BigDecimal("9.98")),
+                            any(),
+                            any(),
+                            org.mockito.ArgumentMatchers.eq(INVOICE_ID),
+                            org.mockito.ArgumentMatchers.eq("CASH"));
+            verify(automaticPaymentApplicationService).applySettled(any(), any(), org.mockito.ArgumentMatchers.eq(EVENT_ID));
+            verify(ingestionRecorder, never()).recordSuspended(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        }
+
         @Test
         @DisplayName("a settled payment in another currency is held, never made an AVAILABLE payment (#2310)")
         void foreignCurrencyPaymentIsHeldNotMaterialized() {

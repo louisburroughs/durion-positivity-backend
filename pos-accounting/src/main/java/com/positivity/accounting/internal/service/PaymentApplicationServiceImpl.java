@@ -254,12 +254,24 @@ public class PaymentApplicationServiceImpl
             @NonNull String requestId,
             @NonNull Instant appliedAt,
             @NonNull ApplicationSource source) {
+        return applyAutomatically(paymentId, invoiceId, amount, requestId, appliedAt, source, null);
+    }
+
+    @Override
+    public @NonNull PaymentApplicationResponse applyAutomatically(
+            @NonNull UUID paymentId,
+            @NonNull UUID invoiceId,
+            @NonNull BigDecimal amount,
+            @NonNull String requestId,
+            @NonNull Instant appliedAt,
+            @NonNull ApplicationSource source,
+            @Nullable BigDecimal cashRoundingAmount) {
         if (source == ApplicationSource.MANUAL) {
             throw new IllegalArgumentException("applyAutomatically is for the automatic paths, not MANUAL");
         }
         PaymentApplicationRequest request = new PaymentApplicationRequest(
                 requestId, List.of(new PaymentApplicationRequest.InvoiceApplication(invoiceId, amount)), null);
-        return apply(paymentId, request, appliedAt, SYSTEM_ACTOR, source);
+        return apply(paymentId, request, appliedAt, SYSTEM_ACTOR, source, cashRoundingAmount);
     }
 
     /**
@@ -273,6 +285,16 @@ public class PaymentApplicationServiceImpl
             Instant applicationTimestamp,
             String currentUser,
             ApplicationSource source) {
+        return apply(paymentId, request, applicationTimestamp, currentUser, source, null);
+    }
+
+    private PaymentApplicationResponse apply(
+            UUID paymentId,
+            PaymentApplicationRequest request,
+            Instant applicationTimestamp,
+            String currentUser,
+            ApplicationSource source,
+            @Nullable BigDecimal cashRoundingAmount) {
 
         // Idempotency check
         if (paymentApplicationRepository.existsByApplicationRequestId(request.getApplicationRequestId())) {
@@ -365,7 +387,12 @@ public class PaymentApplicationServiceImpl
         // back, the work item rolls back with it, so only committed applications
         // ever reach the ledger.
         enqueueGLPostingWorkItem(
-                paymentId, request.getApplicationRequestId(), payment, validation, applicationTimestamp);
+                paymentId,
+                request.getApplicationRequestId(),
+                payment,
+                validation,
+                applicationTimestamp,
+                cashRoundingAmount);
 
         // 10. Build response
         return PaymentApplicationResponse.builder()
@@ -909,7 +936,8 @@ public class PaymentApplicationServiceImpl
             @NonNull String applicationRequestId,
             @NonNull ReceivablePayment payment,
             @NonNull InvoiceApplicationValidation validation,
-            @NonNull Instant applicationTimestamp) {
+            @NonNull Instant applicationTimestamp,
+            @Nullable BigDecimal cashRoundingAmount) {
         PaymentApplicationGLPostingEvent glPostingEvent = PaymentApplicationGLPostingEvent.builder()
                 .eventId(UUIDv7Generator.generate())
                 .applicationRequestId(applicationRequestId)
@@ -918,6 +946,8 @@ public class PaymentApplicationServiceImpl
                 .currency(payment.getCurrency())
                 .appliedAmount(validation.actualTotalApplicationAmount())
                 .applicationTimestamp(applicationTimestamp)
+                .cashRoundingAmount(
+                        cashRoundingAmount == null || cashRoundingAmount.signum() == 0 ? null : cashRoundingAmount)
                 .build();
 
         outboxService.saveToOutbox(

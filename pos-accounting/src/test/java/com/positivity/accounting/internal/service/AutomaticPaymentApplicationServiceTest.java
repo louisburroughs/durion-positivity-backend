@@ -135,7 +135,7 @@ class AutomaticPaymentApplicationServiceTest {
         lenient().when(invoiceBalanceCalculator.balanceDue(invoice)).thenReturn(new BigDecimal("115.00"));
         lenient().when(periodGate.isPostingBlocked(any())).thenReturn(false);
         lenient()
-                .when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any()))
+                .when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(applied("115.00", null));
     }
 
@@ -213,7 +213,7 @@ class AutomaticPaymentApplicationServiceTest {
 
         assertThat(result.outcome()).isEqualTo(expected);
         assertThat(result.detail()).contains(detail);
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any(), any());
         assertThat(count(expected)).isEqualTo(1.0);
         LocalDateTime settledOn = LocalDateTime.ofInstant(SETTLED_AT, ZoneOffset.UTC);
         switch (expected.status()) {
@@ -272,7 +272,7 @@ class AutomaticPaymentApplicationServiceTest {
             + " PAYMENT_SETTLED:<paymentIntentId>, and writes no row")
     void appliesDatedAtSettlement() {
         payment.setUnappliedAmount(new BigDecimal("120.00"));
-        when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any()))
+        when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(applied("115.00", "5.00"));
 
         Result result = service.applySettled(payment, fact(" cash "), EVENT_ID);
@@ -288,7 +288,8 @@ class AutomaticPaymentApplicationServiceTest {
                         new BigDecimal("120.00"),
                         "PAYMENT_SETTLED:" + INTENT,
                         SETTLED_AT,
-                        ApplicationSource.PAYMENT_SETTLED);
+                        ApplicationSource.PAYMENT_SETTLED,
+                        BigDecimal.ZERO);
         verifyNoInteractions(recorder);
         assertThat(count(Outcome.APPLIED)).isEqualTo(1.0);
     }
@@ -305,7 +306,7 @@ class AutomaticPaymentApplicationServiceTest {
         Result result = service.applySettled(payment, fact("CARD"), EVENT_ID);
 
         assertThat(result.outcome()).isEqualTo(Outcome.ALREADY_APPLIED);
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any(), any());
         verifyNoInteractions(recorder);
         assertThat(count(Outcome.ALREADY_APPLIED)).isEqualTo(1.0);
     }
@@ -319,7 +320,7 @@ class AutomaticPaymentApplicationServiceTest {
 
         assertThat(result.outcome()).isEqualTo(Outcome.ALREADY_APPLIED);
         assertThat(result.detail()).contains("undone; not applied again");
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any(), any());
         verifyNoInteractions(recorder);
     }
 
@@ -358,6 +359,71 @@ class AutomaticPaymentApplicationServiceTest {
                 mapper,
                 zoneResolver,
                 provider);
+    }
+
+    /** ADR-0067 A8 (#2662): the signed rounding travels with the settled-fact application; AC 20 figures. */
+    @Test
+    void cashTenderWithRounding_passesTheRoundingToTheApplication() {
+        PaymentSettledV1 base = fact("CASH");
+        PaymentSettledV1 cash = new PaymentSettledV1(
+                base.paymentIntentId(),
+                base.invoiceId(),
+                base.invoiceNumber(),
+                null,
+                null,
+                base.partyId(),
+                "CASH",
+                new BigDecimal("9.98"),
+                base.currencyCode(),
+                "register",
+                null,
+                base.settledAt(),
+                new BigDecimal("10.00"),
+                new BigDecimal("0.02"),
+                new BigDecimal("0.05"));
+        ReceivablePayment payment = availablePayment(new BigDecimal("9.98"));
+        PaymentApplicationResponse applied = PaymentApplicationResponse.builder()
+                .appliedAmount(new BigDecimal("9.98"))
+                .remainingAmount(BigDecimal.ZERO)
+                .build();
+        when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(applied);
+        stubOpenInvoice(new BigDecimal("9.98"));
+
+        Result result = service.applySettled(payment, cash, EVENT_ID);
+
+        assertThat(result.outcome()).isEqualTo(Outcome.APPLIED);
+        verify(paymentApplicationService)
+                .applyAutomatically(
+                        INTENT,
+                        INVOICE,
+                        new BigDecimal("9.98"),
+                        "PAYMENT_SETTLED:" + INTENT,
+                        SETTLED_AT,
+                        ApplicationSource.PAYMENT_SETTLED,
+                        new BigDecimal("0.02"));
+    }
+
+    @Test
+    void reapplyOfAFactHeldForItsRounding_reHoldsIt() {
+        PaymentSettledV1 base = fact("CASH");
+        java.util.Map<String, Object> stored = new java.util.LinkedHashMap<>();
+        stored.put("paymentIntentId", base.paymentIntentId().toString());
+        stored.put("invoiceId", base.invoiceId().toString());
+        stored.put("partyId", base.partyId());
+        stored.put("methodType", "CASH");
+        stored.put("amount", "9.98");
+        stored.put("currencyCode", base.currencyCode());
+        stored.put("settledAt", base.settledAt().toString());
+        stored.put("settledAmount", "9.95");
+        stored.put("cashRoundingAmount", "-0.03");
+        stored.put("cashIncrement", "0.05");
+
+        Result result = service.reapply(stored);
+
+        assertThat(result.outcome()).isEqualTo(Outcome.SUSPENDED_CASH_ROUNDING);
+        assertThat(result.outcome().reason()).isEqualTo("CASH_ROUNDING_INVALID");
+        verifyNoInteractions(paymentApplicationService);
     }
 
     private static PaymentSettledV1 factAt(Instant settledAt) {
@@ -414,7 +480,7 @@ class AutomaticPaymentApplicationServiceTest {
         assertThat(result.outcome()).isEqualTo(Outcome.SUSPENDED_TIME_ZONE);
         assertThat(result.outcome().reason()).isEqualTo("ACCOUNTING_TIME_ZONE_UNSET");
         verifyNoInteractions(periodGate);
-        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any());
+        verify(paymentApplicationService, never()).applyAutomatically(any(), any(), any(), any(), any(), any(), any());
         verify(recorder)
                 .recordSuspended(
                         anyString(),

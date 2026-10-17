@@ -864,10 +864,20 @@ exactly as before.
   as before. The tax-liability reconciliation compares against every account the `SALES_TAX_PAYABLE` and
   `SALES_TAX_PAYABLE_*` keys map to in the period, never a literal code (`taxPayableAccountCode` lists them,
   comma-joined; still `2200` for a USD tenant).
-- **Cash rounding (item 12).** The CAD data provisions 6050 and `CASH_ROUNDING_DIFFERENCE`; the posting waits for
-  ADR-0067 step A8 (its own story), which adds the settled amount and the signed rounding to the cash
-  `PaymentSettledV1`. Release gate: no production tenant whose currency has a cash-rounding increment (CAD first)
-  takes cash until A8 merges.
+- **Cash rounding (item 12, ADR-0067 A8, #2662).** A cash `payment.payment.settled` fact carries the additive
+  triple `settledAmount` (the cash taken after rounding to the register's cash increment), `cashRoundingAmount`
+  (signed, `settledAmount − amount`) and `cashIncrement`; `amount` stays the amount applied to the invoice and to AR.
+  `SettlementEventsListener` checks the triple before recording anything (`CashRoundingFactCheck`: the difference
+  must equal `settledAmount − amount`, `settledAmount` must be `amount` rounded HALF_UP to a multiple of the
+  increment, no rounding without an increment, no rounding fields on a non-cash tender); a fact that fails is held
+  `SUSPENDED / CASH_ROUNDING_INVALID` with no `ReceivablePayment` and no posting, is skipped by the scheduled retry and
+  is re-held by a reprocess (the payload never changes; correct it at the source). A fact that passes is recorded
+  for `amount`, and its automatic application carries the rounding to the cash-receipt entry: Dr 1090 Undeposited
+  Funds `amount + cashRoundingAmount` / Cr 1200 AR `amount` / Cr 6050 `CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE` the
+  rounding when the customer paid more than due, Dr 6050 when the shop absorbed it (AC 20: 10.00 / 9.98 / 0.02). A
+  fact without the triple (card, or published before A8) posts the two lines as before. Cash refunds are out of A8.
+  Release gate: no production tenant whose currency has a cash-rounding increment (CAD first) takes cash until all
+  three A8 PRs (pos-invoice #2743, pos-order, this) are merged.
 - **Flyway.** `V23__input_tax_recovery.sql`.
 
 ## Location scope (ADR-0061, #1885)

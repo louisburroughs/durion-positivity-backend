@@ -23,6 +23,7 @@ import java.util.EnumMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -92,6 +93,7 @@ public class AutomaticPaymentApplicationService {
     public static final Set<String> REPROCESSABLE_REASONS = Set.of(
             PostingFailureReason.PERIOD_CLOSED.name(),
             PostingFailureReason.ACCOUNTING_TIME_ZONE_UNSET.name(),
+            PostingFailureReason.CASH_ROUNDING_INVALID.name(),
             InvoicePaymentEventProcessor.INVOICE_NOT_FOUND,
             InvoicePaymentEventProcessor.INVOICE_NOT_ELIGIBLE);
 
@@ -113,7 +115,12 @@ public class AutomaticPaymentApplicationService {
                 AccountingEventStatus.SUSPENDED,
                 PostingFailureReason.ACCOUNTING_TIME_ZONE_UNSET.name()),
         FAILED_INELIGIBLE(
-                "failed_ineligible", AccountingEventStatus.FAILED, InvoicePaymentEventProcessor.INVOICE_NOT_ELIGIBLE);
+                "failed_ineligible", AccountingEventStatus.FAILED, InvoicePaymentEventProcessor.INVOICE_NOT_ELIGIBLE),
+        /** ADR-0067 A8 (#2662): the cash-rounding triple does not hold together; re-held on every reprocess. */
+        SUSPENDED_CASH_ROUNDING(
+                "suspended_cash_rounding",
+                AccountingEventStatus.SUSPENDED,
+                PostingFailureReason.CASH_ROUNDING_INVALID.name());
 
         private final String tag;
         private final AccountingEventStatus status;
@@ -264,6 +271,14 @@ public class AutomaticPaymentApplicationService {
             throw new IllegalStateException(
                     "Stored payment.payment.settled payload has no paymentIntentId or settledAt");
         }
+        // ADR-0067 A8 (#2662): a fact held for its rounding triple was never recorded; the stored payload cannot
+        // change, so a reprocess re-holds it with the same reason instead of failing on the missing payment.
+        Optional<String> roundingProblem = CashRoundingFactCheck.problem(fact);
+        if (roundingProblem.isPresent()) {
+            Result held = new Result(Outcome.SUSPENDED_CASH_ROUNDING, roundingProblem.get());
+            counter(held.outcome());
+            return held;
+        }
         ReceivablePayment payment = receivablePaymentRepository
                 .findById(fact.paymentIntentId())
                 .orElseThrow(() -> new IllegalStateException(
@@ -374,13 +389,16 @@ public class AutomaticPaymentApplicationService {
         }
 
         // h. Apply the whole unapplied amount to that invoice only (BR-1), dated settledAt (BR-5).
+        // ADR-0067 A8 (#2662): the cash rounding travels with the first (settled-fact) application so the
+        // cash-receipt entry debits the cash taken and books the difference to 6050.
         PaymentApplicationResponse response = paymentApplicationService.applyAutomatically(
                 payment.getPaymentId(),
                 invoiceId,
                 unapplied,
                 requestId,
                 fact.settledAt(),
-                ApplicationSource.PAYMENT_SETTLED);
+                ApplicationSource.PAYMENT_SETTLED,
+                CashRoundingFactCheck.roundingOf(fact));
         return new Result(
                 Outcome.APPLIED,
                 "applied " + response.getAppliedAmount() + " to invoice " + invoiceNumber + excessDetail(response));

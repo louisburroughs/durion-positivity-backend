@@ -143,6 +143,26 @@ public interface GLPostingService {
             @Nullable String overrideJustification);
 
     /**
+     * ADR-0067 A8 (CAP:550 #2662, AC 20): post the cash application of a rounded cash tender: {@code Dr Undeposited
+     * Funds (amount + cashRoundingAmount) / Cr AR amount / Cr 6050 cashRoundingAmount} when the customer paid more
+     * than due (positive), {@code Dr 6050} when the shop absorbed the difference (negative). {@code
+     * cashRoundingAmount} must be non-zero; a zero rounding posts through the two-line overload.
+     *
+     * @param cashRoundingAccountId GL account resolved for {@code CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE} (6050)
+     * @param cashRoundingAmount signed {@code settledAmount − amount}
+     * @return posted journal entry's id
+     */
+    UUID postPaymentApplication(
+            @NonNull UUID paymentApplicationId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull UUID cashRoundingAccountId,
+            @NonNull BigDecimal cashRoundingAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description);
+
+    /**
      * Post a customer-credit issuance (overpayment excess) to GL (parity-C1,
      * issue #975): {@code Dr Undeposited Funds / Cr Customer Credit Liability}
      * for the credit amount. Recognizes the overpayment cash as an asset and the

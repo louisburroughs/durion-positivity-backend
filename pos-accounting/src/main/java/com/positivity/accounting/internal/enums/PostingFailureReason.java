@@ -91,6 +91,16 @@ public enum PostingFailureReason {
     CURRENCY_NOT_SUPPORTED,
 
     /**
+     * A {@code payment.payment.settled} fact whose ADR-0067 A8 cash-rounding triple does not hold together
+     * (CAP:550 #2662, AC 20): {@code cashRoundingAmount != settledAmount − amount}, a {@code settledAmount} that is
+     * not {@code amount} rounded HALF_UP to a multiple of {@code cashIncrement}, a rounding without an increment,
+     * or rounding fields on a tender that is not CASH. Held {@code SUSPENDED}, nothing recorded or posted; the
+     * payload never changes, so the scheduled retry skips it and a reprocess re-holds it until the fact is
+     * corrected at its source.
+     */
+    CASH_ROUNDING_INVALID,
+
+    /**
      * A Kafka-consumed fact its listener deliberately does not post (issue #2433): a stale fact the
      * replica guard skipped, a deposit-take invoice (a contract liability, not revenue), an invoice
      * fact with no {@code finalizedAt}, or a status that neither recognizes nor reverses revenue.
@@ -160,6 +170,7 @@ public enum PostingFailureReason {
     public boolean isExcludedFromAutoRetry() {
         return this == PERIOD_CLOSED
                 || this == CURRENCY_NOT_SUPPORTED
+                || this == CASH_ROUNDING_INVALID
                 || this == TAX_TYPE_MISSING
                 || this == GL_MAPPING_NOT_CONFIGURED
                 // The payload never changes, so a retry fails the same way.

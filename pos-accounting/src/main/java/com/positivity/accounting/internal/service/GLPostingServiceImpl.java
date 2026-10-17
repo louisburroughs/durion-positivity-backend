@@ -268,6 +268,50 @@ public class GLPostingServiceImpl implements GLPostingService {
     }
 
     @Override
+    public UUID postPaymentApplication(
+            @NonNull UUID paymentApplicationId,
+            @NonNull UUID undepositedFundsAccountId,
+            @NonNull UUID arAccountId,
+            @NonNull BigDecimal amount,
+            @NonNull UUID cashRoundingAccountId,
+            @NonNull BigDecimal cashRoundingAmount,
+            @NonNull LocalDateTime transactionDate,
+            @NonNull String description) {
+        if (cashRoundingAmount.signum() == 0) {
+            throw new IllegalArgumentException("cashRoundingAmount must be non-zero; use the two-line overload");
+        }
+        BigDecimal cashTaken = amount.add(cashRoundingAmount);
+        log.info(
+                "Posting cash-rounded payment application GL entry {}: debit undeposited funds {}, credit AR {},"
+                        + " cash rounding {} (ADR-0067 A8)",
+                paymentApplicationId,
+                cashTaken,
+                amount,
+                cashRoundingAmount);
+        List<JournalEntryCreateRequest.JournalEntryLineRequest> lines = new ArrayList<>();
+        lines.add(lineRequest(
+                undepositedFundsAccountId, cashTaken, BigDecimal.ZERO, "Cash Receipt - PA#" + paymentApplicationId));
+        lines.add(lineRequest(arAccountId, BigDecimal.ZERO, amount, "AR Reduction - PA#" + paymentApplicationId));
+        BigDecimal roundingAbs = cashRoundingAmount.abs();
+        String roundingLine = "Cash Rounding - PA#" + paymentApplicationId;
+        lines.add(
+                cashRoundingAmount.signum() > 0
+                        ? lineRequest(cashRoundingAccountId, BigDecimal.ZERO, roundingAbs, roundingLine)
+                        : lineRequest(cashRoundingAccountId, roundingAbs, BigDecimal.ZERO, roundingLine));
+        JournalEntryCreateRequest request = JournalEntryCreateRequest.builder()
+                .transactionDate(transactionDate)
+                .description(description)
+                .sourceEventId(paymentApplicationId)
+                .sourceEventType(JournalEntrySourceTypes.PAYMENT_APPLICATION)
+                .lines(lines)
+                .build();
+        JournalEntryResponse created = journalEntryService.createJournalEntry(request);
+        JournalEntryResponse posted = journalEntryService.postJournalEntry(created.getJournalEntryId(), null);
+        log.info("Posted cash-rounded payment application GL entry: journal entry ID {}", posted.getJournalEntryId());
+        return posted.getJournalEntryId();
+    }
+
+    @Override
     public UUID postCustomerCreditIssuance(
             @NonNull UUID sourceEventId,
             @NonNull UUID creditId,
