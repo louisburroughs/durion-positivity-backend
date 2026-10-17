@@ -11,6 +11,8 @@ import com.positivity.supplier.internal.entity.SupplierAccountEntity;
 import com.positivity.supplier.internal.entity.SupplierAuthConfigEntity;
 import com.positivity.supplier.internal.entity.SupplierEndpointBindingEntity;
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
+import com.positivity.supplier.internal.event.VendorProfilesChanging;
+import com.positivity.supplier.internal.event.VendorProfilesChanged;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
 import com.positivity.supplier.internal.enums.PayloadCaptureLevel;
 import com.positivity.supplier.internal.enums.ProfileSourceOfTruth;
@@ -49,6 +51,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.scheduling.support.CronExpression;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -114,7 +117,7 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
     private final TenantIterator tenantIterator;
     private final PlatformTransactionManager transactionManager;
     private final MeterRegistry meterRegistry;
-    private final com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile purchasingProfile;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Reconciles the YAML profiles into every active tenant (ADR-0062 §3): the profile tables are
@@ -202,8 +205,10 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
             profile.setRetryBackoff(null);
         }
         // #2712: a YAML profile that appears, re-points, enables or disables may move the vendor's purchasing channel.
-        SupplierProfileEntity reconciled = profile;
-        profile = purchasingProfile.republishIfChanged(vendorIdsOf(reconciled), () -> profileRepository.save(reconciled));
+        java.util.Set<UUID> touched = vendorIdsOf(profile);
+        eventPublisher.publishEvent(new VendorProfilesChanging(touched));
+        profile = profileRepository.save(profile);
+        eventPublisher.publishEvent(new VendorProfilesChanged(touched));
         UUID vendorProfileId = profile.getVendorProfileId();
         reconcileAuthConfigs(vendorProfileId, spec);
         reconcileAccounts(vendorProfileId, spec);
@@ -335,7 +340,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
                 .increment();
         if (profile.getVendorProfileId() != null && profile.isEnabled()) {
             profile.setEnabled(false);
-            purchasingProfile.republishIfChanged(vendorIdsOf(profile), () -> profileRepository.save(profile));
+            eventPublisher.publishEvent(new VendorProfilesChanging(vendorIdsOf(profile)));
+            profileRepository.save(profile);
+            eventPublisher.publishEvent(new VendorProfilesChanged(vendorIdsOf(profile)));
         }
     }
 
@@ -347,7 +354,9 @@ public class SupplierYamlBootstrap implements ApplicationRunner {
         for (SupplierProfileEntity profile : profileRepository.findBySourceOfTruth(ProfileSourceOfTruth.YAML)) {
             if (!yamlKeys.contains(profile.getSupplierRef()) && profile.isEnabled()) {
                 profile.setEnabled(false);
-                purchasingProfile.republishIfChanged(vendorIdsOf(profile), () -> profileRepository.save(profile));
+                eventPublisher.publishEvent(new VendorProfilesChanging(vendorIdsOf(profile)));
+                profileRepository.save(profile);
+                eventPublisher.publishEvent(new VendorProfilesChanged(vendorIdsOf(profile)));
             }
         }
     }

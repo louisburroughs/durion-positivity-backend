@@ -15,11 +15,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
+import com.positivity.supplier.internal.event.VendorProfilesChanged;
+import com.positivity.supplier.internal.event.VendorProfilesChanging;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * A vendor's designated purchasing profile (CAP:550 #2712, the Order ruling on #2682): the transmission profile a
@@ -31,9 +35,10 @@ import org.springframework.stereotype.Component;
  * ruling); until then the vendor's administrator keeps one purchasing profile enabled.
  *
  * <p>Whenever a profile change can move a vendor's designation (create, update, re-point, enable, disable, delete,
- * YAML reconciliation), the change runs through {@link #republishIfChanged}: the designation is read before and
- * after, and a vendor whose channel changed is republished with a higher {@code aggregateVersion}, as for any vendor
- * change (ADR-0044 §3). A change that leaves every designation alone publishes nothing.
+ * YAML reconciliation), the writer publishes {@link VendorProfilesChanging} before and {@link VendorProfilesChanged}
+ * after it: the designation is read at both, and a vendor whose channel moved is republished with a higher {@code
+ * aggregateVersion}, as for any vendor change (ADR-0044 §3). A change that leaves every designation alone publishes
+ * nothing. Events, not calls, because the vendor slice already depends on the service slice (ArchUnit cycle rule).
  */
 @Component
 @RequiredArgsConstructor
@@ -45,6 +50,8 @@ public class VendorPurchasingProfile {
     private final VendorFactPublisher factPublisher;
     private final EntityManager entityManager;
     private final Clock clock;
+
+    private static final Object SNAPSHOT_KEY = new Object();
 
     /** The alias of the vendor's designated purchasing profile, or empty when it has none (or several). */
     public @NonNull Optional<String> purchaseOrderSupplierRef(@NonNull UUID vendorId) {
@@ -60,31 +67,56 @@ public class VendorPurchasingProfile {
     }
 
     /**
-     * Runs {@code change} and republishes every vendor among {@code vendorIds} whose designation it moved. Call it
-     * from inside the transaction that makes the change; the republished fact is queued in that transaction.
+     * Before a profile write: remembers each touched vendor's designation for the rest of the transaction, so the
+     * matching {@link VendorProfilesChanged} knows what moved. A vendor already remembered in this transaction keeps
+     * its first snapshot (the state before any of the transaction's writes).
      */
-    public <T> T republishIfChanged(@NonNull Set<UUID> vendorIds, @NonNull Supplier<T> change) {
-        Map<UUID, Optional<String>> before = new HashMap<>();
-        for (UUID vendorId : vendorIds) {
-            before.put(vendorId, purchaseOrderSupplierRef(vendorId));
+    @EventListener
+    public void onChanging(@NonNull VendorProfilesChanging event) {
+        Map<UUID, Optional<String>> snapshot = snapshot();
+        for (UUID vendorId : event.vendorIds()) {
+            snapshot.computeIfAbsent(vendorId, this::purchaseOrderSupplierRef);
         }
-        T result = change.get();
-        entityManager.flush();
-        for (Map.Entry<UUID, Optional<String>> entry : before.entrySet()) {
-            Optional<String> after = purchaseOrderSupplierRef(entry.getKey());
-            if (!Objects.equals(entry.getValue(), after)) {
-                republish(entry.getKey());
-            }
-        }
-        return result;
     }
 
-    /** {@link #republishIfChanged} for a change with no result. */
-    public void republishIfChanged(@NonNull Set<UUID> vendorIds, @NonNull Runnable change) {
-        republishIfChanged(vendorIds, () -> {
-            change.run();
-            return null;
-        });
+    /**
+     * After the write: republishes every touched vendor whose designation differs from its snapshot (or from "none"
+     * when the write announced no snapshot). Runs in the publisher's transaction, so the fact is queued with the
+     * profile change.
+     */
+    @EventListener
+    public void onChanged(@NonNull VendorProfilesChanged event) {
+        entityManager.flush();
+        Map<UUID, Optional<String>> snapshot = snapshot();
+        for (UUID vendorId : event.vendorIds()) {
+            Optional<String> before = snapshot.getOrDefault(vendorId, Optional.empty());
+            Optional<String> after = purchaseOrderSupplierRef(vendorId);
+            if (!Objects.equals(before, after)) {
+                republish(vendorId);
+                snapshot.put(vendorId, after);
+            }
+        }
+    }
+
+    /** The transaction's snapshot of designations; a plain map outside a transaction (tests, bootstraps). */
+    @SuppressWarnings("unchecked")
+    private Map<UUID, Optional<String>> snapshot() {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return new HashMap<>();
+        }
+        Object bound = TransactionSynchronizationManager.getResource(SNAPSHOT_KEY);
+        if (bound == null) {
+            Map<UUID, Optional<String>> fresh = new HashMap<>();
+            TransactionSynchronizationManager.bindResource(SNAPSHOT_KEY, fresh);
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    TransactionSynchronizationManager.unbindResourceIfPossible(SNAPSHOT_KEY);
+                }
+            });
+            return fresh;
+        }
+        return (Map<UUID, Optional<String>>) bound;
     }
 
     /**

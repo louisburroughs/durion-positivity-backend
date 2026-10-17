@@ -80,11 +80,6 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
     @Autowired
     private SupplierVendorRepository vendorRepository;
 
-    @Autowired
-    private jakarta.persistence.EntityManager entityManager;
-
-    @Autowired
-    private java.time.Clock clock;
 
     private SupplierYamlBootstrap bootstrap;
 
@@ -118,15 +113,9 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 tenantIterator,
                 transactionManager,
                 meterRegistry,
-                // #2712: the designation republishes through the real publisher in SupplierProfileAdminServiceImplTest;
-                // here the fact is beside the point, so it is a mock.
-                new com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile(
-                        profileRepository,
-                        vendorRepository,
-                        org.mockito.Mockito.mock(
-                                com.positivity.supplier.internal.vendor.service.VendorFactPublisher.class),
-                        entityManager,
-                        clock));
+                // #2712: the profile-change events; nothing listens in this slice, the designation is asserted in
+                // SupplierProfileAdminServiceImplTest.
+                event -> {});
         michelinVendorId = vendor("MICHELIN").getVendorId();
         vendor("CONTI");
     }
@@ -546,14 +535,6 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
                 bindingRepository,
                 vendorRepository,
                 new SecretSchemeRegistry(List.of(new EnvSecretReferenceResolver())),
-                // #2712: the write is rejected before any designation can move, so the publisher is a mock.
-                new com.positivity.supplier.internal.vendor.service.VendorPurchasingProfile(
-                        profileRepository,
-                        vendorRepository,
-                        org.mockito.Mockito.mock(
-                                com.positivity.supplier.internal.vendor.service.VendorFactPublisher.class),
-                        entityManager,
-                        clock),
                 // A discarding publisher: these assertions are about YAML authority rejecting the write
                 // before anything is published. If a credential-invalidation event ever escaped a rejected
                 // mutation that would be a defect, and SupplierProfileAdminServiceImplTest is where it is
