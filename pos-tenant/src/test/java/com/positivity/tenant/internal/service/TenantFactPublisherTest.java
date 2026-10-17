@@ -50,6 +50,7 @@ class TenantFactPublisherTest {
                 .status(status)
                 .accountId(UUID.randomUUID())
                 .initialAdminEmail("owner@acme.example")
+                .locale("fr-CA")
                 .version(4L)
                 .build();
     }
@@ -75,7 +76,9 @@ class TenantFactPublisherTest {
         TenantCreatedV1 payload = (TenantCreatedV1) envelope.payload();
         assertThat(payload.status()).isEqualTo("PENDING");
         assertThat(payload.initialAdminEmail()).isEqualTo("owner@acme.example");
+        assertThat(payload.locale()).isEqualTo("fr-CA");
         assertThat(payload.projection().slug()).isEqualTo("acme");
+        assertThat(payload.projection().locale()).isEqualTo("fr-CA");
     }
 
     @Test
@@ -86,6 +89,7 @@ class TenantFactPublisherTest {
         assertThat(envelope.eventType()).isEqualTo(TenantEventTypes.SUSPENDED);
         assertThat(envelope.payload()).isInstanceOf(TenantProjectionV1.class);
         assertThat(((TenantProjectionV1) envelope.payload()).status()).isEqualTo("SUSPENDED");
+        assertThat(((TenantProjectionV1) envelope.payload()).locale()).isEqualTo("fr-CA");
     }
 
     @Test

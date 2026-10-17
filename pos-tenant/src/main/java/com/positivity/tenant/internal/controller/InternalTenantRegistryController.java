@@ -47,7 +47,8 @@ public class InternalTenantRegistryController {
                         tenant.getId(),
                         tenant.getSlug(),
                         tenant.getDisplayName(),
-                        tenant.getStatus().name()))
+                        tenant.getStatus().name(),
+                        tenant.getLocale()))
                 .toList());
     }
 }

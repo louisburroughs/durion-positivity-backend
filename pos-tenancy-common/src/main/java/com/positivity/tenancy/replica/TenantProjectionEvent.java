@@ -26,6 +26,10 @@ import tools.jackson.databind.JsonNode;
  * @param displayName human-readable name, may be absent
  * @param status raw lifecycle status
  */
+/**
+ * {@code locale} (BCP 47, CAP:550 S44, #2618): the tenant's language as pos-tenant records it; null on a fact published
+ * before the field existed, which means "unknown", never a default.
+ */
 public record TenantProjectionEvent(
         @NonNull String eventId,
         @NonNull String eventType,
@@ -33,7 +37,8 @@ public record TenantProjectionEvent(
         @NonNull UUID tenantId,
         @NonNull String slug,
         @Nullable String displayName,
-        @NonNull String status) {
+        @NonNull String status,
+        @Nullable String locale) {
 
     /** Event types whose payload is the public projection. */
     public static final Set<String> PROJECTION_EVENT_TYPES = Set.of(
@@ -77,7 +82,8 @@ public record TenantProjectionEvent(
                 tenantId,
                 slug,
                 payload.path("displayName").stringValue(null),
-                status));
+                status,
+                payload.path("locale").stringValue(null)));
     }
 
     /** True when the projection says the tenant may log in and be iterated. */

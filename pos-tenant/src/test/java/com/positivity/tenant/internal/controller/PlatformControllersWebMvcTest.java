@@ -45,7 +45,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * map to.
  */
 @WebMvcTest({PlatformTenantController.class, PlatformAccountController.class})
-@Import({SecurityConfig.class, WebCommonErrorAutoConfiguration.class, PlatformControllersWebMvcTest.SliceConfig.class})
+@Import({SecurityConfig.class, WebCommonErrorAutoConfiguration.class, com.positivity.tenant.internal.service.TenantLocales.class, PlatformControllersWebMvcTest.SliceConfig.class})
 class PlatformControllersWebMvcTest {
 
     private static final UUID TENANT_ID = UUID.fromString("01990000-0000-7000-8000-000000000123");
@@ -80,13 +80,14 @@ class PlatformControllersWebMvcTest {
                 .status(status)
                 .accountId(ACCOUNT_ID)
                 .initialAdminEmail("owner@acme.example")
+                .locale("en-US")
                 .build();
     }
 
     @Test
     void createTenantNeedsThePermission() throws Exception {
         String body = """
-                {"slug":"acme","displayName":"Acme","accountId":"%s","initialAdminEmail":"owner@acme.example"}
+                {"slug":"acme","displayName":"Acme","accountId":"%s","initialAdminEmail":"owner@acme.example","locale":"en-US"}
                 """.formatted(ACCOUNT_ID);
         mockMvc.perform(post("/v1/platform/tenants")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -113,7 +114,7 @@ class PlatformControllersWebMvcTest {
     @Test
     void createTenantValidatesTheSlugAndEmail() throws Exception {
         String body = """
-                {"slug":"Not Valid!","displayName":"Acme","accountId":"%s","initialAdminEmail":"nope"}
+                {"slug":"Not Valid!","displayName":"Acme","accountId":"%s","initialAdminEmail":"nope","locale":"en-US"}
                 """.formatted(ACCOUNT_ID);
         mockMvc.perform(authed(
                         post("/v1/platform/tenants")
@@ -331,5 +332,31 @@ class PlatformControllersWebMvcTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paymentProcessorCustomerTokenPresent").value(true))
                 .andExpect(jsonPath("$.paymentProcessorCustomerToken").doesNotExist());
+    }
+
+    @Test
+    void localeMustBeListedWithARegion() throws Exception {
+        // #2618: a bare language, an unlisted tag or a blank is 400 VALIDATION_ERROR with fieldErrors[locale].
+        for (String locale : java.util.List.of("fr", "de-DE", "")) {
+            String body = """
+                    {"slug":"acme","displayName":"Acme","accountId":"%s","initialAdminEmail":"owner@acme.example",\
+                    "locale":"%s"}
+                    """.formatted(ACCOUNT_ID, locale);
+            mockMvc.perform(authed(
+                            post("/v1/platform/tenants")
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(body),
+                            "platform:tenant:create"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                    .andExpect(jsonPath("$.fieldErrors[?(@.field == 'locale')]").exists());
+        }
+        mockMvc.perform(authed(
+                        patch("/v1/platform/tenants/{id}", TENANT_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"locale\":\"fr\"}"),
+                        "platform:tenant:update"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'locale')]").exists());
     }
 }

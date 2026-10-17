@@ -4,6 +4,7 @@ import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIR
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.positivity.tenant.internal.validation.SupportedLocale;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -60,4 +61,15 @@ public class TenantCreateRequest {
     @Email
     @Size(max = 320)
     private String initialAdminEmail;
+
+    @Schema(
+            description = "The shop's locale as a BCP 47 tag with a region (en-US, es-US, es-MX, fr-CA, fr-FR by"
+                    + " default; pos.tenant.supported-locales); case is normalised (fr-ca becomes fr-CA). A bare"
+                    + " language or an unlisted tag is 400 VALIDATION_ERROR with fieldErrors[locale]",
+            example = "en-US",
+            requiredMode = REQUIRED)
+    @NotBlank
+    @Size(max = 35)
+    @SupportedLocale
+    private String locale;
 }

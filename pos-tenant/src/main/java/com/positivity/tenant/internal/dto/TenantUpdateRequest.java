@@ -3,6 +3,7 @@ package com.positivity.tenant.internal.dto;
 import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.positivity.tenant.internal.validation.SupportedLocale;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -39,4 +40,13 @@ public class TenantUpdateRequest {
     @Schema(description = "New cell or region; omitted or null leaves it unchanged", requiredMode = NOT_REQUIRED)
     @Size(max = 64)
     private String cell;
+
+    @Schema(
+            description = "New locale, a BCP 47 tag with a region from pos.tenant.supported-locales; omitted or null"
+                    + " leaves it unchanged",
+            example = "fr-CA",
+            requiredMode = NOT_REQUIRED)
+    @Size(max = 35)
+    @SupportedLocale
+    private String locale;
 }
