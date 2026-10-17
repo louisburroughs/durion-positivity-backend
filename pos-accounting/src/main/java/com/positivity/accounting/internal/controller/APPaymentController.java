@@ -442,7 +442,10 @@ public class APPaymentController {
                             content =
                                     @Content(
                                             mediaType = "application/json",
-                                            examples = @ExampleObject(name = "ACH return from the statement", value = """
+                                            examples =
+                                                    @ExampleObject(
+                                                            name = "ACH return from the statement",
+                                                            value = """
                                                 {"requestId":"0199c2d4-8f1a-7b3c-9d4e-5f6a7b8c9d0e","returnDate":"2026-10-15",\
                                                 "failureCode":"R01","justification":"Bank statement 2026-10-15: ACH return R01 \
                                                 (insufficient funds) for PAY-2026-0412"}
