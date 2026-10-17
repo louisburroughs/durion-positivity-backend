@@ -425,8 +425,10 @@ class SettlementEventsListenerPaymentSettledTest {
                             any(),
                             org.mockito.ArgumentMatchers.eq(INVOICE_ID),
                             org.mockito.ArgumentMatchers.eq("CASH"));
-            verify(automaticPaymentApplicationService).applySettled(any(), any(), org.mockito.ArgumentMatchers.eq(EVENT_ID));
-            verify(ingestionRecorder, never()).recordSuspended(any(), any(), any(), any(), any(), any(), any(), any(), any());
+            verify(automaticPaymentApplicationService)
+                    .applySettled(any(), any(), org.mockito.ArgumentMatchers.eq(EVENT_ID));
+            verify(ingestionRecorder, never())
+                    .recordSuspended(any(), any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         @Test

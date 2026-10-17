@@ -41,8 +41,8 @@ final class CashRoundingFactCheck {
             return Optional.of("a cash tender with rounding must state amount, settledAmount and cashRoundingAmount");
         }
         if (settled.subtract(amount).compareTo(rounding) != 0) {
-            return Optional.of("cashRoundingAmount " + rounding + " is not settledAmount " + settled + " minus amount "
-                    + amount);
+            return Optional.of(
+                    "cashRoundingAmount " + rounding + " is not settledAmount " + settled + " minus amount " + amount);
         }
         if (increment == null) {
             if (rounding.signum() != 0) {

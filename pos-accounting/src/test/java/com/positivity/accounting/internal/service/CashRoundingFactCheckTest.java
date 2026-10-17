@@ -39,7 +39,8 @@ class CashRoundingFactCheckTest {
 
     @Test
     void cashRoundedDownIsValidWithANegativeRounding() {
-        assertThat(CashRoundingFactCheck.problem(fact("CASH", "10.02", "10.00", "-0.02", "0.05"))).isEmpty();
+        assertThat(CashRoundingFactCheck.problem(fact("CASH", "10.02", "10.00", "-0.02", "0.05")))
+                .isEmpty();
     }
 
     @Test
@@ -62,12 +63,14 @@ class CashRoundingFactCheckTest {
 
     @Test
     void aTripleThatDoesNotAddUpIsInvalid() {
-        assertThat(CashRoundingFactCheck.problem(fact("CASH", "9.98", "10.00", "0.03", "0.05"))).isPresent();
+        assertThat(CashRoundingFactCheck.problem(fact("CASH", "9.98", "10.00", "0.03", "0.05")))
+                .isPresent();
     }
 
     @Test
     void aRoundingWithoutAnIncrementIsInvalid() {
-        assertThat(CashRoundingFactCheck.problem(fact("CASH", "9.98", "10.00", "0.02", null))).isPresent();
+        assertThat(CashRoundingFactCheck.problem(fact("CASH", "9.98", "10.00", "0.02", null)))
+                .isPresent();
     }
 
     @Test
@@ -82,6 +85,7 @@ class CashRoundingFactCheckTest {
         PaymentSettledV1 legacy = fact("CASH", "9.98", null, null, null);
         assertThat(CashRoundingFactCheck.problem(legacy)).isEmpty();
         assertThat(CashRoundingFactCheck.roundingOf(legacy)).isZero();
-        assertThat(CashRoundingFactCheck.problem(fact("CARD", "150.00", null, null, null))).isEmpty();
+        assertThat(CashRoundingFactCheck.problem(fact("CARD", "150.00", null, null, null)))
+                .isEmpty();
     }
 }

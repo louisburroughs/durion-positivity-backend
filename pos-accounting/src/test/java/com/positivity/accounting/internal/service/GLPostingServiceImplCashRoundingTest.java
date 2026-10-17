@@ -39,7 +39,8 @@ class GLPostingServiceImplCashRoundingTest {
         Clock clock = Clock.fixed(Instant.parse("2026-10-17T12:00:00Z"), ZoneOffset.UTC);
         service = new GLPostingServiceImpl(clock, TestZoneResolvers.utc(clock), journalEntryService);
         UUID entryId = UUID.fromString("00000000-0000-0000-0000-00000000e001");
-        JournalEntryResponse created = JournalEntryResponse.builder().journalEntryId(entryId).build();
+        JournalEntryResponse created =
+                JournalEntryResponse.builder().journalEntryId(entryId).build();
         when(journalEntryService.createJournalEntry(any())).thenReturn(created);
         when(journalEntryService.postJournalEntry(eq(entryId), any())).thenReturn(created);
     }
