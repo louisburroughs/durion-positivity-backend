@@ -191,6 +191,10 @@ payment:
     # the same paymentRef, whose idempotency key replays the outcome.
     connect-timeout: ${PAYMENT_GATEWAY_CONNECT_TIMEOUT:5s}
     read-timeout: ${PAYMENT_GATEWAY_READ_TIMEOUT:20s}
+    # Local provider only (payment.gateway.provider=local, #2642): how long after a charge a "-PENDING" payment
+    # reference stays PENDING and a "-RETURN" one is still SUCCEEDED, before a re-read answers SUCCEEDED / FAILED.
+    local:
+      settle-after: ${PAYMENT_GATEWAY_LOCAL_SETTLE_AFTER:PT1M}
 
 stripe:
   api-key: ${STRIPE_API_KEY}

@@ -5,6 +5,7 @@ import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Charge;
 import com.stripe.net.RequestOptions;
+import com.stripe.param.ChargeSearchParams;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.Optional;
@@ -42,6 +43,9 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
     private static final Logger log = LoggerFactory.getLogger(StripePaymentGateway.class);
 
     private final Optional<String> connectAccount;
+    /** Metadata key carrying the payment reference (the idempotency key), searched by {@link #findByReference}. */
+    static final String METADATA_PAYMENT_REF = "payment_ref";
+
     private final Duration connectTimeout;
     private final Duration readTimeout;
 
@@ -96,14 +100,8 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
 
             // Map Stripe charge status to gateway response
             GatewayPaymentStatus status = mapChargeStatus(charge);
-            String failureReason = charge.getFailureMessage();
 
-            var response = new GatewayPaymentResponse(
-                    charge.getId(),
-                    status,
-                    charge.getId(), // authorization code = Stripe charge ID
-                    failureReason,
-                    charge.toJson());
+            var response = toResponse(charge, status);
 
             log.info(
                     "Stripe payment succeeded. Charge ID: {}, Amount: {} {}, Status: {}",
@@ -136,10 +134,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             }
 
             GatewayPaymentStatus status = mapChargeStatus(charge);
-            var response = new GatewayPaymentResponse(
-                    charge.getId(), status, charge.getId(), charge.getFailureMessage(), charge.toJson());
-
-            return Optional.of(response);
+            return Optional.of(toResponse(charge, status));
 
         } catch (com.stripe.exception.InvalidRequestException e) {
             // Charge not found
@@ -149,6 +144,47 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
             throw new PaymentGatewayException(
                     "Failed to retrieve Stripe charge status for charge ID: " + transactionId, e);
         }
+    }
+
+    @Override
+    public @NonNull Optional<GatewayPaymentResponse> findByReference(@NonNull String paymentRef)
+            throws PaymentGatewayException {
+        try {
+            log.debug("Searching Stripe charge by payment reference: {}", paymentRef);
+            var result = Charge.search(
+                    ChargeSearchParams.builder()
+                            .setQuery(referenceQuery(paymentRef))
+                            .setLimit(1L)
+                            .build(),
+                    requestOptions(null));
+            if (result == null || result.getData() == null || result.getData().isEmpty()) {
+                return Optional.empty();
+            }
+            Charge charge = result.getData().get(0);
+            return Optional.of(toResponse(charge, mapChargeStatus(charge)));
+        } catch (StripeException e) {
+            throw new PaymentGatewayException("Failed to search Stripe charges for payment reference: " + paymentRef, e);
+        }
+    }
+
+    /** Stripe search query for the charge stamped with this payment reference (a quote or backslash in it is escaped). */
+    @NonNull
+    static String referenceQuery(@NonNull String paymentRef) {
+        String escaped = paymentRef.replace("\\", "\\\\").replace("'", "\\'");
+        return "metadata['" + METADATA_PAYMENT_REF + "']:'" + escaped + "'";
+    }
+
+    /** Map a Stripe charge (authorization code = the charge id) to the gateway response. */
+    @NonNull
+    GatewayPaymentResponse toResponse(@NonNull Charge charge, @NonNull GatewayPaymentStatus status) {
+        return GatewayPaymentResponse.builder()
+                .transactionId(charge.getId())
+                .status(status)
+                .authorizationCode(charge.getId())
+                .failureReason(charge.getFailureMessage())
+                .failureCode(charge.getFailureCode())
+                .rawResponse(charge.toJson())
+                .build();
     }
 
     /**
@@ -180,7 +216,7 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
     /**
      * Map Stripe charge status to PaymentGatewayProvider status enum.
      */
-    private GatewayPaymentStatus mapChargeStatus(@NonNull Charge charge) {
+    GatewayPaymentStatus mapChargeStatus(@NonNull Charge charge) {
         if (Boolean.TRUE.equals(charge.getPaid())) {
             return switch (charge.getStatus()) {
                 case "succeeded" -> GatewayPaymentStatus.SUCCEEDED;
@@ -212,8 +248,9 @@ public class StripePaymentGateway implements PaymentGatewayProvider {
     /**
      * Build Stripe metadata map from request.
      */
-    private java.util.Map<String, String> buildMetadata(@NonNull GatewayPaymentRequest request) {
+    java.util.Map<String, String> buildMetadata(@NonNull GatewayPaymentRequest request) {
         var metadata = new java.util.HashMap<String, String>();
+        metadata.put(METADATA_PAYMENT_REF, request.getIdempotencyKey());
         metadata.put("vendor_id", request.getVendorId());
         metadata.put("payment_method", request.getPaymentMethod().toString());
         if (request.getMetadata() != null && !request.getMetadata().isEmpty()) {

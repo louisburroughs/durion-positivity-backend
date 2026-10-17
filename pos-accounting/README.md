@@ -1464,6 +1464,15 @@ and whose key replays the original outcome, or an operator reconciles it (`recon
 leaves the row `GATEWAY_FAILED` (the paymentRef is spent at the gateway too). If `idle_in_transaction_session_timeout` is ever set for pos-accounting, it must exceed
 connect + read. The automatic plan still locks every `APPROVED` bill of the vendor.
 
+**Gateway port and the local provider (#2642).** `PaymentGatewayProvider.findByReference(paymentRef)` answers the charge
+the gateway holds under a payment reference (the idempotency key), or empty: it resolves a `GATEWAY_PENDING` orphan whose
+transaction id was never recorded. Stripe stamps `metadata.payment_ref` on every charge and finds it with charge search;
+a response carries the gateway's own `failureCode` (Stripe `failure_code`, an ACH return code) beside the free-text
+`failureReason`. `payment.gateway.provider=local` (the `dev` default) selects `LocalPaymentGateway`, deterministic from the
+`paymentRef` suffix: `-PENDING` stays PENDING until `payment.gateway.local.settle-after` (`PAYMENT_GATEWAY_LOCAL_SETTLE_AFTER`,
+default `PT1M`) has elapsed, then SUCCEEDED; `-DECLINE` is DECLINED (`LOCAL_DECLINE`); `-RETURN` is SUCCEEDED, then FAILED
+(`LOCAL_RETURN`) on a re-read after `settle-after`; anything else SUCCEEDED. `findByReference` answers the settled outcome.
+
 **Data.** V19 makes `ap_payment.payment_date` a `DATE`, adds the foreign key `(tenant_id, bank_account_id)` →
 `gl_account` and the two override columns, drops `net_amount`, and retires the `AP_PAYMENT_GL_POSTING` events. Same
 table, same row-level security policy.
@@ -2000,6 +2009,7 @@ fallback code. Add a row in the same pull request as the controller or advice th
 | `pos.accounting.outbox.send-timeout-ms`             | `10000`              | Broker ack timeout per outbox row (#1843) |
 | `stripe.api-key`                                    | required             | Stripe API key for payment processing    |
 | `payment.gateway.connect-timeout` / `payment.gateway.read-timeout` | `5s` / `20s` | Connect and read timeouts of every gateway call, on its Stripe `RequestOptions` (`PAYMENT_GATEWAY_CONNECT_TIMEOUT`, `PAYMENT_GATEWAY_READ_TIMEOUT`; #2627) |
+| `payment.gateway.provider` / `payment.gateway.local.settle-after` | `stripe` (`local` in `dev`) / `PT1M` | Gateway adapter (`PAYMENT_GATEWAY_PROVIDER`), and the delay before a local `-PENDING` / `-RETURN` charge settles (`PAYMENT_GATEWAY_LOCAL_SETTLE_AFTER`; #2642) |
 | `accounting.ap.lock-timeout`                        | `5s`                 | `SET LOCAL lock_timeout` on the AP pay command, its retry and the vendor-bill decisions; a longer wait is 409 `LOCK_TIMEOUT` (`ACCOUNTING_AP_LOCK_TIMEOUT`; #2627) |
 | `pos.accounting.kafka.tenant-events-topic`          | `tenant.events.v1`   | Tenant lifecycle facts; `tenant.created` provisions the new tenant from the accounting template (#2526) |
 | `pos.accounting.kafka.tenant-events-consumer-group` | `pos-accounting-tenant-events` | Consumer group of the `tenant.created` listener; reads from the earliest offset (#2526) |

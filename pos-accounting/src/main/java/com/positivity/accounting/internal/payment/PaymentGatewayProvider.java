@@ -38,6 +38,20 @@ public interface PaymentGatewayProvider {
     Optional<GatewayPaymentResponse> getPaymentStatus(@NonNull String transactionId) throws PaymentGatewayException;
 
     /**
+     * Find the charge the gateway holds under a payment reference. The pay command's idempotency key is its
+     * {@code paymentRef}, so this answers "did the gateway charge this payment?" without a transaction id. It exists for
+     * the {@code GATEWAY_PENDING} orphan: the call timed out or the process died after the charge was sent, so the
+     * transaction id was never recorded, and settlement or an operator needs to learn the outcome from the reference
+     * alone.
+     *
+     * @param paymentRef the payment reference (the idempotency key of the charge)
+     * @return the charge held under this reference, or empty when the gateway holds none
+     * @throws PaymentGatewayException if the lookup fails (the outcome stays unknown)
+     */
+    @NonNull
+    Optional<GatewayPaymentResponse> findByReference(@NonNull String paymentRef) throws PaymentGatewayException;
+
+    /**
      * Get a human-readable name for this gateway provider.
      *
      * @return provider name (e.g., "Stripe", "Square")
