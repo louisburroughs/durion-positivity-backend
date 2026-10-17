@@ -48,6 +48,12 @@ class ReplenishmentSourcingScanTest {
     private ReplenishmentService replenishmentService;
 
     @Autowired
+    private com.positivity.inventory.internal.repository.ExtSupplierVendorReplicaRepository vendorCopyRepository;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.VendorFeedMappingRepository vendorFeedMappingRepository;
+
+    @Autowired
     private ReplenishmentPolicyRepository policyRepository;
 
     @Autowired
@@ -313,9 +319,15 @@ class ReplenishmentSourcingScanTest {
 
     private void seedManufacturerFeed(UUID productId, int availableQty) {
         Instant asOf = Instant.now();
+        UUID manufacturerId = UUID.randomUUID();
+        FeedVendorMappings.mapActive(
+                vendorCopyRepository,
+                vendorFeedMappingRepository,
+                com.positivity.inventory.internal.enums.FeedVendorType.MANUFACTURER,
+                manufacturerId.toString());
         normalizedAvailabilityRepository.save(NormalizedAvailability.builder()
                 .productId(productId)
-                .manufacturerId(UUID.randomUUID())
+                .manufacturerId(manufacturerId)
                 .manufacturerPartNumber("MPN-F5")
                 .availableQty(availableQty)
                 .uom("EA")

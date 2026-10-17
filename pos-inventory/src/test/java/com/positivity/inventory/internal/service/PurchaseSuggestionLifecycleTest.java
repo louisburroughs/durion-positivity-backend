@@ -48,8 +48,23 @@ class PurchaseSuggestionLifecycleTest {
     @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
     private PurchaseOrderCommandPublisher purchaseOrderCommandPublisher;
 
+    /**
+     * CAP:550 S36 (#2525): without an outbox writer the real publisher now refuses instead of dropping the request;
+     * the test profile wires no outbox, so the spy swallows the call and the captor still sees the command.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void publisherIsInertHere() {
+        org.mockito.Mockito.doNothing().when(purchaseOrderCommandPublisher).request(org.mockito.ArgumentMatchers.any());
+    }
+
     @Autowired
     private PurchaseSuggestionService purchaseSuggestionService;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.ExtSupplierVendorReplicaRepository vendorCopyRepository;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.VendorFeedMappingRepository vendorFeedMappingRepository;
 
     @Autowired
     private PurchaseSuggestionRepository suggestionRepository;
@@ -83,13 +98,20 @@ class PurchaseSuggestionLifecycleTest {
             UUID productId,
             int quantity,
             Integer vendorPackSize) {
+        if (vendorRefId != null) {
+            FeedVendorMappings.mapActive(
+                    vendorCopyRepository,
+                    vendorFeedMappingRepository,
+                    com.positivity.inventory.internal.enums.FeedVendorType.MANUFACTURER,
+                    vendorRefId.toString());
+        }
         return suggestionRepository.save(PurchaseSuggestion.builder()
                 .policyId(UUID.randomUUID())
                 .itemSKU(productId.toString())
                 .locationId(locationId)
                 .suggestedQuantity(quantity)
                 .suggestedVendorType(vendorRefId != null ? SuggestedVendorType.MANUFACTURER : null)
-                .vendorRefId(vendorRefId)
+                .feedVendorRef(vendorRefId != null ? vendorRefId.toString() : null)
                 .unitCostMinor(unitCostMinor)
                 .unitCostCurrency(unitCostMinor != null ? "USD" : null)
                 .vendorPackSize(vendorPackSize)

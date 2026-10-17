@@ -53,6 +53,7 @@ import com.positivity.inventory.internal.exception.TransferQuantityExceededExcep
 import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentTypeException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
+import com.positivity.inventory.internal.exception.VendorFeedMappingException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
@@ -328,9 +329,15 @@ class InventoryGlobalExceptionHandlerTest {
                     Named.of("handlePurchaseSuggestionConversion", (HandlerInvocation)
                             () -> handler.handlePurchaseSuggestionConversion(
                                     PurchaseSuggestionConversionException.vendorMismatch())),
+                    Named.of(
+                            "handlePurchaseOrderRequestUnavailable", (HandlerInvocation)
+                                    () -> handler.handlePurchaseOrderRequestUnavailable(new com.positivity.inventory
+                                            .internal.exception.PurchaseOrderRequestUnavailableException())),
                     Named.of("handlePurchaseSuggestionState", (HandlerInvocation)
                             () -> handler.handlePurchaseSuggestionState(new PurchaseSuggestionStateException(
                                     UUID.randomUUID(), PurchaseSuggestionStatus.CONVERTED, "accept"))),
+                    Named.of("handleVendorFeedMapping", (HandlerInvocation) () -> handler.handleVendorFeedMapping(
+                            VendorFeedMappingException.vendorNotFound(UUID.randomUUID()))),
                     Named.of("handleInvalidParamCombination", (HandlerInvocation) () ->
                             handler.handleInvalidParamCombination(new InvalidParamCombinationException("bad combo"))),
                     Named.of("handleShortageResolution", (HandlerInvocation) () -> handler.handleShortageResolution(

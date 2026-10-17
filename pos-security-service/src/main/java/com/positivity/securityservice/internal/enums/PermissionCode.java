@@ -1070,13 +1070,15 @@ public enum PermissionCode {
     ORDER__PURCHASE_ORDER__REOPEN(564, "order:purchase_order:reopen"),
     // ── Platform (new) ─────────────────────────────────────────────────────────
     PLATFORM__READING_TIER__MANAGE(565, "platform:reading_tier:manage"),
-    PLATFORM__READING_TIER__READ(566, "platform:reading_tier:read");
+    PLATFORM__READING_TIER__READ(566, "platform:reading_tier:read"),
+    // ── Inventory (new) ────────────────────────────────────────────────────────
+    INVENTORY__VENDOR_FEED_MAPPING__MANAGE(567, "inventory:vendor_feed_mapping:manage");
 
     /**
      * Current catalog version. Increment when new permissions are added to a new
      * batch.
      */
-    public static final int CATALOG_VERSION = 108;
+    public static final int CATALOG_VERSION = 109;
 
     private static final Map<String, PermissionCode> BY_CODE =
             Stream.of(values()).collect(Collectors.toUnmodifiableMap(PermissionCode::code, pc -> pc));

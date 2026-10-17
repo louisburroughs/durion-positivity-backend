@@ -2,6 +2,7 @@ package com.positivity.inventory.internal.service;
 
 import com.positivity.domainevents.supplier.SupplierStockReportLine;
 import com.positivity.domainevents.supplier.SupplierStockReportUpdatedV1;
+import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.entity.SupplierStockHint;
 import com.positivity.inventory.internal.entity.SupplierStockSnapshotChunk;
@@ -33,7 +34,10 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Consumes {@code supplier.stockreport.updated} from {@code supplier.events.v1} into supplier
- * availability hints (CAP-322, #1312; producer #1228).
+ * availability hints (CAP-322, #1312; producer #1228), and {@code supplier.vendor.updated} from the same
+ * topic into the vendor copy through {@link SupplierVendorReplicaWriter} (CAP:550 S36, #2525). Every
+ * event the listener sees is marked processed under owner {@code supplier}, which is what the
+ * {@link SupplierManifestListener} reconciliation counts.
  *
  * <p>A stock report is what a <strong>vendor</strong> says about its own warehouse. It is not owned
  * stock: nothing written here enters valuation (ADR-0048) or on-hand ATP, which is guaranteed by
@@ -74,7 +78,7 @@ import tools.jackson.databind.ObjectMapper;
 @Slf4j
 @Component
 @KafkaRails
-public class SupplierStockHintEventsListener {
+public class SupplierEventsListener {
 
     /** Producing domain, per the repo-wide processed_events convention. */
     static final String OWNER = "supplier";
@@ -85,17 +89,19 @@ public class SupplierStockHintEventsListener {
     private final SupplierStockHintRepository hintRepository;
     private final SupplierStockSnapshotReceiptRepository receiptRepository;
     private final SupplierStockSnapshotChunkRepository chunkRepository;
+    private final SupplierVendorReplicaWriter vendorReplicaWriter;
 
     /** Runs the handler with its processed mark in one transaction of their own; see the class doc. */
     private final TransactionTemplate handlerTransaction;
 
-    public SupplierStockHintEventsListener(
+    public SupplierEventsListener(
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
             SupplierStockHintRepository hintRepository,
             SupplierStockSnapshotReceiptRepository receiptRepository,
             SupplierStockSnapshotChunkRepository chunkRepository,
+            SupplierVendorReplicaWriter vendorReplicaWriter,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
@@ -103,6 +109,7 @@ public class SupplierStockHintEventsListener {
         this.hintRepository = hintRepository;
         this.receiptRepository = receiptRepository;
         this.chunkRepository = chunkRepository;
+        this.vendorReplicaWriter = vendorReplicaWriter;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -132,6 +139,8 @@ public class SupplierStockHintEventsListener {
             handlerTransaction.executeWithoutResult(_ -> {
                 if (SupplierStockReportUpdatedV1.EVENT_TYPE.equals(eventType)) {
                     applyStockReportChunk(envelope, eventId);
+                } else if (SupplierVendorUpdatedV1.EVENT_TYPE.equals(eventType)) {
+                    vendorReplicaWriter.apply(envelope, eventId);
                 } else {
                     // The PRICAT feed shares this topic and is pos-catalog's to apply. Recording the
                     // eventId keeps a redelivery from re-walking this path.

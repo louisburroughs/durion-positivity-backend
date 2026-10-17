@@ -31,6 +31,7 @@ import com.positivity.inventory.internal.exception.OverReceiptNotPermittedExcept
 import com.positivity.inventory.internal.exception.PartMatchPermissionException;
 import com.positivity.inventory.internal.exception.PickScanMismatchException;
 import com.positivity.inventory.internal.exception.ProductNotFoundException;
+import com.positivity.inventory.internal.exception.PurchaseOrderRequestUnavailableException;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionConversionException;
 import com.positivity.inventory.internal.exception.PurchaseSuggestionStateException;
 import com.positivity.inventory.internal.exception.PutawayValidationException;
@@ -57,6 +58,7 @@ import com.positivity.inventory.internal.exception.TransferQuantityExceededExcep
 import com.positivity.inventory.internal.exception.UnsupportedSourceDocumentTypeException;
 import com.positivity.inventory.internal.exception.UomConversionUndefinedException;
 import com.positivity.inventory.internal.exception.ValuationAsOfSkuCapExceededException;
+import com.positivity.inventory.internal.exception.VendorFeedMappingException;
 import com.positivity.inventory.internal.exception.WorkorderClosedException;
 import com.positivity.inventory.internal.exception.WorkorderConsumptionException;
 import com.positivity.inventory.internal.exception.WorkorderNotReturnableException;
@@ -501,6 +503,12 @@ public class InventoryGlobalExceptionHandler {
         return build(HttpStatus.valueOf(422), SerialNotAvailableException.ERROR_CODE, ex.getMessage());
     }
 
+    @ExceptionHandler(PurchaseOrderRequestUnavailableException.class)
+    public ResponseEntity<ApiError> handlePurchaseOrderRequestUnavailable(PurchaseOrderRequestUnavailableException ex) {
+        // CAP:550 S36 (#2525): no outbox writer, so the request cannot be queued; the conversion rolled back.
+        return build(HttpStatus.valueOf(422), PurchaseOrderRequestUnavailableException.CODE, ex.getMessage());
+    }
+
     @ExceptionHandler(PurchaseSuggestionConversionException.class)
     public ResponseEntity<ApiError> handlePurchaseSuggestionConversion(PurchaseSuggestionConversionException ex) {
         // odoo-parity F4 (#1044): deterministic per-case 422 for convert preconditions
@@ -514,6 +522,12 @@ public class InventoryGlobalExceptionHandler {
         // odoo-parity F4 (#1044): accept/dismiss from a terminal status is a 409
         // conflict.
         return build(HttpStatus.CONFLICT, PurchaseSuggestionStateException.ERROR_CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(VendorFeedMappingException.class)
+    public ResponseEntity<ApiError> handleVendorFeedMapping(VendorFeedMappingException ex) {
+        // CAP:550 S36 (#2525): per-case 400/404/409/422 for the vendor feed mapping endpoints, each with its own code.
+        return build(ex.getStatus(), ex.getErrorCode(), ex.getMessage());
     }
 
     @ExceptionHandler(InvalidParamCombinationException.class)

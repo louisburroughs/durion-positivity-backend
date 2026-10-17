@@ -58,10 +58,39 @@ public class PurchaseSuggestionResponse {
     private String suggestedVendorType;
 
     @Schema(
-            description = "Selected manufacturer or distributor identifier; null when no vendor was selectable",
+            description = "The feed's own vendor id: the manufacturer UUID or the distributor id as its feed"
+                    + " carries it; null when no vendor was selectable",
             example = "01980003-0000-7000-8000-000000000004",
             requiredMode = NOT_REQUIRED)
-    private UUID vendorRefId;
+    private String feedVendorRef;
+
+    @Schema(
+            description = "The pos-supplier vendor the feed vendor is mapped to; null while it is unmapped",
+            example = "01980003-0000-7000-8000-000000000009",
+            requiredMode = NOT_REQUIRED)
+    private UUID vendorId;
+
+    @Schema(
+            description = "The mapped vendor's number from the local vendor copy; null while unmapped or when the"
+                    + " vendor is not in the copy",
+            example = "V-000001",
+            requiredMode = NOT_REQUIRED)
+    private String vendorNumber;
+
+    @Schema(
+            description = "The mapped vendor's display name from the local vendor copy; null while unmapped or when"
+                    + " the vendor is not in the copy",
+            example = "Michelin North America",
+            requiredMode = NOT_REQUIRED)
+    private String vendorDisplayName;
+
+    @Schema(
+            description = "The mapped vendor's status from the local vendor copy; null while unmapped or when the"
+                    + " vendor is not in the copy",
+            example = "ACTIVE",
+            allowableValues = {"ACTIVE", "INACTIVE"},
+            requiredMode = NOT_REQUIRED)
+    private String vendorStatus;
 
     @Schema(
             description = "Per-unit cost in minor currency units from the vendor feed; null when the feed"
@@ -117,6 +146,22 @@ public class PurchaseSuggestionResponse {
             example = "01980003-0000-7000-8000-000000000005",
             requiredMode = NOT_REQUIRED)
     private UUID convertedPurchaseOrderId;
+
+    @Schema(
+            description = "CAP:550 S36: the requested order's status as pos-inventory's copy of pos-order shows it"
+                    + " (DRAFT, APPROVED, ...); null until the order's fact arrives or when not converted",
+            nullable = true,
+            example = "DRAFT")
+    private String orderStatus;
+
+    @Schema(
+            description = "CAP:550 S36: computed on read for a CONVERTED suggestion; ORDER_VENDOR_INACTIVE or"
+                    + " ORDER_VENDOR_NOT_IN_COPY when the open order's vendor would be refused at approval or"
+                    + " transmission, ORDER_NOT_PLACED when no order has appeared within the placement grace;"
+                    + " null otherwise",
+            nullable = true,
+            example = "ORDER_NOT_PLACED")
+    private String orderAttention;
 
     @Schema(description = "Creation timestamp", example = "2026-07-23T09:30:00Z", requiredMode = REQUIRED)
     private Instant createdAt;

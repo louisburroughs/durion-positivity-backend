@@ -315,7 +315,7 @@ class JwtServiceImplLocationScopeTest {
         // security:audit_export:webhook_manage at bit 563 (105 → 106).
         // What this test guards is that the location-scope claims are not what moved it: they ride
         // the same catalog version.
-        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(108);
+        assertThat(PermissionCode.CATALOG_VERSION).isEqualTo(109);
         Claims claims = claims(token);
         assertThat(claims.get(JwtService.PERM_VER, Integer.class)).isEqualTo(PermissionCode.CATALOG_VERSION);
         // Both scope bitsets decode under that same version: same codec, same bit indexes.

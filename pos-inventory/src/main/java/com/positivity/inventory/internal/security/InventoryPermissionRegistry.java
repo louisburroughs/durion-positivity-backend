@@ -206,6 +206,12 @@ public class InventoryPermissionRegistry {
      */
     public static final String REPLENISHMENT_MANAGE = "inventory:replenishment:manage";
 
+    /**
+     * Maintain the mapping from manufacturer and distributor feed vendors to pos-supplier vendors, which decides the
+     * vendor a purchase suggestion names (CAP:550 S36, issue #2525).
+     */
+    public static final String VENDOR_FEED_MAPPING_MANAGE = "inventory:vendor_feed_mapping:manage";
+
     // ==================== LOT PERMISSIONS ====================
 
     /**
@@ -394,6 +400,13 @@ public class InventoryPermissionRegistry {
                         MEDIUM_RISK,
                         "Issue #1025"),
 
+                // Vendor feed mapping permissions (1)
+                permission(
+                        VENDOR_FEED_MAPPING_MANAGE,
+                        "Maintain the mapping from manufacturer and distributor feed vendors to pos-supplier vendors",
+                        MEDIUM_RISK,
+                        "Issue #2525"),
+
                 // Lot permissions (1)
                 permission(
                         LOT_MANAGE,
@@ -536,6 +549,13 @@ public class InventoryPermissionRegistry {
      */
     public static List<String> replenishmentPermissions() {
         return Arrays.asList(REPLENISHMENT_MANAGE);
+    }
+
+    /**
+     * Vendor feed mapping permissions
+     */
+    public static List<String> vendorFeedMappingPermissions() {
+        return Arrays.asList(VENDOR_FEED_MAPPING_MANAGE);
     }
 
     /**

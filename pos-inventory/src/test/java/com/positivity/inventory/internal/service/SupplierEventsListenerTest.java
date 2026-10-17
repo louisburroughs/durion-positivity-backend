@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.positivity.inventory.internal.entity.ExtSupplierVendorReplica;
 import com.positivity.inventory.internal.entity.ProcessedEvent;
 import com.positivity.inventory.internal.entity.SupplierStockHint;
 import com.positivity.inventory.internal.entity.SupplierStockSnapshotChunk;
@@ -17,10 +18,14 @@ import com.positivity.inventory.internal.entity.SupplierStockSnapshotReceipt;
 import com.positivity.inventory.internal.enums.SupplierHintAsOfSource;
 import com.positivity.inventory.internal.enums.SupplierHintIdentityKind;
 import com.positivity.inventory.internal.enums.SupplierHintResolutionStatus;
+import com.positivity.inventory.internal.enums.VendorStatus;
+import com.positivity.inventory.internal.repository.ExtSupplierVendorReplicaRepository;
 import com.positivity.inventory.internal.repository.ProcessedEventRepository;
 import com.positivity.inventory.internal.repository.SupplierStockHintRepository;
 import com.positivity.inventory.internal.repository.SupplierStockSnapshotChunkRepository;
 import com.positivity.inventory.internal.repository.SupplierStockSnapshotReceiptRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -31,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -43,7 +49,7 @@ import tools.jackson.databind.ObjectMapper;
  * distinction, supersession that never zeroes an omitted article, chunk-gap visibility, and
  * transient database errors rethrown for container retry.
  */
-class SupplierStockHintEventsListenerTest {
+class SupplierEventsListenerTest {
 
     private static final Clock TEST_CLOCK = Clock.fixed(Instant.parse("2026-08-14T12:00:00Z"), ZoneOffset.UTC);
     private static final UUID SNAPSHOT_ID = UUID.fromString("018f0000-0000-7000-8000-0000000005a1");
@@ -56,17 +62,25 @@ class SupplierStockHintEventsListenerTest {
     private final SupplierStockSnapshotReceiptRepository receipts = mock(SupplierStockSnapshotReceiptRepository.class);
     private final SupplierStockSnapshotChunkRepository chunks = mock(SupplierStockSnapshotChunkRepository.class);
 
-    private SupplierStockHintEventsListener listener;
+    private final ExtSupplierVendorReplicaRepository vendors = mock(ExtSupplierVendorReplicaRepository.class);
+
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
+    private SupplierEventsListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new SupplierStockHintEventsListener(
+        @SuppressWarnings("unchecked")
+        ObjectProvider<MeterRegistry> meters = mock(ObjectProvider.class);
+        when(meters.getIfAvailable()).thenReturn(meterRegistry);
+        listener = new SupplierEventsListener(
                 TEST_CLOCK,
                 new ObjectMapper(),
                 processedEvents,
                 hints,
                 receipts,
                 chunks,
+                new SupplierVendorReplicaWriter(TEST_CLOCK, new ObjectMapper(), vendors, meters),
                 org.mockito.Mockito.mock(PlatformTransactionManager.class));
     }
 
@@ -147,7 +161,7 @@ class SupplierStockHintEventsListenerTest {
     @Test
     @DisplayName("a redelivered event is not applied twice")
     void replayed_event_is_skipped() {
-        when(processedEvents.existsByEventIdAndOwner("evt-1", SupplierStockHintEventsListener.OWNER))
+        when(processedEvents.existsByEventIdAndOwner("evt-1", SupplierEventsListener.OWNER))
                 .thenReturn(true);
 
         listener.onSupplierEvent(chunkEvent("evt-1", 1, 1, 1, line("4012345678901", "V-1", "B-1", "12")));
@@ -484,6 +498,104 @@ class SupplierStockHintEventsListenerTest {
                 """);
 
         verify(hints, never()).save(any());
+        verify(processedEvents).save(any(ProcessedEvent.class));
+    }
+
+    // ---------------------------------------------------------------------
+    // supplier.vendor.updated: the vendor copy (CAP:550 S36, #2525)
+    // ---------------------------------------------------------------------
+
+    private static String vendorFact(String eventId, int schemaVersion, long aggregateVersion, String status) {
+        return """
+                {"eventId":"%s","eventType":"supplier.vendor.updated","schemaVersion":%d,"aggregateId":"%s",
+                 "aggregateVersion":%d,"payload":{
+                  "vendorId":"%s","vendorNumber":"V-000123","legalName":"Acme Parts Ltd","displayName":"Acme Parts",
+                  "taxRegistrations":[],"remitTo":null,"remitToVersion":0,"defaultPaymentTerms":"NET30",
+                  "defaultCurrency":"EUR","status":"%s","statusChangedAt":"2026-10-07T09:00:00Z","statusReason":null,
+                  "remitToChangedAt":null,"remitToRequestedBy":null,"remitToApprovedBy":null,"createdBy":"alice",
+                  "createdAt":"2026-10-01T00:00:00Z","occurredAt":"2026-10-07T09:00:00Z"}}
+                """.formatted(eventId, schemaVersion, VENDOR_ID, aggregateVersion, VENDOR_ID, status);
+    }
+
+    private static ExtSupplierVendorReplica heldVendor(long aggregateVersion) {
+        return ExtSupplierVendorReplica.builder()
+                .vendorId(VENDOR_ID)
+                .vendorNumber("V-OLD")
+                .displayName("Old name")
+                .status(VendorStatus.ACTIVE)
+                .aggregateVersion(aggregateVersion)
+                .build();
+    }
+
+    @Test
+    @DisplayName("a vendor fact for a new vendor creates the copy row and marks the event processed")
+    void vendor_fact_creates_copy_row() {
+        when(vendors.findById(VENDOR_ID)).thenReturn(Optional.empty());
+
+        listener.onSupplierEvent(vendorFact("evt-v1", 2, 4, "ACTIVE"));
+
+        ArgumentCaptor<ExtSupplierVendorReplica> saved = ArgumentCaptor.forClass(ExtSupplierVendorReplica.class);
+        verify(vendors).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getVendorId()).isEqualTo(VENDOR_ID);
+        assertThat(saved.getValue().getVendorNumber()).isEqualTo("V-000123");
+        assertThat(saved.getValue().getDisplayName()).isEqualTo("Acme Parts");
+        assertThat(saved.getValue().getStatus()).isEqualTo(VendorStatus.ACTIVE);
+        assertThat(saved.getValue().getAggregateVersion()).isEqualTo(4L);
+        assertThat(saved.getValue().getStatusChangedAt()).isEqualTo(Instant.parse("2026-10-07T09:00:00Z"));
+        ArgumentCaptor<ProcessedEvent> mark = ArgumentCaptor.forClass(ProcessedEvent.class);
+        verify(processedEvents).save(mark.capture());
+        assertThat(mark.getValue().getEventId()).isEqualTo("evt-v1");
+        assertThat(mark.getValue().getOwner()).isEqualTo("supplier");
+    }
+
+    @Test
+    @DisplayName("a vendor fact older than the held version changes nothing but is still marked processed")
+    void stale_vendor_fact_is_skipped() {
+        when(vendors.findById(VENDOR_ID)).thenReturn(Optional.of(heldVendor(7)));
+
+        listener.onSupplierEvent(vendorFact("evt-v2", 2, 6, "INACTIVE"));
+
+        verify(vendors, never()).saveAndFlush(any());
+        verify(processedEvents).save(any(ProcessedEvent.class));
+    }
+
+    @Test
+    @DisplayName("a vendor fact at the held version is re-applied, so a replay repairs a drifted copy")
+    void equal_version_vendor_fact_is_reapplied() {
+        when(vendors.findById(VENDOR_ID)).thenReturn(Optional.of(heldVendor(7)));
+
+        listener.onSupplierEvent(vendorFact("evt-v3", 2, 7, "INACTIVE"));
+
+        ArgumentCaptor<ExtSupplierVendorReplica> saved = ArgumentCaptor.forClass(ExtSupplierVendorReplica.class);
+        verify(vendors).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getStatus()).isEqualTo(VendorStatus.INACTIVE);
+        assertThat(saved.getValue().getDisplayName()).isEqualTo("Acme Parts");
+    }
+
+    @Test
+    @DisplayName("a vendor fact below schema version 2 is skipped and counted, never mapped")
+    void vendor_fact_below_schema_floor_is_skipped() {
+        listener.onSupplierEvent(vendorFact("evt-v4", 1, 3, "ACTIVE"));
+
+        verify(vendors, never()).saveAndFlush(any());
+        verify(processedEvents).save(any(ProcessedEvent.class));
+        assertThat(meterRegistry
+                        .get("inventory.supplier_vendor.skipped")
+                        .tag("schemaVersion", "1")
+                        .counter()
+                        .count())
+                .isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("a malformed vendor payload is recorded as processed rather than retried forever")
+    void malformed_vendor_payload_is_swallowed() {
+        listener.onSupplierEvent("""
+                {"eventId":"evt-v5","eventType":"supplier.vendor.updated","schemaVersion":2,"aggregateVersion":1,
+                 "payload":{"vendorId":"not-a-uuid"}}
+                """);
+
+        verify(vendors, never()).saveAndFlush(any());
         verify(processedEvents).save(any(ProcessedEvent.class));
     }
 }

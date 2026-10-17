@@ -20,6 +20,8 @@ import com.positivity.inventory.internal.security.InventoryPermissionRegistry;
 import com.positivity.inventory.internal.service.ForecastSiteResolver;
 import com.positivity.inventory.internal.service.LocationScopeService;
 import com.positivity.inventory.internal.service.PurchaseOrderCommandPublisher;
+import com.positivity.inventory.internal.service.VendorCopyReader;
+import com.positivity.inventory.internal.service.VendorFeedMappingService;
 import com.positivity.security.common.LocationScopeDeniedException;
 import java.time.Clock;
 import java.time.Instant;
@@ -60,6 +62,15 @@ class PurchaseSuggestionServiceImplTest {
     @Mock
     private LocationScopeService locationScopeService;
 
+    @Mock
+    private VendorCopyReader vendorCopyReader;
+
+    @Mock
+    private VendorFeedMappingService vendorFeedMappingService;
+
+    @Mock
+    private PurchaseSuggestionOrderAttentionService orderAttentionService;
+
     private PurchaseSuggestionServiceImpl service;
 
     @BeforeEach
@@ -70,7 +81,10 @@ class PurchaseSuggestionServiceImplTest {
                 purchaseOrderCommandPublisher,
                 forecastSiteResolver,
                 Clock.fixed(Instant.parse("2026-09-07T00:00:00Z"), ZoneOffset.UTC),
-                locationScopeService);
+                locationScopeService,
+                vendorCopyReader,
+                vendorFeedMappingService,
+                orderAttentionService);
     }
 
     private static PurchaseSuggestion suggestion() {
@@ -92,7 +106,8 @@ class PurchaseSuggestionServiceImplTest {
                 .thenReturn(Optional.of(Set.of(SITE)));
         when(purchaseSuggestionRepository.findWithinLocations(Set.of(SITE))).thenReturn(List.of(suggestion()));
 
-        Page<PurchaseSuggestionResponse> page = service.listPurchaseSuggestions(null, null, null, Pageable.unpaged());
+        Page<PurchaseSuggestionResponse> page =
+                service.listPurchaseSuggestions(null, null, null, null, Pageable.unpaged());
 
         assertThat(page.getContent())
                 .extracting(PurchaseSuggestionResponse::getSuggestionId)
@@ -106,7 +121,7 @@ class PurchaseSuggestionServiceImplTest {
         when(locationScopeService.narrowTo(isNull(), eq(InventoryPermissionRegistry.INVENTORY_VIEW)))
                 .thenReturn(Optional.of(Set.of()));
 
-        assertThat(service.listPurchaseSuggestions(null, null, null, Pageable.unpaged()))
+        assertThat(service.listPurchaseSuggestions(null, null, null, null, Pageable.unpaged()))
                 .isEmpty();
         verifyNoInteractions(purchaseSuggestionRepository);
     }
@@ -116,7 +131,8 @@ class PurchaseSuggestionServiceImplTest {
     void list_filter_isGatedThenFiltered() {
         when(purchaseSuggestionRepository.findAll()).thenReturn(List.of(suggestion()));
 
-        Page<PurchaseSuggestionResponse> page = service.listPurchaseSuggestions(null, null, SITE, Pageable.unpaged());
+        Page<PurchaseSuggestionResponse> page =
+                service.listPurchaseSuggestions(null, null, SITE, null, Pageable.unpaged());
 
         assertThat(page.getContent()).hasSize(1);
         verify(locationScopeService).narrowTo(SITE, InventoryPermissionRegistry.INVENTORY_VIEW);

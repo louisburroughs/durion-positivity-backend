@@ -42,6 +42,19 @@ public interface NormalizedAvailabilityRepository extends JpaRepository<Normaliz
             """)
     LeadTimeAggregate findLeadTimeAggregateByProductId(@Param("productId") UUID productId);
 
+    /**
+     * One row per manufacturer the feed reports (CAP:550 S36, #2525): its distinct products and when it last reported.
+     * Feeds the unmapped-feed-vendor list.
+     */
+    @Query("""
+            SELECT n.manufacturerId AS feedVendorRef,
+                   COUNT(DISTINCT n.productId) AS productCount,
+                   MAX(n.asOf) AS lastReportedAt
+            FROM NormalizedAvailability n
+            GROUP BY n.manufacturerId
+            """)
+    List<FeedVendorSummary> summarizeManufacturers();
+
     interface LeadTimeAggregate {
         Integer getMinDays();
 
