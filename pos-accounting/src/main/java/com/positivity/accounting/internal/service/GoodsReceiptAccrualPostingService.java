@@ -204,8 +204,8 @@ public class GoodsReceiptAccrualPostingService {
     public @Nullable UUID postAccrual(@NonNull GoodsReceiptRecordedV1 fact) {
         String postingKey = postingKey(fact.receiptId());
         UUID sourceEventId = toSourceEventId(fact.receiptId());
-        // The posting key expires (IdempotencyService, 24 h); the entry's deterministic sourceEventId is the durable
-        // backstop for a re-emit that arrives after it has.
+        // The posting key never expires (#2595); the entry's deterministic sourceEventId is a second line of defence
+        // (belt and braces: the key and the entry commit in one transaction).
         if (idempotencyService.isKeyProcessed(postingKey)
                 || !journalEntryRepository.findBySourceEvent(sourceEventId).isEmpty()) {
             log.info("Goods receipt accrual already posted, skipping | receiptId={}", fact.receiptId());

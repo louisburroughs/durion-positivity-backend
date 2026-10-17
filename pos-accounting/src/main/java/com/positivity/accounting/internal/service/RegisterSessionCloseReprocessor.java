@@ -43,9 +43,8 @@ import tools.jackson.databind.ObjectMapper;
  *   <li>nothing to post (no variance, no petty expense): {@code PROCESSED / NEW}, no entry;
  *   <li>every posting key of the session already registered (a re-emit posted it first), or the over/short's entry
  *       already in the ledger: nothing posts and the row closes {@code PROCESSED / DUPLICATE_IGNORED}, linked to the
- *       earlier entry. The entry check comes first because the over/short's posting key expires after 24 hours (#2595)
- *       and a reprocess may come later; a session posts all or nothing, so its over/short entry proves the movements
- *       posted too;
+ *       earlier entry. The entry check comes first because a session posts all or nothing, so its over/short entry
+ *       proves the movements posted too (posting keys never expire, #2595, so either check suffices);
  *   <li>a currency still not the ledger's: held again {@code SUSPENDED / CURRENCY_NOT_SUPPORTED}; the posting
  *       transaction is rolled back, so the posting path's own hold record is not written beside the row reprocessed.
  * </ul>

@@ -73,10 +73,10 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * register float's (AW36): a register moves only between sessions.
  *
  * <p><b>Idempotency</b> is per movement: {@code REGISTER_CASH_MOVEMENT_GL_POSTING:<movementId>} is registered in the
- * same transaction as the entry, so a fact redelivered under a fresh envelope id posts nothing twice. The key expires
- * after 24 hours ({@code IdempotencyService}); past that, the entry's deterministic {@code sourceEventId} is the
- * durable backstop, as in {@link InventoryRevaluationPostingService} (non-expiring posting keys: #2595). The checks run
- * in the over/short's order: idempotency, then currency, then the fact's contract.
+ * same transaction as the entry, so a fact redelivered under a fresh envelope id posts nothing twice; the key never
+ * expires (#2595), and the entry's deterministic {@code sourceEventId} is a second line of defence, as in {@link
+ * InventoryRevaluationPostingService}. The checks run in the over/short's order: idempotency, then currency, then the
+ * fact's contract.
  *
  * <p><b>Currency (ADR-0067 PC-9).</b> A session whose fact, or any movement to post, is in a currency other than the
  * ledger's posts nothing: it is held once per session as the {@code SUSPENDED / CURRENCY_NOT_SUPPORTED} record the
@@ -269,9 +269,8 @@ public class RegisterCashMovementPostingService {
     }
 
     /**
-     * Whether the movement's entry was posted before: its posting key, or, once that key has expired ({@code
-     * IdempotencyService}, 24 hours), the entry's deterministic source event, the durable backstop {@link
-     * InventoryRevaluationPostingService} uses too.
+     * Whether the movement's entry was posted before: its posting key (never expiring, #2595), or, belt and braces,
+     * the entry's deterministic source event, as {@link InventoryRevaluationPostingService} checks too.
      */
     private boolean alreadyPosted(UUID movementId) {
         return idempotencyService.isKeyProcessed(IDEMPOTENCY_KEY_PREFIX + movementId)

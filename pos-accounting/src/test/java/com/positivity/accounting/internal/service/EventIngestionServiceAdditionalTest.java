@@ -581,7 +581,7 @@ class EventIngestionServiceAdditionalTest {
         Map<String, Object> eventMap =
                 buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "  ", LocalDateTime.now(TEST_CLOCK));
 
-        when(idempotencyService.isKeyProcessed(any())).thenReturn(false);
+        when(idempotencyService.isKeyActive(any())).thenReturn(false);
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(savedEvent);
 
         AccountingEventResponse result = service.submitEvent(eventMap);
@@ -596,7 +596,7 @@ class EventIngestionServiceAdditionalTest {
         AccountingEvent savedEvent = buildEvent(testEventId, AccountingEventStatus.RECEIVED);
         Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB", null);
 
-        when(idempotencyService.isKeyProcessed(any())).thenReturn(false);
+        when(idempotencyService.isKeyActive(any())).thenReturn(false);
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(savedEvent);
 
         AccountingEventResponse result = service.submitEvent(eventMap);
@@ -611,7 +611,7 @@ class EventIngestionServiceAdditionalTest {
         Map<String, Object> eventMap =
                 buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB", LocalDateTime.now(TEST_CLOCK));
 
-        when(idempotencyService.isKeyProcessed(any())).thenReturn(true);
+        when(idempotencyService.isKeyActive(any())).thenReturn(true);
 
         assertThatThrownBy(() -> service.submitEvent(eventMap))
                 .isInstanceOf(DuplicateEventException.class)
@@ -630,7 +630,7 @@ class EventIngestionServiceAdditionalTest {
         Map<String, Object> eventMap = buildEventMap(testOrganizationId, "INVOICE_RECEIVED", "MYOB", null);
         eventMap.put("transactionDate", "2024-01-15T10:30:00"); // String form
 
-        when(idempotencyService.isKeyProcessed(any())).thenReturn(false);
+        when(idempotencyService.isKeyActive(any())).thenReturn(false);
         when(accountingEventRepository.save(any(AccountingEvent.class))).thenReturn(savedEvent);
 
         AccountingEventResponse result = service.submitEvent(eventMap);
