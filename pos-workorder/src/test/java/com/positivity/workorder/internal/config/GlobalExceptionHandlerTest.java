@@ -174,6 +174,13 @@ class GlobalExceptionHandlerTest {
                     Named.of("handleUomConversionUndefined", (HandlerInvocation)
                             request -> handler.handleUomConversionUndefined(
                                     UomConversionUndefinedException.noConversionRow(SOME_ID, "EA"), request)),
+                    Named.of("handleEstimateTaxRefused", (HandlerInvocation)
+                            request -> handler.handleEstimateTaxRefused(
+                                    new com.positivity.workorder.internal.exception.EstimateTaxRefusedException(
+                                            com.positivity.workorder.internal.exception.EstimateTaxRefusedException
+                                                    .CURRENCY_NOT_SUPPORTED,
+                                            "CAD is not the profile's currency"),
+                                    request)),
                     Named.of("handleEstimateNotFound", (HandlerInvocation)
                             request -> handler.handleEstimateNotFound(new EstimateNotFoundException(SOME_ID), request)),
                     Named.of("handleDocumentNumberConflict", (HandlerInvocation)
