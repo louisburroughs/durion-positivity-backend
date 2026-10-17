@@ -198,6 +198,11 @@ class AccountingExceptionHandlerTest {
                     Named.of("handleAccountNotZeroBalance", (HandlerInvocation)
                             request -> handler.handleAccountNotZeroBalance(
                                     new AccountNotZeroBalanceException("non-zero balance"), request)),
+                    Named.of("handleAccountHasUnpostedPayments", (HandlerInvocation)
+                            request -> handler.handleAccountHasUnpostedPayments(
+                                    new com.positivity.accounting.internal.exception
+                                            .AccountHasUnpostedPaymentsException("unposted payments"),
+                                    request)),
                     Named.of("handleAccountNotInactive", (HandlerInvocation) request ->
                             handler.handleAccountNotInactive(new AccountNotInactiveException("not inactive"), request)),
                     Named.of("handleCashSetup", (HandlerInvocation) request -> handler.handleCashSetup(
