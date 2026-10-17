@@ -38,6 +38,7 @@ import com.positivity.accounting.internal.service.GLMappingResolver;
 import com.positivity.accounting.internal.service.InvoiceRevenuePostingService;
 import com.positivity.accounting.internal.service.RetreadPlantAddOnSource;
 import com.positivity.accounting.internal.service.TenantEventsListener;
+import com.positivity.accounting.internal.service.TenantLocaleReplicaWriter;
 import com.positivity.accounting.internal.service.TenantTemplateService;
 import com.positivity.domainevents.invoice.InvoiceUpdatedV1;
 import com.positivity.security.common.GatewaySecurityConstants;
@@ -155,6 +156,9 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
 
     @Autowired
     private ProcessedEventRepository processedEvents;
+
+    @Autowired
+    private TenantLocaleReplicaWriter localeWriter;
 
     @Autowired
     private GLMappingResolver glMappingResolver;
@@ -846,7 +850,7 @@ class TenantTemplateProvisioningIT extends PostgresTenancyTestBase {
     @DisplayName("the listener provisions a created tenant, and records but never provisions the platform tenant")
     void theListenerProvisionsACreatedTenantButNeverThePlatformTenant() {
         TenantEventsListener listener =
-                new TenantEventsListener(new ObjectMapper(), processedEvents, templateReader, provisioner);
+                new TenantEventsListener(new ObjectMapper(), processedEvents, templateReader, provisioner, localeWriter);
         UUID t6 = newTenant();
         String createdEvent = newEventId();
         String platformEvent = newEventId();
