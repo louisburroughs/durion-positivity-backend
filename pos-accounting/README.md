@@ -870,8 +870,9 @@ exactly as before.
   `SettlementEventsListener` checks the triple before recording anything (`CashRoundingFactCheck`: the difference
   must equal `settledAmount − amount`, `settledAmount` must be `amount` rounded HALF_UP to a multiple of the
   increment, no rounding without an increment, no rounding fields on a non-cash tender); a fact that fails is held
-  `SUSPENDED / CASH_ROUNDING_INVALID` with no `ReceivablePayment` and no posting, is skipped by the scheduled retry and
-  is re-held by a reprocess (the payload never changes; correct it at the source). A fact that passes is recorded
+  `SUSPENDED / CASH_ROUNDING_INVALID` with no `ReceivablePayment` and no posting, is skipped by the scheduled retry, and
+  a reprocess or retry answers 409 `ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE` (no release path, #2620; the payload
+  never changes, so correct the payment at its source and have the fact republished). A fact that passes is recorded
   for `amount`, and its automatic application carries the rounding to the cash-receipt entry: Dr 1090 Undeposited
   Funds `amount + cashRoundingAmount` / Cr 1200 AR `amount` / Cr 6050 `CASH_ROUNDING / CASH_ROUNDING_DIFFERENCE` the
   rounding when the customer paid more than due, Dr 6050 when the shop absorbed it (AC 20: 10.00 / 9.98 / 0.02). A

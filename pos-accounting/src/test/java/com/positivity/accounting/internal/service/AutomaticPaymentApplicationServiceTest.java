@@ -381,14 +381,10 @@ class AutomaticPaymentApplicationServiceTest {
                 new BigDecimal("10.00"),
                 new BigDecimal("0.02"),
                 new BigDecimal("0.05"));
-        ReceivablePayment payment = availablePayment(new BigDecimal("9.98"));
-        PaymentApplicationResponse applied = PaymentApplicationResponse.builder()
-                .appliedAmount(new BigDecimal("9.98"))
-                .remainingAmount(BigDecimal.ZERO)
-                .build();
+        payment.setTotalAmount(new BigDecimal("9.98"));
+        payment.setUnappliedAmount(new BigDecimal("9.98"));
         when(paymentApplicationService.applyAutomatically(any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(applied);
-        stubOpenInvoice(new BigDecimal("9.98"));
+                .thenReturn(applied("9.98", null));
 
         Result result = service.applySettled(payment, cash, EVENT_ID);
 
@@ -402,28 +398,6 @@ class AutomaticPaymentApplicationServiceTest {
                         SETTLED_AT,
                         ApplicationSource.PAYMENT_SETTLED,
                         new BigDecimal("0.02"));
-    }
-
-    @Test
-    void reapplyOfAFactHeldForItsRounding_reHoldsIt() {
-        PaymentSettledV1 base = fact("CASH");
-        java.util.Map<String, Object> stored = new java.util.LinkedHashMap<>();
-        stored.put("paymentIntentId", base.paymentIntentId().toString());
-        stored.put("invoiceId", base.invoiceId().toString());
-        stored.put("partyId", base.partyId());
-        stored.put("methodType", "CASH");
-        stored.put("amount", "9.98");
-        stored.put("currencyCode", base.currencyCode());
-        stored.put("settledAt", base.settledAt().toString());
-        stored.put("settledAmount", "9.95");
-        stored.put("cashRoundingAmount", "-0.03");
-        stored.put("cashIncrement", "0.05");
-
-        Result result = service.reapply(stored);
-
-        assertThat(result.outcome()).isEqualTo(Outcome.SUSPENDED_CASH_ROUNDING);
-        assertThat(result.outcome().reason()).isEqualTo("CASH_ROUNDING_INVALID");
-        verifyNoInteractions(paymentApplicationService);
     }
 
     private static PaymentSettledV1 factAt(Instant settledAt) {

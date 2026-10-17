@@ -95,8 +95,9 @@ public enum PostingFailureReason {
      * (CAP:550 #2662, AC 20): {@code cashRoundingAmount != settledAmount − amount}, a {@code settledAmount} that is
      * not {@code amount} rounded HALF_UP to a multiple of {@code cashIncrement}, a rounding without an increment,
      * or rounding fields on a tender that is not CASH. Held {@code SUSPENDED}, nothing recorded or posted; the
-     * payload never changes, so the scheduled retry skips it and a reprocess re-holds it until the fact is
-     * corrected at its source.
+     * payload never changes, so the scheduled retry skips it and a reprocess or retry answers 409
+     * {@code ACCOUNTING_EVENT_HOLD_NOT_RELEASABLE} (no release path, #2620): the fact is corrected at its source
+     * and republished, this row keeps the hold as the record.
      */
     CASH_ROUNDING_INVALID,
 
