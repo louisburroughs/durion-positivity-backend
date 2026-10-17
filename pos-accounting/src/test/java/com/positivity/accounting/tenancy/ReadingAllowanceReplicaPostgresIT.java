@@ -70,12 +70,11 @@ class ReadingAllowanceReplicaPostgresIT extends PostgresTenancyTestBase {
 
         consume(TENANT_A, 1, "STANDARD", "20.00");
 
-        assertThat(reader.allowanceOf(TENANT_A))
-                .hasValueSatisfying(allowance -> {
-                    assertThat(allowance.tierCode()).isEqualTo("STANDARD");
-                    assertThat(allowance.amount()).isEqualByComparingTo("20.00");
-                    assertThat(allowance.currencyCode()).isEqualTo("USD");
-                });
+        assertThat(reader.allowanceOf(TENANT_A)).hasValueSatisfying(allowance -> {
+            assertThat(allowance.tierCode()).isEqualTo("STANDARD");
+            assertThat(allowance.amount()).isEqualByComparingTo("20.00");
+            assertThat(allowance.currencyCode()).isEqualTo("USD");
+        });
     }
 
     @Test
@@ -122,9 +121,10 @@ class ReadingAllowanceReplicaPostgresIT extends PostgresTenancyTestBase {
     private void consume(UUID tenant, long version, String tier, String amount) {
         String eventId = UUID.randomUUID().toString();
         eventIds.add(eventId);
-        TenantEventsListener listener =
-                new TenantEventsListener(new ObjectMapper(), processedEvents, templateReader, provisioner, localeWriter, writer);
-        asTenant(PlatformTenant.ID, () -> listener.onTenantEvent("""
+        TenantEventsListener listener = new TenantEventsListener(
+                new ObjectMapper(), processedEvents, templateReader, provisioner, localeWriter, writer);
+        asTenant(
+                PlatformTenant.ID, () -> listener.onTenantEvent("""
                         {"eventId":"%s","eventType":"tenant.reading-allowance.changed","aggregateVersion":%d,
                          "payload":{"tenantId":"%s","tierCode":"%s",
                                     "monthlyAllowance":{"amount":%s,"currencyCode":"USD"},

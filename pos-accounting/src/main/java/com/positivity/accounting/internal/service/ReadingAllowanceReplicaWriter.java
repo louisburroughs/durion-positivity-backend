@@ -46,7 +46,8 @@ public class ReadingAllowanceReplicaWriter {
     private void upsert(ReadingAllowanceEvent fact) {
         BillIntakeReadingAllowance row = allowances.findById(fact.tenantId()).orElse(null);
         if (row != null && ReplicaVersionGuard.isStale(row.getAggregateVersion(), fact.aggregateVersion())) {
-            log.debug("Ignoring stale reading-allowance fact eventId={} for tenant {}", fact.eventId(), fact.tenantId());
+            log.debug(
+                    "Ignoring stale reading-allowance fact eventId={} for tenant {}", fact.eventId(), fact.tenantId());
             return;
         }
         if (row == null) {

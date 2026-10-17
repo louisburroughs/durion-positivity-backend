@@ -51,7 +51,8 @@ class TenantEventsListenerTest {
 
     @BeforeEach
     void setUp() {
-        listener = new TenantEventsListener(new ObjectMapper(), processedEvents, reader, provisioner, localeWriter, allowanceWriter);
+        listener = new TenantEventsListener(
+                new ObjectMapper(), processedEvents, reader, provisioner, localeWriter, allowanceWriter);
         doAnswer(invocation -> boundAtAllowance.add(TenantContext.current()))
                 .when(allowanceWriter)
                 .applyAndRecord(any());

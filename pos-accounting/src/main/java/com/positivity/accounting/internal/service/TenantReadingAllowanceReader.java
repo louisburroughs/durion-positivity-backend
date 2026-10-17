@@ -33,8 +33,7 @@ public class TenantReadingAllowanceReader {
     /** The stored allowance of {@code tenantId}, or empty when no fact has arrived for it. */
     public @NonNull Optional<ReadingAllowance> allowanceOf(@NonNull UUID tenantId) {
         return TenantContext.callAs(
-                tenantId,
-                () -> allowances.findById(tenantId).map(TenantReadingAllowanceReader::toAllowance));
+                tenantId, () -> allowances.findById(tenantId).map(TenantReadingAllowanceReader::toAllowance));
     }
 
     private static ReadingAllowance toAllowance(BillIntakeReadingAllowance row) {
@@ -50,5 +49,8 @@ public class TenantReadingAllowanceReader {
      * @param effectiveAt when the allowance applies from
      */
     public record ReadingAllowance(
-            @NonNull String tierCode, @NonNull BigDecimal amount, @NonNull String currencyCode, @NonNull Instant effectiveAt) {}
+            @NonNull String tierCode,
+            @NonNull BigDecimal amount,
+            @NonNull String currencyCode,
+            @NonNull Instant effectiveAt) {}
 }

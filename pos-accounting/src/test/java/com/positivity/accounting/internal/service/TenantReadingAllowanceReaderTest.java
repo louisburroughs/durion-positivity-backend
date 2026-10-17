@@ -34,13 +34,12 @@ class TenantReadingAllowanceReaderTest {
         row.setEffectiveAt(EFFECTIVE);
         when(allowances.findById(TENANT)).thenReturn(Optional.of(row));
 
-        assertThat(reader.allowanceOf(TENANT))
-                .hasValueSatisfying(allowance -> {
-                    assertThat(allowance.tierCode()).isEqualTo("PRO");
-                    assertThat(allowance.amount()).isEqualByComparingTo("60");
-                    assertThat(allowance.currencyCode()).isEqualTo("USD");
-                    assertThat(allowance.effectiveAt()).isEqualTo(EFFECTIVE);
-                });
+        assertThat(reader.allowanceOf(TENANT)).hasValueSatisfying(allowance -> {
+            assertThat(allowance.tierCode()).isEqualTo("PRO");
+            assertThat(allowance.amount()).isEqualByComparingTo("60");
+            assertThat(allowance.currencyCode()).isEqualTo("USD");
+            assertThat(allowance.effectiveAt()).isEqualTo(EFFECTIVE);
+        });
     }
 
     @Test

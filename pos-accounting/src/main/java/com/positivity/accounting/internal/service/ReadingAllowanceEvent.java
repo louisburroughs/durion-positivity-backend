@@ -35,7 +35,8 @@ public record ReadingAllowanceEvent(
      * or malformed (the consumer logs and skips it, recording nothing).
      */
     public static Optional<ReadingAllowanceEvent> parse(@NonNull JsonNode root) {
-        if (!TenantEventTypes.READING_ALLOWANCE_CHANGED.equals(root.path("eventType").stringValue(null))) {
+        if (!TenantEventTypes.READING_ALLOWANCE_CHANGED.equals(
+                root.path("eventType").stringValue(null))) {
             return Optional.empty();
         }
         String eventId = root.path("eventId").stringValue(null);
@@ -46,7 +47,8 @@ public record ReadingAllowanceEvent(
         }
         JsonNode payload = root.path("payload");
         String tierCode = payload.path("tierCode").stringValue(null);
-        String currencyCode = payload.path("monthlyAllowance").path("currencyCode").stringValue(null);
+        String currencyCode =
+                payload.path("monthlyAllowance").path("currencyCode").stringValue(null);
         if (tierCode == null || tierCode.isBlank() || currencyCode == null || !currencyCode.matches("[A-Z]{3}")) {
             return Optional.empty();
         }
@@ -70,7 +72,10 @@ public record ReadingAllowanceEvent(
             BigDecimal seconds = node.decimalValue();
             long whole = seconds.longValue();
             return Instant.ofEpochSecond(
-                    whole, seconds.subtract(BigDecimal.valueOf(whole)).movePointRight(9).longValue());
+                    whole,
+                    seconds.subtract(BigDecimal.valueOf(whole))
+                            .movePointRight(9)
+                            .longValue());
         }
         return Instant.parse(node.stringValue(""));
     }
