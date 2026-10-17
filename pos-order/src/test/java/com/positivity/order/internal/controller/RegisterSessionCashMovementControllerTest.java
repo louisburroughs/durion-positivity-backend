@@ -16,16 +16,19 @@ import com.positivity.order.internal.dto.CashMovementSummary;
 import com.positivity.order.internal.exception.CashMovementIdempotencyConflictException;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
+import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.exception.StepUpUnavailableException;
 import com.positivity.order.internal.service.CashMovementApprovalService;
 import com.positivity.order.internal.service.RegisterSessionService;
+import com.positivity.order.internal.service.SupplierVendorGuard;
 import com.positivity.order.internal.service.model.CashMovementApprovalCommand;
 import com.positivity.order.internal.service.model.CashMovementApprovalResult;
 import com.positivity.order.internal.service.model.CashMovementCommand;
 import com.positivity.order.internal.service.model.CashMovementOptions;
 import com.positivity.order.internal.service.model.CashMovementResult;
 import com.positivity.security.common.GatewaySecurityConfig;
+import com.positivity.web.common.ReplicationPendingException;
 import com.positivity.web.common.WebCommonErrorAutoConfiguration;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -50,6 +53,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @Import({GatewaySecurityConfig.class, WebCommonErrorAutoConfiguration.class, BaseControllerSliceTest.SliceConfig.class})
 class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest {
 
+    private static final UUID VENDOR_ID = UUID.fromString("0199b1c2-0000-7000-8000-000000000042");
     private static final UUID SESSION_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4b01");
     private static final UUID REQUEST_ID = UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c01");
     private static final String CASH_MOVEMENT = "order:session:cash_movement";
@@ -58,6 +62,11 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
             {"requestId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c01","reason":"PETTY_EXPENSE","amount":25.00,"currencyCode":"USD",
              "categoryCode":"SHOP_SUPPLIES","receiptReference":"R-1","note":"gloves","approvalToken":"tok",
              "clerkId":"X"}
+            """;
+
+    private static final String VENDOR_COD_BODY = """
+            {"requestId":"018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f4c01","reason":"VENDOR_COD","amount":40.00,"currencyCode":"USD",
+             "vendorId":"0199b1c2-0000-7000-8000-000000000042","approvalToken":"tok"}
             """;
 
     @MockitoBean
@@ -314,6 +323,7 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                                 List.of("categoryCode", "receiptReference", "note"))),
                         List.of(new CashMovementOptions.CategoryOption(
                                 "SHOP_SUPPLIES", "Shop supplies", "rags", List.of())),
+                        List.of(new CashMovementOptions.VendorOption(VENDOR_ID, "V-1001", "Acme Parts")),
                         null));
 
         mockMvc.perform(withGatewayAuth(
@@ -321,7 +331,44 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reasons[0].runningTotal").value(55.0))
                 .andExpect(jsonPath("$.categories[0].code").value("SHOP_SUPPLIES"))
+                .andExpect(jsonPath("$.vendors[0].vendorId").value(VENDOR_ID.toString()))
+                .andExpect(jsonPath("$.vendors[0].displayName").value("Acme Parts"))
                 .andExpect(jsonPath("$.currencyCode").value("USD"));
+    }
+
+    @Test
+    @DisplayName("#2576: an inactive VENDOR_COD vendor is 422 VENDOR_INACTIVE")
+    void vendorInactiveIs422() throws Exception {
+        when(registerSessionService.recordCashMovement(any()))
+                .thenThrow(PurchaseOrderVendorException.inactiveForCashMovement("V-1001"));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/sessions/{sessionId}/cash-movements", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VENDOR_COD_BODY),
+                        CASH_MOVEMENT))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("VENDOR_INACTIVE"));
+    }
+
+    @Test
+    @DisplayName(
+            "#2576: a VENDOR_COD vendor the copy does not hold yet is 503 VENDOR_REPLICATION_PENDING + Retry-After")
+    void vendorReplicationPendingIs503WithRetryAfter() throws Exception {
+        when(registerSessionService.recordCashMovement(any()))
+                .thenThrow(new ReplicationPendingException(
+                        SupplierVendorGuard.VENDOR_REPLICATION_PENDING,
+                        SupplierVendorGuard.VENDOR_REPLICATION_PENDING_MESSAGE,
+                        VENDOR_ID));
+
+        mockMvc.perform(withGatewayAuth(
+                        post("/v1/orders/sessions/{sessionId}/cash-movements", SESSION_ID)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(VENDOR_COD_BODY),
+                        CASH_MOVEMENT))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.code").value("VENDOR_REPLICATION_PENDING"));
     }
 
     @Test

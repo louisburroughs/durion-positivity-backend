@@ -23,6 +23,7 @@ import com.positivity.order.internal.entity.CashMovementApproval;
 import com.positivity.order.internal.entity.CashMovementReason;
 import com.positivity.order.internal.entity.ExtAccountingPettyExpenseCategory;
 import com.positivity.order.internal.entity.ExtAccountingRegisterFloat;
+import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrderStatus;
@@ -30,12 +31,14 @@ import com.positivity.order.internal.exception.CashMovementIdempotencyConflictEx
 import com.positivity.order.internal.exception.CashMovementRefusedException;
 import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
+import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
 import com.positivity.order.internal.repository.CashMovementRepository;
 import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
 import com.positivity.order.internal.repository.ExtCustomerRepository;
 import com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository;
+import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -48,6 +51,7 @@ import com.positivity.security.common.LocationAncestorResolver;
 import com.positivity.security.common.LocationScope;
 import com.positivity.security.common.LocationScopeDeniedException;
 import com.positivity.shared.id.UUIDv7Generator;
+import com.positivity.web.common.ReplicationPendingException;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
@@ -95,6 +99,7 @@ class RegisterSessionCashMovementTest {
     private final OrderDomainEventPublisher publisher = mock(OrderDomainEventPublisher.class);
     private final SessionPolicyService policyService = mock(SessionPolicyService.class);
     private final CashMovementApprovalService approvalService = mock(CashMovementApprovalService.class);
+    private final ExtSupplierVendorRepository vendorCopies = mock(ExtSupplierVendorRepository.class);
     private final ExtAccountingRegisterFloatRepository floats = mock(ExtAccountingRegisterFloatRepository.class);
     private final ExtAccountingPettyExpenseCategoryRepository categories =
             mock(ExtAccountingPettyExpenseCategoryRepository.class);
@@ -131,6 +136,7 @@ class RegisterSessionCashMovementTest {
                 new FunctionalCurrency("USD"),
                 mock(DrawerStatedTax.class),
                 new ActorDisplayNames(links),
+                new SupplierVendorGuard(vendorCopies),
                 CLOCK,
                 meters);
         session = RegisterSession.builder()
@@ -402,6 +408,64 @@ class RegisterSessionCashMovementTest {
 
             assertThatThrownBy(() -> service.recordCashMovement(cod))
                     .satisfies(e -> assertThat(refusal(e).refusal()).isEqualTo(Refusal.TYPE_NOT_ALLOWED));
+        }
+
+        @Test
+        @DisplayName(
+                "#2576: with the policy allowing it, a cash-on-delivery movement naming an active vendor of the copy"
+                        + " is recorded; an inactive vendor is 422 VENDOR_INACTIVE; one the copy lacks is 503 (replication pending)")
+        void vendorCodChecksTheVendorCopy() {
+            when(policyService.current())
+                    .thenReturn(new SessionPolicyView(
+                            1L,
+                            true,
+                            new BigDecimal("50.00"),
+                            true,
+                            new BigDecimal("500.00"),
+                            new BigDecimal("5.00"),
+                            "USD"));
+            UUID active = UUIDv7Generator.generate();
+            UUID inactive = UUIDv7Generator.generate();
+            UUID unknown = UUIDv7Generator.generate();
+            when(vendorCopies.findById(active)).thenReturn(Optional.of(vendorCopy(active, true)));
+            when(vendorCopies.findById(inactive)).thenReturn(Optional.of(vendorCopy(inactive, false)));
+            when(vendorCopies.findById(unknown)).thenReturn(Optional.empty());
+
+            service.recordCashMovement(cod(active, "40.00"));
+            verify(movements).saveAndFlush(any(CashMovement.class));
+
+            assertThatThrownBy(() -> service.recordCashMovement(cod(inactive, "40.00")))
+                    .isInstanceOf(PurchaseOrderVendorException.class)
+                    .hasMessageContaining("cash on delivery");
+            assertThatThrownBy(() -> service.recordCashMovement(cod(unknown, "40.00")))
+                    .isInstanceOf(ReplicationPendingException.class);
+        }
+
+        private static ExtSupplierVendor vendorCopy(UUID vendorId, boolean active) {
+            ExtSupplierVendor vendor = new ExtSupplierVendor();
+            vendor.setVendorId(vendorId);
+            vendor.setVendorNumber("V-000123");
+            vendor.setDisplayName("Acme Parts");
+            vendor.setStatus(active ? ExtSupplierVendor.Status.ACTIVE : ExtSupplierVendor.Status.INACTIVE);
+            return vendor;
+        }
+
+        private static CashMovementCommand cod(UUID vendorId, String amount) {
+            return new CashMovementCommand(
+                    SESSION_ID,
+                    UUIDv7Generator.generate(),
+                    "VENDOR_COD",
+                    new BigDecimal(amount),
+                    "USD",
+                    null,
+                    vendorId,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
 
         @Test

@@ -86,6 +86,7 @@ public class RegisterSessionController {
             + " PETTY_EXPENSE_CATEGORY_UNKNOWN (not an ACTIVE petty-expense category) or FLOAT_CHANGE_NOT_RECORDED"
             + " (the amount does not close the gap between the configured float and the drawer's float) or"
             + " CURRENCY_NOT_SUPPORTED (an amount in a currency other than the functional currency);"
+            + " VENDOR_INACTIVE (the VENDOR_COD vendor is INACTIVE in the vendor copy);"
             + " AMOUNT_PRECISION_EXCEEDS_CURRENCY (the amount or a stated tax amount has more decimals than the"
             + " currency allows, never rounded), TAX_REGIME_NOT_OFFERED (a stated regime the category does not offer"
             + " here and today), TAX_AMOUNT_IMPLAUSIBLE (a stated amount, or their sum, at or above the amount, or above"
@@ -253,9 +254,11 @@ public class RegisterSessionController {
                     approval rules or LOCATION_SCOPE_DENIED, 404 when the session does not exist, 409 \
                     REGISTER_SESSION_CONFLICT when the session is not OPEN or IDEMPOTENCY_CONFLICT when the \
                     requestId was used for another movement, 422 for a drawer rule, CURRENCY_NOT_SUPPORTED, \
-                    AMOUNT_PRECISION_EXCEEDS_CURRENCY, TAX_REGIME_NOT_OFFERED, TAX_AMOUNT_IMPLAUSIBLE or \
-                    SUPPLIER_REGISTRATION_NOT_ACCEPTED, and 503 TAX_CHECK_UNAVAILABLE with Retry-After when the \
-                    supplier's number was sent and pos-tax cannot check it.
+                    AMOUNT_PRECISION_EXCEEDS_CURRENCY, TAX_REGIME_NOT_OFFERED, TAX_AMOUNT_IMPLAUSIBLE, \
+                    SUPPLIER_REGISTRATION_NOT_ACCEPTED or VENDOR_INACTIVE, and 503 TAX_CHECK_UNAVAILABLE with \
+                    Retry-After when the supplier's number was sent and pos-tax cannot check it, or 503 \
+                    VENDOR_REPLICATION_PENDING with Retry-After when the VENDOR_COD vendor is not in the vendor copy \
+                    yet.
                     """,
             tags = {"Register Sessions"})
     @ApiResponse(responseCode = "201", description = "Cash movement recorded.")
@@ -285,7 +288,8 @@ public class RegisterSessionController {
             responseCode = "503",
             description = "TAX_CHECK_UNAVAILABLE: the supplier's registration number was sent and pos-tax could not"
                     + " check it; nothing was recorded. Retry after Retry-After seconds, or resend the same requestId"
-                    + " without the number.",
+                    + " without the number. VENDOR_REPLICATION_PENDING (with Retry-After): the VENDOR_COD vendor has"
+                    + " not reached pos-order's vendor copy yet; retry shortly.",
             headers =
                     @Header(
                             name = "Retry-After",
@@ -508,6 +512,10 @@ public class RegisterSessionController {
                 options.categories().stream()
                         .map(c -> new CashMovementOptionsResponse.CategoryOption(
                                 c.code(), c.label(), c.examples(), c.offeredRegimes()))
+                        .toList(),
+                options.vendors().stream()
+                        .map(v -> new CashMovementOptionsResponse.VendorOption(
+                                v.vendorId(), v.vendorNumber(), v.displayName()))
                         .toList(),
                 options.evidenceRule() == null
                         ? null

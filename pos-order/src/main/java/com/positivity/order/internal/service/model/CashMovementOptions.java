@@ -17,7 +17,14 @@ public record CashMovementOptions(
         @NonNull String currencyCode,
         @NonNull List<ReasonOption> reasons,
         @NonNull List<CategoryOption> categories,
+        @NonNull List<VendorOption> vendors,
         @Nullable EvidenceRule evidenceRule) {
+
+    /** An ACTIVE vendor of pos-order's vendor copy a drawer may pay cash on delivery (#2576, #2512 PROPOSED 5). */
+    public record VendorOption(
+            @NonNull UUID vendorId,
+            @NonNull String vendorNumber,
+            @NonNull String displayName) {}
 
     /** One reason's options. */
     public record ReasonOption(

@@ -246,7 +246,6 @@ class SessionPolicyControllerTest extends BaseControllerSliceTest {
     @CsvSource({
         "justification, justification must be at least 10 characters",
         "pettyExpense.allowed, pettyExpense.allowed is required",
-        "vendorCod.allowed, vendor cash on delivery cannot be switched on until pos-order holds the vendor list",
         "overShortTolerance, overShortTolerance must not be negative",
         "currencyCode, currencyCode is required and must be an ISO 4217 code",
         "pettyExpense.cashierLimit, pettyExpense.cashierLimit is required while petty expenses are allowed",

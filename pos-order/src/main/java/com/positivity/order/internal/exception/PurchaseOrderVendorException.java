@@ -37,6 +37,14 @@ public class PurchaseOrderVendorException extends RuntimeException {
                         + " master, or revise the order to another vendor.");
     }
 
+    /** The vendor is inactive and a drawer cash-on-delivery payout names it (#2576). */
+    public static @NonNull PurchaseOrderVendorException inactiveForCashMovement(@NonNull String vendorNumber) {
+        return new PurchaseOrderVendorException(
+                Code.VENDOR_INACTIVE,
+                "Vendor " + vendorNumber + " is inactive and cannot be paid cash on delivery from the drawer."
+                        + " Reactivate it in the vendor master, or record the payout under another vendor.");
+    }
+
     public @NonNull Code getCode() {
         return code;
     }

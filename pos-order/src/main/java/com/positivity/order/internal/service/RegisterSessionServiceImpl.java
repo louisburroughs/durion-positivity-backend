@@ -121,6 +121,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
     private final FunctionalCurrency functionalCurrency;
     private final DrawerStatedTax drawerStatedTax;
     private final ActorDisplayNames actorDisplayNames;
+    private final SupplierVendorGuard vendorGuard;
     private final Clock clock;
     private final @Nullable MeterRegistry meterRegistry;
 
@@ -154,6 +155,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
             FunctionalCurrency functionalCurrency,
             DrawerStatedTax drawerStatedTax,
             ActorDisplayNames actorDisplayNames,
+            SupplierVendorGuard vendorGuard,
             Clock clock,
             ObjectProvider<MeterRegistry> meterRegistry) {
         this.registerSessionRepository = registerSessionRepository;
@@ -169,6 +171,7 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         this.functionalCurrency = functionalCurrency;
         this.drawerStatedTax = drawerStatedTax;
         this.actorDisplayNames = actorDisplayNames;
+        this.vendorGuard = vendorGuard;
         this.clock = clock;
         this.meterRegistry = meterRegistry.getIfAvailable();
     }
@@ -290,6 +293,12 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
         if (!policy.allowed(type)) {
             // Never retroactive: recorded movements of the type stand and are carried on the close fact.
             throw refused(Refusal.TYPE_NOT_ALLOWED, reason + " movements are switched off in the drawer policy");
+        }
+        if (reason == CashMovementReason.VENDOR_COD) {
+            // #2576 (#2512 PROPOSED 8): the vendor paid must be in pos-order's vendor copy and active: 422
+            // VENDOR_INACTIVE, or 503 VENDOR_REPLICATION_PENDING while the copy does not hold it yet (S24).
+            // After the policy switch: a type switched off is refused without reading the copy.
+            vendorGuard.requireActiveForCashMovement(Objects.requireNonNull(movement.vendorId()));
         }
         Instant occurredAt = Instant.now(clock);
         LocalDate movementDate = DrawerStatedTax.movementDate(occurredAt);
@@ -488,7 +497,15 @@ public class RegisterSessionServiceImpl implements RegisterSessionService {
                         .toList();
         CashMovementOptions.EvidenceRule evidenceRule =
                 registered.isEmpty() ? null : drawerStatedTax.evidenceRule(session, today);
-        return new CashMovementOptions(sessionId, session.getCurrencyCode(), reasons, categories, evidenceRule);
+        // Vendors are only offered while the policy allows cash on delivery: no copy read for a type switched off.
+        List<CashMovementOptions.VendorOption> vendors = policy.allowed(CashMovementReason.VENDOR_COD.policyType())
+                ? vendorGuard.activeVendors().stream()
+                        .map(v -> new CashMovementOptions.VendorOption(
+                                v.getVendorId(), v.getVendorNumber(), v.getDisplayName()))
+                        .toList()
+                : List.of();
+        return new CashMovementOptions(
+                sessionId, session.getCurrencyCode(), reasons, categories, vendors, evidenceRule);
     }
 
     @Override

@@ -265,7 +265,6 @@ class SessionPolicyServiceImplTest {
         badByField.put(put(null, true, "50.00", false, null, "-0.01", JUSTIFICATION), "overShortTolerance");
         badByField.put(put(null, true, null, false, null, "5.00", JUSTIFICATION), "pettyExpense.cashierLimit");
         badByField.put(put(null, true, "50.00", true, null, "5.00", JUSTIFICATION), "vendorCod.cashierLimit");
-        badByField.put(put(null, true, "50.00", true, "100.00", "5.00", JUSTIFICATION), "vendorCod.allowed");
         badByField.put(put(null, true, "50.00", false, null, null, JUSTIFICATION), "overShortTolerance");
         badByField.forEach((bad, field) -> assertThatThrownBy(() -> service.update(bad))
                 .as(field)

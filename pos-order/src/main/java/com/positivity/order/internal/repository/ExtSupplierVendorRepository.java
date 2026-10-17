@@ -1,6 +1,7 @@
 package com.positivity.order.internal.repository;
 
 import com.positivity.order.internal.entity.ExtSupplierVendor;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -11,4 +12,8 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
  * specification executor serves the purchase-order screens' vendor list (#2680).
  */
 public interface ExtSupplierVendorRepository
-        extends JpaRepository<ExtSupplierVendor, UUID>, JpaSpecificationExecutor<ExtSupplierVendor> {}
+        extends JpaRepository<ExtSupplierVendor, UUID>, JpaSpecificationExecutor<ExtSupplierVendor> {
+
+    /** The copy's vendors in one status, by display name (#2576: the vendors a drawer may pay cash on delivery). */
+    List<ExtSupplierVendor> findByStatusOrderByDisplayNameAsc(ExtSupplierVendor.Status status);
+}

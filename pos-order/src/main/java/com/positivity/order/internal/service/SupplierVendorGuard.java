@@ -4,6 +4,7 @@ import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.web.common.ReplicationPendingException;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,11 @@ public class SupplierVendorGuard {
 
     private final ExtSupplierVendorRepository vendors;
 
+    /** The ACTIVE vendors of the copy, by display name: what the cash-movement options offer for VENDOR_COD (#2576). */
+    public @NonNull List<ExtSupplierVendor> activeVendors() {
+        return vendors.findByStatusOrderByDisplayNameAsc(ExtSupplierVendor.Status.ACTIVE);
+    }
+
     /**
      * Returns the vendor when it is in the copy and active.
      *
@@ -58,11 +64,31 @@ public class SupplierVendorGuard {
 
     /** {@link #requireActive(UUID)} over a copy row the caller already read. */
     public @NonNull ExtSupplierVendor requireActive(@NonNull UUID vendorId, @NonNull Optional<ExtSupplierVendor> copy) {
-        ExtSupplierVendor vendor = copy.orElseThrow(() -> new ReplicationPendingException(
-                VENDOR_REPLICATION_PENDING, VENDOR_REPLICATION_PENDING_MESSAGE, vendorId));
+        ExtSupplierVendor vendor = requirePresent(vendorId, copy);
         if (!vendor.isActive()) {
             throw PurchaseOrderVendorException.inactive(vendor.getVendorNumber());
         }
         return vendor;
+    }
+
+    /**
+     * Like {@link #requireActive(UUID)}, for a drawer cash-on-delivery payout (#2576): an inactive vendor answers 422
+     * {@code VENDOR_INACTIVE} with a message about the drawer rather than about purchase orders.
+     *
+     * @throws ReplicationPendingException {@value #VENDOR_REPLICATION_PENDING} when it is not in the copy
+     * @throws PurchaseOrderVendorException {@code VENDOR_INACTIVE} when it is inactive
+     */
+    public @NonNull ExtSupplierVendor requireActiveForCashMovement(@NonNull UUID vendorId) {
+        ExtSupplierVendor vendor = requirePresent(vendorId, vendors.findById(vendorId));
+        if (!vendor.isActive()) {
+            throw PurchaseOrderVendorException.inactiveForCashMovement(vendor.getVendorNumber());
+        }
+        return vendor;
+    }
+
+    private static @NonNull ExtSupplierVendor requirePresent(
+            @NonNull UUID vendorId, @NonNull Optional<ExtSupplierVendor> copy) {
+        return copy.orElseThrow(() -> new ReplicationPendingException(
+                VENDOR_REPLICATION_PENDING, VENDOR_REPLICATION_PENDING_MESSAGE, vendorId));
     }
 }

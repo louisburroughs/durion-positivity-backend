@@ -34,6 +34,7 @@ import com.positivity.order.internal.exception.SessionCloseBlockedException;
 import com.positivity.order.internal.repository.CashMovementRepository;
 import com.positivity.order.internal.repository.ExtAccountingPettyExpenseCategoryRepository;
 import com.positivity.order.internal.repository.ExtAccountingRegisterFloatRepository;
+import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
@@ -111,6 +112,8 @@ class RegisterSessionServiceImplTest {
     @Mock
     private ExtAccountingPettyExpenseCategoryRepository categoryRepository;
 
+    private final ExtSupplierVendorRepository vendorCopies =
+            org.mockito.Mockito.mock(ExtSupplierVendorRepository.class);
     private RegisterSessionServiceImpl service;
 
     /** The drawer policy's defaults (CAP:550 S16): tolerance 5.00, petty on at 50.00, COD off. */
@@ -136,6 +139,7 @@ class RegisterSessionServiceImplTest {
                 org.mockito.Mockito.mock(DrawerStatedTax.class),
                 new com.positivity.order.internal.service.ActorDisplayNames(org.mockito.Mockito.mock(
                         com.positivity.order.internal.repository.ExtPeopleContactUserLinkRepository.class)),
+                new SupplierVendorGuard(vendorCopies),
                 clock,
                 meters);
         org.mockito.Mockito.lenient().when(sessionPolicyService.current()).thenReturn(DEFAULT_POLICY);
