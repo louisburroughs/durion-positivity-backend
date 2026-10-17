@@ -128,7 +128,8 @@ class PurchaseOrderLineLifecycleTest {
     }
 
     @Test
-    @DisplayName("reopen: the returned quantity is open again, the balance rises by its value, FULLY_RECEIVED → PARTIALLY")
+    @DisplayName(
+            "reopen: the returned quantity is open again, the balance rises by its value, FULLY_RECEIVED → PARTIALLY")
     void reopenPutsTheReturnedQuantityBackInFrontOfReceiving() {
         PurchaseOrderEntity po = order(PurchaseOrderStatus.FULLY_RECEIVED, "8", "2");
         assertThat(po.getOpenBalanceMinor()).isZero();
@@ -171,14 +172,20 @@ class PurchaseOrderLineLifecycleTest {
         order(PurchaseOrderStatus.PARTIALLY_RECEIVED, "6", "0");
 
         PurchaseOrderResponse partly = service.cancelPurchaseOrderLine(
-                PO_ID, LINE_ID, new CancelPurchaseOrderLineRequest(new BigDecimal("1"), "backordered too long"), "buyer");
+                PO_ID,
+                LINE_ID,
+                new CancelPurchaseOrderLineRequest(new BigDecimal("1"), "backordered too long"),
+                "buyer");
         assertThat(partly.getStatus()).isEqualTo(PurchaseOrderStatus.PARTIALLY_RECEIVED);
         assertThat(partly.getOpenBalanceMinor()).isEqualTo(3_000L);
         assertThat(partly.getLines().getFirst().getOpenQuantityDecimal()).isEqualByComparingTo("3");
         assertThat(partly.getLines().getFirst().getCancelledQuantityDecimal()).isEqualByComparingTo("1");
 
         PurchaseOrderResponse closed = service.cancelPurchaseOrderLine(
-                PO_ID, LINE_ID, new CancelPurchaseOrderLineRequest(new BigDecimal("3"), "vendor discontinued"), "buyer");
+                PO_ID,
+                LINE_ID,
+                new CancelPurchaseOrderLineRequest(new BigDecimal("3"), "vendor discontinued"),
+                "buyer");
         assertThat(closed.getStatus()).isEqualTo(PurchaseOrderStatus.CLOSED);
         assertThat(closed.getOpenBalanceMinor()).isZero();
         assertThat(closed.getVersionNumber()).isEqualTo(5);
@@ -190,8 +197,9 @@ class PurchaseOrderLineLifecycleTest {
         order(PurchaseOrderStatus.DRAFT, "0", "0");
         assertThatThrownBy(() -> service.cancelPurchaseOrderLine(
                         PO_ID, LINE_ID, new CancelPurchaseOrderLineRequest(BigDecimal.ONE, "r"), "buyer"))
-                .isInstanceOfSatisfying(PurchaseOrderStateConflictException.class, e -> assertThat(e.getNextAction())
-                        .contains("revisePurchaseOrder"));
+                .isInstanceOfSatisfying(
+                        PurchaseOrderStateConflictException.class,
+                        e -> assertThat(e.getNextAction()).contains("revisePurchaseOrder"));
         order(PurchaseOrderStatus.APPROVED, "0", "0");
         assertThatThrownBy(() -> service.cancelPurchaseOrderLine(
                         PO_ID, LINE_ID, new CancelPurchaseOrderLineRequest(new BigDecimal("11"), "r"), "buyer"))
@@ -209,8 +217,8 @@ class PurchaseOrderLineLifecycleTest {
     void closeCancelsEveryRemainder() {
         order(PurchaseOrderStatus.PARTIALLY_RECEIVED, "4", "0");
 
-        PurchaseOrderResponse closed =
-                service.closePurchaseOrder(PO_ID, new ClosePurchaseOrderRequest("vendor will not ship the rest"), "buyer");
+        PurchaseOrderResponse closed = service.closePurchaseOrder(
+                PO_ID, new ClosePurchaseOrderRequest("vendor will not ship the rest"), "buyer");
 
         assertThat(closed.getStatus()).isEqualTo(PurchaseOrderStatus.CLOSED);
         assertThat(closed.getOpenBalanceMinor()).isZero();
@@ -220,17 +228,21 @@ class PurchaseOrderLineLifecycleTest {
     }
 
     @Test
-    @DisplayName("close on FULLY_RECEIVED is CLOSED with nothing cancelled; on nothing received it is 409 naming cancel")
+    @DisplayName(
+            "close on FULLY_RECEIVED is CLOSED with nothing cancelled; on nothing received it is 409 naming cancel")
     void closeEdges() {
         order(PurchaseOrderStatus.FULLY_RECEIVED, "10", "0");
-        PurchaseOrderResponse closed = service.closePurchaseOrder(PO_ID, new ClosePurchaseOrderRequest("done"), "buyer");
+        PurchaseOrderResponse closed =
+                service.closePurchaseOrder(PO_ID, new ClosePurchaseOrderRequest("done"), "buyer");
         assertThat(closed.getStatus()).isEqualTo(PurchaseOrderStatus.CLOSED);
         assertThat(closed.getLines().getFirst().getCancelledQuantityDecimal()).isEqualByComparingTo("0");
 
         order(PurchaseOrderStatus.APPROVED, "0", "0");
-        assertThatThrownBy(() -> service.closePurchaseOrder(PO_ID, new ClosePurchaseOrderRequest("nothing came"), "buyer"))
-                .isInstanceOfSatisfying(PurchaseOrderStateConflictException.class, e -> assertThat(e.getNextAction())
-                        .contains("cancelPurchaseOrder"));
+        assertThatThrownBy(
+                        () -> service.closePurchaseOrder(PO_ID, new ClosePurchaseOrderRequest("nothing came"), "buyer"))
+                .isInstanceOfSatisfying(
+                        PurchaseOrderStateConflictException.class,
+                        e -> assertThat(e.getNextAction()).contains("cancelPurchaseOrder"));
         order(PurchaseOrderStatus.DRAFT, "0", "0");
         assertThatThrownBy(() -> service.closePurchaseOrder(PO_ID, new ClosePurchaseOrderRequest("draft"), "buyer"))
                 .isInstanceOf(PurchaseOrderStateConflictException.class);

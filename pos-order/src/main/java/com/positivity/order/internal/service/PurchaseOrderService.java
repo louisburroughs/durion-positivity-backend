@@ -1,7 +1,6 @@
 package com.positivity.order.internal.service;
 
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
-import com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.CancelPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.ClosePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
@@ -9,6 +8,7 @@ import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderSummaryResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
+import com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.enums.PurchaseOrderStatus;
 import java.util.List;
@@ -105,7 +105,5 @@ public interface PurchaseOrderService {
      * {@code nextAction} naming cancel, on an order with nothing received.
      */
     PurchaseOrderResponse closePurchaseOrder(
-            @NonNull UUID poId,
-            @NonNull ClosePurchaseOrderRequest request,
-            @NonNull String actorId);
+            @NonNull UUID poId, @NonNull ClosePurchaseOrderRequest request, @NonNull String actorId);
 }

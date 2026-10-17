@@ -3,7 +3,6 @@ package com.positivity.order.internal.service;
 import com.positivity.order.internal.dto.purchaseorder.ApprovePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.CancelPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.ClosePurchaseOrderRequest;
-import com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.CreatePurchaseOrderRequest;
 import com.positivity.order.internal.dto.purchaseorder.ListPurchaseOrdersRequest;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderLineRequest;
@@ -14,6 +13,7 @@ import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusRollup
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderStatusSummary;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderSummaryResponse;
 import com.positivity.order.internal.dto.purchaseorder.PurchaseOrderTransmissionEventResponse;
+import com.positivity.order.internal.dto.purchaseorder.ReopenPurchaseOrderLineRequest;
 import com.positivity.order.internal.dto.purchaseorder.RevisePurchaseOrderRequest;
 import com.positivity.order.internal.entity.ExtSupplierVendor;
 import com.positivity.order.internal.entity.PurchaseOrderEntity;
@@ -583,7 +583,8 @@ public class PurchaseOrderServiceImpl implements PurchaseOrderService {
                     + quantity.stripTrailingZeros().toPlainString() + " cannot be cancelled");
         }
         long value = PurchaseOrderLineFigures.valueOf(line, quantity);
-        line.setCancelledQuantity(PurchaseOrderLineFigures.zeroIfNull(line.getCancelledQuantity()).add(quantity));
+        line.setCancelledQuantity(
+                PurchaseOrderLineFigures.zeroIfNull(line.getCancelledQuantity()).add(quantity));
         line.setCancelledValueMinor(PurchaseOrderLineFigures.zeroIfNull(line.getCancelledValueMinor()) + value);
         PurchaseOrderLineFigures.moveBalance(po, -value);
     }

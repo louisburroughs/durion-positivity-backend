@@ -48,7 +48,8 @@ class PurchaseOrderLineFiguresTest {
         assertThat(PurchaseOrderLineFigures.valueOf(three, BigDecimal.ONE)).isEqualTo(333L);
         assertThat(PurchaseOrderLineFigures.valueOf(three, new BigDecimal("2"))).isEqualTo(667L);
         assertThat(PurchaseOrderLineFigures.valueOf(three, new BigDecimal("3"))).isEqualTo(1_000L);
-        assertThat(PurchaseOrderLineFigures.valueOf(line("0", 1_000L), BigDecimal.ONE)).isZero();
+        assertThat(PurchaseOrderLineFigures.valueOf(line("0", 1_000L), BigDecimal.ONE))
+                .isZero();
     }
 
     @Test
@@ -79,7 +80,9 @@ class PurchaseOrderLineFiguresTest {
         assertThat(a.getOpenQuantityDecimal()).isEqualByComparingTo("6");
         assertThat(b.getOpenQuantityDecimal()).isEqualByComparingTo("1");
         assertThat(order.getStatus()).isEqualTo(PurchaseOrderStatus.PARTIALLY_RECEIVED);
-        assertThat(order.getOpenBalanceMinor()).as("refresh leaves the balance alone").isEqualTo(8_500L);
+        assertThat(order.getOpenBalanceMinor())
+                .as("refresh leaves the balance alone")
+                .isEqualTo(8_500L);
 
         PurchaseOrderLineFigures.moveBalance(order, -10_000L);
         assertThat(order.getOpenBalanceMinor()).isZero();
@@ -88,7 +91,8 @@ class PurchaseOrderLineFiguresTest {
     }
 
     @Test
-    @DisplayName("a line written before the figures (open below ordered, figures zero) adopts received = ordered − open")
+    @DisplayName(
+            "a line written before the figures (open below ordered, figures zero) adopts received = ordered − open")
     void legacyOpenIsAdopted() {
         PurchaseOrderLineEntity legacy = line("10", 10_000L);
         legacy.setOpenQuantityDecimal(new BigDecimal("4"));
@@ -106,7 +110,8 @@ class PurchaseOrderLineFiguresTest {
     }
 
     @Test
-    @DisplayName("status: all settled → CLOSED with a short-close else FULLY_RECEIVED; received → PARTIALLY; else APPROVED")
+    @DisplayName(
+            "status: all settled → CLOSED with a short-close else FULLY_RECEIVED; received → PARTIALLY; else APPROVED")
     void statusMatrix() {
         PurchaseOrderLineEntity l = line("4", 4_000L);
         PurchaseOrderEntity order = order(PurchaseOrderStatus.PARTIALLY_RECEIVED, l);
@@ -121,13 +126,17 @@ class PurchaseOrderLineFiguresTest {
         l.setReceivedQuantity(new BigDecimal("3"));
         l.setCancelledQuantity(BigDecimal.ONE);
         PurchaseOrderLineFigures.refresh(order);
-        assertThat(order.getStatus()).as("settled with a short-closed remainder").isEqualTo(PurchaseOrderStatus.CLOSED);
+        assertThat(order.getStatus())
+                .as("settled with a short-closed remainder")
+                .isEqualTo(PurchaseOrderStatus.CLOSED);
 
         l.setCancelledQuantity(BigDecimal.ZERO);
         l.setReturnedQuantity(BigDecimal.ONE);
         order.setStatus(PurchaseOrderStatus.PARTIALLY_RECEIVED);
         PurchaseOrderLineFigures.refresh(order);
-        assertThat(order.getStatus()).as("a credited return settles the line too").isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
+        assertThat(order.getStatus())
+                .as("a credited return settles the line too")
+                .isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
     }
 
     @Test
@@ -147,9 +156,12 @@ class PurchaseOrderLineFiguresTest {
     @Test
     @DisplayName("toMinor converts a decimal at the currency exponent (JPY 0, USD 2, unknown → 2)")
     void toMinor() {
-        assertThat(PurchaseOrderLineFigures.toMinor(new BigDecimal("12.345"), "USD")).isEqualTo(1_235L);
-        assertThat(PurchaseOrderLineFigures.toMinor(new BigDecimal("12.5"), "JPY")).isEqualTo(13L);
-        assertThat(PurchaseOrderLineFigures.toMinor(new BigDecimal("1.00"), "ZZZ")).isEqualTo(100L);
+        assertThat(PurchaseOrderLineFigures.toMinor(new BigDecimal("12.345"), "USD"))
+                .isEqualTo(1_235L);
+        assertThat(PurchaseOrderLineFigures.toMinor(new BigDecimal("12.5"), "JPY"))
+                .isEqualTo(13L);
+        assertThat(PurchaseOrderLineFigures.toMinor(new BigDecimal("1.00"), "ZZZ"))
+                .isEqualTo(100L);
         assertThat(PurchaseOrderLineFigures.toMinor(null, "USD")).isZero();
     }
 }

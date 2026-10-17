@@ -90,7 +90,8 @@ class VendorReturnConsumerTransactionTest {
     }
 
     @Test
-    @DisplayName("receipt 6 of 10, correction 2: the line reopens to 6, PARTIALLY_RECEIVED, version bumped, balance 6000")
+    @DisplayName(
+            "receipt 6 of 10, correction 2: the line reopens to 6, PARTIALLY_RECEIVED, version bumped, balance 6000")
     void receiptCorrectionReopensTheLine() {
         UUID orderId = approvedOrder();
         UUID lineId = onlyLineId(orderId);
@@ -116,7 +117,8 @@ class VendorReturnConsumerTransactionTest {
     }
 
     @Test
-    @DisplayName("receipt 10 of 10 then a return to vendor of 3: received 7, returned 3, open 0, FULLY_RECEIVED, no bump")
+    @DisplayName(
+            "receipt 10 of 10 then a return to vendor of 3: received 7, returned 3, open 0, FULLY_RECEIVED, no bump")
     void returnToVendorDefaultsToCredit() {
         UUID orderId = approvedOrder();
         UUID lineId = onlyLineId(orderId);
@@ -130,7 +132,9 @@ class VendorReturnConsumerTransactionTest {
         assertThat(after.received()).isEqualByComparingTo("7");
         assertThat(after.returned()).isEqualByComparingTo("3");
         assertThat(after.open()).isEqualByComparingTo("0");
-        assertThat(after.balance()).as("the credit takes the receipt's accrual off: nothing owed").isZero();
+        assertThat(after.balance())
+                .as("the credit takes the receipt's accrual off: nothing owed")
+                .isZero();
         assertThat(after.status()).isEqualTo(PurchaseOrderStatus.FULLY_RECEIVED);
         assertThat(after.version()).as("nothing published").isEqualTo(2);
         assertThat(processedEventRepository.existsById(eventId)).isTrue();
@@ -143,7 +147,8 @@ class VendorReturnConsumerTransactionTest {
         UUID lineId = onlyLineId(orderId);
         listener.onInventoryEvent(receipt(orderId, lineId, "4"));
         transaction.executeWithoutResult(_ -> {
-            PurchaseOrderEntity order = purchaseOrderRepository.findById(orderId).orElseThrow();
+            PurchaseOrderEntity order =
+                    purchaseOrderRepository.findById(orderId).orElseThrow();
             order.setStatus(PurchaseOrderStatus.CANCELLED);
             purchaseOrderRepository.save(order);
         });
@@ -210,7 +215,8 @@ class VendorReturnConsumerTransactionTest {
 
     private Snapshot snapshot(UUID orderId) {
         return transaction.execute(_ -> {
-            PurchaseOrderEntity order = purchaseOrderRepository.findById(orderId).orElseThrow();
+            PurchaseOrderEntity order =
+                    purchaseOrderRepository.findById(orderId).orElseThrow();
             PurchaseOrderLineEntity line = order.getLines().getFirst();
             return new Snapshot(
                     order.getStatus(),
@@ -246,8 +252,15 @@ class VendorReturnConsumerTransactionTest {
                  "occurredAt":"%s","lines":[{"receiptId":"%s","receiptLineId":"%s","poLineId":"%s",
                  "quantityReturned":%s,"accruedAmount":%s}]}
                 """.formatted(
-                        UUID.randomUUID(), orderId, kind, NOW, UUID.randomUUID(), UUID.randomUUID(), poLineId,
-                        quantity, accruedAmount);
+                        UUID.randomUUID(),
+                        orderId,
+                        kind,
+                        NOW,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        poLineId,
+                        quantity,
+                        accruedAmount);
         return envelope(eventId, VendorReturnRecordedV1.EVENT_TYPE, orderId, payload);
     }
 }

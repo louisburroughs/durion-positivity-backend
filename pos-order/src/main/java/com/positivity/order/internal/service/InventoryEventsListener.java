@@ -2,9 +2,9 @@ package com.positivity.order.internal.service;
 
 import com.positivity.domainevents.inventory.GoodsReceiptLine;
 import com.positivity.domainevents.inventory.GoodsReceiptRecordedV1;
-import com.positivity.domainevents.inventory.VendorReturnRecordedV1;
 import com.positivity.domainevents.inventory.InventoryAvailabilityUpdatedV1;
 import com.positivity.domainevents.inventory.ReservationOutcomeV1;
+import com.positivity.domainevents.inventory.VendorReturnRecordedV1;
 import com.positivity.kafka.common.KafkaRails;
 import com.positivity.order.internal.entity.ExtInventoryAvailability;
 import com.positivity.order.internal.entity.FulfillmentStatus;
@@ -103,7 +103,6 @@ import tools.jackson.databind.ObjectMapper;
 @KafkaRails
 public class InventoryEventsListener {
     private static final String PAYLOAD = "payload";
-
 
     /** Producing domain, per the repo-wide {@code processed_events} convention. */
     static final String OWNER = "inventory";
@@ -404,7 +403,9 @@ public class InventoryEventsListener {
             if (orderLine == null) {
                 if (line.poLineId() != null) {
                     log.warn(
-                            "Vendor return {} references unknown line {}", vendorReturn.vendorReturnId(), line.poLineId());
+                            "Vendor return {} references unknown line {}",
+                            vendorReturn.vendorReturnId(),
+                            line.poLineId());
                 }
                 // The receipt moved only the balance; a correction gives that back below.
                 continue;
@@ -414,13 +415,13 @@ public class InventoryEventsListener {
             BigDecimal received = PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedQuantity())
                     .subtract(line.quantityReturned());
             orderLine.setReceivedQuantity(received.signum() < 0 ? BigDecimal.ZERO : received);
-            orderLine.setReceivedAccruedMinor(Math.max(
-                    0L, PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedAccruedMinor()) - accrued));
+            orderLine.setReceivedAccruedMinor(
+                    Math.max(0L, PurchaseOrderLineFigures.zeroIfNull(orderLine.getReceivedAccruedMinor()) - accrued));
             if (!correction) {
                 BigDecimal reopened = PurchaseOrderLineFigures.open(orderLine).subtract(openBefore);
                 if (reopened.signum() > 0) {
-                    orderLine.setReturnedQuantity(
-                            PurchaseOrderLineFigures.zeroIfNull(orderLine.getReturnedQuantity()).add(reopened));
+                    orderLine.setReturnedQuantity(PurchaseOrderLineFigures.zeroIfNull(orderLine.getReturnedQuantity())
+                            .add(reopened));
                 }
                 orderLine.setReturnedValueMinor(
                         PurchaseOrderLineFigures.zeroIfNull(orderLine.getReturnedValueMinor()) + accrued);

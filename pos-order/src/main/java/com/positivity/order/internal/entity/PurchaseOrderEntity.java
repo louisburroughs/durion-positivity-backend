@@ -97,7 +97,6 @@ public class PurchaseOrderEntity extends TenantScopedEntity {
      */
     private Long openBalanceMinor;
 
-
     private UUID shipToLocationId;
 
     private String paymentTermsId;

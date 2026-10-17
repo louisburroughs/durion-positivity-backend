@@ -19,12 +19,18 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Cancel part or all of a line's open quantity: the vendor will not ship it")
 public class CancelPurchaseOrderLineRequest {
 
-    @Schema(description = "Base units to cancel; at most the line's open quantity", example = "3", requiredMode = REQUIRED)
+    @Schema(
+            description = "Base units to cancel; at most the line's open quantity",
+            example = "3",
+            requiredMode = REQUIRED)
     @NotNull
     @Positive
     private BigDecimal quantity;
 
-    @Schema(description = "Why the remainder is cancelled", example = "Vendor discontinued the part", requiredMode = REQUIRED)
+    @Schema(
+            description = "Why the remainder is cancelled",
+            example = "Vendor discontinued the part",
+            requiredMode = REQUIRED)
     @NotBlank
     @Size(max = 500)
     private String reason;

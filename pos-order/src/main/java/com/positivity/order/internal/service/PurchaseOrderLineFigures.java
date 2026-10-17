@@ -109,7 +109,8 @@ public final class PurchaseOrderLineFigures {
 
     /** Whether anything was received on the order (net of corrections). */
     public static boolean anythingReceived(@NonNull PurchaseOrderEntity order) {
-        return order.getLines().stream().anyMatch(line -> zeroIfNull(line.getReceivedQuantity()).signum() > 0);
+        return order.getLines().stream()
+                .anyMatch(line -> zeroIfNull(line.getReceivedQuantity()).signum() > 0);
     }
 
     /** A decimal at the currency exponent, in whole minor units of {@code currencyCode} (HALF_UP). */

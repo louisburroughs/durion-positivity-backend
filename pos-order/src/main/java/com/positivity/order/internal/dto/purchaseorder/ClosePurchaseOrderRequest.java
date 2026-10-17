@@ -16,7 +16,10 @@ import lombok.NoArgsConstructor;
 @Schema(description = "Close a purchase order: every remaining open quantity on every line is cancelled")
 public class ClosePurchaseOrderRequest {
 
-    @Schema(description = "Why the remainder is cancelled", example = "Vendor will not ship the rest", requiredMode = REQUIRED)
+    @Schema(
+            description = "Why the remainder is cancelled",
+            example = "Vendor will not ship the rest",
+            requiredMode = REQUIRED)
     @NotBlank
     @Size(max = 500)
     private String reason;
