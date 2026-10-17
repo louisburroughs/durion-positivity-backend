@@ -21,6 +21,7 @@ import com.positivity.tenant.internal.exception.InvalidStatusTransitionException
 import com.positivity.tenant.internal.exception.ResourceNotFoundException;
 import com.positivity.tenant.internal.repository.AccountRepository;
 import com.positivity.tenant.internal.repository.TenantRepository;
+import com.positivity.tenant.internal.validation.TenantLocales;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -47,7 +48,12 @@ class TenantServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new TenantServiceImpl(tenants, accounts, facts, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new TenantServiceImpl(
+                tenants,
+                accounts,
+                facts,
+                new TenantLocales(java.util.List.of("en-US", "es-US", "es-MX", "fr-CA", "fr-FR")),
+                Clock.fixed(NOW, ZoneOffset.UTC));
         when(tenants.saveAndFlush(any())).thenAnswer(invocation -> {
             TenantEntity entity = invocation.getArgument(0);
             if (entity.getId() == null) {
@@ -64,6 +70,7 @@ class TenantServiceImplTest {
                 .accountId(ACCOUNT)
                 .cell("us-east-1")
                 .initialAdminEmail("owner@acme.example")
+                .locale("fr-ca")
                 .build();
     }
 

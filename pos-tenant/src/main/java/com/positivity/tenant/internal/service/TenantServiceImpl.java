@@ -10,6 +10,7 @@ import com.positivity.tenant.internal.exception.InvalidStatusTransitionException
 import com.positivity.tenant.internal.exception.ResourceNotFoundException;
 import com.positivity.tenant.internal.repository.AccountRepository;
 import com.positivity.tenant.internal.repository.TenantRepository;
+import com.positivity.tenant.internal.validation.TenantLocales;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -38,6 +39,7 @@ public class TenantServiceImpl implements TenantService {
     private final TenantRepository tenantRepository;
     private final AccountRepository accountRepository;
     private final TenantFactPublisher factPublisher;
+    private final TenantLocales locales;
     private final Clock clock;
 
     @Override
@@ -58,6 +60,7 @@ public class TenantServiceImpl implements TenantService {
                 .accountId(request.getAccountId())
                 .cell(request.getCell())
                 .initialAdminEmail(request.getInitialAdminEmail())
+                .locale(locales.canonical(request.getLocale()))
                 .build();
         TenantEntity saved;
         try {
@@ -119,6 +122,13 @@ public class TenantServiceImpl implements TenantService {
         if (request.getCell() != null && !request.getCell().equals(tenant.getCell())) {
             tenant.setCell(request.getCell());
             changed = true;
+        }
+        if (request.getLocale() != null) {
+            String locale = locales.canonical(request.getLocale());
+            if (!locale.equals(tenant.getLocale())) {
+                tenant.setLocale(locale);
+                changed = true;
+            }
         }
         if (!changed) {
             return toResponse(tenant);
@@ -242,6 +252,7 @@ public class TenantServiceImpl implements TenantService {
                 .accountId(tenant.getAccountId())
                 .cell(tenant.getCell())
                 .initialAdminEmail(tenant.getInitialAdminEmail())
+                .locale(tenant.getLocale())
                 .createdAt(tenant.getCreatedAt())
                 .updatedAt(tenant.getUpdatedAt())
                 .activatedAt(tenant.getActivatedAt())

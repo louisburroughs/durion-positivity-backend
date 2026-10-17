@@ -26,7 +26,8 @@ public record TenantCreatedV1(
         @NonNull String slug,
         @Nullable String displayName,
         @NonNull String status,
-        @NonNull String initialAdminEmail) {
+        @NonNull String initialAdminEmail,
+        @Nullable String locale) {
 
     public static final String EVENT_TYPE = TenantEventTypes.CREATED;
     public static final int SCHEMA_VERSION = 1;
@@ -48,6 +49,6 @@ public record TenantCreatedV1(
 
     /** The public projection consumers keep in {@code ext_tenant}. */
     public @NonNull TenantProjectionV1 projection() {
-        return new TenantProjectionV1(tenantId, slug, displayName, status);
+        return new TenantProjectionV1(tenantId, slug, displayName, status, locale);
     }
 }

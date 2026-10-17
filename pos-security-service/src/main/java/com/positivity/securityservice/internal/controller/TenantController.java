@@ -33,7 +33,7 @@ public class TenantController {
 
     @Operation(operationId = "getMyTenant", summary = "Get the Caller's Tenant", description = """
             Returns the tenant the caller's token belongs to (its tid claim) as the security service knows it \
-            from the tenant registry's published projection: id, slug, display name and lifecycle status.
+            from the tenant registry's published projection: id, slug, display name, lifecycle status and locale.
             Use this tool to show the tenant name in the header or to check the tenant is ACTIVE; do not use \
             it to look up another tenant, which only platform staff can do through the pos-tenant registry.
             Preconditions: an authenticated caller whose tenant has been published to the replica.

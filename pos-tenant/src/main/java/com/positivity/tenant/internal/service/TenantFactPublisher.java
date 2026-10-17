@@ -47,7 +47,8 @@ public class TenantFactPublisher {
                 tenant.getSlug(),
                 tenant.getDisplayName(),
                 tenant.getStatus().name(),
-                tenant.getInitialAdminEmail());
+                tenant.getInitialAdminEmail(),
+                tenant.getLocale());
         publish(TenantCreatedV1.EVENT_TYPE, TenantCreatedV1.SCHEMA_VERSION, tenant, payload);
     }
 
@@ -72,7 +73,8 @@ public class TenantFactPublisher {
                 tenant.getId(),
                 tenant.getSlug(),
                 tenant.getDisplayName(),
-                tenant.getStatus().name());
+                tenant.getStatus().name(),
+                tenant.getLocale());
         publish(eventType, TenantProjectionV1.SCHEMA_VERSION, tenant, payload);
     }
 

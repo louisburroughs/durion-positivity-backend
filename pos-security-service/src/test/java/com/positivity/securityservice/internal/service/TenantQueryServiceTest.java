@@ -35,6 +35,7 @@ class TenantQueryServiceTest {
                         .slug("acme")
                         .displayName("Acme")
                         .status("ACTIVE")
+                        .locale("fr-CA")
                         .build()));
         TenantContext.bind(TENANT);
 
@@ -44,6 +45,7 @@ class TenantQueryServiceTest {
         assertThat(body.get().id()).isEqualTo(TENANT);
         assertThat(body.get().slug()).isEqualTo("acme");
         assertThat(body.get().status()).isEqualTo("ACTIVE");
+        assertThat(body.get().locale()).isEqualTo("fr-CA");
     }
 
     @Test

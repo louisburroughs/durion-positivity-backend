@@ -79,6 +79,10 @@ public class TenantEntity extends TenantScopedEntity {
     @Column(name = "initial_admin_email", nullable = false, length = 320)
     private String initialAdminEmail;
 
+    /** BCP 47 language tag in canonical case (CAP:550 S44, #2618), from {@code pos.tenant.supported-locales}. */
+    @Column(nullable = false, length = 35)
+    private String locale;
+
     @Version
     @Column(nullable = false)
     private Long version;

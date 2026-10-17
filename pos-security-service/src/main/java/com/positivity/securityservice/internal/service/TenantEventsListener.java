@@ -158,6 +158,10 @@ public class TenantEventsListener {
             row.setDisplayName(projection.displayName());
             row.setDisplayNameKey(
                     projection.displayName() == null ? null : TenantDisplayName.normalize(projection.displayName()));
+            // A fact published before the field carries no locale: keep what the replica holds.
+            if (projection.locale() != null) {
+                row.setLocale(projection.locale());
+            }
             row.setStatus(projection.status());
             row.setAggregateVersion(projection.aggregateVersion());
             row.setUpdatedAt(Instant.now(clock));
