@@ -10,47 +10,56 @@ import com.positivity.tax.internal.entity.OutboxEvent;
 import com.positivity.tax.internal.repository.OutboxEventRepository;
 import com.positivity.tenancy.TenantContext;
 import com.positivity.tenancy.kafka.TenantKafkaHeaders;
-import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * #2657: pos-tax's Kafka rails against a real broker (Testcontainers {@code apache/kafka}, KRaft) on Postgres: an
- * outbox row is published to {@code tax.events.v1} with the tenant header; a {@code tax.outbox.replay-requested}
- * command produced to {@code tax.commands.v1} is read back from the broker and handed to the command listener, which
- * re-queues the window's fact; the publisher sends it again under the same eventId. The {@code pg} profile runs
- * without the {@code @KafkaRails} beans (they need a deployed profile), so the publisher and the listener are built
- * here on the broker the container provides, exactly as the rails beans would be wired. Requires Docker.
+ * #2657: pos-tax's Kafka rails against a real broker (Testcontainers {@code apache/kafka}, KRaft) on Postgres, with
+ * the rails' own beans: {@code pg} plus {@code local-kafka} switches the {@code @KafkaRails} beans on, and the
+ * {@code pg} profile's Kafka auto-configuration exclusion is lifted so the real {@code KafkaTemplate}, listener
+ * container factory (tenant {@code RecordInterceptor}, dead-letter error handler) and {@link TaxCommandListener}
+ * run against the broker. An outbox row is published by the real {@link OutboxPublisher} to {@code tax.events.v1}
+ * with the tenant header; a {@code tax.outbox.replay-requested} command sent through the real template to
+ * {@code tax.commands.v1} is consumed by the real {@code @KafkaListener}, which re-queues the window's fact (its row
+ * becomes unpublished again); the publisher then sends it again under the same eventId. Hand-built consumers only
+ * assert what reached the topics. The scheduled drains are parked (one-hour poll), so the test drives the publisher
+ * itself. Requires Docker.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@ActiveProfiles("pg")
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.NONE,
+        properties = {
+            "spring.autoconfigure.exclude=",
+            "pos.tax.outbox.poll-interval-ms=3600000",
+            "pos.tax.manifest.poll-interval-ms=3600000",
+            "pos.tax.outbox.send-timeout-ms=30000"
+        })
+@ActiveProfiles({"pg", "local-kafka"})
 @ResourceLock(TaxKafkaContainer.RESOURCE_LOCK)
+@ResourceLock(TaxRegistrationOutboxIT.OUTBOX_LOCK)
 @DisplayName("Outbox → tax.events.v1 → replay command → re-sent, on a real broker (#2657)")
 class TaxOutboxBrokerIT {
 
@@ -58,9 +67,10 @@ class TaxOutboxBrokerIT {
     private static final String COMMANDS_TOPIC = "tax.commands.v1";
 
     @DynamicPropertySource
-    static void properties(DynamicPropertyRegistry registry) {
+    static void properties(DynamicPropertyRegistry registry) throws Exception {
         TaxPostgresContainer.registerDataSourceProperties(registry);
         TaxKafkaContainer.registerKafkaProperties(registry);
+        TaxKafkaContainer.createTopics(EVENTS_TOPIC, COMMANDS_TOPIC);
     }
 
     @Autowired
@@ -70,7 +80,10 @@ class TaxOutboxBrokerIT {
     private OutboxEventRepository outboxEvents;
 
     @Autowired
-    private OutboxReplayService replayService;
+    private OutboxPublisher publisher;
+
+    @Autowired
+    private KafkaTemplate<String, String> template;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -79,7 +92,7 @@ class TaxOutboxBrokerIT {
     private Clock clock;
 
     @Autowired
-    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    private PlatformTransactionManager transactionManager;
 
     @Test
     @DisplayName("publish, consume with the tenant header, replay through the commands topic, consume the re-send")
@@ -93,7 +106,7 @@ class TaxOutboxBrokerIT {
         TenantContext.bind(tenant);
         try {
             // The writer joins the caller's transaction (MANDATORY), as a service method's would.
-            new org.springframework.transaction.support.TransactionTemplate(transactionManager)
+            new TransactionTemplate(transactionManager)
                     .executeWithoutResult(_ -> outboxWriter.publish(
                             EVENTS_TOPIC,
                             new DomainEventEnvelope<>(
@@ -112,20 +125,13 @@ class TaxOutboxBrokerIT {
             TenantContext.clear();
         }
 
-        // The publisher, on a template bound to the container's broker, as the rails would build it.
-        KafkaTemplate<String, String> template = new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TaxKafkaContainer.bootstrapServers(),
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class)));
-        OutboxPublisher publisher = new OutboxPublisher(
-                outboxEvents, template, clock, new StaticListableBeanFactory().getBeanProvider(MeterRegistry.class));
-        ReflectionTestUtils.setField(publisher, "sendTimeoutMs", 30_000L);
-
-        try (KafkaConsumer<String, String> events = consumer("it-events-" + eventId)) {
+        try (KafkaConsumer<String, String> events = consumer("it-events-" + eventId);
+                KafkaConsumer<String, String> commands = consumer("it-commands-" + eventId)) {
             events.subscribe(List.of(EVENTS_TOPIC));
+            commands.subscribe(List.of(COMMANDS_TOPIC));
             publisher.publishPending();
 
-            ConsumerRecord<String, String> first = awaitRecord(events, eventId.toString());
+            ConsumerRecord<String, String> first = awaitEvent(events, eventId.toString());
             assertThat(first.key()).isEqualTo(aggregate.toString());
             assertThat(TenantKafkaHeaders.read(first.headers())).contains(tenant);
             JsonNode envelope = objectMapper.readTree(first.value());
@@ -140,37 +146,29 @@ class TaxOutboxBrokerIT {
                     .as("marked published only after the broker acknowledged")
                     .isNotNull();
 
-            // A replay command goes through the commands topic and comes back off the broker to the listener.
+            // A replay command goes through the real template; the real listener consumes it off the broker.
             String command =
                     """
                     {"commandType":"tax.outbox.replay-requested","payload":{"since":"%s","until":"%s"}}
                     """.formatted(before.minusSeconds(1), Instant.now(clock).plusSeconds(1));
             template.send(TenantKafkaHeaders.record(COMMANDS_TOPIC, aggregate.toString(), command, tenant))
-                    .get(30, java.util.concurrent.TimeUnit.SECONDS);
-            TaxCommandListener listener = new TaxCommandListener(clock, objectMapper, replayService);
-            try (KafkaConsumer<String, String> commands = consumer("it-commands-" + eventId)) {
-                commands.subscribe(List.of(COMMANDS_TOPIC));
-                ConsumerRecord<String, String> received = awaitAny(commands);
-                assertThat(TenantKafkaHeaders.read(received.headers())).contains(tenant);
-                TenantContext.bind(tenant);
-                try {
-                    listener.onCommand(received.value());
-                } finally {
-                    TenantContext.clear();
-                }
-            }
-            OutboxEvent requeued = outboxEvents.findById(row.getId()).orElseThrow();
-            assertThat(requeued.getPublishedAt())
-                    .as("the window's fact is re-queued (its row marked unpublished again), same eventId")
-                    .isNull();
+                    .get(30, TimeUnit.SECONDS);
+            ConsumerRecord<String, String> received = awaitCommand(commands, aggregate.toString(), tenant);
+            assertThat(received.value()).contains("tax.outbox.replay-requested");
+
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(60))
+                    .pollInterval(Duration.ofMillis(250))
+                    .untilAsserted(() -> assertThat(
+                                    outboxEvents.findById(row.getId()).orElseThrow().getPublishedAt())
+                            .as("the listener re-queued the window's fact (row unpublished again), same eventId")
+                            .isNull());
 
             publisher.publishPending();
-            ConsumerRecord<String, String> again = awaitRecord(events, eventId.toString());
+            ConsumerRecord<String, String> again = awaitEvent(events, eventId.toString());
             assertThat(again.offset()).isGreaterThan(first.offset());
             assertThat(objectMapper.readTree(again.value()).path("eventId").stringValue(null))
                     .isEqualTo(eventId.toString());
-        } finally {
-            template.destroy();
         }
     }
 
@@ -191,7 +189,7 @@ class TaxOutboxBrokerIT {
     }
 
     /** The first record whose envelope carries {@code eventId}, within a minute; other tests' records are skipped. */
-    private ConsumerRecord<String, String> awaitRecord(KafkaConsumer<String, String> consumer, String eventId)
+    private ConsumerRecord<String, String> awaitEvent(KafkaConsumer<String, String> consumer, String eventId)
             throws Exception {
         Instant deadline = Instant.now().plusSeconds(60);
         while (Instant.now().isBefore(deadline)) {
@@ -206,15 +204,18 @@ class TaxOutboxBrokerIT {
         throw new AssertionError("No record with eventId " + eventId + " on the broker within 60 s");
     }
 
-    private static ConsumerRecord<String, String> awaitAny(KafkaConsumer<String, String> consumer) {
+    /** The first command keyed {@code key} and stamped with {@code tenant}, within a minute; others are skipped. */
+    private static ConsumerRecord<String, String> awaitCommand(
+            KafkaConsumer<String, String> consumer, String key, UUID tenant) {
         Instant deadline = Instant.now().plusSeconds(60);
-        List<ConsumerRecord<String, String>> seen = new ArrayList<>();
         while (Instant.now().isBefore(deadline)) {
-            consumer.poll(Duration.ofMillis(500)).forEach(seen::add);
-            if (!seen.isEmpty()) {
-                return seen.getLast();
+            for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofMillis(500))) {
+                if (key.equals(record.key())
+                        && TenantKafkaHeaders.read(record.headers()).filter(tenant::equals).isPresent()) {
+                    return record;
+                }
             }
         }
-        throw new AssertionError("No command record on the broker within 60 s");
+        throw new AssertionError("No command keyed " + key + " on the broker within 60 s");
     }
 }
