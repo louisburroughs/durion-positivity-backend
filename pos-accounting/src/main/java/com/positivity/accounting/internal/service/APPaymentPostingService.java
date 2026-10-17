@@ -104,7 +104,6 @@ public class APPaymentPostingService {
     /** {@code returnDateRule}: the return date's period was closed, so the mirror is dated on the detection date. */
     public static final String DETECTION_DATE = "DETECTION_DATE";
 
-
     /**
      * The retry caller's leave to date the entry past a hard lock (#2729, AW42): who gave it and why. Recorded on the
      * {@code AP_PAYMENT_GL_POSTING_DEFERRED} audit row, written inside the posting transaction.
@@ -187,7 +186,11 @@ public class APPaymentPostingService {
         }
         if (returnOwed && payment.getGlJournalEntryId() != null) {
             // The original is posted; only the mirror is owed (its first attempt fell in a closed period).
-            return postReturn(payment, null, overrideJustification, deferral == null ? APPaymentReturnService.SYSTEM : deferral.user());
+            return postReturn(
+                    payment,
+                    null,
+                    overrideJustification,
+                    deferral == null ? APPaymentReturnService.SYSTEM : deferral.user());
         }
         return post(payment, overrideJustification, false, deferral);
     }
@@ -324,7 +327,8 @@ public class APPaymentPostingService {
             @Nullable Deferral deferral) {
         UUID entryId = postOriginal(payment, callerOverride, applyRecordedOverride, deferral);
         if (returnOwed(payment)) {
-            postReturn(payment, null, callerOverride, deferral == null ? APPaymentReturnService.SYSTEM : deferral.user());
+            postReturn(
+                    payment, null, callerOverride, deferral == null ? APPaymentReturnService.SYSTEM : deferral.user());
         }
         return entryId;
     }
