@@ -42,7 +42,6 @@ import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
-import com.positivity.order.internal.service.SupplierVendorGuard;
 import com.positivity.order.internal.service.model.CashMovementCommand;
 import com.positivity.order.internal.service.model.CashMovementOptions;
 import com.positivity.order.internal.service.model.CashMovementResult;

@@ -34,7 +34,8 @@ public class UpdateSessionPolicyRequest {
     private TypeSetting pettyExpense;
 
     @Schema(
-            description = "Vendor cash on delivery (allowed and cashier limit); a VENDOR_COD movement names an ACTIVE vendor of the vendor copy",
+            description =
+                    "Vendor cash on delivery (allowed and cashier limit); a VENDOR_COD movement names an ACTIVE vendor of the vendor copy",
             requiredMode = REQUIRED)
     private TypeSetting vendorCod;
 

@@ -28,8 +28,8 @@ import com.positivity.order.internal.entity.RegisterSession;
 import com.positivity.order.internal.entity.RegisterSessionStatus;
 import com.positivity.order.internal.entity.SalesOrderStatus;
 import com.positivity.order.internal.exception.CashMovementIdempotencyConflictException;
-import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
 import com.positivity.order.internal.exception.CashMovementRefusedException;
+import com.positivity.order.internal.exception.CashMovementRefusedException.Refusal;
 import com.positivity.order.internal.exception.CurrencyNotSupportedException;
 import com.positivity.order.internal.exception.PurchaseOrderVendorException;
 import com.positivity.order.internal.exception.RegisterSessionRequestValidationException;
@@ -42,7 +42,6 @@ import com.positivity.order.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.order.internal.repository.OrderPaymentRecordRepository;
 import com.positivity.order.internal.repository.RegisterSessionRepository;
 import com.positivity.order.internal.repository.SalesOrderRepository;
-import com.positivity.order.internal.service.SupplierVendorGuard;
 import com.positivity.order.internal.service.model.CashMovementCommand;
 import com.positivity.order.internal.service.model.CashMovementOptions;
 import com.positivity.order.internal.service.model.CashMovementResult;
@@ -100,8 +99,7 @@ class RegisterSessionCashMovementTest {
     private final OrderDomainEventPublisher publisher = mock(OrderDomainEventPublisher.class);
     private final SessionPolicyService policyService = mock(SessionPolicyService.class);
     private final CashMovementApprovalService approvalService = mock(CashMovementApprovalService.class);
-    private final ExtSupplierVendorRepository vendorCopies =
-            mock(ExtSupplierVendorRepository.class);
+    private final ExtSupplierVendorRepository vendorCopies = mock(ExtSupplierVendorRepository.class);
     private final ExtAccountingRegisterFloatRepository floats = mock(ExtAccountingRegisterFloatRepository.class);
     private final ExtAccountingPettyExpenseCategoryRepository categories =
             mock(ExtAccountingPettyExpenseCategoryRepository.class);
@@ -443,17 +441,12 @@ class RegisterSessionCashMovementTest {
                     .isInstanceOf(ReplicationPendingException.class);
         }
 
-        private static ExtSupplierVendor vendorCopy(
-                UUID vendorId, boolean active) {
-            ExtSupplierVendor vendor =
-                    new ExtSupplierVendor();
+        private static ExtSupplierVendor vendorCopy(UUID vendorId, boolean active) {
+            ExtSupplierVendor vendor = new ExtSupplierVendor();
             vendor.setVendorId(vendorId);
             vendor.setVendorNumber("V-000123");
             vendor.setDisplayName("Acme Parts");
-            vendor.setStatus(
-                    active
-                            ? ExtSupplierVendor.Status.ACTIVE
-                            : ExtSupplierVendor.Status.INACTIVE);
+            vendor.setStatus(active ? ExtSupplierVendor.Status.ACTIVE : ExtSupplierVendor.Status.INACTIVE);
             return vendor;
         }
 

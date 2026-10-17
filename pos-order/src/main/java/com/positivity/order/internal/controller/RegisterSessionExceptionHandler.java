@@ -226,8 +226,7 @@ public class RegisterSessionExceptionHandler {
      * Retry-After}, rendered by the platform handler ({@code ReplicationPendingException}).
      */
     @ExceptionHandler(PurchaseOrderVendorException.class)
-    public ResponseEntity<ApiError> handleVendor(
-            PurchaseOrderVendorException ex, HttpServletRequest request) {
+    public ResponseEntity<ApiError> handleVendor(PurchaseOrderVendorException ex, HttpServletRequest request) {
         String correlationId = correlationId(request);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .header(X_CORRELATION_ID, correlationId)

@@ -351,7 +351,8 @@ class RegisterSessionCashMovementControllerTest extends BaseControllerSliceTest 
     }
 
     @Test
-    @DisplayName("#2576: a VENDOR_COD vendor the copy does not hold yet is 503 VENDOR_REPLICATION_PENDING + Retry-After")
+    @DisplayName(
+            "#2576: a VENDOR_COD vendor the copy does not hold yet is 503 VENDOR_REPLICATION_PENDING + Retry-After")
     void vendorReplicationPendingIs503WithRetryAfter() throws Exception {
         when(registerSessionService.recordCashMovement(any()))
                 .thenThrow(new ReplicationPendingException(
