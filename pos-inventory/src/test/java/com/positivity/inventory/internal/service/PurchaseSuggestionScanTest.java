@@ -47,6 +47,12 @@ class PurchaseSuggestionScanTest {
     private ReplenishmentService replenishmentService;
 
     @Autowired
+    private com.positivity.inventory.internal.repository.ExtSupplierVendorReplicaRepository vendorCopyRepository;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.VendorFeedMappingRepository vendorFeedMappingRepository;
+
+    @Autowired
     private PurchaseSuggestionService purchaseSuggestionService;
 
     @Autowired
@@ -110,6 +116,11 @@ class PurchaseSuggestionScanTest {
             Integer minOrderQty,
             int packSize) {
         Instant asOf = Instant.now();
+        FeedVendorMappings.mapActive(
+                vendorCopyRepository,
+                vendorFeedMappingRepository,
+                com.positivity.inventory.internal.enums.FeedVendorType.MANUFACTURER,
+                manufacturerId.toString());
         return normalizedAvailabilityRepository.save(NormalizedAvailability.builder()
                 .productId(productId)
                 .manufacturerId(manufacturerId)

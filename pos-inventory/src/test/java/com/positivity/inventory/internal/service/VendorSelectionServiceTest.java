@@ -177,7 +177,7 @@ class VendorSelectionServiceTest {
                         manufacturerRow(VENDOR_B, 40, 5, new BigDecimal("4.99"), asOf)),
                 List.of());
         assertThat(vendorSelectionService.selectVendor(PRODUCT_ID, 12).chosen().feedVendorRef())
-                .isEqualTo(VENDOR_B);
+                .isEqualTo(VENDOR_B.toString());
     }
 
     @Test
@@ -237,8 +237,8 @@ class VendorSelectionServiceTest {
     }
 
     @Test
-    @DisplayName("distributor rows with non-UUID ids are excluded — they cannot be PO vendors")
-    void nonUuidDistributorExcluded() {
+    @DisplayName("S36: a non-UUID distributor id is a candidate once mapped; it wins on every criterion here")
+    void nonUuidDistributorIsEligible() {
         Instant asOf = Instant.parse("2026-07-01T00:00:00Z");
         feeds(
                 List.of(manufacturerRow(VENDOR_B, 8, 9, new BigDecimal("4.99"), asOf)),
@@ -246,8 +246,9 @@ class VendorSelectionServiceTest {
 
         var selection = vendorSelectionService.selectVendor(PRODUCT_ID, 12);
 
-        // The non-UUID distributor would have won on every criterion — it must be absent.
-        assertThat(selection.chosen().feedVendorRef()).isEqualTo(VENDOR_B.toString());
+        // Before #2525 the free-text id was dropped (it could not be a PO vendor); the mapping key is the feed's text.
+        assertThat(selection.chosen().feedVendorRef()).isEqualTo("ACME-DIST");
+        assertThat(selection.chosen().sourceType()).isEqualTo(SuggestedVendorType.DISTRIBUTOR);
     }
 
     @Test

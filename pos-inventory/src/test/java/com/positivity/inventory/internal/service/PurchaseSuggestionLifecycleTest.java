@@ -52,6 +52,12 @@ class PurchaseSuggestionLifecycleTest {
     private PurchaseSuggestionService purchaseSuggestionService;
 
     @Autowired
+    private com.positivity.inventory.internal.repository.ExtSupplierVendorReplicaRepository vendorCopyRepository;
+
+    @Autowired
+    private com.positivity.inventory.internal.repository.VendorFeedMappingRepository vendorFeedMappingRepository;
+
+    @Autowired
     private PurchaseSuggestionRepository suggestionRepository;
 
     @Autowired
@@ -83,6 +89,13 @@ class PurchaseSuggestionLifecycleTest {
             UUID productId,
             int quantity,
             Integer vendorPackSize) {
+        if (vendorRefId != null) {
+            FeedVendorMappings.mapActive(
+                    vendorCopyRepository,
+                    vendorFeedMappingRepository,
+                    com.positivity.inventory.internal.enums.FeedVendorType.MANUFACTURER,
+                    vendorRefId.toString());
+        }
         return suggestionRepository.save(PurchaseSuggestion.builder()
                 .policyId(UUID.randomUUID())
                 .itemSKU(productId.toString())
