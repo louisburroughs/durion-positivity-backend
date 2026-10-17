@@ -220,11 +220,12 @@ public class CashOutlookServiceImpl implements CashOutlookService {
         Set<String> excluded = walkIn.isEmpty()
                 ? Set.of(NO_PARTY)
                 : walkIn.stream().map(UUID::toString).collect(Collectors.toSet());
-        List<ExtInvoice> candidates = extInvoiceRepository
-                .findByStatusInExcludingParties(InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES, excluded)
-                .stream()
-                .filter(invoice -> !InvoiceBalanceCalculator.isWalkIn(invoice, walkIn))
-                .toList();
+        List<ExtInvoice> candidates =
+                extInvoiceRepository
+                        .findByStatusInExcludingParties(InvoiceBalanceCalculator.AR_ELIGIBLE_STATUSES, excluded)
+                        .stream()
+                        .filter(invoice -> !InvoiceBalanceCalculator.isWalkIn(invoice, walkIn))
+                        .toList();
         if (candidates.isEmpty()) {
             return List.of();
         }

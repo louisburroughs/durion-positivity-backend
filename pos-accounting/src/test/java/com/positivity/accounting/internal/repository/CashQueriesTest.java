@@ -85,7 +85,12 @@ class CashQueriesTest extends BaseIntegrationTest {
     }
 
     private void entry(
-            String number, LocalDate date, JournalEntryStatus status, GLAccount debit, GLAccount credit, String amount) {
+            String number,
+            LocalDate date,
+            JournalEntryStatus status,
+            GLAccount debit,
+            GLAccount credit,
+            String amount) {
         BigDecimal value = new BigDecimal(amount);
         JournalEntry entry = new JournalEntry();
         entry.setStatus(status);
@@ -117,7 +122,8 @@ class CashQueriesTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("getAccountBalances sums POSTED and REVERSED lines per account before the bound, not DRAFT or later ones")
+    @DisplayName(
+            "getAccountBalances sums POSTED and REVERSED lines per account before the bound, not DRAFT or later ones")
     void accountBalances() {
         GLAccount bank = account("CQ-1", AccountType.ASSET, AccountSubtype.BANK_CASH);
         GLAccount other = account("CQ-2", AccountType.LIABILITY, AccountSubtype.CURRENT_LIABILITY);
@@ -141,18 +147,22 @@ class CashQueriesTest extends BaseIntegrationTest {
         assertThat(balances.get(other.getGlAccountId())).isEqualByComparingTo("-70.00");
         assertThat(balances).as("an account with no lines is absent").doesNotContainKey(untouched.getGlAccountId());
 
-        Map<UUID, BigDecimal> withTomorrow = journalEntryLines
-                .getAccountBalances(List.of(bank.getGlAccountId()), TODAY.plusDays(2).atStartOfDay())
-                .stream()
-                .collect(Collectors.toMap(
-                        JournalEntryLineRepository.AccountBalance::getGlAccountId,
-                        JournalEntryLineRepository.AccountBalance::getBalance));
+        Map<UUID, BigDecimal> withTomorrow =
+                journalEntryLines
+                        .getAccountBalances(
+                                List.of(bank.getGlAccountId()),
+                                TODAY.plusDays(2).atStartOfDay())
+                        .stream()
+                        .collect(Collectors.toMap(
+                                JournalEntryLineRepository.AccountBalance::getGlAccountId,
+                                JournalEntryLineRepository.AccountBalance::getBalance));
         assertThat(withTomorrow.get(bank.getGlAccountId()))
                 .as("the post-dated entry counts only once its day is in the bound")
                 .isEqualByComparingTo("77.00");
     }
 
-    private BankStatement statement(UUID account, LocalDate start, LocalDate end, String closing, BankStatementStatus status) {
+    private BankStatement statement(
+            UUID account, LocalDate start, LocalDate end, String closing, BankStatementStatus status) {
         BankStatement statement = new BankStatement();
         statement.setGlAccountId(account);
         statement.setSourceKind(SourceKind.MANUAL_ENTRY);
@@ -172,22 +182,45 @@ class CashQueriesTest extends BaseIntegrationTest {
     void latestStatements() {
         GLAccount first = account("CQ-4", AccountType.ASSET, AccountSubtype.BANK_CASH);
         GLAccount second = account("CQ-5", AccountType.ASSET, AccountSubtype.BANK_CASH);
-        statement(first.getGlAccountId(), LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31), "100.00", BankStatementStatus.COMMITTED);
-        statement(first.getGlAccountId(), LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), "250.00", BankStatementStatus.COMMITTED);
-        statement(first.getGlAccountId(), LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31), "999.00", BankStatementStatus.SUPERSEDED);
-        statement(second.getGlAccountId(), LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), "70.00", BankStatementStatus.COMMITTED);
+        statement(
+                first.getGlAccountId(),
+                LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 8, 31),
+                "100.00",
+                BankStatementStatus.COMMITTED);
+        statement(
+                first.getGlAccountId(),
+                LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 9, 30),
+                "250.00",
+                BankStatementStatus.COMMITTED);
+        statement(
+                first.getGlAccountId(),
+                LocalDate.of(2026, 10, 1),
+                LocalDate.of(2026, 10, 31),
+                "999.00",
+                BankStatementStatus.SUPERSEDED);
+        statement(
+                second.getGlAccountId(),
+                LocalDate.of(2026, 9, 1),
+                LocalDate.of(2026, 9, 30),
+                "70.00",
+                BankStatementStatus.COMMITTED);
 
         List<BankStatement> latest = statements.findLatestByGlAccountIdIn(
                 List.of(first.getGlAccountId(), second.getGlAccountId()), BankStatementStatus.COMMITTED);
 
         assertThat(latest)
-                .extracting(BankStatement::getGlAccountId, s -> s.getClosingBalance().intValue())
+                .extracting(
+                        BankStatement::getGlAccountId,
+                        s -> s.getClosingBalance().intValue())
                 .containsExactlyInAnyOrder(
                         org.assertj.core.api.Assertions.tuple(first.getGlAccountId(), 250),
                         org.assertj.core.api.Assertions.tuple(second.getGlAccountId(), 70));
     }
 
-    private void item(UUID account, OutstandingItemKind kind, String amount, LocalDate date, OutstandingItemStatus status) {
+    private void item(
+            UUID account, OutstandingItemKind kind, String amount, LocalDate date, OutstandingItemStatus status) {
         BankReconciliationOutstandingItem item = new BankReconciliationOutstandingItem();
         item.setGlAccountId(account);
         item.setSide(OutstandingItemSide.LEDGER);
@@ -212,13 +245,28 @@ class CashQueriesTest extends BaseIntegrationTest {
         profiles.saveAndFlush(profile);
         UUID a = withBaseline.getGlAccountId();
         UUID b = without.getGlAccountId();
-        item(a, OutstandingItemKind.DEPOSIT_IN_TRANSIT, "450.00", LocalDate.of(2026, 9, 20), OutstandingItemStatus.OPEN);
+        item(
+                a,
+                OutstandingItemKind.DEPOSIT_IN_TRANSIT,
+                "450.00",
+                LocalDate.of(2026, 9, 20),
+                OutstandingItemStatus.OPEN);
         item(a, OutstandingItemKind.DEPOSIT_IN_TRANSIT, "50.00", LocalDate.of(2026, 8, 20), OutstandingItemStatus.OPEN);
-        item(a, OutstandingItemKind.OUTSTANDING_CHECK, "-120.00", LocalDate.of(2026, 9, 25), OutstandingItemStatus.OPEN);
+        item(
+                a,
+                OutstandingItemKind.OUTSTANDING_CHECK,
+                "-120.00",
+                LocalDate.of(2026, 9, 25),
+                OutstandingItemStatus.OPEN);
         item(a, OutstandingItemKind.OUTSTANDING_CHECK, "-30.00", LocalDate.of(2026, 9, 26), OutstandingItemStatus.OPEN);
         item(a, OutstandingItemKind.OTHER_LEDGER_TIMING, "5.00", LocalDate.of(2026, 9, 26), OutstandingItemStatus.OPEN);
         item(b, OutstandingItemKind.DEPOSIT_IN_TRANSIT, "10.00", LocalDate.of(2026, 1, 2), OutstandingItemStatus.OPEN);
-        item(b, OutstandingItemKind.DEPOSIT_IN_TRANSIT, "99.00", LocalDate.of(2026, 1, 2), OutstandingItemStatus.CLEARED);
+        item(
+                b,
+                OutstandingItemKind.DEPOSIT_IN_TRANSIT,
+                "99.00",
+                LocalDate.of(2026, 1, 2),
+                OutstandingItemStatus.CLEARED);
 
         List<AccountKindTotals> totals = outstandingItems.totalsSinceBaselineByGlAccountIdIn(
                 List.of(a, b),
@@ -226,13 +274,16 @@ class CashQueriesTest extends BaseIntegrationTest {
                 Set.of(OutstandingItemKind.DEPOSIT_IN_TRANSIT, OutstandingItemKind.OUTSTANDING_CHECK));
 
         assertThat(totals).hasSize(3);
-        assertThat(find(totals, a, OutstandingItemKind.DEPOSIT_IN_TRANSIT).count()).isEqualTo(1);
+        assertThat(find(totals, a, OutstandingItemKind.DEPOSIT_IN_TRANSIT).count())
+                .isEqualTo(1);
         assertThat(find(totals, a, OutstandingItemKind.DEPOSIT_IN_TRANSIT).signedAmount())
                 .isEqualByComparingTo("450.00");
-        assertThat(find(totals, a, OutstandingItemKind.OUTSTANDING_CHECK).count()).isEqualTo(2);
+        assertThat(find(totals, a, OutstandingItemKind.OUTSTANDING_CHECK).count())
+                .isEqualTo(2);
         assertThat(find(totals, a, OutstandingItemKind.OUTSTANDING_CHECK).signedAmount())
                 .isEqualByComparingTo("-150.00");
-        assertThat(find(totals, b, OutstandingItemKind.DEPOSIT_IN_TRANSIT).count()).isEqualTo(1);
+        assertThat(find(totals, b, OutstandingItemKind.DEPOSIT_IN_TRANSIT).count())
+                .isEqualTo(1);
     }
 
     private static AccountKindTotals find(List<AccountKindTotals> totals, UUID account, OutstandingItemKind kind) {
@@ -242,7 +293,13 @@ class CashQueriesTest extends BaseIntegrationTest {
                 .orElseThrow();
     }
 
-    private APPayment payment(String ref, PaymentMethod method, APPaymentStatus status, String unapplied, LocalDate date, String currency) {
+    private APPayment payment(
+            String ref,
+            PaymentMethod method,
+            APPaymentStatus status,
+            String unapplied,
+            LocalDate date,
+            String currency) {
         APPayment payment = new APPayment(UUID.randomUUID());
         payment.setPaymentRef(ref);
         payment.setVendorId(UUID.randomUUID());
@@ -260,8 +317,10 @@ class CashQueriesTest extends BaseIntegrationTest {
     @DisplayName("findUnappliedByMethodBefore finds aged cash payments with money left, oldest first")
     void unappliedCashPayments() {
         LocalDate cutoff = LocalDate.of(2026, 10, 3);
-        APPayment newer = payment("CQ-P1", PaymentMethod.CASH, APPaymentStatus.GL_POSTED, "55.00", LocalDate.of(2026, 10, 1), "USD");
-        APPayment older = payment("CQ-P2", PaymentMethod.CASH, APPaymentStatus.GL_POSTED, "145.00", LocalDate.of(2026, 9, 20), "USD");
+        APPayment newer = payment(
+                "CQ-P1", PaymentMethod.CASH, APPaymentStatus.GL_POSTED, "55.00", LocalDate.of(2026, 10, 1), "USD");
+        APPayment older = payment(
+                "CQ-P2", PaymentMethod.CASH, APPaymentStatus.GL_POSTED, "145.00", LocalDate.of(2026, 9, 20), "USD");
         payment("CQ-P3", PaymentMethod.CASH, APPaymentStatus.GL_POSTED, "10.00", cutoff, "USD");
         payment("CQ-P4", PaymentMethod.CASH, APPaymentStatus.VOIDED, "10.00", LocalDate.of(2026, 9, 1), "USD");
         payment("CQ-P5", PaymentMethod.CASH, APPaymentStatus.GL_POSTED, "0.00", LocalDate.of(2026, 9, 1), "USD");
@@ -271,7 +330,9 @@ class CashQueriesTest extends BaseIntegrationTest {
         List<APPayment> found = apPayments.findUnappliedByMethodBefore(
                 PaymentMethod.CASH, "USD", Set.of(APPaymentStatus.VOIDED, APPaymentStatus.RETURNED), cutoff);
 
-        assertThat(found).extracting(APPayment::getPaymentId).containsExactly(older.getPaymentId(), newer.getPaymentId());
+        assertThat(found)
+                .extracting(APPayment::getPaymentId)
+                .containsExactly(older.getPaymentId(), newer.getPaymentId());
     }
 
     private ExtInvoice invoice(String party, String status) {

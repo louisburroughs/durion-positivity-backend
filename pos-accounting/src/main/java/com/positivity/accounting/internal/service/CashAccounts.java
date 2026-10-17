@@ -132,7 +132,8 @@ public class CashAccounts {
         ids.addAll(waitingAccounts.keySet());
         drawerAccounts.forEach(account -> ids.add(account.getGlAccountId()));
         suspense.ifPresent(ids::add);
-        Map<UUID, BigDecimal> balances = balancesOf(ids, zoneResolver.today().plusDays(1).atStartOfDay());
+        Map<UUID, BigDecimal> balances =
+                balancesOf(ids, zoneResolver.today().plusDays(1).atStartOfDay());
 
         List<Row> bankRows =
                 bank.stream().map(account -> row(account, balances, currency)).toList();

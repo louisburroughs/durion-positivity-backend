@@ -284,7 +284,9 @@ class CashPositionServiceTest {
 
         assertThat(position.inTheBank().total()).isEqualByComparingTo("12700.00");
         assertThat(position.total()).isEqualByComparingTo("14497.00");
-        assertThat(position.inTheBank().accounts()).extracting(AccountRow::accountCode).containsExactly("1000", "1020");
+        assertThat(position.inTheBank().accounts())
+                .extracting(AccountRow::accountCode)
+                .containsExactly("1000", "1020");
         assertThat(position.inTheBank().accounts().get(0).statementClosingBalance())
                 .isEqualByComparingTo("12100.00");
         assertThat(position.inTheBank().accounts().get(1).statementClosingBalance())
@@ -296,12 +298,12 @@ class CashPositionServiceTest {
     }
 
     @Test
-    @DisplayName("balances count entries dated before the start of tomorrow on the accounting date, not post-dated ones")
+    @DisplayName(
+            "balances count entries dated before the start of tomorrow on the accounting date, not post-dated ones")
     void balancesAreBoundedByTheAccountingDate() {
         service.read();
 
-        verify(journalEntryLines)
-                .getAccountBalances(anyCollection(), eq(LocalDateTime.of(2026, 10, 18, 0, 0)));
+        verify(journalEntryLines).getAccountBalances(anyCollection(), eq(LocalDateTime.of(2026, 10, 18, 0, 0)));
     }
 
     @Test
@@ -548,7 +550,9 @@ class CashPositionServiceTest {
         CashPositionResponse position = service.read();
 
         assertThat(position.eventFedAsOf()).isEqualTo(NOW.minus(Duration.ofDays(3)));
-        assertThat(position.lagging()).as("a quiet shop is not a lagging replica").isFalse();
+        assertThat(position.lagging())
+                .as("a quiet shop is not a lagging replica")
+                .isFalse();
     }
 
     @Test
