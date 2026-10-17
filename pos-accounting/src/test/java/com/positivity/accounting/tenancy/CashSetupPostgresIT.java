@@ -1131,9 +1131,9 @@ class CashSetupPostgresIT extends PostgresTenancyTestBase {
                     assertThat(h.effectiveFrom()).isEqualTo(today);
                     assertThat(h.oldAccountNumber()).isNull();
                 });
-        PettyExpenseCategoryResponse replayed = asTenant(tenant, () -> categories.create(tireDisposal));
-        assertThat(replayed.replayed()).isTrue();
-        assertThat(replayed.history())
+        PettyExpenseCategoryResponse createdAgain = asTenant(tenant, () -> categories.create(tireDisposal));
+        assertThat(createdAgain.replayed()).isTrue();
+        assertThat(createdAgain.history())
                 .filteredOn(h -> h.changeType() == PettyExpenseCategoryChangeType.CREATE)
                 .singleElement()
                 .satisfies(h -> {

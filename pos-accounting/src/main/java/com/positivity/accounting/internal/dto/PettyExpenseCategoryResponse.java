@@ -125,8 +125,8 @@ public record PettyExpenseCategoryResponse(
             String oldAccountName,
 
             @Schema(
-                    description = "CREATE and REMAP: the number of the account the category posts to from"
-                            + " effectiveFrom",
+                    description =
+                            "CREATE and REMAP: the number of the account the category posts to from" + " effectiveFrom",
                     example = "6350",
                     requiredMode = Schema.RequiredMode.NOT_REQUIRED)
             @Nullable
