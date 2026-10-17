@@ -1115,7 +1115,8 @@ class WorkItemServiceTest {
                     .as(bad)
                     .isInstanceOf(WorkItemsCursorInvalidException.class);
         }
-        assertThat(service.list(null, token.apply("ALL|2026-10-17|BILLS_DUE_SOON:0"), 2).items())
+        assertThat(service.list(null, token.apply("ALL|2026-10-17|BILLS_DUE_SOON:0"), 2)
+                        .items())
                 .isNotEmpty();
     }
 

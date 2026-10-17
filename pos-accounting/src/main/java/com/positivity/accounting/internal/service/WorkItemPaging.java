@@ -73,8 +73,8 @@ public class WorkItemPaging {
 
     /** The cursor of a position, for {@code scope}. */
     public @NonNull String encode(@NonNull String scope, @NonNull Key key) {
-        byte[] payload =
-                String.join(SEPARATOR, scope, key.occurredOn().toString(), key.itemId()).getBytes(StandardCharsets.UTF_8);
+        byte[] payload = String.join(SEPARATOR, scope, key.occurredOn().toString(), key.itemId())
+                .getBytes(StandardCharsets.UTF_8);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(payload);
     }
 
