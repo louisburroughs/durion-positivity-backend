@@ -2,6 +2,8 @@ package com.positivity.supplier.internal.vendor.service;
 
 import com.positivity.supplier.internal.entity.SupplierProfileEntity;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
+import com.positivity.supplier.internal.event.VendorProfilesChanged;
+import com.positivity.supplier.internal.event.VendorProfilesChanging;
 import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.repository.SupplierVendorRepository;
 import jakarta.persistence.EntityManager;
@@ -13,13 +15,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import com.positivity.supplier.internal.event.VendorProfilesChanged;
-import com.positivity.supplier.internal.event.VendorProfilesChanging;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -132,6 +131,8 @@ public class VendorPurchasingProfile {
         entityManager.lock(vendor.get(), LockModeType.PESSIMISTIC_FORCE_INCREMENT);
         entityManager.flush();
         factPublisher.publish(vendor.get(), Instant.now(clock), SupplierVendorServiceImpl.currentActorOrNull());
-        log.info("Republished vendor {} after its purchasing profile changed", vendor.get().getVendorNumber());
+        log.info(
+                "Republished vendor {} after its purchasing profile changed",
+                vendor.get().getVendorNumber());
     }
 }

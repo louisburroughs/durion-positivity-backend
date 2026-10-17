@@ -28,14 +28,17 @@ class VendorPurchasingProfileTest {
     @Test
     void disabledAndSandboxProfilesDoNotCount() {
         assertThat(VendorPurchasingProfile.designated(List.of(
-                        profile("edi-main", true, false), profile("edi-old", false, false), profile("edi-sb", true, true))))
+                        profile("edi-main", true, false),
+                        profile("edi-old", false, false),
+                        profile("edi-sb", true, true))))
                 .isEqualTo("edi-main");
     }
 
     @Test
     void noneOrSeveralIsNoChannel() {
         assertThat(VendorPurchasingProfile.designated(List.of())).isNull();
-        assertThat(VendorPurchasingProfile.designated(List.of(profile("edi-sb", true, true)))).isNull();
+        assertThat(VendorPurchasingProfile.designated(List.of(profile("edi-sb", true, true))))
+                .isNull();
         assertThat(VendorPurchasingProfile.designated(
                         List.of(profile("edi-a", true, false), profile("edi-b", true, false))))
                 .isNull();

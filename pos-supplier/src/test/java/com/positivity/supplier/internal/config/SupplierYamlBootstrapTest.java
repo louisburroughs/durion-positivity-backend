@@ -80,7 +80,6 @@ class SupplierYamlBootstrapTest extends PostgresSliceTestBase {
     @Autowired
     private SupplierVendorRepository vendorRepository;
 
-
     private SupplierYamlBootstrap bootstrap;
 
     private SimpleMeterRegistry meterRegistry;

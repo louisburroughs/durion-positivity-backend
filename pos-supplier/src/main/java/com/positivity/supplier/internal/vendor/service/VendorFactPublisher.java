@@ -5,8 +5,8 @@ import com.positivity.domainevents.DomainTopics;
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.shared.id.UUIDv7Generator;
 import com.positivity.supplier.internal.entity.SupplierVendorEntity;
-import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.entity.VendorRemitTo;
+import com.positivity.supplier.internal.repository.SupplierProfileRepository;
 import com.positivity.supplier.internal.service.SupplierOutboxEventWriter;
 import java.time.Instant;
 import java.util.Objects;
@@ -77,7 +77,9 @@ public class VendorFactPublisher {
     /** The fact with the vendor's purchasing channel (#2712), null when it has none. */
     @NonNull
     static SupplierVendorUpdatedV1 toFact(
-            @NonNull SupplierVendorEntity vendor, @NonNull Instant occurredAt, @Nullable String purchaseOrderSupplierRef) {
+            @NonNull SupplierVendorEntity vendor,
+            @NonNull Instant occurredAt,
+            @Nullable String purchaseOrderSupplierRef) {
         return new SupplierVendorUpdatedV1(
                 vendor.getVendorId(),
                 vendor.getVendorNumber(),
