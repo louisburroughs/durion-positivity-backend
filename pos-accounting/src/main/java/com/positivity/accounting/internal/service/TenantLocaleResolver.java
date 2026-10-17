@@ -30,10 +30,12 @@ public class TenantLocaleResolver {
 
     /** The stored locale of {@code tenantId}, or {@link #DEFAULT_LOCALE}. */
     public @NonNull String localeOf(@NonNull UUID tenantId) {
-        return TenantContext.callAs(tenantId, () -> tenants.findById(tenantId)
-                .map(ExtTenant::getLocale)
-                .filter(locale -> !locale.isBlank())
-                .orElse(DEFAULT_LOCALE));
+        return TenantContext.callAs(
+                tenantId,
+                () -> tenants.findById(tenantId)
+                        .map(ExtTenant::getLocale)
+                        .filter(locale -> !locale.isBlank())
+                        .orElse(DEFAULT_LOCALE));
     }
 
     /** The bound tenant's locale. */
