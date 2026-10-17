@@ -25,6 +25,7 @@ public class TenantQueryService {
         return extTenantRepository
                 .findById(TenantContext.require())
                 .map(tenant -> new TenantMeResponse(
-                        tenant.getTenantId(), tenant.getSlug(), tenant.getDisplayName(), tenant.getStatus()));
+                        tenant.getTenantId(), tenant.getSlug(), tenant.getDisplayName(), tenant.getStatus(),
+                        tenant.getLocale()));
     }
 }

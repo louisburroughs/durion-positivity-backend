@@ -193,6 +193,54 @@ class TenantEventsListenerTest {
         assertThat(row.getAggregateVersion()).isEqualTo(6L);
     }
 
+    private static String eventWithLocale(String id, String type, long version, String status, String locale) {
+        return """
+                {"eventId":"%s","eventType":"%s","schemaVersion":1,"aggregateId":"%s","aggregateVersion":%d,
+                 "occurredAtUtc":"2026-09-10T12:00:00Z","sourceService":"pos-tenant",
+                 "payload":{"tenantId":"%s","slug":"acme","displayName":"Acme","status":"%s","locale":"%s"}}
+                """.formatted(id, type, TENANT, version, TENANT, status, locale);
+    }
+
+    @Test
+    @DisplayName("a fact carrying locale writes it; a later fact without it keeps it (#2618)")
+    void localeIsWrittenAndKept() {
+        when(processed.existsById("l1")).thenReturn(false);
+        when(processed.existsById("l2")).thenReturn(false);
+        ExtTenant row = ExtTenant.builder()
+                .tenantId(TENANT)
+                .slug("acme")
+                .status("ACTIVE")
+                .aggregateVersion(1L)
+                .build();
+        when(extTenants.findById(TENANT)).thenReturn(Optional.of(row));
+
+        listener.onEvent(eventWithLocale("l1", "tenant.updated", 2, "ACTIVE", "en-US"));
+        assertThat(row.getLocale()).isEqualTo("en-US");
+
+        listener.onEvent(event("l2", "tenant.updated", 3, "ACTIVE"));
+        assertThat(row.getLocale()).as("a fact published before the field").isEqualTo("en-US");
+        assertThat(row.getAggregateVersion()).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("an older fact never overwrites the stored locale (#2618)")
+    void olderFactNeverOverwritesLocale() {
+        when(processed.existsById("l3")).thenReturn(false);
+        ExtTenant row = ExtTenant.builder()
+                .tenantId(TENANT)
+                .slug("acme")
+                .status("ACTIVE")
+                .aggregateVersion(5L)
+                .locale("en-US")
+                .build();
+        when(extTenants.findById(TENANT)).thenReturn(Optional.of(row));
+
+        listener.onEvent(eventWithLocale("l3", "tenant.updated", 3, "ACTIVE", "de-DE"));
+
+        verify(extTenants, never()).save(any());
+        assertThat(row.getLocale()).isEqualTo("en-US");
+    }
+
     @Test
     @DisplayName("tenant.provisioned carries no projection: recorded, nothing written; redelivery is a no-op")
     void provisionedAndRedelivery() {

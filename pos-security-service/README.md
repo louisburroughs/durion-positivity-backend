@@ -415,7 +415,7 @@ export request.
 - `POST /v1/auth/login` — authenticate and receive JWT (tenant from `X-Tenant-Slug` or the form's `tenantSlug`, ADR-0062 §3)
 - `POST /v1/auth/activate` — exchange a one-time activation token for the account's first password (unauthenticated; ADR-0062 §7, WS2b-3)
 - `POST /v1/platform/tenants/{tenantId}/administrators/{userId}/activation-token` — platform tenant only, `platform:tenant:provision`: mint a first-administrator activation token, returned once
-- `GET /v1/tenants/me` — the caller's tenant (`tid`) as the `ext_tenant` replica knows it; 404 while the replica is behind
+- `GET /v1/tenants/me` — the caller's tenant (`tid`) as the `ext_tenant` replica knows it, including its `locale` (BCP 47, null until the replica learns it; #2618); 404 while the replica is behind
 - `GET /v1/auth/validate` — validate a JWT
 - `GET /v1/auth/subject` — extract subject from JWT
 - `GET /v1/permissions/catalog-version` — active catalog version (public)
@@ -707,7 +707,7 @@ Flyway on the owner credential (`SPRING_FLYWAY_USER` / `SPRING_FLYWAY_PASSWORD`)
 - **Both tokens carry `tid`.** Token validation and the refresh exchange bind the token's own `tid` around
   their lookups, so a refresh cannot change tenant. The gateway injects `X-Tenant-Id` from `tid`.
 - **`ext_tenant`** is the replica of pos-tenant's `tenant.events.v1` projection (`TenantEventsListener`,
-  idempotent through `processed_events`, monotonic on `aggregateVersion`). `ExtTenantRegistry` serves it as
+  idempotent through `processed_events`, monotonic on `aggregateVersion`; carries the tenant's `locale`, kept when a fact omits it, #2618). `ExtTenantRegistry` serves it as
   the module's `TenantRegistry`, and `GET /v1/tenants/me` reads it for the caller.
 - **Provisioning (`tenant.created`).** `TenantEventsListener` reads the platform role template under the platform
   binding (`RoleTemplateService`) and applies it under the new tenant's binding (`TenantProvisioningService`):

@@ -19,4 +19,10 @@ public record TenantMeResponse(
         String displayName,
 
         @Schema(description = "Lifecycle status: PENDING, ACTIVE, SUSPENDED or DECOMMISSIONED", requiredMode = REQUIRED)
-        String status) {}
+        String status,
+
+        @Schema(
+                description = "The tenant's locale (BCP 47, ADR-0030 §2); null while the replica has not learned it",
+                example = "en-US",
+                requiredMode = NOT_REQUIRED)
+        String locale) {}

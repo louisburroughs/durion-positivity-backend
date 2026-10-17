@@ -47,6 +47,10 @@ public class ExtTenant {
     @Column(name = "display_name_key", length = 200)
     private String displayNameKey;
 
+    /** The tenant's locale as a BCP 47 tag (ADR-0030 §2); null until the replica learns it. */
+    @Column(length = 35)
+    private String locale;
+
     /** Raw lifecycle status: {@code PENDING}, {@code ACTIVE}, {@code SUSPENDED} or {@code DECOMMISSIONED}. */
     @Column(nullable = false, length = 16)
     private String status;
