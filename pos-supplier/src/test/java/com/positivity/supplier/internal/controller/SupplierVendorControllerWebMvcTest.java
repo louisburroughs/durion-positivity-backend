@@ -236,6 +236,30 @@ class SupplierVendorControllerWebMvcTest {
     }
 
     @Test
+    void createWithRequestIdPassesTheKeyAndMapsTheIdempotencyConflict() throws Exception {
+        when(vendorService.createVendor(any())).thenReturn(view());
+        String keyed = CREATE.replace("\"defaultCurrency\":\"USD\"",
+                "\"defaultCurrency\":\"USD\",\"requestId\":\"019a0000-0000-7000-8000-000000000101\"");
+
+        mockMvc.perform(authed(
+                        post(BASE).contentType(MediaType.APPLICATION_JSON).content(keyed),
+                        SupplierPermissions.VENDOR_WRITE))
+                .andExpect(status().isCreated());
+        ArgumentCaptor<VendorCreateRequest> captor = ArgumentCaptor.captor();
+        verify(vendorService).createVendor(captor.capture());
+        assertThat(captor.getValue().requestId())
+                .isEqualTo(java.util.UUID.fromString("019a0000-0000-7000-8000-000000000101"));
+
+        when(vendorService.createVendor(any()))
+                .thenThrow(new SupplierConflictException(SupplierConflictException.IDEMPOTENCY_CONFLICT, "reused"));
+        mockMvc.perform(authed(
+                        post(BASE).contentType(MediaType.APPLICATION_JSON).content(keyed),
+                        SupplierPermissions.VENDOR_WRITE))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"));
+    }
+
+    @Test
     void malformedFieldsAre400ValidationError() throws Exception {
         mockMvc.perform(authed(
                         post(BASE).contentType(MediaType.APPLICATION_JSON).content("""

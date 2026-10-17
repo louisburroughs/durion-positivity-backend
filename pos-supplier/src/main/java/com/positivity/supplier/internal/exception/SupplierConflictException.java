@@ -37,6 +37,13 @@ public class SupplierConflictException extends RuntimeException {
     /** The vendor number is already used by another vendor of the tenant (#2516). */
     public static final String VENDOR_NUMBER_TAKEN = "SUPPLIER_VENDOR_NUMBER_TAKEN";
 
+    /**
+     * A vendor create's {@code requestId} was already used with another payload, or is being used by a concurrent
+     * create (#2678). The platform's code (ADR-0017; pos-accounting's commands answer the same), so a client treats
+     * every module alike: mint a new key for a different payload, retry the same one for the same payload.
+     */
+    public static final String IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT";
+
     /** The vendor already has a remit-to change waiting for a decision; at most one may (#2516). */
     public static final String VENDOR_REMIT_CHANGE_PENDING = "SUPPLIER_VENDOR_REMIT_CHANGE_PENDING";
 

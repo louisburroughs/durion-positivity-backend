@@ -267,8 +267,13 @@ public class SupplierVendorController {
                     never returned (the response shows last4).
                     Emits a SUPPLIER_VENDOR_CREATE audit event and queues one supplier.vendor.updated fact in the
                     same transaction; a remitTo given here is stored as version 1 without approval.
-                    Returns 201 with the vendor, 400 VALIDATION_ERROR when a field is missing or malformed, and
-                    409 SUPPLIER_VENDOR_NUMBER_TAKEN when the number is in use.
+                    Send a requestId (a UUID the client mints) to make the create idempotent: a retry after a
+                    timeout or 5xx with the same requestId and the same payload answers the original 201 body and
+                    creates nothing; the same requestId with another payload is refused. Reuse a requestId only for
+                    an identical payload.
+                    Returns 201 with the vendor, 400 VALIDATION_ERROR when a field is missing or malformed,
+                    409 SUPPLIER_VENDOR_NUMBER_TAKEN when the number is in use, and 409 IDEMPOTENCY_CONFLICT when
+                    the requestId was used with a different payload or is in use by a concurrent create.
                     """)
     @ApiResponse(responseCode = "201", description = "Vendor created.")
     @ApiResponse(
@@ -277,7 +282,9 @@ public class SupplierVendorController {
             content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "409",
-            description = "SUPPLIER_VENDOR_NUMBER_TAKEN: another vendor of the tenant uses the number.",
+            description = "SUPPLIER_VENDOR_NUMBER_TAKEN: another vendor of the tenant uses the number;"
+                    + " IDEMPOTENCY_CONFLICT: the requestId was already used with a different payload, or is in use"
+                    + " by a concurrent create (#2678).",
             content = @Content(mediaType = JSON, schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "401",
