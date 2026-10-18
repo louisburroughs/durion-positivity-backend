@@ -184,6 +184,17 @@ scrape_configs:
           service: 'pos-marketing'
           application: 'pos-marketing'
 
+  - job_name: 'pos-extraction-worker'
+    metrics_path: '/actuator/prometheus'
+    basic_auth:
+      username: 'prometheus_scraper'
+      password: 'durion-local-prom-scrape-password'
+    static_configs:
+      - targets: ['pos-extraction-worker:8080']
+        labels:
+          service: 'pos-extraction-worker'
+          application: 'pos-extraction-worker'
+
   - job_name: 'pos-platform-sender'
     metrics_path: '/actuator/prometheus'
     basic_auth:

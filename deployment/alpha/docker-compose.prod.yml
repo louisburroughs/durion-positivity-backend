@@ -152,6 +152,13 @@ services:
     # POS_PLATFORM_SENDER_* interpolation of the on-box .env; until an operator sets
     # POS_PLATFORM_SENDER_TRANSPORT=aws it runs the 'log' transport and contacts nobody.
 
+  pos-extraction-worker:
+    image: ${ECR_REGISTRY}/durion/pos-extraction-worker:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+    # POS_EXTRACTION_WORKER_PROVIDERS stays on the base compose default 'none' until Security records
+    # the Textract retention check (AW61): until then every extract answers UNAVAILABLE.
+
   pos-mcp-server:
     image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
     restart: unless-stopped
