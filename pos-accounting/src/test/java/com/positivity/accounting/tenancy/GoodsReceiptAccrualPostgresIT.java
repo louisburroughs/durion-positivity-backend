@@ -670,7 +670,7 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
         GoodsReceiptRecordedV1 posted = fact("USD", 40_000L, line("4", 40_000L, 40_000L, "AVERAGE"));
         GoodsReceiptRecordedV1 euro = fact("EUR", 40_000L, line("4", 40_000L, null, "AVERAGE"));
         GoodsReceiptRecordedV1 none = fact(null, 40_000L, line("4", 40_000L, null, "AVERAGE"));
-        GoodsReceiptRecordedV1 uncosted = fact("USD", 40_000L, line("4", 40_000L, null, "NONE"));
+        GoodsReceiptRecordedV1 uncosted = fact("USD", 0L, line("4", 0L, null, "NONE"));
         GoodsReceiptRecordedV1 malformed = fact("USD", 40_001L, line("4", 40_000L, 40_000L, "AVERAGE"));
         for (GoodsReceiptRecordedV1 fact : List.of(posted, euro, none, uncosted, malformed)) {
             asTenant(

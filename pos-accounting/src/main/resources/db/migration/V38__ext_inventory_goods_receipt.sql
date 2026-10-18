@@ -6,7 +6,8 @@
 -- receipt updates the amount, currency and receipt number and keeps received_at, the first fact's occurredAt.
 -- Every well-formed fact is recorded whatever its accrual outcome (held, skipped, nothing to post, posted); the
 -- read filters. No backfill here (FORCE RLS): GoodsReceiptReplicaBackfill replays the stored facts at startup.
--- It carries the full tenancy schema of TENANCY_SCHEMA.md "Adding a table".
+-- The key leads with tenant_id: a receipt id belongs to one tenant, but a row hidden by RLS must not make
+-- another tenant's insert of the same id collide. It carries the full tenancy schema of TENANCY_SCHEMA.md "Adding a table".
 CREATE TABLE public.ext_inventory_goods_receipt (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     goods_receipt_id uuid NOT NULL,
@@ -29,7 +30,7 @@ COMMENT ON COLUMN public.ext_inventory_goods_receipt.received_at IS
     'occurredAt of the FIRST fact seen for the receipt; a corrected re-emit does not move it.';
 
 ALTER TABLE ONLY public.ext_inventory_goods_receipt
-    ADD CONSTRAINT ext_inventory_goods_receipt_pkey PRIMARY KEY (goods_receipt_id);
+    ADD CONSTRAINT ext_inventory_goods_receipt_pkey PRIMARY KEY (tenant_id, goods_receipt_id);
 ALTER TABLE ONLY public.ext_inventory_goods_receipt
     ADD CONSTRAINT ext_inventory_goods_receipt_tenant_key UNIQUE (tenant_id, goods_receipt_id);
 CREATE INDEX ext_inventory_goods_receipt_tenant_idx ON public.ext_inventory_goods_receipt USING btree (tenant_id);
