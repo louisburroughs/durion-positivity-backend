@@ -22,6 +22,11 @@ public interface SupplierInvoiceHoldRepository extends JpaRepository<SupplierInv
     List<SupplierInvoiceHold> findByVendorIdAndReasonAndReleasedAtIsNullOrderByReceivedAtAscHoldIdAsc(
             @NonNull UUID vendorId, SupplierInvoiceHold.@NonNull Reason reason);
 
+    /** Every open hold of one reason, oldest first: what the one-shot conversion of {@code VENDOR_ID_MISSING} reads. */
+    @NonNull
+    List<SupplierInvoiceHold> findByReasonAndReleasedAtIsNullOrderByReceivedAtAscHoldIdAsc(
+            SupplierInvoiceHold.@NonNull Reason reason);
+
     /** Open holds of one reason: the {@code accounting.supplier_invoice.held} gauge. */
     long countByReasonAndReleasedAtIsNull(SupplierInvoiceHold.@NonNull Reason reason);
 

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.positivity.accounting.internal.billintake.service.TestBillIntakePorts;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
@@ -923,16 +924,24 @@ class VendorBillServiceTest {
                 billRepository,
                 billLineRepository,
                 matchCandidateRepository,
-                vendorCopies,
                 guard,
-                sequenceLocker,
-                transactionManager,
-                TestZoneResolvers.utc(FIXED_CLOCK),
                 new VendorBillInvoiceMatcher(clock, billLineRepository, evidenceRepository, new LedgerCurrency("USD")),
                 reader,
                 auditLogs,
                 locks,
-                autoApproval);
+                autoApproval,
+                // A goods receipt is the port's: over the same mocks.
+                TestBillIntakePorts.builder()
+                        .with(clock)
+                        .with(zoneResolver)
+                        .with(billRepository)
+                        .with(billLineRepository)
+                        .with(vendorCopies)
+                        .with(guard)
+                        .with(reader)
+                        .with(sequenceLocker)
+                        .with(transactionManager)
+                        .build());
     }
 
     /** What the reader answers in these tests: the bill's own fields, enough to assert the routing. */

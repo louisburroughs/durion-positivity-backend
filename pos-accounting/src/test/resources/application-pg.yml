@@ -41,6 +41,10 @@ pos:
     # The undeposited drawer cash gauges (#2514) poll on a schedule too; UndepositedCashGaugeTest drives them.
     deposit-gauge:
       enabled: false
+    # S25 (#2518): the startup conversion of VENDOR_ID_MISSING holds walks every tenant; ITs call the converter directly.
+    bill-intake:
+      vendorless-hold-conversion:
+        enabled: false
 
 # CAP:550 S43: the bill read's purchase-tax rules are not cached across tests, so each test's stubbed pos-tax answer
 # (TaxReferenceClient is a mock, PostgresTenancyTestBase) is the one its read sees.

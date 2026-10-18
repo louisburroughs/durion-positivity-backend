@@ -25,7 +25,7 @@ import org.jspecify.annotations.Nullable;
  * @param difference {@code gross - (net + tax)}
  * @param tolerance the rounding tolerance of this bill
  */
-record VendorBillTotals(
+public record VendorBillTotals(
         @NonNull BigDecimal gross,
         @NonNull BigDecimal net,
         @NonNull BigDecimal tax,
@@ -38,7 +38,7 @@ record VendorBillTotals(
     private static final int SCALE = 2;
 
     /** The totals of {@code bill}; empty for a bill without the vendor's header totals (a goods-receipt bill). */
-    static @NonNull Optional<VendorBillTotals> of(@NonNull VendorBill bill) {
+    public static @NonNull Optional<VendorBillTotals> of(@NonNull VendorBill bill) {
         if (bill.getTotalAmount() == null || bill.getNetAmount() == null) {
             return Optional.empty();
         }
@@ -56,13 +56,12 @@ record VendorBillTotals(
     }
 
     /** Whether the gap is within the tolerance: posted as a rounding adjustment, no decision needed. */
-    boolean reconciled() {
+    public boolean reconciled() {
         return difference.abs().compareTo(tolerance) <= 0;
     }
 
     /** The {@code statusExplanation} of a bill held for its totals. */
-    @NonNull
-    String explanation() {
+    public @NonNull String explanation() {
         return "The vendor's totals don't add up: net " + net.toPlainString() + " + tax " + tax.toPlainString()
                 + " ≠ total " + gross.toPlainString();
     }

@@ -11,6 +11,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.positivity.accounting.internal.billintake.service.TestBillIntakePorts;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ApVendorSettings;
 import com.positivity.accounting.internal.repository.ApVendorSettingsRepository;
@@ -118,15 +119,20 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
                 clock,
                 objectMapper,
                 processed,
-                bills,
                 vendorCopy,
                 holds,
-                ledgerCurrency,
-                ingestion,
                 duplicateGuard,
-                reissues,
-                locks,
-                statedTax,
+                TestBillIntakePorts.builder()
+                        .with(clock)
+                        .with(bills)
+                        .with(vendorCopy)
+                        .with(duplicateGuard)
+                        .with(reissues)
+                        .with(locks)
+                        .with(statedTax)
+                        .with(ledgerCurrency)
+                        .with(ingestion)
+                        .build(),
                 meters,
                 transactionManager);
         accountingLogger = (Logger) LoggerFactory.getLogger("com.positivity.accounting");
@@ -725,15 +731,20 @@ class SupplierVendorCopyPostgresIT extends PostgresTenancyTestBase {
                 clock,
                 objectMapper,
                 processed,
-                bills,
                 failing,
                 holds,
-                ledgerCurrency,
-                ingestion,
                 duplicateGuard,
-                reissues,
-                locks,
-                statedTax,
+                TestBillIntakePorts.builder()
+                        .with(clock)
+                        .with(bills)
+                        .with(failing)
+                        .with(duplicateGuard)
+                        .with(reissues)
+                        .with(locks)
+                        .with(statedTax)
+                        .with(ledgerCurrency)
+                        .with(ingestion)
+                        .build(),
                 meters,
                 transactionManager);
 

@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -65,6 +66,28 @@ public class GoodsReceivedEvent {
     @Schema(description = "Line items received")
     @JsonProperty("lineItems")
     private List<ReceivedLineItem> lineItems;
+
+    @Nullable
+    @Size(max = 50)
+    @Schema(
+            description =
+                    "The purchase order's number as the vendor knows it; optional. With deliveryReference it lets "
+                            + "a later bill for the same delivery be recognised as a duplicate of this one.",
+            example = "PO-2026-0042",
+            maxLength = 50)
+    @JsonProperty("purchaseOrderNumber")
+    private String purchaseOrderNumber;
+
+    @Nullable
+    @Size(max = 100)
+    @Schema(
+            description =
+                    "The vendor's delivery-note or ASN number for this receipt; optional. Compared after the same "
+                            + "normalisation as a bill number (case, spacing, punctuation and leading zeros ignored).",
+            example = "DN-88213",
+            maxLength = 100)
+    @JsonProperty("deliveryReference")
+    private String deliveryReference;
 
     @Nullable
     @Schema(description = "Optional dimensional context for GL mapping", example = "{\"businessUnitId\":\"BU-001\"}")

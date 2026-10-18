@@ -39,6 +39,8 @@ class EntityStandardsArchitectureTest {
         // Bank reconciliation core and its file adapter keep their entities in sub-packages (#2300).
         "com.positivity.accounting.internal.bankrec.entity..",
         "com.positivity.accounting.internal.bankfeed.file.entity..",
+        // Bill intake (CAP:550 S25, #2518).
+        "com.positivity.accounting.internal.billintake.entity..",
         "com.positivity.invoice.internal.entity..",
         "com.positivity.order.internal.entity..",
         "com.positivity.people.internal.entity..",

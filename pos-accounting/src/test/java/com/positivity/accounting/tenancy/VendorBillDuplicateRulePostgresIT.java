@@ -7,6 +7,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.internal.billintake.service.BillIntakePortImpl;
+import com.positivity.accounting.internal.billintake.service.TestBillIntakePorts;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
@@ -179,6 +181,9 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
     @Autowired
     private AccountingSequenceRepository sequences;
 
+    @Autowired
+    private com.positivity.accounting.internal.billintake.repository.BillIntakeItemRepository items;
+
     private SupplierEventsListener listener;
 
     /** A vendor of this test's own, so nothing here meets another test's bills. */
@@ -226,21 +231,38 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
         clearBillCounters();
     }
 
+    /** The single writer of new bills, wired by hand over {@code duplicateGuard} and the test's zone (AW37). */
+    private BillIntakePortImpl port(VendorBillDuplicateGuard duplicateGuard) {
+        return TestBillIntakePorts.builder()
+                .with(clock)
+                .with(com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()))
+                .with(bills)
+                .with(billLines)
+                .with(vendorCopy)
+                .with(vendorCopies)
+                .with(duplicateGuard)
+                .with(locks)
+                .with(reissues)
+                .with(statedTax)
+                .with(reader)
+                .with(ledgerCurrency)
+                .with(ingestionRecorder)
+                .with(sequenceLocker)
+                .with(transactionManager)
+                .with(items)
+                .build();
+    }
+
     /** The EDI listener as production wires it, over {@code duplicateGuard}. */
     private SupplierEventsListener listener(VendorBillDuplicateGuard duplicateGuard) {
         return new SupplierEventsListener(
                 clock,
                 objectMapper,
                 processedEventRepository,
-                bills,
                 vendorCopy,
                 holds,
-                ledgerCurrency,
-                ingestionRecorder,
                 duplicateGuard,
-                reissues,
-                locks,
-                statedTax,
+                port(duplicateGuard),
                 meterRegistry,
                 transactionManager);
     }
@@ -647,16 +669,13 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 bills,
                 billLines,
                 matchCandidates,
-                vendorCopies,
                 racing,
-                sequenceLocker,
-                transactionManager,
-                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
                 matcher,
                 reader,
                 auditLogs,
                 locks,
-                autoApproval);
+                autoApproval,
+                port(racing));
     }
 
     /**
@@ -785,16 +804,13 @@ class VendorBillDuplicateRulePostgresIT extends PostgresTenancyTestBase {
                 bills,
                 billLines,
                 matchCandidates,
-                vendorCopies,
                 guard,
-                sequenceLocker,
-                transactionManager,
-                com.positivity.accounting.internal.service.TestZoneResolvers.utc(java.time.Clock.systemUTC()),
                 matcher,
                 reader,
                 auditLogs,
                 locks,
-                autoApproval);
+                autoApproval,
+                port(guard));
     }
 
     private String create(VendorBillService service, UUID tenant, UUID vendorId) {

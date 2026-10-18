@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -44,7 +45,9 @@ public class VendorBillDuplicateGuard {
     public enum Channel {
         GOODS_RECEIPT,
         MATCH,
-        EDI
+        EDI,
+        UPLOAD,
+        IMPORT
     }
 
     /** What the rule did with a duplicate; the counter's {@code outcome} tag. */
@@ -143,6 +146,74 @@ public class VendorBillDuplicateGuard {
             @NonNull VendorBill original) {
         record(channel, Outcome.REFUSED, vendorId, billNumber, billDate, original.getVendorBillId());
         return new VendorBillDuplicateException(original);
+    }
+
+    /**
+     * The live goods-receipt bill a bill naming this delivery would duplicate (ruling 8 of #2518, G16): the same vendor,
+     * purchase-order number and normalised delivery reference. It applies only when the incoming bill carries both a
+     * purchase-order number and a delivery reference; otherwise there is nothing to match and the result is empty. EDI
+     * facts carry no delivery reference, so they are never matched by delivery.
+     *
+     * @return the oldest live goods-receipt bill of that delivery, if there is one
+     */
+    public @NonNull Optional<VendorBill> findDeliveryOriginal(
+            @NonNull UUID vendorId, @Nullable String purchaseOrderNumber, @Nullable String deliveryReference) {
+        if (purchaseOrderNumber == null
+                || purchaseOrderNumber.isBlank()
+                || deliveryReference == null
+                || deliveryReference.isBlank()) {
+            return Optional.empty();
+        }
+        return vendorBillRepository
+                .findLiveGoodsReceiptsByDelivery(
+                        vendorId,
+                        VendorBillNumbers.normalise(purchaseOrderNumber.trim()),
+                        VendorBillNumbers.normalise(deliveryReference.trim()))
+                .stream()
+                .findFirst();
+    }
+
+    /**
+     * Refuses a bill that names a delivery a live goods-receipt bill already covers (G16): 409 {@code AP_BILL_DUPLICATE}
+     * matched by {@code DELIVERY_REFERENCE}. Recorded as a refusal on {@code channel}.
+     *
+     * @param billNumber the incoming bill's number, for the counter's log line
+     * @param billDate   the incoming bill's date, for the counter's log line
+     * @throws VendorBillDuplicateException carrying the goods-receipt original, when there is one
+     */
+    public void refuseIfDeliveryDuplicate(
+            @NonNull Channel channel,
+            @NonNull UUID vendorId,
+            @NonNull String billNumber,
+            @NonNull LocalDateTime billDate,
+            @Nullable String purchaseOrderNumber,
+            @Nullable String deliveryReference) {
+        Optional<VendorBill> original = findDeliveryOriginal(vendorId, purchaseOrderNumber, deliveryReference);
+        if (original.isPresent()) {
+            record(
+                    channel,
+                    Outcome.REFUSED,
+                    vendorId,
+                    billNumber,
+                    billDate,
+                    original.get().getVendorBillId());
+            throw new VendorBillDuplicateException(
+                    original.get(), VendorBillDuplicateException.MatchedBy.DELIVERY_REFERENCE);
+        }
+    }
+
+    /**
+     * The live goods-receipt bills of this vendor against this purchase order: what a bill that names the order but no
+     * delivery is warned against (ruling 8 of #2518, a draft's {@code possibleDuplicates}), never refused for. Empty when
+     * the incoming bill names no purchase order.
+     */
+    public @NonNull List<VendorBill> findPurchaseOrderMatches(
+            @NonNull UUID vendorId, @Nullable String purchaseOrderNumber) {
+        if (purchaseOrderNumber == null || purchaseOrderNumber.isBlank()) {
+            return List.of();
+        }
+        return vendorBillRepository.findLiveGoodsReceiptsByPurchaseOrder(
+                vendorId, VendorBillNumbers.normalise(purchaseOrderNumber.trim()));
     }
 
     /**

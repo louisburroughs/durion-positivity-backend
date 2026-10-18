@@ -1,43 +1,31 @@
 package com.positivity.accounting.internal.service;
 
+import com.positivity.accounting.internal.billintake.service.BillIntakePort;
 import com.positivity.accounting.internal.config.AccountingEventTypeRegistry;
-import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.SupplierInvoiceHold;
-import com.positivity.accounting.internal.entity.VendorBill;
-import com.positivity.accounting.internal.entity.VendorBillReissue;
-import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.repository.ExtSupplierVendorRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.repository.SupplierInvoiceHoldRepository;
-import com.positivity.accounting.internal.repository.VendorBillReissueRepository;
-import com.positivity.accounting.internal.repository.VendorBillRepository;
 import com.positivity.domainevents.ReplicaVersionGuard;
 import com.positivity.domainevents.supplier.SupplierInvoiceReceivedV1;
-import com.positivity.domainevents.supplier.SupplierInvoiceTax;
 import com.positivity.domainevents.supplier.SupplierVendorUpdatedV1;
 import com.positivity.kafka.common.KafkaRails;
 import com.positivity.tenancy.kafka.RetryableConsumerFailures;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.Serial;
-import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -71,11 +59,15 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <h2>The vendor key (S24)</h2>
  *
- * An invoice names its vendor by the fact's {@code vendorId}, never by {@code vendorProfileId}. A fact without one is
- * held ({@code VENDOR_ID_MISSING}, until S25 turns it into a draft); a vendor not yet copied is held too ({@code
- * VENDOR_NOT_IN_COPY}) and released, through the same bill creation, once the vendor is copied. A hold is written with
- * the processed mark, so an invoice fact is never dropped. An {@code INACTIVE} vendor's invoice becomes a {@code
- * MATCH_EXCEPTION} bill naming the vendor as inactive (ruling 3).
+ * An invoice names its vendor by the fact's {@code vendorId}, never by {@code vendorProfileId}. A fact without one
+ * becomes a bill draft ({@code BillIntakeItem}, channel {@code EDI}, CAP:550 S25 #2518) that a person completes by
+ * picking the vendor; it used to be held as {@code VENDOR_ID_MISSING}, a reason now retired (the open holds are
+ * converted once, by {@code VendorlessHoldConverter}). A vendor not yet copied is held ({@code VENDOR_NOT_IN_COPY}) and
+ * released, through the same bill creation, once the vendor is copied. A hold is written with the processed mark, so an
+ * invoice fact is never dropped. An {@code INACTIVE} vendor's invoice becomes a {@code MATCH_EXCEPTION} bill naming the
+ * vendor as inactive (ruling 3). The bill, the draft, the S0 duplicate rule and the ingestion record are {@link
+ * BillIntakePort#acceptMachineDocument}'s; this listener keeps the parse, the event-id dedupe, the holds and the
+ * transaction shape.
  *
  * <h2>Three judgments made here, and why</h2>
  *
@@ -129,7 +121,7 @@ import tools.jackson.databind.ObjectMapper;
  * own, so an unreadable invoice that fails inside a repository call rolls back only that work and
  * is recorded in a separate transaction; every database failure still propagates for retry,
  * unrecorded, as above. So does any failure writing the fact's {@code accounting_event} row (#2433),
- * database or not ({@link IngestionRecordFailure}): marking it processed would lose the bill along
+ * database or not ({@link BillIntakePort.IngestionRecordFailure}): marking it processed would lose the bill along
  * with the record, since both roll back together.
  *
  * <h2>Ingestion record (#2433)</h2>
@@ -149,7 +141,7 @@ public class SupplierEventsListener {
     static final String OWNER = "supplier";
 
     /** Producing module, stamped as {@code sourceSystem} on this listener's ingestion records. */
-    public static final String SOURCE_SYSTEM = "pos-supplier";
+    public static final String SOURCE_SYSTEM = BillIntakePort.EDI_SOURCE_SYSTEM;
 
     /**
      * Event type codes this listener records an {@code accounting_event} row for, one per consumed
@@ -158,20 +150,13 @@ public class SupplierEventsListener {
     public static final List<String> RECORDED_EVENT_TYPES =
             AccountingEventTypeRegistry.kafkaCodes(AccountingEventTypeRegistry.DOMAIN_SUPPLIER);
 
-    private static final String ORIGIN_EVENT_TYPE = "SUPPLIER_INVOICE_RECEIVED";
-
     private final Clock clock;
     private final ObjectMapper objectMapper;
     private final ProcessedEventRepository processedEventRepository;
-    private final VendorBillRepository vendorBillRepository;
     private final ExtSupplierVendorRepository vendorCopy;
     private final SupplierInvoiceHoldRepository holds;
-    private final LedgerCurrency ledgerCurrency;
-    private final KafkaFactIngestionRecorder ingestionRecorder;
     private final VendorBillDuplicateGuard duplicateGuard;
-    private final VendorBillReissueRepository reissues;
-    private final VendorBillLocks locks;
-    private final VendorBillStatedTax statedTax;
+    private final BillIntakePort billIntake;
     private final @Nullable MeterRegistry meterRegistry;
 
     /** The handler plus its processed mark, or a failure's mark alone, per transaction; see the class doc. */
@@ -181,29 +166,19 @@ public class SupplierEventsListener {
             Clock clock,
             ObjectMapper objectMapper,
             ProcessedEventRepository processedEventRepository,
-            VendorBillRepository vendorBillRepository,
             ExtSupplierVendorRepository vendorCopy,
             SupplierInvoiceHoldRepository holds,
-            LedgerCurrency ledgerCurrency,
-            KafkaFactIngestionRecorder ingestionRecorder,
             VendorBillDuplicateGuard duplicateGuard,
-            VendorBillReissueRepository reissues,
-            VendorBillLocks locks,
-            VendorBillStatedTax statedTax,
+            BillIntakePort billIntake,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager) {
         this.clock = clock;
         this.objectMapper = objectMapper;
         this.processedEventRepository = processedEventRepository;
-        this.vendorBillRepository = vendorBillRepository;
         this.vendorCopy = vendorCopy;
         this.holds = holds;
-        this.ledgerCurrency = ledgerCurrency;
-        this.ingestionRecorder = ingestionRecorder;
         this.duplicateGuard = duplicateGuard;
-        this.reissues = reissues;
-        this.locks = locks;
-        this.statedTax = statedTax;
+        this.billIntake = billIntake;
         this.meterRegistry = meterRegistry.getIfAvailable();
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -258,9 +233,9 @@ public class SupplierEventsListener {
             });
         } catch (VendorCopyWriteFailure e) {
             throw e.getCause();
-        } catch (IngestionRecordFailure e) {
+        } catch (BillIntakePort.IngestionRecordFailure e) {
             throw e.getCause();
-        } catch (DuplicateRuleCollision e) {
+        } catch (BillIntakePort.DuplicateRuleCollision e) {
             if (mayRunOnceMore) {
                 // A concurrent writer committed the same (vendor, number, date) between this
                 // handler's check and its insert (#2501). Redelivery would find that bill too, but
@@ -269,9 +244,9 @@ public class SupplierEventsListener {
                 duplicateGuard.record(
                         VendorBillDuplicateGuard.Channel.EDI,
                         VendorBillDuplicateGuard.Outcome.RETRIED,
-                        e.vendorId,
-                        e.billNumber,
-                        e.billDate,
+                        e.vendorId(),
+                        e.billNumber(),
+                        e.billDate(),
                         null);
                 handle(envelope, eventType, eventId, false);
                 return;
@@ -484,18 +459,18 @@ public class SupplierEventsListener {
                         hold.getEventId(),
                         billId);
             });
-        } catch (IngestionRecordFailure e) {
+        } catch (BillIntakePort.IngestionRecordFailure e) {
             throw e.getCause();
-        } catch (DuplicateRuleCollision e) {
+        } catch (BillIntakePort.DuplicateRuleCollision e) {
             if (!mayRunOnceMore) {
                 throw e.getCause();
             }
             duplicateGuard.record(
                     VendorBillDuplicateGuard.Channel.EDI,
                     VendorBillDuplicateGuard.Outcome.RETRIED,
-                    e.vendorId,
-                    e.billNumber,
-                    e.billDate,
+                    e.vendorId(),
+                    e.billNumber(),
+                    e.billDate(),
                     null);
             release(holdId, false);
         }
@@ -510,187 +485,26 @@ public class SupplierEventsListener {
     // ---- the invoice (CAP-321; S24's vendor key) -----------------------------------------------------------------
 
     /**
-     * Turns an invoice fact into a bill, a flagged duplicate (S0) or, when {@code holdIfUnready}, a hold.
+     * Turns an invoice fact into a bill, a flagged duplicate (S0), a draft (no vendor named, S25) or, when {@code
+     * holdIfUnready}, a hold: the work is {@link BillIntakePort#acceptMachineDocument}'s, in this handler's transaction.
      *
      * @param holdIfUnready false on a release: a fact whose vendor is still not copied stays held, unchanged
-     * @return the bill created or flagged against; null when the fact was held (or, on a release, is not ready)
+     * @return the bill created or flagged against; null when the fact was held (or, on a release, is not ready) or
+     *     became a draft
      */
     private @Nullable UUID applyInvoice(JsonNode envelope, String eventId, boolean holdIfUnready) {
         SupplierInvoiceReceivedV1 fact =
                 objectMapper.treeToValue(envelope.path("payload"), SupplierInvoiceReceivedV1.class);
-
-        // S24: the vendor is the fact's pos-supplier vendorId, never its vendorProfileId.
-        UUID vendorId = fact.vendorId();
-        if (vendorId == null) {
-            if (holdIfUnready) {
-                hold(envelope, eventId, fact, null, SupplierInvoiceHold.Reason.VENDOR_ID_MISSING);
+        return switch (billIntake.acceptMachineDocument(fact, eventId)) {
+            case BillIntakePort.MachineDocumentOutcome.Bill bill -> bill.billId();
+            case BillIntakePort.MachineDocumentOutcome.Draft _ -> null;
+            case BillIntakePort.MachineDocumentOutcome.VendorNotInCopy notCopied -> {
+                if (holdIfUnready) {
+                    hold(envelope, eventId, fact, notCopied.vendorId(), SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY);
+                }
+                yield null;
             }
-            return null;
-        }
-        ExtSupplierVendor vendor = vendorCopy.findById(vendorId).orElse(null);
-        if (vendor == null) {
-            if (holdIfUnready) {
-                hold(envelope, eventId, fact, vendorId, SupplierInvoiceHold.Reason.VENDOR_NOT_IN_COPY);
-            }
-            return null;
-        }
-        String billNumber = fact.vendorInvoiceNumber();
-        LocalDateTime billDate = fact.invoiceDate().atStartOfDay();
-
-        // The duplicate rule (#2501): a live bill of this vendor with this number, normalised, on
-        // this date. A voided or rejected bill is not one, so its re-issue becomes a new bill below.
-        Optional<VendorBill> existing = duplicateGuard.findOriginal(vendorId, billNumber, billDate, null);
-        if (existing.isPresent()) {
-            boolean flagged = flagReissue(existing.get(), fact, billNumber, eventId);
-            duplicateGuard.record(
-                    VendorBillDuplicateGuard.Channel.EDI,
-                    flagged ? VendorBillDuplicateGuard.Outcome.FLAGGED : VendorBillDuplicateGuard.Outcome.IGNORED,
-                    vendorId,
-                    billNumber,
-                    billDate,
-                    existing.get().getVendorBillId());
-            record(
-                    eventId,
-                    existing.get(),
-                    fact,
-                    flagged ? FactPostingOutcome.nothingToPost() : new FactPostingOutcome.AlreadyPosted(null, null));
-            return existing.get().getVendorBillId();
-        }
-
-        VendorBill bill = new VendorBill();
-        bill.setVendorId(vendorId);
-        bill.setVendorName(vendor.getDisplayName());
-        // The vendor's own number, not one we mint. It is what an AP clerk quotes back to the
-        // vendor, and a number of our own would be meaningless in that conversation.
-        bill.setBillNumber(billNumber);
-        bill.setBillDate(billDate);
-        bill.setTotalAmount(signedTotal(fact));
-        if (fact.totalGrossAmount() != null) {
-            // The net and tax as stated (AW39), signed like the total (AW47, ruling #2509 comment 6059252089): a
-            // missing tax is 0; no net stated, net = gross - tax, so a derived net never disagrees with the gross;
-            // neither, net = gross and tax 0. A net and a gross stated without a tax are checked as net + 0.
-            BigDecimal gross = bill.getTotalAmount();
-            BigDecimal net = fact.totalNetAmount() == null ? null : signed(fact, fact.totalNetAmount());
-            BigDecimal tax = fact.totalTaxAmount() == null ? null : signed(fact, fact.totalTaxAmount());
-            tax = tax == null ? BigDecimal.ZERO : tax;
-            if (net == null) {
-                net = gross.subtract(tax);
-            }
-            bill.setNetAmount(net);
-            bill.setTaxAmount(tax);
-            bill.setStatedLineCount(Math.max(1, fact.lines().size()));
-        }
-        // The figure is only a sum of money with its currency, so the bill keeps the one the vendor
-        // stated (ADR-0067 DF-1).
-        bill.setCurrency(fact.currency());
-        if (ledgerCurrency.isForeign(fact.currency())) {
-            // Never booked at par (ADR-0067 PC-9, PC-13): a bill in another currency is held where an
-            // operator sees why, out of matching, approval, payment and ledger-currency totals.
-            bill.setStatus(VendorBillStatus.CURRENCY_HOLD);
-            bill.setRejectionReason(
-                    (vendor.isActive() ? "" : inactive(vendor) + ". ") + currencyHoldReason(fact.currency()));
-        } else {
-            // An invoice whose amount could not be read is not a nil invoice. The codec deliberately
-            // records an unreadable figure as absent rather than zero so the two stay
-            // distinguishable, and collapsing them here would undo that: a bill for nothing looks
-            // settled, sits at the bottom of every ageing report, and is noticed when the vendor
-            // chases payment.
-            bill.setStatus(
-                    fact.totalGrossAmount() == null
-                            ? VendorBillStatus.MATCH_EXCEPTION
-                            : VendorBillStatus.PENDING_RECEIPT_MATCH);
-            // AW47: a document whose gross is not its net + tax, beyond the rounding tolerance, waits for a person
-            // to say where the gap posts, to correct it or to void it.
-            VendorBillTotals.of(bill).filter(totals -> !totals.reconciled()).ifPresent(totals -> {
-                bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
-                bill.setRejectionReason(totals.explanation());
-            });
-            // S24 (ruling 3): an inactive vendor's invoice is recorded, the debt being real, for a person to decide; if
-            // its totals don't add up either, TOTALS_ADD_UP still reports FAIL and the difference is still required.
-            if (!vendor.isActive()) {
-                bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
-                bill.setRejectionReason(
-                        inactive(vendor) + (bill.getRejectionReason() == null ? "" : ". " + bill.getRejectionReason()));
-            }
-        }
-        bill.setOriginEventId(UUID.fromString(eventId));
-        bill.setOriginEventType(ORIGIN_EVENT_TYPE);
-        bill.setPurchaseOrderNumber(fact.vendorOrderReference());
-        bill.setCreatedBy(OWNER);
-        bill.setModifiedBy(OWNER);
-
-        // A new bill (no id yet) is persisted, not merged, so the id is assigned on this instance.
-        // Flushed so the duplicate rule's unique index answers here, inside the handler transaction,
-        // where onSupplierEvent can tell it from every other database failure.
-        try {
-            vendorBillRepository.saveAndFlush(bill);
-        } catch (DataIntegrityViolationException e) {
-            if (VendorBillDuplicateGuard.isDuplicateRuleViolation(e)) {
-                throw new DuplicateRuleCollision(vendorId, billNumber, billDate, e);
-            }
-            throw e;
-        }
-        // S32d item 10 (closes G11): every bill keeps the tax its document states by type, signed like its total.
-        statedTax.storeFromDocument(bill, taxByType(fact));
-        record(eventId, bill, fact, FactPostingOutcome.nothingToPost());
-        log.info(
-                "Created vendor bill from supplier invoice {} ({} {}) for vendor {} status={}",
-                billNumber,
-                fact.totalGrossAmount(),
-                fact.currency(),
-                vendor.getVendorNumber(),
-                bill.getStatus());
-        return bill.getVendorBillId();
-    }
-
-    /** The shape a stored tax type must have ({@code vendor_bill_tax.tax_type}'s CHECK). */
-    static final Pattern TAX_TYPE_SHAPE = Pattern.compile("^[A-Z0-9_]{1,32}$");
-
-    /** Counted, never logged by value, when a document's tax labels cannot be stored as tax types. */
-    static final String UNSPLIT_LABELS_METRIC = "accounting.vendor_bill.tax_labels_unusable";
-
-    /**
-     * The fact's tax by type, signed like the bill's total; a type stated twice is added up. Null when none.
-     *
-     * <p>The document's label is normalised (trimmed, upper-cased in the root locale) and must then have the shape of a
-     * configured tax type. The label never blocks the bill (#2664 review A1): when any label does not fit, no tax by
-     * type is kept at all, so the bill reads as unsplit ({@code TAX_SPLIT_MISSING}) and nothing is recovered; only the
-     * number of labels is logged and counted, never a label's value.
-     */
-    private @Nullable Map<String, BigDecimal> taxByType(SupplierInvoiceReceivedV1 fact) {
-        if (fact.taxes() == null || fact.taxes().isEmpty()) {
-            return null;
-        }
-        Map<String, BigDecimal> byType = new LinkedHashMap<>();
-        int unusable = 0;
-        for (SupplierInvoiceTax tax : fact.taxes()) {
-            String type = tax.taxType() == null ? "" : tax.taxType().trim().toUpperCase(Locale.ROOT);
-            if (!TAX_TYPE_SHAPE.matcher(type).matches()) {
-                unusable++;
-                continue;
-            }
-            byType.merge(type, signed(fact, tax.amount()), BigDecimal::add);
-        }
-        if (unusable > 0) {
-            log.warn(
-                    "Supplier invoice {} states {} of {} tax label(s) that are not a tax type; the bill keeps no tax"
-                            + " by type and reads as unsplit (TAX_SPLIT_MISSING)",
-                    fact.vendorInvoiceNumber(),
-                    unusable,
-                    fact.taxes().size());
-            if (meterRegistry != null) {
-                Counter.builder(UNSPLIT_LABELS_METRIC)
-                        .description("Supplier invoices whose tax labels could not be kept as tax types (S32d)")
-                        .register(meterRegistry)
-                        .increment();
-            }
-            return null;
-        }
-        return byType;
-    }
-
-    private static String inactive(ExtSupplierVendor vendor) {
-        return "Vendor " + vendor.getVendorNumber() + " is inactive";
+        };
     }
 
     /**
@@ -741,182 +555,5 @@ public class SupplierEventsListener {
         public synchronized @NonNull DataIntegrityViolationException getCause() {
             return (DataIntegrityViolationException) super.getCause();
         }
-    }
-
-    private void record(String eventId, VendorBill bill, SupplierInvoiceReceivedV1 fact, FactPostingOutcome outcome) {
-        // Argument evaluation stays outside the wrap: a payload fault there is malformed, not a
-        // recorder failure.
-        LocalDateTime businessTime = fact.invoiceDate().atStartOfDay();
-        try {
-            ingestionRecorder.record(
-                    SOURCE_SYSTEM,
-                    SupplierInvoiceReceivedV1.EVENT_TYPE,
-                    eventId,
-                    bill.getVendorBillId(),
-                    businessTime,
-                    fact,
-                    outcome);
-        } catch (RuntimeException e) {
-            if (RetryableConsumerFailures.isRetryable(e)) {
-                throw e;
-            }
-            throw new IngestionRecordFailure(e);
-        }
-    }
-
-    /**
-     * Carries an ingestion-record failure out of the handler transaction past the malformed-payload
-     * catch, so {@link #onSupplierEvent} rethrows the original exception unmarked.
-     */
-    private static final class IngestionRecordFailure extends RuntimeException {
-
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        IngestionRecordFailure(@NonNull RuntimeException cause) {
-            super(cause);
-        }
-
-        @Override
-        public synchronized @NonNull RuntimeException getCause() {
-            return (RuntimeException) super.getCause();
-        }
-    }
-
-    /**
-     * The bill insert refused by the duplicate rule's unique index: a concurrent writer committed the
-     * same key after this handler's check. Carried out of the handler transaction, which rolls back,
-     * so {@link #handle} can run the handler once more; a second one is rethrown as its cause.
-     */
-    private static final class DuplicateRuleCollision extends RuntimeException {
-
-        @Serial
-        private static final long serialVersionUID = 1L;
-
-        private final UUID vendorId;
-        private final String billNumber;
-        private final LocalDateTime billDate;
-
-        DuplicateRuleCollision(
-                @NonNull UUID vendorId,
-                @NonNull String billNumber,
-                @NonNull LocalDateTime billDate,
-                @NonNull DataIntegrityViolationException cause) {
-            super(cause);
-            this.vendorId = vendorId;
-            this.billNumber = billNumber;
-            this.billDate = billDate;
-        }
-
-        @Override
-        public synchronized @NonNull DataIntegrityViolationException getCause() {
-            return (DataIntegrityViolationException) super.getCause();
-        }
-    }
-
-    /**
-     * A second invoice under a number we already hold. Not overwritten: the first version is what
-     * somebody may already have approved or paid against, and replacing it would erase the
-     * disagreement rather than raise it. A different amount or a different currency is flagged for
-     * review; a bill held for its currency stays held, so a re-issue never releases it into a queue
-     * where it could be approved at par (#2309).
-     *
-     * <p>An approved bill is locked (#2509, §4.3): it keeps its status and approval fields, and the
-     * re-issue is recorded as an exception item linked to it, with both amounts, for a person to
-     * settle by credit note or with the vendor. Bills not yet approved keep the flagging above.
-     *
-     * @return whether the bill was flagged; {@code false} for a re-issue identical to the bill held
-     */
-    private boolean flagReissue(VendorBill found, SupplierInvoiceReceivedV1 fact, String billNumber, String eventId) {
-        // The bill was found without a lock: lock it and see it as it is now. A decision that voided or rejected it
-        // meanwhile means it is no longer the original, so the event is retried and becomes a bill of its own.
-        VendorBill bill = locks.lock(found);
-        if (bill.getStatus() == VendorBillStatus.VOIDED || bill.getStatus() == VendorBillStatus.REJECTED) {
-            throw new ConcurrencyFailureException("Vendor bill " + bill.getBillNumber() + " became " + bill.getStatus()
-                    + " while its re-issue was being read; retried");
-        }
-        BigDecimal incoming = signedTotal(fact);
-        boolean amountChanged = bill.getTotalAmount() != null && incoming.compareTo(bill.getTotalAmount()) != 0;
-        boolean currencyChanged =
-                !effectiveCurrency(bill.getCurrency()).equalsIgnoreCase(effectiveCurrency(fact.currency()));
-        if (!amountChanged && !currencyChanged) {
-            log.debug("Vendor invoice {} already held; nothing to do", billNumber);
-            return false;
-        }
-        if (bill.getStatus() == VendorBillStatus.APPROVED || bill.getStatus() == VendorBillStatus.PAID) {
-            UUID sourceEventId = UUID.fromString(eventId);
-            if (!reissues.existsBySourceEventId(sourceEventId)) {
-                VendorBillReissue item = new VendorBillReissue();
-                item.setVendorBillId(bill.getVendorBillId());
-                item.setIncomingBillNumber(billNumber);
-                item.setIncomingBillDate(fact.invoiceDate());
-                item.setIncomingAmount(incoming);
-                item.setIncomingCurrencyCode(effectiveCurrency(fact.currency()));
-                item.setHeldAmount(bill.getTotalAmount() == null ? BigDecimal.ZERO : bill.getTotalAmount());
-                item.setHeldCurrencyCode(effectiveCurrency(bill.getCurrency()));
-                item.setSourceEventId(sourceEventId);
-                reissues.save(item);
-            }
-            log.info(
-                    "Vendor invoice {} re-issued at {} {} against an approved bill of {} {}; recorded as an exception"
-                            + " item, the bill is unchanged",
-                    billNumber,
-                    incoming,
-                    fact.currency(),
-                    bill.getTotalAmount(),
-                    effectiveCurrency(bill.getCurrency()));
-            return true;
-        }
-        String change = "Re-issued under the same number at " + incoming + " " + fact.currency() + " against a bill of "
-                + bill.getTotalAmount() + " " + effectiveCurrency(bill.getCurrency());
-        if (bill.getStatus() == VendorBillStatus.CURRENCY_HOLD) {
-            bill.setRejectionReason(currencyHoldReason(effectiveCurrency(bill.getCurrency())) + ". " + change);
-        } else {
-            // Checked again from the start (#2509 review, L5): a bill that was awaiting approval keeps no submission,
-            // proposal or difference, as after a CORRECT.
-            bill.setStatus(VendorBillStatus.MATCH_EXCEPTION);
-            bill.setRejectionReason(change);
-            bill.clearSubmission();
-        }
-        vendorBillRepository.save(bill);
-        // INFO: the one WARN for a flag is the duplicate guard's, which names the original (#2501).
-        log.info(
-                "Vendor invoice {} re-issued at {} {} against a bill of {} {}; flagged for review",
-                billNumber,
-                incoming,
-                fact.currency(),
-                bill.getTotalAmount(),
-                effectiveCurrency(bill.getCurrency()));
-        return true;
-    }
-
-    /** An absent currency is the ledger currency (ADR-0067 E-3). */
-    private String effectiveCurrency(String currency) {
-        return currency == null || currency.isBlank() ? ledgerCurrency.code() : currency.trim();
-    }
-
-    private String currencyHoldReason(String currency) {
-        return "Currency " + currency + " is not the ledger currency " + ledgerCurrency.code()
-                + "; held, never booked at par (ADR-0067 PC-9)";
-    }
-
-    /**
-     * The amount, signed by what the document is.
-     *
-     * <p>A credit note is money owed back, so it carries the opposite sign to an invoice. The sign
-     * is taken from the document type rather than from the amount, because a vendor may state a
-     * credit as a positive figure on a document that declares itself a credit note — and reading
-     * the sign off the number would silently turn a refund into a debt.
-     */
-    private static BigDecimal signedTotal(SupplierInvoiceReceivedV1 fact) {
-        BigDecimal total = fact.totalGrossAmount() == null ? BigDecimal.ZERO : fact.totalGrossAmount();
-        BigDecimal magnitude = total.abs();
-        return fact.isPayable() ? magnitude : magnitude.negate();
-    }
-
-    /** A stated amount signed by the document type, as {@link #signedTotal}; absent is zero. */
-    private static BigDecimal signed(SupplierInvoiceReceivedV1 fact, BigDecimal amount) {
-        BigDecimal magnitude = amount == null ? BigDecimal.ZERO : amount.abs();
-        return fact.isPayable() ? magnitude : magnitude.negate();
     }
 }

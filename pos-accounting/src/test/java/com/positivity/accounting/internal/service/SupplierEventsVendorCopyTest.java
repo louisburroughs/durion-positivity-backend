@@ -14,7 +14,9 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.positivity.accounting.internal.billintake.service.TestBillIntakePorts;
 import com.positivity.accounting.internal.config.LedgerCurrency;
+import com.positivity.accounting.internal.entity.AccountingSequence;
 import com.positivity.accounting.internal.entity.ExtSupplierVendor;
 import com.positivity.accounting.internal.entity.ProcessedEvent;
 import com.positivity.accounting.internal.entity.SupplierInvoiceHold;
@@ -91,6 +93,15 @@ class SupplierEventsVendorCopyTest {
     @Mock
     private KafkaFactIngestionRecorder ingestion;
 
+    /** Drafts of vendor-less facts (S25) and the counter their references are drawn from. */
+    @Mock
+    private com.positivity.accounting.internal.billintake.repository.BillIntakeItemRepository items;
+
+    @Mock
+    private AccountingSequenceLocker sequenceLocker;
+
+    private final AccountingSequence intakeCounter = new AccountingSequence();
+
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private SupplierEventsListener listener;
     private ListAppender<ILoggingEvent> logs;
@@ -103,21 +114,38 @@ class SupplierEventsVendorCopyTest {
         @SuppressWarnings("unchecked")
         ObjectProvider<MeterRegistry> registry = mock(ObjectProvider.class);
         when(registry.getIfAvailable()).thenReturn(meters);
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        VendorBillDuplicateGuard guard = new VendorBillDuplicateGuard(bills, noMeters);
         listener = new SupplierEventsListener(
-                Clock.fixed(NOW, ZoneOffset.UTC),
+                clock,
                 new ObjectMapper(),
                 processed,
-                bills,
                 copy,
                 holds,
-                new LedgerCurrency("USD"),
-                ingestion,
-                new VendorBillDuplicateGuard(bills, noMeters),
-                reissues,
-                locks,
-                mock(VendorBillStatedTax.class),
+                guard,
+                TestBillIntakePorts.builder()
+                        .with(clock)
+                        .with(bills)
+                        .with(copy)
+                        .with(guard)
+                        .with(reissues)
+                        .with(locks)
+                        .with(mock(VendorBillStatedTax.class))
+                        .with(new LedgerCurrency("USD"))
+                        .with(ingestion)
+                        .with(items)
+                        .with(sequenceLocker)
+                        .withMeters(registry)
+                        .build(),
                 registry,
                 mock(PlatformTransactionManager.class));
+        intakeCounter.setNextValue(7L);
+        lenient().when(sequenceLocker.lockOrProvision("BI-202610")).thenReturn(intakeCounter);
+        lenient().when(items.saveAndFlush(any())).thenAnswer(inv -> {
+            com.positivity.accounting.internal.billintake.entity.BillIntakeItem item = inv.getArgument(0);
+            item.setIntakeId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9c77"));
+            return item;
+        });
         when(processed.existsById(any())).thenReturn(false);
         when(bills.findLiveDuplicate(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         lenient().when(bills.saveAndFlush(any())).thenAnswer(inv -> {
@@ -345,21 +373,40 @@ class SupplierEventsVendorCopyTest {
         }
 
         @Test
-        @DisplayName("AC 3: no vendorId: no bill, a VENDOR_ID_MISSING hold with the payload, the event marked")
-        void missingVendorIdIsHeld() {
+        @DisplayName("AC 3 (S25): no vendorId: no bill and no hold, an EDI draft ready for review keyed by its"
+                + " ingestion record, the event marked")
+        void missingVendorIdBecomesADraft() {
             listener.onSupplierEvent(invoice(INVOICE_EVENT, "", "288.00", "240.00", "48.00"));
 
             verify(bills, never()).saveAndFlush(any());
-            ArgumentCaptor<SupplierInvoiceHold> captor = ArgumentCaptor.forClass(SupplierInvoiceHold.class);
-            verify(holds).save(captor.capture());
-            SupplierInvoiceHold hold = captor.getValue();
-            assertThat(hold.getReason()).isEqualTo(SupplierInvoiceHold.Reason.VENDOR_ID_MISSING);
-            assertThat(hold.getEventId()).isEqualTo(UUID.fromString(INVOICE_EVENT));
-            assertThat(hold.getSupplierInvoiceRef()).isEqualTo("INV-77");
-            assertThat(hold.getVendorId()).isNull();
-            assertThat(hold.getPayload()).contains("INV-77").contains(PROFILE.toString());
+            verify(holds, never()).save(any());
+            ArgumentCaptor<com.positivity.accounting.internal.billintake.entity.BillIntakeItem> captor =
+                    ArgumentCaptor.forClass(com.positivity.accounting.internal.billintake.entity.BillIntakeItem.class);
+            verify(items).saveAndFlush(captor.capture());
+            com.positivity.accounting.internal.billintake.entity.BillIntakeItem draft = captor.getValue();
+            assertThat(draft.getChannel())
+                    .isEqualTo(com.positivity.accounting.internal.billintake.enums.BillIntakeChannel.EDI);
+            assertThat(draft.getStatus())
+                    .isEqualTo(com.positivity.accounting.internal.billintake.enums.BillIntakeStatus.READY_FOR_REVIEW);
+            assertThat(draft.getIntakeReference()).isEqualTo("BI-202610-0000007");
+            assertThat(intakeCounter.getNextValue()).isEqualTo(8L);
+            assertThat(draft.getUploadedBy()).isEqualTo("supplier");
+            assertThat(draft.getReadBack()).containsKeys("vendor", "billNumber", "totalAmount");
+            assertThat(draft.getReadBack().get("vendor")).asString().contains("CHECK_THIS");
+            assertThat(draft.getReadBack().get("billNumber"))
+                    .asString()
+                    .contains("INV-77")
+                    .contains("READ");
             assertThat(mark().getEventId()).isEqualTo(INVOICE_EVENT);
-            verify(ingestion, never()).record(any(), any(), any(), any(), any(), any(), any());
+            verify(ingestion)
+                    .record(
+                            any(),
+                            any(),
+                            eq(INVOICE_EVENT),
+                            eq(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9c77")),
+                            any(),
+                            any(),
+                            any());
         }
 
         @Test

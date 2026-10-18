@@ -1,5 +1,7 @@
 package com.positivity.accounting.internal.entity;
 
+import com.positivity.accounting.internal.billintake.enums.BillExtractionOutcome;
+import com.positivity.accounting.internal.billintake.enums.BillIntakeChannel;
 import com.positivity.accounting.internal.enums.TaxOnResaleOverrideSource;
 import com.positivity.accounting.internal.enums.VendorBillApproverKind;
 import com.positivity.accounting.internal.enums.VendorBillDebitClass;
@@ -118,8 +120,45 @@ public class VendorBill extends TenantScopedEntity {
     @Column(name = "purchase_order_id")
     private UUID purchaseOrderId;
 
+    @Setter(AccessLevel.NONE)
     @Column(name = "purchase_order_number", length = 50)
     private String purchaseOrderNumber;
+
+    /** {@link VendorBillNumbers#normalise} of {@link #purchaseOrderNumber}: what the delivery duplicate check compares. */
+    @Setter(AccessLevel.NONE)
+    @Column(name = "purchase_order_number_key", length = VendorBillNumbers.MAX_KEY_LENGTH)
+    private String purchaseOrderNumberKey;
+
+    /**
+     * The vendor's delivery-note or ASN number as stated (ruling 8 of #2518, G16); optional. Written only by
+     * {@link #setDeliveryReference}, which keeps {@link #deliveryReferenceKey} in step.
+     */
+    @Setter(AccessLevel.NONE)
+    @Column(name = "delivery_reference", length = 100)
+    private String deliveryReference;
+
+    /** {@link VendorBillNumbers#normalise} of {@link #deliveryReference}: what the delivery duplicate check compares. */
+    @Setter(AccessLevel.NONE)
+    @Column(name = "delivery_reference_key", length = VendorBillNumbers.MAX_KEY_LENGTH)
+    private String deliveryReferenceKey;
+
+    /** The bill draft this bill was confirmed from (S25); null for a bill that never was a draft. */
+    @Column(name = "intake_id", columnDefinition = "UUID")
+    private UUID intakeId;
+
+    /** How the draft arrived ({@code UPLOAD}, {@code IMPORT}, {@code EDI} or {@code EMAIL_IN}); null when there was no draft. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "intake_channel", length = 10)
+    private BillIntakeChannel intakeChannel;
+
+    /** The stored original the draft was read from, when it came from a file. */
+    @Column(name = "source_file_id", columnDefinition = "UUID")
+    private UUID sourceFileId;
+
+    /** How the draft's fields were filled, when there was a draft. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "extraction_outcome", length = 20)
+    private BillExtractionOutcome extractionOutcome;
 
     // Traceability
     @Column(name = "origin_event_id")
@@ -264,6 +303,28 @@ public class VendorBill extends TenantScopedEntity {
     public void setBillNumber(String billNumber) {
         this.billNumber = billNumber;
         this.billNumberKey = billNumber == null ? null : VendorBillNumbers.normalise(billNumber);
+    }
+
+    /**
+     * Sets the purchase-order number and, with it, the key the delivery duplicate check reads (ruling 8 of #2518).
+     *
+     * @param purchaseOrderNumber the vendor's order number as stated; blank is none
+     */
+    public void setPurchaseOrderNumber(String purchaseOrderNumber) {
+        boolean none = purchaseOrderNumber == null || purchaseOrderNumber.isBlank();
+        this.purchaseOrderNumber = none ? null : purchaseOrderNumber.trim();
+        this.purchaseOrderNumberKey = none ? null : VendorBillNumbers.normalise(this.purchaseOrderNumber);
+    }
+
+    /**
+     * Sets the delivery reference and, with it, the key the delivery duplicate check reads.
+     *
+     * @param deliveryReference the vendor's delivery-note or ASN number as stated; blank is none
+     */
+    public void setDeliveryReference(String deliveryReference) {
+        boolean none = deliveryReference == null || deliveryReference.isBlank();
+        this.deliveryReference = none ? null : deliveryReference.trim();
+        this.deliveryReferenceKey = none ? null : VendorBillNumbers.normalise(this.deliveryReference);
     }
 
     /**

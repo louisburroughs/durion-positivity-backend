@@ -1874,7 +1874,12 @@ Bills, AP payments and the vendor reads name a vendor by its **pos-supplier vend
   per tenant until it reports `complete` (`docs/OPERATIONS_RUNBOOK.md`). Until then bills and payments for
   unseeded vendors are refused or held as below.
 - **EDI vendor key.** An invoice fact's vendor is its `vendorId`, never `vendorProfileId`. No `vendorId`: the fact
-  is held, reason `VENDOR_ID_MISSING` (S25 turns these into drafts). A vendor not in the copy: held,
+  becomes a bill draft (`bill_intake_item`, channel `EDI`, `READY_FOR_REVIEW`, vendor `CHECK_THIS`; S25 #2518) keyed by
+  its ingestion record; the retired `VENDOR_ID_MISSING` holds are converted once at startup
+  (`VendorlessHoldConverter`, `pos.accounting.bill-intake.vendorless-hold-conversion.enabled`). Every new bill is
+  created by `BillIntakePort`, the only class that constructs a `VendorBill` (module `ArchitectureTest`). A goods
+  receipt may carry `purchaseOrderNumber` and `deliveryReference` (ruling 8, G16). Follow-up: delete
+  `VendorlessHoldConversionRunner` and `VendorlessHoldConverter` once alpha and prod have converted their holds. A vendor not in the copy: held,
   `VENDOR_NOT_IN_COPY`, and released through the same bill creation, with its ingestion record, when the
   vendor is copied (`accounting.supplier_invoice.hold_released`). An `INACTIVE` vendor: the bill is created
   `MATCH_EXCEPTION`, `statusExplanation` "Vendor V-000123 is inactive"; an AW47 totals gap still reports
