@@ -130,8 +130,8 @@ public class WorkItemController {
                     accounting:payment:reverse, and listed without it once reversed), settlement lines matched \
                     automatically and vendor bills approved by the system approver. Bank reconciliation \
                     proposals are never listed; they stay to-do items.
-                    Use this tool to show "done automatically" and to undo a payment application; use \
-                    listWorkItems for what still needs a person.
+                    Use this tool to show "done automatically" and to undo a payment application; do not use \
+                    it to find work that needs a person, use listWorkItems instead.
                     Preconditions: the caller holds one of accounting:payment:apply, accounting:payment:reverse, \
                     accounting:reconciliation:view, accounting:ap:approve or accounting:ap:approve_over_limit; \
                     each kind is listed only to the holders of its own permission: payment applications to the \
