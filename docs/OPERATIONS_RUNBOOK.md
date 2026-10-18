@@ -165,9 +165,9 @@ command line.
 | --- | --- | --- |
 | `db-pool-primary` | 10 / 2 | accounting, workorder, order, inventory, shop-manager, customer, invoice, people |
 | `db-pool-standard` | 5 / 1 | catalog, location, security-service, supplier, warranty, price, event-receiver |
-| `db-pool-small` | 3 / 1 | bulk-loader, image, tax, tenant, mcp-server, people-contact, vehicle-inventory, marketing, platform-sender |
+| `db-pool-small` | 3 / 1 | bulk-loader, image, tax, tenant, mcp-server, people-contact, vehicle-inventory, marketing, platform-sender, inbound-mail |
 
-All tiers return idle connections after 30s. With every pool full the services hold 142
+All tiers return idle connections after 30s. With every pool full the services hold 145
 connections; the rest of the 200 covers Flyway's owner connections while services start,
 postgres-exporter and an operator's `psql`. The primary tier is the modules with the most Kafka
 listeners, whose handlers open a nested `REQUIRES_NEW` transaction and so hold two connections per

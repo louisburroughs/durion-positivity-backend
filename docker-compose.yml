@@ -10,7 +10,7 @@ x-pos-security-client-env: &pos-security-client-env
 
 # Hikari pool tiers: every service with a database merges exactly one. All pools share the one
 # Postgres below, so the tiers are sized against its max_connections (200): 8 primary x 10 +
-# 7 standard x 5 + 9 small x 3 = 142 when every pool is full, which leaves room for Flyway's owner
+# 7 standard x 5 + 10 small x 3 = 145 when every pool is full, which leaves room for Flyway's owner
 # connections at startup, postgres-exporter and an operator's psql. Primary is the busy Kafka
 # consumers whose handlers nest REQUIRES_NEW transactions (two connections per thread, #2344,
 # #2501); a pool of 3 queued them behind each other. Put a new service in a tier and keep the
@@ -218,7 +218,7 @@ services:
     image: timescale/timescaledb:2.17.2-pg16
     container_name: postgres-positivity
     # max_connections is set here, not left to the image: the service pools (x-db-pool-* above) take
-    # up to 142, and the command line also wins over whatever timescaledb-tune wrote at volume init.
+    # up to 145, and the command line also wins over whatever timescaledb-tune wrote at volume init.
     command: [ "postgres", "-c", "shared_preload_libraries=timescaledb", "-c", "max_connections=200" ]
     ports:
       - "127.0.0.1:5432:5432"
