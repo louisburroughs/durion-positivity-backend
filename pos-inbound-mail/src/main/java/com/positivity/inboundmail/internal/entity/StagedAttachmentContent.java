@@ -1,6 +1,7 @@
 package com.positivity.inboundmail.internal.entity;
 
 import com.positivity.shared.id.AssignedIdentifier;
+import com.positivity.shared.id.UUIDv7Id;
 import com.positivity.tenancy.TenantScopedEntity;
 import jakarta.persistence.Basic;
 import jakarta.persistence.Column;
@@ -9,7 +10,6 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
-import com.positivity.shared.id.UUIDv7Id;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
