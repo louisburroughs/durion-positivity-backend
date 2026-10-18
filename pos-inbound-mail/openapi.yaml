@@ -1,0 +1,327 @@
+openapi: 3.1.0
+info:
+  contact:
+    email: platform@durionpos.org
+    name: Durion Support Services
+  description: 'CAP:550 S27 inbound-mail edge: the intake address registry and the staged-attachment store behind vendor-bills-by-email. Service-to-service only: pos-accounting is its one caller (ADR-0044 amendment 2026-10-05), and the API Gateway has no route here.'
+  title: Positivity Inbound Mail API
+  version: v1
+servers:
+- description: Direct container address (Compose and alpha)
+  url: http://pos-inbound-mail:8080
+security:
+- inboundMailSecret: []
+tags:
+- description: Attachments of accepted emails, waiting for pos-accounting to collect them
+  name: Inbound mail staging
+- description: The per-tenant intake address that vendor bills are emailed to
+  name: Inbound mail addresses
+paths:
+  /inbound-mail/v1/addresses:
+    post:
+      description: 'Returns the caller''s tenant''s ACTIVE intake address, the one shops email vendor bills to, and issues one first when the tenant has none. Concurrent first calls agree on a single address.
+
+        Use this tool to show a shop where to forward bills; do not use it to replace an address, call the rotation endpoint instead, which retires the old address and issues a new one.
+
+        Preconditions: the caller holds the shared secret and sends the tenant in X-Tenant-Id.
+
+        Required inputs: none; the body is empty.
+
+        Emits an INBOUND_MAIL_ADDRESS_ISSUE event.
+
+        Returns 200 with the address id, the address text and when it was issued; the address is an unguessable capability, so the caller never logs it or copies it into an event.
+
+        '
+      operationId: issueInboundMailAddress
+      parameters:
+      - description: The caller's bound tenant; without it the edge answers 401 TENANT_REQUIRED
+        in: header
+        name: X-Tenant-Id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedAddressResponse'
+          description: The tenant's ACTIVE address
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or wrong X-Inbound-Mail-Secret, the edge's own secret unset, or no tenant (TENANT_REQUIRED)
+      summary: Return or issue the tenant's intake address
+      tags:
+      - Inbound mail addresses
+      x-required-permissions:
+      - AUTHENTICATED
+  /inbound-mail/v1/addresses/rotation:
+    post:
+      description: 'Retires the tenant''s ACTIVE intake address and issues a new one in one transaction. Mail sent to the retired address is refused from then on.
+
+        Use this tool when an address has leaked or is being abused; do not use it to look up the current address, call the issue endpoint instead, which never changes it.
+
+        Preconditions: the caller holds the shared secret and sends the tenant in X-Tenant-Id.
+
+        Required inputs: requestId, the caller''s own UUID for this rotation; replaying the same requestId returns the address that request issued and never rotates twice.
+
+        Emits an INBOUND_MAIL_ADDRESS_ROTATE event; the reason for the rotation is kept by the caller, not sent here.
+
+        Returns 200 with the new address id, address text and issue time.
+
+        '
+      operationId: rotateInboundMailAddress
+      parameters:
+      - description: The caller's bound tenant; without it the edge answers 401 TENANT_REQUIRED
+        in: header
+        name: X-Tenant-Id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              Rotation:
+                description: Rotation
+                value:
+                  requestId: 01990000-0000-7000-8000-0000000000b1
+            schema:
+              $ref: '#/components/schemas/RotateAddressRequest'
+        description: The caller's idempotency key for this rotation.
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedAddressResponse'
+          description: The address this rotation issued (also on a replay)
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Malformed request (VALIDATION_FAILED), for example a missing requestId
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or wrong X-Inbound-Mail-Secret, the edge's own secret unset, or no tenant (TENANT_REQUIRED)
+      summary: Retire the tenant's address and issue a new one
+      tags:
+      - Inbound mail addresses
+      x-required-permissions:
+      - AUTHENTICATED
+  /inbound-mail/v1/staged-attachments/{ref}:
+    get:
+      description: 'Returns the raw bytes of one attachment the edge staged from an accepted email, so pos-accounting can hand them to its bill intake. The bytes are never parsed or altered; the digest of what was staged travels in X-Content-SHA256 so the caller can verify what it received.
+
+        Use this tool with the ref carried by an email-received command; do not use it to hunt for mail, there is no listing endpoint, so take the ref from the command instead of guessing one, and a ref only ever works for the tenant that owns it.
+
+        Preconditions: the caller holds the shared secret, sends the tenant in X-Tenant-Id, and the ref has not been collected or purged after the staging TTL.
+
+        Required inputs: ref, the attachment''s UUID from the command.
+
+        Emits an INBOUND_MAIL_STAGED_ATTACHMENT_GET event.
+
+        Returns 200 application/octet-stream with Content-Length, X-Content-SHA256, Cache-Control no-store and X-Content-Type-Options nosniff, or 404 STAGED_ATTACHMENT_NOT_FOUND with one identical body whether the ref is unknown, another tenant''s, collected or purged.
+
+        '
+      operationId: getStagedInboundMailAttachment
+      parameters:
+      - in: path
+        name: ref
+        required: true
+        schema:
+          format: uuid
+          type: string
+      - description: The caller's bound tenant; without it the edge answers 401 TENANT_REQUIRED
+        in: header
+        name: X-Tenant-Id
+        required: true
+        schema:
+          format: uuid
+          type: string
+      responses:
+        '200':
+          content: {}
+          description: The attachment's bytes
+        '401':
+          content:
+            application/octet-stream:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Missing or wrong X-Inbound-Mail-Secret, the edge's own secret unset, or no tenant (TENANT_REQUIRED)
+        '404':
+          content:
+            application/octet-stream:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: 'STAGED_ATTACHMENT_NOT_FOUND: unknown, another tenant''s, collected or purged ref'
+      summary: Fetch one staged email attachment
+      tags:
+      - Inbound mail staging
+      x-required-permissions:
+      - AUTHENTICATED
+components:
+  schemas:
+    ApiError:
+      description: Standard error response envelope returned by all Durion backend APIs
+      properties:
+        code:
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+          type: string
+        conflicts:
+          description: Itemized conflicts behind a 409 whose cause is a set of named conflicts, such as SCHEDULING_CONFLICT (ADR-0017 §3). Present only on such a 409; absent otherwise
+          items:
+            $ref: '#/components/schemas/Conflict'
+          type: array
+        correlationId:
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+          type: string
+        fieldErrors:
+          description: 'Field-level validation errors. Optional and module-dependent: a module populates it for validation-related errors such as VALIDATION_ERROR or VALIDATION_FAILED where doing so is safe, and omits it otherwise — some modules deliberately withhold it because the binding result names internal property names and the response is provokable by any caller. Never present for non-validation errors. Treat it as absent unless the endpoint''s own documentation says otherwise'
+          items:
+            $ref: '#/components/schemas/FieldError'
+          type: array
+        message:
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+          type: string
+        nextAction:
+          description: Recommended next step for the caller, when applicable
+          example: Retry the request with a valid quantity
+          type: string
+        referenceId:
+          description: Workflow or review-case reference identifier, when applicable
+          example: REVIEW-2026-000123
+          type: string
+        status:
+          description: HTTP status code
+          example: 404
+          format: int32
+          type: integer
+        suggestedAlternatives:
+          description: Alternatives the caller may retry with, accompanying conflicts when the service can compute them. Optional even when conflicts is present
+          items:
+            $ref: '#/components/schemas/SuggestedAlternative'
+          type: array
+        supportAction:
+          description: Support or admin investigation guidance, when applicable
+          example: Contact support with the correlation ID for assistance
+          type: string
+        timestamp:
+          description: ISO 8601 UTC timestamp of the error
+          example: '2026-03-17T14:30:00.000Z'
+          type: string
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+      type: object
+    Conflict:
+      description: A single named conflict behind a 409 response
+      properties:
+        affectedResource:
+          description: Resource affected by the conflict
+          example: 'Mechanic: John Doe'
+          type: string
+        code:
+          description: Machine-readable conflict code
+          example: MECHANIC_UNAVAILABLE
+          type: string
+        message:
+          description: User-safe description of the conflict
+          example: The selected mechanic is already booked
+          type: string
+        overridable:
+          description: Whether the conflict can be overridden (HARD=false, SOFT=true)
+          example: true
+          type: boolean
+        severity:
+          description: Conflict severity (HARD or SOFT)
+          example: SOFT
+          type: string
+      required:
+      - code
+      - message
+      - overridable
+      - severity
+      type: object
+    FieldError:
+      description: Validation error for a specific request field
+      properties:
+        field:
+          description: Field name
+          example: quantity
+          type: string
+        message:
+          description: Validation failure message
+          example: must be greater than 0
+          type: string
+      required:
+      - field
+      - message
+      type: object
+    IssuedAddressResponse:
+      description: An intake address of the caller's tenant
+      properties:
+        address:
+          description: Full lower-case intake address; a capability, never to be logged
+          example: bills-abcdefghijklmnopqrstuvwxyz@mail.example.com
+          type: string
+        addressId:
+          description: Registry id of the address; logs and events use it instead of the address text
+          format: uuid
+          type: string
+        issuedAt:
+          description: When the address was issued
+          format: date-time
+          type: string
+      type: object
+    RotateAddressRequest:
+      description: Rotation request keyed by the caller's own request id
+      properties:
+        requestId:
+          description: Caller's idempotency key; a replay returns the address this request issued
+          format: uuid
+          type: string
+      required:
+      - requestId
+      type: object
+    SuggestedAlternative:
+      description: A suggested alternative accompanying a 409 conflict
+      properties:
+        endDateTime:
+          description: Suggested end time (ISO-8601 with offset)
+          example: '2026-06-18T10:00:00-05:00'
+          type: string
+        reason:
+          description: Reason this alternative is suggested
+          example: Mechanic available
+          type: string
+        startDateTime:
+          description: Suggested start time (ISO-8601 with offset)
+          example: '2026-06-18T09:00:00-05:00'
+          type: string
+      required:
+      - endDateTime
+      - startDateTime
+      type: object
+  securitySchemes:
+    inboundMailSecret:
+      description: Shared secret, pos.inbound-mail.api-secret
+      in: header
+      name: X-Inbound-Mail-Secret
+      type: apiKey
