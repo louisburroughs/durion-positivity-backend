@@ -43,7 +43,8 @@ class GoodsReceiptReplicaTest {
 
     private static GoodsReceiptRecordedV1 fact(
             String number, long amount, String currency, Instant occurredAt, UUID purchaseOrderId) {
-        return new GoodsReceiptRecordedV1(RECEIPT, number, purchaseOrderId, null, amount, occurredAt, List.of(), currency);
+        return new GoodsReceiptRecordedV1(
+                RECEIPT, number, purchaseOrderId, null, amount, occurredAt, List.of(), currency);
     }
 
     @Test

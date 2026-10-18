@@ -127,7 +127,8 @@ public class GoodsReceiptReplicaBackfill implements ApplicationRunner {
         try {
             fact = objectMapper.convertValue(event.getPayload(), GoodsReceiptRecordedV1.class);
         } catch (Exception e) {
-            log.warn("Skipping unreadable stored goods receipt fact eventId={}: {}", event.getEventId(), e.getMessage());
+            log.warn(
+                    "Skipping unreadable stored goods receipt fact eventId={}: {}", event.getEventId(), e.getMessage());
             return;
         }
         if (fact == null || existing.contains(fact.receiptId())) {

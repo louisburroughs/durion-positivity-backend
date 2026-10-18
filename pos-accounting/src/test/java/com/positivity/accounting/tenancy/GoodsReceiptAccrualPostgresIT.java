@@ -13,7 +13,6 @@ import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
 import com.positivity.accounting.internal.repository.ExtInventoryGoodsReceiptRepository;
-import com.positivity.accounting.internal.service.GoodsReceiptReplicaBackfill;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
@@ -21,6 +20,7 @@ import com.positivity.accounting.internal.service.EventIngestionService;
 import com.positivity.accounting.internal.service.FinancialReportingService;
 import com.positivity.accounting.internal.service.GoodsReceiptAccrualPostingService;
 import com.positivity.accounting.internal.service.GoodsReceiptReplica;
+import com.positivity.accounting.internal.service.GoodsReceiptReplicaBackfill;
 import com.positivity.accounting.internal.service.IdempotencyService;
 import com.positivity.accounting.internal.service.InventoryAdjustmentPostingService;
 import com.positivity.accounting.internal.service.InventoryEventsListener;
@@ -739,7 +739,8 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                     () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), fact)));
         }
         // The receipts accrued before the copy existed: no copy rows, the stored facts remain.
-        new JdbcTemplate(ownerDataSource()).update("DELETE FROM ext_inventory_goods_receipt WHERE tenant_id = ?", tenant);
+        new JdbcTemplate(ownerDataSource())
+                .update("DELETE FROM ext_inventory_goods_receipt WHERE tenant_id = ?", tenant);
         assertThat(count(tenant, "ext_inventory_goods_receipt")).isZero();
         GoodsReceiptReplicaBackfill backfill = new GoodsReceiptReplicaBackfill(
                 null,
