@@ -120,8 +120,14 @@ public class VendorBill extends TenantScopedEntity {
     @Column(name = "purchase_order_id")
     private UUID purchaseOrderId;
 
+    @Setter(AccessLevel.NONE)
     @Column(name = "purchase_order_number", length = 50)
     private String purchaseOrderNumber;
+
+    /** {@link VendorBillNumbers#normalise} of {@link #purchaseOrderNumber}: what the delivery duplicate check compares. */
+    @Setter(AccessLevel.NONE)
+    @Column(name = "purchase_order_number_key", length = VendorBillNumbers.MAX_KEY_LENGTH)
+    private String purchaseOrderNumberKey;
 
     /**
      * The vendor's delivery-note or ASN number as stated (ruling 8 of #2518, G16); optional. Written only by
@@ -140,7 +146,7 @@ public class VendorBill extends TenantScopedEntity {
     @Column(name = "intake_id", columnDefinition = "UUID")
     private UUID intakeId;
 
-    /** How the draft arrived ({@code UPLOAD} or {@code IMPORT}); null when there was no draft. */
+    /** How the draft arrived ({@code UPLOAD}, {@code IMPORT}, {@code EDI} or {@code EMAIL_IN}); null when there was no draft. */
     @Enumerated(EnumType.STRING)
     @Column(name = "intake_channel", length = 10)
     private BillIntakeChannel intakeChannel;
@@ -297,6 +303,17 @@ public class VendorBill extends TenantScopedEntity {
     public void setBillNumber(String billNumber) {
         this.billNumber = billNumber;
         this.billNumberKey = billNumber == null ? null : VendorBillNumbers.normalise(billNumber);
+    }
+
+    /**
+     * Sets the purchase-order number and, with it, the key the delivery duplicate check reads (ruling 8 of #2518).
+     *
+     * @param purchaseOrderNumber the vendor's order number as stated; blank is none
+     */
+    public void setPurchaseOrderNumber(String purchaseOrderNumber) {
+        boolean none = purchaseOrderNumber == null || purchaseOrderNumber.isBlank();
+        this.purchaseOrderNumber = none ? null : purchaseOrderNumber.trim();
+        this.purchaseOrderNumberKey = none ? null : VendorBillNumbers.normalise(this.purchaseOrderNumber);
     }
 
     /**

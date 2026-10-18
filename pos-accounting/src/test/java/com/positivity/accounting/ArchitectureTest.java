@@ -421,16 +421,18 @@ public class ArchitectureTest {
     static final String VENDOR_BILL = "com.positivity.accounting.internal.entity.VendorBill";
 
     /**
-     * Any call of {@code VendorBill}'s no-argument constructor (it has no builder; a future one needs a rule too). The id-only reference
+     * Any call of, or constructor reference ({@code VendorBill::new}) to, {@code VendorBill}'s no-argument constructor (it has no builder; a future one needs a rule too). The id-only reference
      * constructor, {@code VendorBill(UUID)}, stays allowed: associations take it to name a bill they do not own. Matched
      * by owner name and parameter count only, so no class hierarchy is resolved.
      */
-    static final DescribedPredicate<JavaConstructorCall> VENDOR_BILL_CREATION =
-            new DescribedPredicate<>("construct a VendorBill with no arguments") {
+    static final DescribedPredicate<com.tngtech.archunit.core.domain.JavaAccess<?>> VENDOR_BILL_CREATION =
+            new DescribedPredicate<>("construct a VendorBill with no arguments, directly or by constructor reference") {
                 @Override
-                public boolean test(JavaConstructorCall input) {
+                public boolean test(com.tngtech.archunit.core.domain.JavaAccess<?> input) {
                     return VENDOR_BILL.equals(input.getTargetOwner().getName())
-                            && input.getTarget().getRawParameterTypes().isEmpty();
+                            && "<init>".equals(input.getName())
+                            && input.getTarget() instanceof com.tngtech.archunit.core.domain.AccessTarget.CodeUnitAccessTarget target
+                            && target.getRawParameterTypes().isEmpty();
                 }
             };
 
@@ -442,7 +444,7 @@ public class ArchitectureTest {
             .and()
             .doNotHaveFullyQualifiedName(BILL_INTAKE_PORT_IMPL)
             .should()
-            .callConstructorWhere(VENDOR_BILL_CREATION)
+            .accessTargetWhere(VENDOR_BILL_CREATION)
             .because("#2518 (ruling 10): a new VendorBill is born only in BillIntakePortImpl, which applies the vendor"
                     + " guards, the duplicate rule (#2501) and the delivery check; VendorBill(UUID), the id-only"
                     + " reference, is allowed. Test fixtures are outside the rule");

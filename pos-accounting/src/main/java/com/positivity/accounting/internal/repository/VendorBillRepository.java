@@ -222,7 +222,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
 
     /**
      * The live goods-receipt bills of a vendor that name this delivery against this purchase order (ruling 8 of
-     * #2518, G16): same vendor, same purchase-order number, same normalised delivery reference, origin
+     * #2518, G16): same vendor, same normalised purchase-order number, same normalised delivery reference, origin
      * {@code GOODS_RECEIVED}, and not {@code VOIDED} or {@code REJECTED}. Not unique by index: the oldest first.
      *
      * @param deliveryReferenceKey {@link com.positivity.accounting.internal.entity.VendorBillNumbers#normalise} of
@@ -232,7 +232,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         SELECT vb
         FROM VendorBill vb
         WHERE vb.vendorId = :vendorId
-          AND vb.purchaseOrderNumber = :purchaseOrderNumber
+          AND vb.purchaseOrderNumberKey = :purchaseOrderNumberKey
           AND vb.deliveryReferenceKey = :deliveryReferenceKey
           AND vb.originEventType = 'GOODS_RECEIVED'
           AND vb.status NOT IN (
@@ -242,7 +242,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         """)
     List<VendorBill> findLiveGoodsReceiptsByDelivery(
             @Param("vendorId") UUID vendorId,
-            @Param("purchaseOrderNumber") String purchaseOrderNumber,
+            @Param("purchaseOrderNumberKey") String purchaseOrderNumberKey,
             @Param("deliveryReferenceKey") String deliveryReferenceKey);
 
     /**
@@ -253,7 +253,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         SELECT vb
         FROM VendorBill vb
         WHERE vb.vendorId = :vendorId
-          AND vb.purchaseOrderNumber = :purchaseOrderNumber
+          AND vb.purchaseOrderNumberKey = :purchaseOrderNumberKey
           AND vb.originEventType = 'GOODS_RECEIVED'
           AND vb.status NOT IN (
                 com.positivity.accounting.internal.enums.VendorBillStatus.VOIDED,
@@ -261,7 +261,7 @@ public interface VendorBillRepository extends JpaRepository<VendorBill, UUID> {
         ORDER BY vb.billDate ASC, vb.vendorBillId ASC
         """)
     List<VendorBill> findLiveGoodsReceiptsByPurchaseOrder(
-            @Param("vendorId") UUID vendorId, @Param("purchaseOrderNumber") String purchaseOrderNumber);
+            @Param("vendorId") UUID vendorId, @Param("purchaseOrderNumberKey") String purchaseOrderNumberKey);
 
     /**
      * Find unpaid bills (status = APPROVED or PENDING_REVIEW) for a vendor.

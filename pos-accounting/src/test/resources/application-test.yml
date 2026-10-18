@@ -66,6 +66,8 @@ pos.events.base-url: http://127.0.0.1:1
 pos.accounting.event-drainer.enabled: false
 # The undeposited drawer cash gauges (#2514) poll on a schedule too; UndepositedCashGaugeTest drives them directly.
 pos.accounting.deposit-gauge.enabled: false
+# S25 (#2518): the one-shot conversion of VENDOR_ID_MISSING holds walks every tenant at startup; tests call it directly.
+pos.accounting.bill-intake.vendorless-hold-conversion.enabled: false
 
 # #2642: no settlement re-read in test contexts (the sweep would run against fixtures after its initial delay).
 accounting.ap.settlement.enabled: false

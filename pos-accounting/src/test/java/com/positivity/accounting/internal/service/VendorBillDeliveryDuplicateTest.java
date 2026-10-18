@@ -43,11 +43,11 @@ class VendorBillDeliveryDuplicateTest {
     @Test
     @DisplayName("the same vendor, order and delivery (normalised) is refused, matched by DELIVERY_REFERENCE")
     void refusesTheSameDelivery() {
-        when(repository.findLiveGoodsReceiptsByDelivery(VENDOR, "PO-42", "DN088213"))
+        when(repository.findLiveGoodsReceiptsByDelivery(VENDOR, "PO42", "DN088213"))
                 .thenReturn(List.of(goodsReceiptBill()));
 
         assertThatThrownBy(() -> guard.refuseIfDeliveryDuplicate(
-                        VendorBillDuplicateGuard.Channel.UPLOAD, VENDOR, "INV-1", DATE, "PO-42", " dn-088213 "))
+                        VendorBillDuplicateGuard.Channel.UPLOAD, VENDOR, "INV-1", DATE, " po-042 ", " dn-088213 "))
                 .isInstanceOfSatisfying(VendorBillDuplicateException.class, e -> {
                     assertThat(e.getMatchedBy()).isEqualTo(VendorBillDuplicateException.MatchedBy.DELIVERY_REFERENCE);
                     assertThat(e.getMessage()).contains("BILL_X_1").doesNotContain("018f0a1b");
@@ -66,10 +66,22 @@ class VendorBillDeliveryDuplicateTest {
     @Test
     @DisplayName("an order only: the goods-receipt bills of the order are what a draft is warned about, not refused")
     void purchaseOrderOnlyIsAWarning() {
-        when(repository.findLiveGoodsReceiptsByPurchaseOrder(VENDOR, "PO-42")).thenReturn(List.of(goodsReceiptBill()));
+        when(repository.findLiveGoodsReceiptsByPurchaseOrder(VENDOR, "PO42")).thenReturn(List.of(goodsReceiptBill()));
 
-        assertThat(guard.findPurchaseOrderMatches(VENDOR, "PO-42")).hasSize(1);
+        assertThat(guard.findPurchaseOrderMatches(VENDOR, "po 42")).hasSize(1);
         assertThat(guard.findPurchaseOrderMatches(VENDOR, null)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("a bill's purchase-order key is its normalised number; blank is none")
+    void billKeepsThePurchaseOrderKey() {
+        VendorBill bill = new VendorBill();
+        bill.setPurchaseOrderNumber(" po-042 ");
+        assertThat(bill.getPurchaseOrderNumber()).isEqualTo("po-042");
+        assertThat(bill.getPurchaseOrderNumberKey()).isEqualTo("PO042");
+        bill.setPurchaseOrderNumber(" ");
+        assertThat(bill.getPurchaseOrderNumber()).isNull();
+        assertThat(bill.getPurchaseOrderNumberKey()).isNull();
     }
 
     @Test

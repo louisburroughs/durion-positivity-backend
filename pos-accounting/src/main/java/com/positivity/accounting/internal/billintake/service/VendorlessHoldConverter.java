@@ -11,9 +11,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
-import org.springframework.boot.ApplicationArguments;
-import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -21,7 +18,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Converts the open {@code VENDOR_ID_MISSING} holds into bill drafts, once (CAP:550 S25, #2518; the reason is retired).
+ * Converts the open {@code VENDOR_ID_MISSING} holds into bill drafts (CAP:550 S25, #2518; the reason is retired).
  *
  * <p>Before S25 an EDI invoice fact that named no vendor was held, waiting for a person who had nothing to act on. Now
  * such a fact becomes a {@code BillIntakeItem} on channel {@code EDI} at once ({@link
@@ -35,15 +32,11 @@ import tools.jackson.databind.ObjectMapper;
  * the next start; one hold's failure stops neither the others nor the service. The reason's enum constant stays, so
  * the converted rows still read.
  *
- * <p>Turn it off with {@code pos.accounting.bill-intake.vendorless-hold-conversion.enabled=false}.
+ * <p>{@link VendorlessHoldConversionRunner} runs it at startup; tests call {@link #convertOpenHolds} directly.
  */
 @Slf4j
 @Component
-@ConditionalOnProperty(
-        name = "pos.accounting.bill-intake.vendorless-hold-conversion.enabled",
-        havingValue = "true",
-        matchIfMissing = true)
-public class VendorlessHoldConverter implements ApplicationRunner {
+public class VendorlessHoldConverter {
 
     private final TenantIterator tenantIterator;
     private final SupplierInvoiceHoldRepository holds;
@@ -65,18 +58,6 @@ public class VendorlessHoldConverter implements ApplicationRunner {
         this.objectMapper = objectMapper;
         this.clock = clock;
         this.transaction = new TransactionTemplate(transactionManager);
-    }
-
-    @Override
-    public void run(ApplicationArguments args) {
-        try {
-            int converted = convertAll();
-            if (converted > 0) {
-                log.info("Converted {} held supplier invoice(s) with no vendor into bill drafts", converted);
-            }
-        } catch (RuntimeException e) {
-            log.error("Converting held vendor-less supplier invoices failed; continuing startup", e);
-        }
     }
 
     /** Converts every active tenant's open holds; returns how many drafts were written. */

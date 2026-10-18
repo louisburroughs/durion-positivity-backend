@@ -211,10 +211,11 @@ ALTER TABLE public.vendor_bill ADD COLUMN intake_id uuid;
 ALTER TABLE public.vendor_bill ADD COLUMN intake_channel character varying(10);
 ALTER TABLE public.vendor_bill ADD COLUMN source_file_id uuid;
 ALTER TABLE public.vendor_bill ADD COLUMN extraction_outcome character varying(20);
+ALTER TABLE public.vendor_bill ADD COLUMN purchase_order_number_key character varying(255);
 ALTER TABLE public.vendor_bill ADD COLUMN delivery_reference character varying(100);
 ALTER TABLE public.vendor_bill ADD COLUMN delivery_reference_key character varying(255);
 ALTER TABLE public.vendor_bill
-    ADD CONSTRAINT vendor_bill_intake_channel_check CHECK (intake_channel IS NULL OR intake_channel IN ('UPLOAD', 'IMPORT', 'EMAIL_IN'));
+    ADD CONSTRAINT vendor_bill_intake_channel_check CHECK (intake_channel IS NULL OR intake_channel IN ('UPLOAD', 'IMPORT', 'EDI', 'EMAIL_IN'));
 ALTER TABLE public.vendor_bill
     ADD CONSTRAINT vendor_bill_extraction_outcome_check CHECK (extraction_outcome IS NULL OR extraction_outcome IN ('MANUAL', 'EXTRACTED'));
 ALTER TABLE ONLY public.vendor_bill
@@ -224,6 +225,16 @@ ALTER TABLE ONLY public.vendor_bill
     ADD CONSTRAINT vendor_bill_source_file_fk FOREIGN KEY (tenant_id, source_file_id)
         REFERENCES public.bill_source_file (tenant_id, file_id);
 CREATE INDEX vendor_bill_intake_idx ON public.vendor_bill USING btree (tenant_id, intake_id) WHERE intake_id IS NOT NULL;
+-- The key of the purchase-order number, the same normalisation as bill_number_key (ruling 8): backfilled once here,
+-- written afterwards only by VendorBill#setPurchaseOrderNumber. SQL twin of VendorBillNumbers.normalise (see V4).
+UPDATE public.vendor_bill
+SET purchase_order_number_key = left(
+        regexp_replace(
+            regexp_replace(upper(normalize(purchase_order_number, NFKC)), '[^[:alnum:]]', '', 'g'),
+            '^0+(?=.)',
+            ''),
+        255)
+WHERE purchase_order_number IS NOT NULL;
 COMMENT ON COLUMN public.vendor_bill.delivery_reference IS
     'The vendor''s delivery-note or ASN number, as stated (ruling 8 of #2518); optional. delivery_reference_key is its '
     'normalisation, written only by VendorBill#setDeliveryReference, the same normaliser as bill_number_key.';
@@ -231,8 +242,9 @@ COMMENT ON COLUMN public.vendor_bill.delivery_reference IS
 -- of the same vendor, purchase order and delivery. Not unique: the check is in code, and a vendor+PO-only match is a
 -- warning, not a refusal.
 CREATE INDEX vendor_bill_delivery_reference_idx
-    ON public.vendor_bill USING btree (tenant_id, vendor_id, purchase_order_number, delivery_reference_key)
+    ON public.vendor_bill USING btree (tenant_id, vendor_id, purchase_order_number_key, delivery_reference_key)
     WHERE delivery_reference_key IS NOT NULL
+      AND purchase_order_number_key IS NOT NULL
       AND status NOT IN ('VOIDED', 'REJECTED')
       AND origin_event_type = 'GOODS_RECEIVED';
 

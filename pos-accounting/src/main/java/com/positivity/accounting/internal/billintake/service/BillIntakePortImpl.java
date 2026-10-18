@@ -60,6 +60,8 @@ import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -319,6 +321,7 @@ public class BillIntakePortImpl implements BillIntakePort {
     // ---- machine documents (EDI) ---------------------------------------------------------------------------
 
     @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public @NonNull MachineDocumentOutcome acceptMachineDocument(
             @NonNull SupplierInvoiceReceivedV1 fact, @NonNull String eventId) {
         // S24: the vendor is the fact's pos-supplier vendorId, never its vendorProfileId.

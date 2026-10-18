@@ -43,6 +43,11 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
     @Autowired
     private javax.sql.DataSource appDataSource;
 
+    @Autowired
+    private com.positivity.accounting.internal.repository.VendorBillRepository bills;
+
+    private final List<UUID> vendors = new java.util.ArrayList<>();
+
     private final JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
 
     /** Tenants a test made up; their rows are removed afterwards so no other test meets them. */
@@ -50,6 +55,10 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
 
     @AfterEach
     void cleanUp() {
+        for (UUID vendor : vendors) {
+            owner.update("DELETE FROM vendor_bill WHERE vendor_id = ?", vendor);
+        }
+        vendors.clear();
         for (UUID tenant : scratchTenants) {
             for (String table : List.of(
                     "accounting_event", "bill_intake_item", "accounting_sequence", "accounting_configuration")) {
@@ -190,5 +199,69 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
                         Integer.class,
                         released.get("released_intake_id")))
                 .isEqualTo(1);
+    }
+
+    private com.positivity.accounting.internal.entity.VendorBill bill(
+            UUID vendor,
+            String number,
+            String origin,
+            com.positivity.accounting.internal.enums.VendorBillStatus status,
+            String purchaseOrder,
+            String delivery) {
+        var bill = new com.positivity.accounting.internal.entity.VendorBill();
+        bill.setVendorId(vendor);
+        bill.setVendorName("Acme Parts Co");
+        bill.setBillNumber(number);
+        bill.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 9, 0));
+        bill.setTotalAmount(new BigDecimal("10.00"));
+        bill.setStatus(status);
+        bill.setOriginEventType(origin);
+        bill.setPurchaseOrderNumber(purchaseOrder);
+        bill.setDeliveryReference(delivery);
+        bill.setCreatedBy("test");
+        bill.setModifiedBy("test");
+        return asTenant(TENANT_A, () -> bills.saveAndFlush(bill));
+    }
+
+    @Test
+    @DisplayName("vendor_bill accepts every intake channel a draft can carry, EDI included")
+    void vendorBillAcceptsTheEdiChannel() {
+        UUID vendor = UUID.randomUUID();
+        vendors.add(vendor);
+        var bill = new com.positivity.accounting.internal.entity.VendorBill();
+        bill.setVendorId(vendor);
+        bill.setBillNumber("EDI-1");
+        bill.setBillDate(java.time.LocalDateTime.of(2026, 10, 1, 9, 0));
+        bill.setTotalAmount(new BigDecimal("10.00"));
+        bill.setIntakeChannel(com.positivity.accounting.internal.billintake.enums.BillIntakeChannel.EDI);
+        bill.setCreatedBy("test");
+        bill.setModifiedBy("test");
+        UUID id = asTenant(TENANT_A, () -> bills.saveAndFlush(bill)).getVendorBillId();
+
+        assertThat(owner.queryForObject("SELECT intake_channel FROM vendor_bill WHERE vendor_bill_id = ?", String.class, id))
+                .isEqualTo("EDI");
+    }
+
+    @Test
+    @DisplayName("G16 queries: a live goods-receipt bill of the same normalised order and delivery is found, nothing else")
+    void deliveryQueries() {
+        UUID vendor = UUID.randomUUID();
+        vendors.add(vendor);
+        var live = com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH;
+        var found = bill(vendor, "GR-1", "GOODS_RECEIVED", live, "PO-42", "DN-1");
+        bill(vendor, "GR-2", "GOODS_RECEIVED", com.positivity.accounting.internal.enums.VendorBillStatus.VOIDED, "PO-42", "DN-1");
+        bill(vendor, "GR-3", "GOODS_RECEIVED", com.positivity.accounting.internal.enums.VendorBillStatus.REJECTED, "PO-42", "DN-1");
+        bill(vendor, "EDI-9", "SUPPLIER_INVOICE_RECEIVED", live, "PO-42", "DN-1");
+        var otherDelivery = bill(vendor, "GR-4", "GOODS_RECEIVED", live, "PO-42", "DN-2");
+        bill(UUID.randomUUID(), "GR-5", "GOODS_RECEIVED", live, "PO-42", "DN-1");
+
+        assertThat(asTenant(TENANT_A, () -> bills.findLiveGoodsReceiptsByDelivery(vendor, "PO42", "DN1")))
+                .extracting(com.positivity.accounting.internal.entity.VendorBill::getVendorBillId)
+                .containsExactly(found.getVendorBillId());
+        assertThat(asTenant(TENANT_A, () -> bills.findLiveGoodsReceiptsByDelivery(vendor, "PO42", "DN3")))
+                .isEmpty();
+        assertThat(asTenant(TENANT_A, () -> bills.findLiveGoodsReceiptsByPurchaseOrder(vendor, "PO42")))
+                .extracting(com.positivity.accounting.internal.entity.VendorBill::getVendorBillId)
+                .containsExactlyInAnyOrder(found.getVendorBillId(), otherDelivery.getVendorBillId());
     }
 }

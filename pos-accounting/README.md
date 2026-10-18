@@ -1878,7 +1878,8 @@ Bills, AP payments and the vendor reads name a vendor by its **pos-supplier vend
   its ingestion record; the retired `VENDOR_ID_MISSING` holds are converted once at startup
   (`VendorlessHoldConverter`, `pos.accounting.bill-intake.vendorless-hold-conversion.enabled`). Every new bill is
   created by `BillIntakePort`, the only class that constructs a `VendorBill` (module `ArchitectureTest`). A goods
-  receipt may carry `purchaseOrderNumber` and `deliveryReference` (ruling 8, G16). A vendor not in the copy: held,
+  receipt may carry `purchaseOrderNumber` and `deliveryReference` (ruling 8, G16). Follow-up: delete
+  `VendorlessHoldConversionRunner` and `VendorlessHoldConverter` once alpha and prod have converted their holds. A vendor not in the copy: held,
   `VENDOR_NOT_IN_COPY`, and released through the same bill creation, with its ingestion record, when the
   vendor is copied (`accounting.supplier_invoice.hold_released`). An `INACTIVE` vendor: the bill is created
   `MATCH_EXCEPTION`, `statusExplanation` "Vendor V-000123 is inactive"; an AW47 totals gap still reports

@@ -26,6 +26,13 @@ class BillIntakeConstructionRuleTest {
         }
     }
 
+    /** A constructor reference does not call the constructor where it is written, but it builds the bill all the same. */
+    static final class CreatesABillByReference {
+        java.util.function.Supplier<VendorBill> factory() {
+            return VendorBill::new;
+        }
+    }
+
     static final class NamesABillById {
         VendorBill reference(UUID id) {
             return new VendorBill(id);
@@ -45,6 +52,7 @@ class BillIntakeConstructionRuleTest {
     @DisplayName("new VendorBill() in another class violates; VendorBill(UUID) does not")
     void catchesASecondCreator() {
         assertThat(violates(CreatesABill.class)).isTrue();
+        assertThat(violates(CreatesABillByReference.class)).isTrue();
         assertThat(violates(NamesABillById.class)).isFalse();
     }
 

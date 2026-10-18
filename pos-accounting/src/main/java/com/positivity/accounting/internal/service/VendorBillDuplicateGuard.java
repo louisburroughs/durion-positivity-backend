@@ -166,7 +166,9 @@ public class VendorBillDuplicateGuard {
         }
         return vendorBillRepository
                 .findLiveGoodsReceiptsByDelivery(
-                        vendorId, purchaseOrderNumber, VendorBillNumbers.normalise(deliveryReference.trim()))
+                        vendorId,
+                        VendorBillNumbers.normalise(purchaseOrderNumber.trim()),
+                        VendorBillNumbers.normalise(deliveryReference.trim()))
                 .stream()
                 .findFirst();
     }
@@ -210,7 +212,8 @@ public class VendorBillDuplicateGuard {
         if (purchaseOrderNumber == null || purchaseOrderNumber.isBlank()) {
             return List.of();
         }
-        return vendorBillRepository.findLiveGoodsReceiptsByPurchaseOrder(vendorId, purchaseOrderNumber);
+        return vendorBillRepository.findLiveGoodsReceiptsByPurchaseOrder(
+                vendorId, VendorBillNumbers.normalise(purchaseOrderNumber.trim()));
     }
 
     /**
