@@ -238,19 +238,33 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
         bill.setModifiedBy("test");
         UUID id = asTenant(TENANT_A, () -> bills.saveAndFlush(bill)).getVendorBillId();
 
-        assertThat(owner.queryForObject("SELECT intake_channel FROM vendor_bill WHERE vendor_bill_id = ?", String.class, id))
+        assertThat(owner.queryForObject(
+                        "SELECT intake_channel FROM vendor_bill WHERE vendor_bill_id = ?", String.class, id))
                 .isEqualTo("EDI");
     }
 
     @Test
-    @DisplayName("G16 queries: a live goods-receipt bill of the same normalised order and delivery is found, nothing else")
+    @DisplayName(
+            "G16 queries: a live goods-receipt bill of the same normalised order and delivery is found, nothing else")
     void deliveryQueries() {
         UUID vendor = UUID.randomUUID();
         vendors.add(vendor);
         var live = com.positivity.accounting.internal.enums.VendorBillStatus.PENDING_RECEIPT_MATCH;
         var found = bill(vendor, "GR-1", "GOODS_RECEIVED", live, "PO-42", "DN-1");
-        bill(vendor, "GR-2", "GOODS_RECEIVED", com.positivity.accounting.internal.enums.VendorBillStatus.VOIDED, "PO-42", "DN-1");
-        bill(vendor, "GR-3", "GOODS_RECEIVED", com.positivity.accounting.internal.enums.VendorBillStatus.REJECTED, "PO-42", "DN-1");
+        bill(
+                vendor,
+                "GR-2",
+                "GOODS_RECEIVED",
+                com.positivity.accounting.internal.enums.VendorBillStatus.VOIDED,
+                "PO-42",
+                "DN-1");
+        bill(
+                vendor,
+                "GR-3",
+                "GOODS_RECEIVED",
+                com.positivity.accounting.internal.enums.VendorBillStatus.REJECTED,
+                "PO-42",
+                "DN-1");
         bill(vendor, "EDI-9", "SUPPLIER_INVOICE_RECEIVED", live, "PO-42", "DN-1");
         var otherDelivery = bill(vendor, "GR-4", "GOODS_RECEIVED", live, "PO-42", "DN-2");
         bill(UUID.randomUUID(), "GR-5", "GOODS_RECEIVED", live, "PO-42", "DN-1");

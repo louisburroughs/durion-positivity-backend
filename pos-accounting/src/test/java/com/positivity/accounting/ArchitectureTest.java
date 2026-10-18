@@ -431,7 +431,8 @@ public class ArchitectureTest {
                 public boolean test(com.tngtech.archunit.core.domain.JavaAccess<?> input) {
                     return VENDOR_BILL.equals(input.getTargetOwner().getName())
                             && "<init>".equals(input.getName())
-                            && input.getTarget() instanceof com.tngtech.archunit.core.domain.AccessTarget.CodeUnitAccessTarget target
+                            && input.getTarget()
+                                    instanceof com.tngtech.archunit.core.domain.AccessTarget.CodeUnitAccessTarget target
                             && target.getRawParameterTypes().isEmpty();
                 }
             };
