@@ -171,6 +171,18 @@ class DomainEventContractTest {
         assertThat(eventRecords()).hasSizeGreaterThan(40);
     }
 
+    @Test
+    @DisplayName("S27 (#2520): the email-in command and result records are swept by this contract")
+    void emailInEventsAreSwept() {
+        assertThat(eventRecords())
+                .extracting(Class::getSimpleName)
+                .contains("BillIntakeEmailReceivedV1", "BillIntakeEmailProcessedV1");
+        assertThat(constructibleEventRecords())
+                .as("neither needs a cross-field exemption: a generic sample constructs both")
+                .extracting(Class::getSimpleName)
+                .contains("BillIntakeEmailReceivedV1", "BillIntakeEmailProcessedV1");
+    }
+
     @ParameterizedTest(name = "{0}")
     @MethodSource("eventRecords")
     @DisplayName("every event declares a well-formed EVENT_TYPE")

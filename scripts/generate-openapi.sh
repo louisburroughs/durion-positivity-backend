@@ -20,6 +20,8 @@ AGGREGATE_OUTPUT="pos-api-gateway/docs/openapi-aggregate.yaml"
 # front door, by per-caller secret (ADR-0071 §6), so they must never reach the gateway index or an SDK.
 AGGREGATE_EXCLUDED_MODULES=(pos-platform-sender pos-tax)
 VALIDATION_MODE="${OPENAPI_VALIDATION_MODE:-report}"
+# pos-inbound-mail (CAP:550 S27): called only by pos-accounting with a shared secret (ADR-0014), no gateway route.
+AGGREGATE_EXCLUDED_MODULES+=(pos-inbound-mail)
 GENERATE_PERMISSIONS=true
 
 usage() {

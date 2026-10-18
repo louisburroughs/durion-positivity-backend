@@ -273,6 +273,11 @@ jobs:
         # never shadows the env file.
         run: bash scripts/tests/deploy-backend-step-up-secret-selftest.sh
 
+      - name: Verify the deploy's inbound-mail secret handling
+        # CAP:550 S27: POS_INBOUND_MAIL_API_SECRET is persisted when supplied, kept when not, generated on the box
+        # when missing, never printed, and its shell copy never shadows the env file.
+        run: bash scripts/tests/deploy-backend-inbound-mail-secret-selftest.sh
+
       - name: Verify the CloudWatch agent installer
         # The installer is the only thing standing between alpha and a repeat of #1862, and its
         # contract is that every condition leaving the box unwatched fails the run. Those paths

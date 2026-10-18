@@ -303,6 +303,7 @@
 		<module>pos-supplier</module>
 		<module>pos-tax</module>
 		<module>pos-tenant</module>
+		<module>pos-inbound-mail</module>
 		<module>pos-documents</module>
 		<module>pos-warranty</module>
 		<module>pos-marketing</module>

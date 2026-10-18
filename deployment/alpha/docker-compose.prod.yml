@@ -152,6 +152,13 @@ services:
     # POS_PLATFORM_SENDER_* interpolation of the on-box .env; until an operator sets
     # POS_PLATFORM_SENDER_TRANSPORT=aws it runs the 'log' transport and contacts nobody.
 
+  pos-inbound-mail:
+    image: ${ECR_REGISTRY}/durion/pos-inbound-mail:${BACKEND_TAG}
+    restart: unless-stopped
+    logging: *logging
+    # The mail source stays 'none' (POS_INBOUND_MAIL_SOURCE, base compose default) until the platform owner
+    # signs off the SES receiving setup (S27 ruling 9); the API secret and domain come from the on-box .env.
+
   pos-mcp-server:
     image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
     restart: unless-stopped

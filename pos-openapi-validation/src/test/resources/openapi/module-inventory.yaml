@@ -91,6 +91,10 @@ modules:
     mode: STRICT
     annotationDepth: STRICT
     errorSchema: STRICT
+  pos-inbound-mail:
+    mode: STRICT
+    annotationDepth: STRICT
+    errorSchema: STRICT
   pos-api-gateway:
     mode: EXCEPTION
     reason: aggregate producer without module paths

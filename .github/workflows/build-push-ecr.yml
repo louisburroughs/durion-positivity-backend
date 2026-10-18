@@ -77,7 +77,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-bulk-loader","pos-catalog","pos-customer","pos-documents","pos-event-receiver","pos-image","pos-inventory","pos-invoice","pos-location","pos-marketing","pos-mcp-server","pos-order","pos-people","pos-people-contact","pos-platform-sender","pos-price","pos-reference-mock","pos-security-service","pos-service-discovery","pos-shop-manager","pos-supplier","pos-tax","pos-tenant","pos-vehicle-inventory","pos-warranty","pos-workorder"]'
+          ALL_SERVICES_JSON='["pos-accounting","pos-api-gateway","pos-bulk-loader","pos-catalog","pos-customer","pos-documents","pos-event-receiver","pos-image","pos-inbound-mail","pos-inventory","pos-invoice","pos-location","pos-marketing","pos-mcp-server","pos-order","pos-people","pos-people-contact","pos-platform-sender","pos-price","pos-reference-mock","pos-security-service","pos-service-discovery","pos-shop-manager","pos-supplier","pos-tax","pos-tenant","pos-vehicle-inventory","pos-warranty","pos-workorder"]'
           echo "all-services=${ALL_SERVICES_JSON}" >> "$GITHUB_OUTPUT"
           FORCE_FULL_REBUILD=false
 
@@ -512,6 +512,9 @@ jobs:
           # Optional: deploy-backend.sh persists it when set, keeps the box's copy when not, and
           # generates one on the box when neither exists.
           POS_SECURITY_STEP_UP_SECRET: ${{ secrets.POS_SECURITY_STEP_UP_SECRET }}
+          # CAP:550 S27: the inbound-mail edge's API secret (pos-inbound-mail and pos-accounting). Optional: deploy-backend.sh
+          # persists it when set, keeps the box's copy when not, and generates one on the box when neither exists.
+          POS_INBOUND_MAIL_API_SECRET: ${{ secrets.POS_INBOUND_MAIL_API_SECRET }}
           # Only a manual dispatch can ask for the alpha schema reset (drop every backend
           # database, let Flyway rebuild from V1); the automatic promotion path never does.
           RESET_ALPHA_DATABASES: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_alpha_databases }}
@@ -540,6 +543,10 @@ jobs:
           POS_SECURITY_STEP_UP_SECRET="$(printf '%s' "${POS_SECURITY_STEP_UP_SECRET}" | tr -d '[:space:]')"
           if [[ -n "${POS_SECURITY_STEP_UP_SECRET}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT+="POS_SECURITY_STEP_UP_SECRET='${POS_SECURITY_STEP_UP_SECRET}' "
+          fi
+          POS_INBOUND_MAIL_API_SECRET="$(printf '%s' "${POS_INBOUND_MAIL_API_SECRET}" | tr -d '[:space:]')"
+          if [[ -n "${POS_INBOUND_MAIL_API_SECRET}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT+="POS_INBOUND_MAIL_API_SECRET='${POS_INBOUND_MAIL_API_SECRET}' "
           fi
           # Same rule for the reset: the variable reaches the host only when the reset was
           # asked for, so deploy-backend.sh's default (false) is what every other deploy sees.

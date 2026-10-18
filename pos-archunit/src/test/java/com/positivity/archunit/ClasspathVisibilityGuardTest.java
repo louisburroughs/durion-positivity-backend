@@ -47,6 +47,7 @@ class ClasspathVisibilityGuardTest {
             Map.entry("pos-image", "com.positivity.image"),
             Map.entry("pos-inquiry", "com.positivity.inquiry"),
             Map.entry("pos-inventory", "com.positivity.inventory"),
+            Map.entry("pos-inbound-mail", "com.positivity.inboundmail"),
             Map.entry("pos-invoice", "com.positivity.invoice"),
             Map.entry("pos-location", "com.positivity.location"),
             Map.entry("pos-mcp-server", "com.positivity.mcp"),
