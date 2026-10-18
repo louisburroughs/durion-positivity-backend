@@ -38,6 +38,15 @@ class BillIntakeControllerTest extends BaseControllerSliceTest {
     @MockitoBean
     private BillIntakeEntry entry;
 
+    private static org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder upload(
+            String authorities) {
+        return multipart(URL)
+                .file(pdf())
+                .param("requestId", REQUEST_ID)
+                .header("X-User", TEST_USER)
+                .header("X-Authorities", authorities);
+    }
+
     private static MockMultipartFile pdf() {
         return new MockMultipartFile("files", "bill.pdf", "application/pdf", "%PDF-1.7 a bill".getBytes());
     }
@@ -58,7 +67,7 @@ class BillIntakeControllerTest extends BaseControllerSliceTest {
                                 Instant.parse("2026-10-17T09:00:00Z"))),
                         false));
 
-        mockMvc.perform(withAuth(multipart(URL).file(pdf()).param("requestId", REQUEST_ID), "accounting:bill_intake:create"))
+        mockMvc.perform(upload("accounting:bill_intake:create"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.items[0].intakeReference").value("BI-202610-0000001"))
                 .andExpect(jsonPath("$.items[0].status").value("QUARANTINED"));
@@ -68,7 +77,7 @@ class BillIntakeControllerTest extends BaseControllerSliceTest {
     @Test
     @DisplayName("403 for a caller without the permission, and the entry is never called")
     void forbidden() throws Exception {
-        mockMvc.perform(withAuth(multipart(URL).file(pdf()).param("requestId", REQUEST_ID), "accounting:ap:view"))
+        mockMvc.perform(upload("accounting:ap:view"))
                 .andExpect(status().isForbidden());
         org.mockito.Mockito.verifyNoInteractions(entry);
     }
@@ -80,7 +89,7 @@ class BillIntakeControllerTest extends BaseControllerSliceTest {
                 .thenThrow(new VendorBillException(
                         VendorBillException.Code.IDEMPOTENCY_CONFLICT, "The requestId was used before with other files"));
 
-        mockMvc.perform(withAuth(multipart(URL).file(pdf()).param("requestId", REQUEST_ID), "accounting:bill_intake:create"))
+        mockMvc.perform(upload("accounting:bill_intake:create"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("IDEMPOTENCY_CONFLICT"));
     }
@@ -90,12 +99,12 @@ class BillIntakeControllerTest extends BaseControllerSliceTest {
     void tooLarge() throws Exception {
         when(entry.receive(any(), any(), any(), any()))
                 .thenThrow(new VendorBillException(VendorBillException.Code.PAYLOAD_TOO_LARGE, "A file is over the limit"));
-        mockMvc.perform(withAuth(multipart(URL).file(pdf()).param("requestId", REQUEST_ID), "accounting:bill_intake:create"))
+        mockMvc.perform(upload("accounting:bill_intake:create"))
                 .andExpect(status().isPayloadTooLarge())
                 .andExpect(jsonPath("$.code").value("PAYLOAD_TOO_LARGE"));
 
         when(entry.receive(any(), any(), any(), any())).thenThrow(new MaxUploadSizeExceededException(100L));
-        mockMvc.perform(withAuth(multipart(URL).file(pdf()).param("requestId", REQUEST_ID), "accounting:bill_intake:create"))
+        mockMvc.perform(upload("accounting:bill_intake:create"))
                 .andExpect(status().isPayloadTooLarge())
                 .andExpect(jsonPath("$.code").value("PAYLOAD_TOO_LARGE"));
     }
