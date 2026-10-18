@@ -45,8 +45,21 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
 
     private final JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
 
+    /** Tenants a test made up; their rows are removed afterwards so no other test meets them. */
+    private final List<UUID> scratchTenants = new java.util.ArrayList<>();
+
     @AfterEach
     void cleanUp() {
+        for (UUID tenant : scratchTenants) {
+            for (String table : List.of(
+                    "accounting_event",
+                    "bill_intake_item",
+                    "accounting_sequence",
+                    "accounting_configuration")) {
+                owner.update("DELETE FROM " + table + " WHERE tenant_id = ?", tenant);
+            }
+        }
+        scratchTenants.clear();
         owner.update(
                 "DELETE FROM accounting_event WHERE source_system = 'pos-supplier' AND tenant_id IN (?, ?)",
                 TENANT_A,
@@ -115,21 +128,23 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
     @Test
     @DisplayName("each tenant sees only its own drafts under RLS; references are per tenant")
     void tenantsAreIsolated() {
-        provisionAccounting(TENANT_A);
-        provisionAccounting(TENANT_B);
-        accept(TENANT_A, vendorlessFact("INV-A"), UUID.randomUUID().toString());
-        accept(TENANT_B, vendorlessFact("INV-B"), UUID.randomUUID().toString());
+        UUID one = tenantWithZone();
+        UUID two = tenantWithZone();
+        scratchTenants.add(one);
+        scratchTenants.add(two);
+        accept(one, vendorlessFact("INV-A"), UUID.randomUUID().toString());
+        accept(two, vendorlessFact("INV-B"), UUID.randomUUID().toString());
 
         assertThat(asTenant(
-                        TENANT_A,
+                        one,
                         () -> new JdbcTemplate(appDataSource)
                                 .queryForList("SELECT tenant_id FROM bill_intake_item", UUID.class)))
-                .containsOnly(TENANT_A);
+                .containsOnly(one);
         assertThat(asTenant(
-                        TENANT_B,
+                        two,
                         () -> new JdbcTemplate(appDataSource)
                                 .queryForList("SELECT tenant_id FROM bill_intake_item", UUID.class)))
-                .containsOnly(TENANT_B);
+                .containsOnly(two);
     }
 
     @Test
