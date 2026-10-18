@@ -34,9 +34,12 @@ public class OpenApiConfig {
                                 + " its one caller, and the API Gateway has no route here.")
                         .version("v1")
                         .contact(new Contact().email("platform@durionpos.org").name("Durion Support Services")))
-                .servers(List.of(new Server()
-                        .url("http://extraction-proxy:8080")
-                        .description("Through extraction-proxy (Compose and alpha); the worker itself is only on extraction-net")))
+                .servers(
+                        List.of(
+                                new Server()
+                                        .url("http://extraction-proxy:8080")
+                                        .description(
+                                                "Through extraction-proxy (Compose and alpha); the worker itself is only on extraction-net")))
                 .components(new Components()
                         .addSecuritySchemes(
                                 WORKER_SECRET_SCHEME,

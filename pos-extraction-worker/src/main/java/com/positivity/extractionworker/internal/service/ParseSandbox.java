@@ -49,7 +49,8 @@ public class ParseSandbox {
         this.properties = properties;
     }
 
-    @NonNull SandboxOutcome run(@NonNull Path callDir, @NonNull SandboxRequest request, @NonNull Duration deadline) {
+    @NonNull
+    SandboxOutcome run(@NonNull Path callDir, @NonNull SandboxRequest request, @NonNull Duration deadline) {
         Process process = null;
         try {
             mapper.writeValue(callDir.resolve(SandboxRequest.REQUEST_FILE).toFile(), request);

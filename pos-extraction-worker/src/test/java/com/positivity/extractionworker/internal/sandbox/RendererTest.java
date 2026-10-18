@@ -68,7 +68,9 @@ class RendererTest {
                 209_715_200L,
                 0.01,
                 "heif-dec",
-                 20, 1024, 268_435_456L);
+                20,
+                1024,
+                268_435_456L);
 
         render(DeclaredType.PDF, TestCorpus.pdf(1), 1, capped);
 
@@ -129,7 +131,9 @@ class RendererTest {
                 209_715_200L,
                 0.01,
                 "heif-dec",
-                 20, 1024, 268_435_456L);
+                20,
+                1024,
+                268_435_456L);
 
         render(DeclaredType.PNG, TestCorpus.image("png", 100, 100), 1, capped);
 

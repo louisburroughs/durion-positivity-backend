@@ -59,7 +59,9 @@ public record ExtractionWorkerProperties(
      * @param maxPages most pages a PDF may have
      * @param maxStreamCacheBytes most bytes PDFBox may spill to its temp-file stream cache
      */
-    public record Pdf(@DefaultValue("30") int maxPages, @DefaultValue("268435456") long maxStreamCacheBytes) {}
+    public record Pdf(
+            @DefaultValue("30") int maxPages,
+            @DefaultValue("268435456") long maxStreamCacheBytes) {}
 
     /**
      * @param maxPixels most pixels an image may declare in its header
@@ -138,7 +140,8 @@ public record ExtractionWorkerProperties(
             return apiSecret;
         }
         try {
-            return Files.readString(Path.of(apiSecretFile), StandardCharsets.UTF_8).strip();
+            return Files.readString(Path.of(apiSecretFile), StandardCharsets.UTF_8)
+                    .strip();
         } catch (IOException | RuntimeException e) {
             return null;
         }

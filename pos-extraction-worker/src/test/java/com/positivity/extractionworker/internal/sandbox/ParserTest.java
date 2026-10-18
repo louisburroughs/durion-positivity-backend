@@ -69,9 +69,11 @@ class ParserTest {
 
     @Test
     void goToActionsAreNotActiveContentButRiskyActionTypesAre() throws IOException {
-        assertThat(inspect(DeclaredType.PDF, TestCorpus.pdfWithBenignOpenAction()).outcome())
+        assertThat(inspect(DeclaredType.PDF, TestCorpus.pdfWithBenignOpenAction())
+                        .outcome())
                 .isEqualTo(SandboxResult.Outcome.ACCEPTED);
-        assertThat(inspect(DeclaredType.PDF, TestCorpus.pdfWithBenignAdditionalActions()).outcome())
+        assertThat(inspect(DeclaredType.PDF, TestCorpus.pdfWithBenignAdditionalActions())
+                        .outcome())
                 .isEqualTo(SandboxResult.Outcome.ACCEPTED);
         assertRejected(inspect(DeclaredType.PDF, TestCorpus.pdfWithXfa()), ReasonCode.PDF_ACTIVE_CONTENT);
         assertRejected(inspect(DeclaredType.PDF, TestCorpus.pdfWithUriAction()), ReasonCode.PDF_ACTIVE_CONTENT);
@@ -166,7 +168,9 @@ class ParserTest {
                 209_715_200L,
                 0.01,
                 "heif-dec",
-                 20, 1024, 268_435_456L);
+                20,
+                1024,
+                268_435_456L);
 
         assertRejected(
                 inspect(DeclaredType.CSV, TestCorpus.csv("a\n1\n2\n3\n4\n"), tight),
@@ -226,7 +230,9 @@ class ParserTest {
                 209_715_200L,
                 0.01,
                 "heif-dec",
-                 20, 1024, 268_435_456L);
+                20,
+                1024,
+                268_435_456L);
         SandboxLimits fewEntries = new SandboxLimits(
                 30,
                 30,
@@ -241,7 +247,9 @@ class ParserTest {
                 209_715_200L,
                 0.01,
                 "heif-dec",
-                 20, 1024, 268_435_456L);
+                20,
+                1024,
+                268_435_456L);
 
         assertRejected(
                 inspect(DeclaredType.XLSX, TestCorpus.xlsx(50, 4), smallEntries),
@@ -266,7 +274,9 @@ class ParserTest {
                 209_715_200L,
                 0.01,
                 "heif-dec",
-                 20, 1024, 268_435_456L);
+                20,
+                1024,
+                268_435_456L);
 
         assertRejected(inspect(DeclaredType.XLSX, TestCorpus.xlsx(10, 2), tight), ReasonCode.RESOURCE_LIMIT_EXCEEDED);
         assertRejected(inspect(DeclaredType.XLSX, TestCorpus.xlsx(2, 5), tight), ReasonCode.RESOURCE_LIMIT_EXCEEDED);

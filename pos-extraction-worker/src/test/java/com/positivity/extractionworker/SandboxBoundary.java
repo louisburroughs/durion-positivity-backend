@@ -19,16 +19,17 @@ public final class SandboxBoundary {
     private SandboxBoundary() {}
 
     public static ArchRule webProcessUsesOnlyTheBoundaryRecords() {
-        DescribedPredicate<JavaClass> sandboxInternals = new DescribedPredicate<>(
-                "sandbox classes other than the request, result and limits records") {
-            @Override
-            public boolean test(JavaClass target) {
-                return target.getPackageName().startsWith("com.positivity.extractionworker.internal.sandbox")
-                        && !BOUNDARY_TYPES.contains(target.getSimpleName().replaceAll("\\$.*", ""))
-                        && !target.getFullName().contains("SandboxResult$")
-                        && !target.getFullName().contains("SandboxRequest$");
-            }
-        };
+        DescribedPredicate<JavaClass> sandboxInternals =
+                new DescribedPredicate<>("sandbox classes other than the request, result and limits records") {
+                    @Override
+                    public boolean test(JavaClass target) {
+                        return target.getPackageName().startsWith("com.positivity.extractionworker.internal.sandbox")
+                                && !BOUNDARY_TYPES.contains(
+                                        target.getSimpleName().replaceAll("\\$.*", ""))
+                                && !target.getFullName().contains("SandboxResult$")
+                                && !target.getFullName().contains("SandboxRequest$");
+                    }
+                };
         return noClasses()
                 .that()
                 .resideOutsideOfPackage("..internal.sandbox..")

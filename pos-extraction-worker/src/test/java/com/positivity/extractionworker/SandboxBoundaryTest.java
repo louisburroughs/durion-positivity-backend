@@ -16,7 +16,8 @@ class SandboxBoundaryTest {
         JavaClasses fixture = new ClassFileImporter().importPackages("com.positivity.extractionworker.fixture");
 
         assertThat(fixture).isNotEmpty();
-        assertThatThrownBy(() -> SandboxBoundary.webProcessUsesOnlyTheBoundaryRecords().check(fixture))
+        assertThatThrownBy(() ->
+                        SandboxBoundary.webProcessUsesOnlyTheBoundaryRecords().check(fixture))
                 .isInstanceOf(AssertionError.class)
                 .hasMessageContaining("ParseMain");
     }

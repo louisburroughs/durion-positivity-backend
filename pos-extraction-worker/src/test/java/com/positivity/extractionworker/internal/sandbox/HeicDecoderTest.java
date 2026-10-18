@@ -51,7 +51,9 @@ class HeicDecoderTest {
                 209_715_200L,
                 0.01,
                 binary,
-                 20, 1024, 268_435_456L);
+                20,
+                1024,
+                268_435_456L);
         return ParseMain.execute(dir, new SandboxRequest(SandboxRequest.INSPECT, DeclaredType.HEIC, 0, limits));
     }
 
@@ -83,7 +85,8 @@ class HeicDecoderTest {
 
     @Test
     void heicWithNoReadableSizeFailsClosedBeforeTheDecoder() throws IOException {
-        byte[] noIspe = new byte[] {0, 0, 0, 24, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0, 0, 0, 0, 'm', 'i', 'f', '1'};
+        byte[] noIspe =
+                new byte[] {0, 0, 0, 24, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0, 0, 0, 0, 'm', 'i', 'f', '1'};
 
         SandboxResult result = inspect(noIspe, "no-such-heif-decoder");
 

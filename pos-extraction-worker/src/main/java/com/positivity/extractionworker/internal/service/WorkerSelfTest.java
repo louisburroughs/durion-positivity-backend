@@ -31,10 +31,13 @@ public class WorkerSelfTest implements HealthIndicator {
     private final ExtractionWorkerProperties properties;
     private final ScratchSpace scratch;
     private final ParseSandbox sandbox;
-    private volatile Health health = Health.unknown().withDetail("selfTest", "not run yet").build();
+    private volatile Health health =
+            Health.unknown().withDetail("selfTest", "not run yet").build();
 
     public WorkerSelfTest(
-            @NonNull ExtractionWorkerProperties properties, @NonNull ScratchSpace scratch, @NonNull ParseSandbox sandbox) {
+            @NonNull ExtractionWorkerProperties properties,
+            @NonNull ScratchSpace scratch,
+            @NonNull ParseSandbox sandbox) {
         this.properties = properties;
         this.scratch = scratch;
         this.sandbox = sandbox;
@@ -55,7 +58,7 @@ public class WorkerSelfTest implements HealthIndicator {
         }
     }
 
-    boolean sandboxWorks() {
+    public boolean sandboxWorks() {
         try (ScratchSpace.CallDir dir = scratch.open();
                 InputStream png = getClass().getResourceAsStream("/selftest.png")) {
             if (png == null) {
@@ -64,7 +67,8 @@ public class WorkerSelfTest implements HealthIndicator {
             Files.write(dir.path().resolve(SandboxRequest.INPUT_FILE), png.readAllBytes());
             SandboxRequest request =
                     new SandboxRequest(SandboxRequest.INSPECT, DeclaredType.PNG, 0, properties.sandboxLimits());
-            SandboxOutcome outcome = sandbox.run(dir.path(), request, properties.deadline().inspect());
+            SandboxOutcome outcome =
+                    sandbox.run(dir.path(), request, properties.deadline().inspect());
             return outcome instanceof SandboxOutcome.Completed completed
                     && completed.result().outcome() == SandboxResult.Outcome.ACCEPTED
                     && completed.result().pageCount() == 1;
