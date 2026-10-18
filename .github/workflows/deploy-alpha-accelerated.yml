@@ -229,6 +229,9 @@ jobs:
           # Optional: deploy-backend.sh persists it when set, keeps the box's copy when not, and
           # generates one on the box when neither exists.
           POS_SECURITY_STEP_UP_SECRET: ${{ secrets.POS_SECURITY_STEP_UP_SECRET }}
+          # CAP:550 S27: the inbound-mail edge's API secret (pos-inbound-mail and pos-accounting). Optional: deploy-backend.sh
+          # persists it when set, keeps the box's copy when not, and generates one on the box when neither exists.
+          POS_INBOUND_MAIL_API_SECRET: ${{ secrets.POS_INBOUND_MAIL_API_SECRET }}
         run: |
           # See build-push-ecr.yml for why these two are handled this way: a newline in the
           # base64 breaks the --parameters JSON, and an empty export on the host shadows the
@@ -249,6 +252,10 @@ jobs:
           POS_SECURITY_STEP_UP_SECRET="$(printf '%s' "${POS_SECURITY_STEP_UP_SECRET}" | tr -d '[:space:]')"
           if [[ -n "${POS_SECURITY_STEP_UP_SECRET}" ]]; then
             SUPPLIER_KEY_ASSIGNMENT+="POS_SECURITY_STEP_UP_SECRET='${POS_SECURITY_STEP_UP_SECRET}' "
+          fi
+          POS_INBOUND_MAIL_API_SECRET="$(printf '%s' "${POS_INBOUND_MAIL_API_SECRET}" | tr -d '[:space:]')"
+          if [[ -n "${POS_INBOUND_MAIL_API_SECRET}" ]]; then
+            SUPPLIER_KEY_ASSIGNMENT+="POS_INBOUND_MAIL_API_SECRET='${POS_INBOUND_MAIL_API_SECRET}' "
           fi
           # deploy-backend.sh re-checks the anchors before it touches the host: their shape, a
           # gap of at least one day, and the scale. It also writes them into the
