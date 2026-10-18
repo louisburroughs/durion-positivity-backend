@@ -47,7 +47,10 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
 
     @AfterEach
     void cleanUp() {
-        owner.update("DELETE FROM accounting_event WHERE source_system = 'pos-supplier' AND tenant_id IN (?, ?)", TENANT_A, TENANT_B);
+        owner.update(
+                "DELETE FROM accounting_event WHERE source_system = 'pos-supplier' AND tenant_id IN (?, ?)",
+                TENANT_A,
+                TENANT_B);
         owner.update("DELETE FROM supplier_invoice_hold WHERE tenant_id IN (?, ?)", TENANT_A, TENANT_B);
         owner.update("DELETE FROM bill_intake_item WHERE tenant_id IN (?, ?)", TENANT_A, TENANT_B);
     }
@@ -104,7 +107,8 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
                         Integer.class,
                         outcome.intakeId().toString()))
                 .isEqualTo(1);
-        assertThat(owner.queryForObject("SELECT count(*) FROM vendor_bill WHERE intake_id = ?", Integer.class, outcome.intakeId()))
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM vendor_bill WHERE intake_id = ?", Integer.class, outcome.intakeId()))
                 .isZero();
     }
 

@@ -115,9 +115,18 @@ class BillIntakePortImplTest {
         assertThat(draft.getVendorResolution()).isEqualTo(BillVendorResolution.NOT_SET_UP);
         assertThat(draft.getUploadedAt()).isEqualTo(Instant.now(CLOCK));
         assertThat(draft.getExtractionOutcome()).isNull();
-        assertThat(draft.getReadBack().get("vendor")).asString().contains("CHECK_THIS").contains("ACME");
-        assertThat(draft.getReadBack().get("totalAmount")).asString().contains("288.00").contains("READ");
-        assertThat(draft.getReadBack().get("taxByType")).asString().contains("VAT").contains("READ");
+        assertThat(draft.getReadBack().get("vendor"))
+                .asString()
+                .contains("CHECK_THIS")
+                .contains("ACME");
+        assertThat(draft.getReadBack().get("totalAmount"))
+                .asString()
+                .contains("288.00")
+                .contains("READ");
+        assertThat(draft.getReadBack().get("taxByType"))
+                .asString()
+                .contains("VAT")
+                .contains("READ");
         assertThat(draft.getReadBack().get("lines")).asString().contains("ART-9");
         assertThat(draft.getReadBack().get("purchaseOrderNumber")).asString().contains("PO-42");
         // The ingestion record is keyed on the draft's id, nothing posts, and no bill is written.
@@ -128,7 +137,8 @@ class BillIntakePortImplTest {
     @Test
     @DisplayName("a tax label that is not a tax type is CHECK_THIS on the draft")
     void unusableTaxLabelNeedsChecking() {
-        port.acceptMachineDocument(fact(null, List.of(new SupplierInvoiceTax("VAT 19 %", new BigDecimal("48.00")))), EVENT);
+        port.acceptMachineDocument(
+                fact(null, List.of(new SupplierInvoiceTax("VAT 19 %", new BigDecimal("48.00")))), EVENT);
 
         ArgumentCaptor<BillIntakeItem> saved = ArgumentCaptor.forClass(BillIntakeItem.class);
         verify(items).saveAndFlush(saved.capture());
@@ -205,7 +215,8 @@ class BillIntakePortImplTest {
         });
         VendorBillReader reader = mock(VendorBillReader.class);
         when(reader.read(any(VendorBill.class)))
-                .thenReturn(com.positivity.accounting.internal.dto.VendorBillResponse.builder().build());
+                .thenReturn(com.positivity.accounting.internal.dto.VendorBillResponse.builder()
+                        .build());
         port = TestBillIntakePorts.builder()
                 .with(CLOCK)
                 .with(bills)

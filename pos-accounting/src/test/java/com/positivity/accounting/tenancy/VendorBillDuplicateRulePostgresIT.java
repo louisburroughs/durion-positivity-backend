@@ -6,8 +6,9 @@ import static com.positivity.tenancy.testing.TenantTestSupport.asTenant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.positivity.accounting.internal.billintake.service.TestBillIntakePorts;
 import com.positivity.accounting.AccountingPostgresContainer;
+import com.positivity.accounting.internal.billintake.service.BillIntakePortImpl;
+import com.positivity.accounting.internal.billintake.service.TestBillIntakePorts;
 import com.positivity.accounting.internal.config.LedgerCurrency;
 import com.positivity.accounting.internal.dto.GoodsReceivedEvent;
 import com.positivity.accounting.internal.dto.VendorBillResponse;
@@ -38,7 +39,6 @@ import com.positivity.accounting.internal.service.VendorBillLocks;
 import com.positivity.accounting.internal.service.VendorBillReader;
 import com.positivity.accounting.internal.service.VendorBillService;
 import com.positivity.accounting.internal.service.VendorBillServiceImpl;
-import com.positivity.accounting.internal.billintake.service.BillIntakePortImpl;
 import com.positivity.accounting.internal.service.VendorBillStatedTax;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;

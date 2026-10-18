@@ -141,13 +141,11 @@ class SupplierEventsVendorCopyTest {
                 mock(PlatformTransactionManager.class));
         intakeCounter.setNextValue(7L);
         lenient().when(sequenceLocker.lockOrProvision("BI-202610")).thenReturn(intakeCounter);
-        lenient()
-                .when(items.saveAndFlush(any()))
-                .thenAnswer(inv -> {
-                    com.positivity.accounting.internal.billintake.entity.BillIntakeItem item = inv.getArgument(0);
-                    item.setIntakeId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9c77"));
-                    return item;
-                });
+        lenient().when(items.saveAndFlush(any())).thenAnswer(inv -> {
+            com.positivity.accounting.internal.billintake.entity.BillIntakeItem item = inv.getArgument(0);
+            item.setIntakeId(UUID.fromString("018f0a1b-2c3d-7e4f-8a9b-0c1d2e3f9c77"));
+            return item;
+        });
         when(processed.existsById(any())).thenReturn(false);
         when(bills.findLiveDuplicate(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         lenient().when(bills.saveAndFlush(any())).thenAnswer(inv -> {
@@ -395,7 +393,10 @@ class SupplierEventsVendorCopyTest {
             assertThat(draft.getUploadedBy()).isEqualTo("supplier");
             assertThat(draft.getReadBack()).containsKeys("vendor", "billNumber", "totalAmount");
             assertThat(draft.getReadBack().get("vendor")).asString().contains("CHECK_THIS");
-            assertThat(draft.getReadBack().get("billNumber")).asString().contains("INV-77").contains("READ");
+            assertThat(draft.getReadBack().get("billNumber"))
+                    .asString()
+                    .contains("INV-77")
+                    .contains("READ");
             assertThat(mark().getEventId()).isEqualTo(INVOICE_EVENT);
             verify(ingestion)
                     .record(

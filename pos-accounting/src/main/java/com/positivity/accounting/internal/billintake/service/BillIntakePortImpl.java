@@ -440,7 +440,6 @@ public class BillIntakePortImpl implements BillIntakePort {
         return new MachineDocumentOutcome.Bill(bill.getVendorBillId());
     }
 
-
     // ---- a vendor-less fact becomes a draft (S25) -----------------------------------------------------------
 
     /**
@@ -494,7 +493,10 @@ public class BillIntakePortImpl implements BillIntakePort {
         readBack.put("documentType", field(fact.type().name(), BillFieldState.READ));
         readBack.put("billNumber", field(fact.vendorInvoiceNumber(), BillFieldState.READ));
         readBack.put("billDate", field(fact.invoiceDate().toString(), BillFieldState.READ));
-        putIfPresent(readBack, "dueDate", fact.dueDate() == null ? null : fact.dueDate().toString());
+        putIfPresent(
+                readBack,
+                "dueDate",
+                fact.dueDate() == null ? null : fact.dueDate().toString());
         putIfPresent(readBack, "terms", fact.paymentTerms());
         readBack.put("currency", field(fact.currency(), BillFieldState.READ));
         putIfPresent(readBack, "netAmount", fact.totalNetAmount());
@@ -597,7 +599,6 @@ public class BillIntakePortImpl implements BillIntakePort {
         return "Vendor " + vendor.getVendorNumber() + " is inactive";
     }
 
-
     private void record(String eventId, UUID domainKeyId, SupplierInvoiceReceivedV1 fact, FactPostingOutcome outcome) {
         // Argument evaluation stays outside the wrap: a payload fault there is malformed, not a
         // recorder failure.
@@ -618,7 +619,6 @@ public class BillIntakePortImpl implements BillIntakePort {
             throw new IngestionRecordFailure(e);
         }
     }
-
 
     /**
      * A second invoice under a number we already hold. Not overwritten: the first version is what

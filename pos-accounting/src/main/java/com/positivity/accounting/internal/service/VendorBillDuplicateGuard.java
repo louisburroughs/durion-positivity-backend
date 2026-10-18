@@ -188,7 +188,13 @@ public class VendorBillDuplicateGuard {
             @Nullable String deliveryReference) {
         Optional<VendorBill> original = findDeliveryOriginal(vendorId, purchaseOrderNumber, deliveryReference);
         if (original.isPresent()) {
-            record(channel, Outcome.REFUSED, vendorId, billNumber, billDate, original.get().getVendorBillId());
+            record(
+                    channel,
+                    Outcome.REFUSED,
+                    vendorId,
+                    billNumber,
+                    billDate,
+                    original.get().getVendorBillId());
             throw new VendorBillDuplicateException(
                     original.get(), VendorBillDuplicateException.MatchedBy.DELIVERY_REFERENCE);
         }

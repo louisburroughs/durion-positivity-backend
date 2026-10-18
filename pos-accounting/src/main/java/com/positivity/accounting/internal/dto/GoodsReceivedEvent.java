@@ -70,8 +70,9 @@ public class GoodsReceivedEvent {
     @Nullable
     @Size(max = 50)
     @Schema(
-            description = "The purchase order's number as the vendor knows it; optional. With deliveryReference it lets "
-                    + "a later bill for the same delivery be recognised as a duplicate of this one.",
+            description =
+                    "The purchase order's number as the vendor knows it; optional. With deliveryReference it lets "
+                            + "a later bill for the same delivery be recognised as a duplicate of this one.",
             example = "PO-2026-0042",
             maxLength = 50)
     @JsonProperty("purchaseOrderNumber")
@@ -80,8 +81,9 @@ public class GoodsReceivedEvent {
     @Nullable
     @Size(max = 100)
     @Schema(
-            description = "The vendor's delivery-note or ASN number for this receipt; optional. Compared after the same "
-                    + "normalisation as a bill number (case, spacing, punctuation and leading zeros ignored).",
+            description =
+                    "The vendor's delivery-note or ASN number for this receipt; optional. Compared after the same "
+                            + "normalisation as a bill number (case, spacing, punctuation and leading zeros ignored).",
             example = "DN-88213",
             maxLength = 100)
     @JsonProperty("deliveryReference")
