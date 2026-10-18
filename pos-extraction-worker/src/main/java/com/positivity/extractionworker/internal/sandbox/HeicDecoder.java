@@ -35,7 +35,7 @@ final class HeicDecoder {
             return new Decoded(null, reason, false);
         }
 
-        static Decoded unavailable() {
+        static Decoded missing() {
             return new Decoded(null, null, true);
         }
     }
@@ -66,7 +66,7 @@ final class HeicDecoder {
         try {
             process = builder.start();
         } catch (IOException e) {
-            return Decoded.unavailable();
+            return Decoded.missing();
         }
         try {
             process.getOutputStream().close();
@@ -81,7 +81,7 @@ final class HeicDecoder {
         }
         int exit = process.exitValue();
         if (exit == 126 || exit == 127) {
-            return Decoded.unavailable();
+            return Decoded.missing();
         }
         if (exit != 0) {
             // Killed by the address-space limit shows as a failed allocation (non-zero) or a signal.

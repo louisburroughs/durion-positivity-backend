@@ -49,7 +49,6 @@ public class ParseSandbox {
         this.properties = properties;
     }
 
-    @NonNull
     @NonNull SandboxOutcome run(@NonNull Path callDir, @NonNull SandboxRequest request, @NonNull Duration deadline) {
         Process process = null;
         try {
