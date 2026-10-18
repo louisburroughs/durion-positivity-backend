@@ -35,7 +35,7 @@ public class SecurityConfig {
     @SuppressWarnings("java:S4502") // CSRF not needed: stateless service-to-service call, secret in a header
     public SecurityFilterChain workerApiFilterChain(
             HttpSecurity http, ExtractionWorkerProperties properties, Clock clock, ObjectMapper objectMapper) {
-        WorkerSecretFilter secretFilter = new WorkerSecretFilter(properties.apiSecret(), clock, objectMapper);
+        WorkerSecretFilter secretFilter = new WorkerSecretFilter(properties.resolvedSecret(), clock, objectMapper);
         http.securityMatcher(WorkerSecretFilter.PATH_PREFIX + "/**")
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

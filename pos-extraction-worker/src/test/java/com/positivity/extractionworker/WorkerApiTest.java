@@ -135,7 +135,15 @@ class WorkerApiTest {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
         mvc.perform(authorised(post("/inspections", "bill.pdf", TestCorpus.pdf(1)))
                         .param("declaredType", "DOCX"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("declaredType"));
+        mvc.perform(authorised(post("/renderings", "bill.pdf", TestCorpus.pdf(1)))
+                        .param("declaredType", "PDF")
+                        .param("page", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("page"));
     }
 
     // ---- inspect -----------------------------------------------------------------------------------

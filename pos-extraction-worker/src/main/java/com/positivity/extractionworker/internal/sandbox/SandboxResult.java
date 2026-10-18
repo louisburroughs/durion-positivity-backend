@@ -20,7 +20,9 @@ public record SandboxResult(Outcome outcome, @Nullable ReasonCode reasonCode, in
         ACCEPTED,
         REJECTED,
         RENDERED,
-        NOT_RENDERABLE
+        NOT_RENDERABLE,
+        /** Infrastructure failed (for example the HEIC decoder is missing), not the file: the caller retries. */
+        UNAVAILABLE
     }
 
     public static SandboxResult accepted(int pageCount) {
@@ -33,6 +35,10 @@ public record SandboxResult(Outcome outcome, @Nullable ReasonCode reasonCode, in
 
     public static SandboxResult rendered(int page) {
         return new SandboxResult(Outcome.RENDERED, null, page);
+    }
+
+    public static SandboxResult unavailable() {
+        return new SandboxResult(Outcome.UNAVAILABLE, null, 0);
     }
 
     public static SandboxResult notRenderable() {

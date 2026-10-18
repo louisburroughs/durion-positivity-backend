@@ -1,7 +1,6 @@
 package com.positivity.extractionworker.internal.service;
 
 import com.positivity.extractionworker.internal.config.ExtractionWorkerProperties;
-import com.positivity.extractionworker.internal.sandbox.ParseMain;
 import com.positivity.extractionworker.internal.sandbox.SandboxRequest;
 import com.positivity.extractionworker.internal.sandbox.SandboxResult;
 import java.io.IOException;
@@ -21,11 +20,12 @@ import tools.jackson.databind.json.JsonMapper;
  * Runs one parse in a child JVM (S26 ruling 5). The web process never parses file structure: a thread stuck
  * in PDFBox cannot be stopped safely, and an OutOfMemoryError leaves a shared heap undefined. So each call
  * gets its own JVM with a heap cap, {@code -XX:+ExitOnOutOfMemoryError} and an emptied environment (no
- * secret, no AWS variable), killed at the deadline. Its stdout and stderr go to a file in the call
- * directory that is deleted and never read: a library's exception message can quote file content.
+ * secret, no AWS variable), killed at the deadline. Its stdout and stderr are discarded and its logging
+ * is off: a library's exception message can quote file content.
  *
  * <p>The child's result is untrusted. It must be a small, parseable {@link SandboxResult}; anything else
- * is {@link SandboxOutcome.Failed}.
+ * is {@link SandboxOutcome.Failed}. A child that cannot start, or a decoder that is missing, is
+ * {@link SandboxOutcome.Unavailable}: infrastructure, never a verdict on the file.
  */
 @Component
 @Slf4j
@@ -35,6 +35,11 @@ public class ParseSandbox {
     static final long MAX_RESULT_BYTES = 4096;
 
     private static final long KILL_WAIT_SECONDS = 5;
+    private static final int EXIT_JVM_LAUNCH_FAILURE = 1;
+    private static final int EXIT_OUT_OF_MEMORY = 3;
+    private static final int EXIT_KILLED = 137;
+    private static final int EXIT_TERMINATED = 143;
+    private static final String CHILD_LOGBACK = "child-logback.xml";
     private static final String DEFAULT_PATH = "/usr/local/bin:/usr/bin:/bin";
 
     private final ExtractionWorkerProperties properties;
@@ -45,10 +50,10 @@ public class ParseSandbox {
     }
 
     @NonNull
-    SandboxOutcome run(@NonNull Path callDir, @NonNull SandboxRequest request, @NonNull Duration deadline) {
+    @NonNull SandboxOutcome run(@NonNull Path callDir, @NonNull SandboxRequest request, @NonNull Duration deadline) {
         Process process = null;
         try {
-            mapper.writeValue(callDir.resolve(ParseMain.REQUEST_FILE).toFile(), request);
+            mapper.writeValue(callDir.resolve(SandboxRequest.REQUEST_FILE).toFile(), request);
             ProcessBuilder builder = new ProcessBuilder(command(callDir, request));
             builder.environment().clear();
             builder.environment().put("PATH", pathOrDefault());
@@ -58,8 +63,9 @@ public class ParseSandbox {
                 builder.environment().put("JAVA_HOME", javaHome);
             }
             builder.directory(callDir.toFile());
+            // Nothing the child prints is kept: no file on the tmpfs to fill, nothing to read or log.
             builder.redirectErrorStream(true);
-            builder.redirectOutput(callDir.resolve("child.out").toFile());
+            builder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
             process = builder.start();
             process.getOutputStream().close();
             if (!process.waitFor(deadline.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -67,33 +73,42 @@ public class ParseSandbox {
                 return new SandboxOutcome.TimedOut();
             }
             return interpret(callDir, process.exitValue());
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             log.warn("Could not run the parse sandbox ({})", e.getClass().getSimpleName());
-            return new SandboxOutcome.Failed();
+            return new SandboxOutcome.Unavailable();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            if (process != null) {
+            return new SandboxOutcome.Unavailable();
+        } finally {
+            if (process != null && process.isAlive()) {
                 kill(process);
             }
-            return new SandboxOutcome.Failed();
         }
     }
 
     private SandboxOutcome interpret(Path callDir, int exit) {
-        if (exit == 3) {
+        if (exit == EXIT_OUT_OF_MEMORY || exit == EXIT_KILLED || exit == EXIT_TERMINATED) {
+            // ExitOnOutOfMemoryError, or the kernel's OOM killer (the child asks to be its first victim).
             return new SandboxOutcome.OutOfMemory();
+        }
+        if (exit == EXIT_JVM_LAUNCH_FAILURE) {
+            // The JVM itself could not start the child class: a broken classpath or install, not a bad file.
+            return new SandboxOutcome.Unavailable();
         }
         if (exit != 0) {
             return new SandboxOutcome.Failed();
         }
-        Path resultFile = callDir.resolve(ParseMain.RESULT_FILE);
+        Path resultFile = callDir.resolve(SandboxRequest.RESULT_FILE);
         try {
             if (!Files.isRegularFile(resultFile) || Files.size(resultFile) > MAX_RESULT_BYTES) {
                 return new SandboxOutcome.Failed();
             }
             SandboxResult result = mapper.readValue(resultFile.toFile(), SandboxResult.class);
-            return result == null || result.outcome() == null || result.pageCount() < 0
-                    ? new SandboxOutcome.Failed()
+            if (result == null || result.outcome() == null || result.pageCount() < 0) {
+                return new SandboxOutcome.Failed();
+            }
+            return result.outcome() == SandboxResult.Outcome.UNAVAILABLE
+                    ? new SandboxOutcome.Unavailable()
                     : new SandboxOutcome.Completed(result);
         } catch (IOException | JacksonException e) {
             return new SandboxOutcome.Failed();
@@ -115,6 +130,7 @@ public class ParseSandbox {
         command.add("-XX:ActiveProcessorCount=1");
         command.add("-XX:-UsePerfData");
         command.add("-Djava.awt.headless=true");
+        command.add("-Dlogback.configurationFile=" + CHILD_LOGBACK);
         command.add("-Djava.io.tmpdir=" + callDir.toAbsolutePath());
         command.add("-cp");
         command.add(classpath);

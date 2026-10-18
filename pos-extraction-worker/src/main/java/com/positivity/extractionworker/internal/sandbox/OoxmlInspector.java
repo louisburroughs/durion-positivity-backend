@@ -6,7 +6,11 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
@@ -66,12 +70,13 @@ final class OoxmlInspector {
             if (zip.size() > limits.maxZipEntries()) {
                 return ReasonCode.DECOMPRESSION_LIMIT_EXCEEDED;
             }
+            ContentTypes types = ContentTypes.read(zip);
             Enumeration<? extends ZipEntry> entries = zip.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
                 String name = entry.getName().toLowerCase(Locale.ROOT);
                 macro |= name.contains("vbaproject");
-                boolean xml = name.endsWith(".xml") || name.endsWith(".rels") || name.endsWith(".vml");
+                boolean xml = types.mayBeXml(entry.getName());
                 boolean contentTypes = name.equals("[content_types].xml");
                 EntryScan scan = readEntry(zip, entry, xml, contentTypes, limits, limits.maxZipTotalBytes() - total);
                 if (scan.breach()) {
@@ -88,6 +93,69 @@ final class OoxmlInspector {
             return ReasonCode.MACRO_CONTENT;
         }
         return entity ? ReasonCode.EXTERNAL_ENTITY : null;
+    }
+
+    /**
+     * The package's {@code [Content_Types].xml}: which parts are known not to be XML. Every other part is
+     * scanned for entity declarations, so an XML part cannot hide behind an odd extension; only parts the
+     * package itself declares as images, printer settings, OLE objects or other binary types are skipped.
+     */
+    static final class ContentTypes {
+        private static final Pattern TAG = Pattern.compile("<(Default|Override)\\b[^>]*>");
+        private static final Pattern EXTENSION = Pattern.compile("\\bExtension=\"([^\"]*)\"");
+        private static final Pattern PART_NAME = Pattern.compile("\\bPartName=\"([^\"]*)\"");
+        private static final Pattern CONTENT_TYPE = Pattern.compile("\\bContentType=\"([^\"]*)\"");
+
+        private final Map<String, String> byExtension = new HashMap<>();
+        private final Map<String, String> byPart = new HashMap<>();
+
+        static ContentTypes read(ZipFile zip) throws IOException {
+            ContentTypes types = new ContentTypes();
+            ZipEntry entry = zip.getEntry("[Content_Types].xml");
+            if (entry == null || entry.getSize() > CHUNK * 16L) {
+                return types;
+            }
+            try (InputStream in = zip.getInputStream(entry)) {
+                String xml = new String(in.readNBytes(CHUNK * 16), StandardCharsets.UTF_8);
+                Matcher tags = TAG.matcher(xml);
+                while (tags.find()) {
+                    String tag = tags.group();
+                    String type = first(CONTENT_TYPE, tag);
+                    if (type == null) {
+                        continue;
+                    }
+                    String extension = first(EXTENSION, tag);
+                    String part = first(PART_NAME, tag);
+                    if (extension != null) {
+                        types.byExtension.put(extension.toLowerCase(Locale.ROOT), type);
+                    }
+                    if (part != null) {
+                        types.byPart.put(part.toLowerCase(Locale.ROOT), type);
+                    }
+                }
+            }
+            return types;
+        }
+
+        /** False only for a part the package declares with a known non-XML content type. */
+        boolean mayBeXml(String entryName) {
+            String name = entryName.toLowerCase(Locale.ROOT);
+            String type = byPart.get("/" + name);
+            if (type == null) {
+                int dot = name.lastIndexOf('.');
+                type = dot < 0 ? null : byExtension.get(name.substring(dot + 1));
+            }
+            if (type == null) {
+                return true;
+            }
+            String lower = type.toLowerCase(Locale.ROOT);
+            return lower.endsWith("+xml") || lower.equals("application/xml") || lower.equals("text/xml");
+        }
+
+        private static String first(Pattern pattern, String text) {
+            Matcher matcher = pattern.matcher(text);
+            return matcher.find() ? matcher.group(1) : null;
+        }
     }
 
     private record EntryScan(long inflated, boolean breach, boolean entityDeclared, boolean macroContentType) {}

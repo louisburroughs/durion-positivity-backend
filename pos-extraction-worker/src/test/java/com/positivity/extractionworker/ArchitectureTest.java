@@ -157,6 +157,10 @@ public class ArchitectureTest {
                     + " secrets and never parses");
 
     @ArchTest
+    static final ArchRule web_process_reaches_the_sandbox_only_through_the_boundary_records =
+            SandboxBoundary.webProcessUsesOnlyTheBoundaryRecords();
+
+    @ArchTest
     static final ArchRule sandbox_does_not_depend_on_the_web_process = noClasses()
             .that()
             .resideInAPackage("..internal.sandbox..")

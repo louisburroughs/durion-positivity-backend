@@ -22,7 +22,7 @@ final class PdfRenderer {
     private PdfRenderer() {}
 
     static SandboxResult render(Path input, int page, SandboxLimits limits, Path output) throws IOException {
-        try (PDDocument document = PdfInspector.load(input)) {
+        try (PDDocument document = PdfInspector.load(input, limits.maxStreamCacheBytes())) {
             if (document.isEncrypted()) {
                 return SandboxResult.notRenderable();
             }

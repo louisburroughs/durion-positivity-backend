@@ -6,11 +6,11 @@ import com.positivity.extractionworker.internal.enums.DeclaredType;
 import com.positivity.extractionworker.internal.enums.ReasonCode;
 import com.positivity.extractionworker.internal.enums.Verdict;
 import com.positivity.extractionworker.internal.exception.WorkerBusyException;
+import com.positivity.extractionworker.internal.exception.WorkerUnavailableException;
 import com.positivity.extractionworker.internal.sandbox.SandboxRequest;
 import com.positivity.extractionworker.internal.sandbox.SandboxResult;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -80,9 +80,14 @@ public class InspectionService {
                     response.reasonCode(),
                     elapsed.toMillis());
             return response;
+        } catch (WorkerUnavailableException e) {
+            metrics.record(tenant, OPERATION, "UNAVAILABLE", null, Duration.ofNanos(System.nanoTime() - started));
+            throw e;
         } catch (IOException e) {
-            throw new UncheckedIOException(
-                    "Could not stage the upload", new IOException(e.getClass().getSimpleName()));
+            // Scratch full or unwritable: the worker's fault, so the caller retries (never a verdict on the file).
+            log.warn("Could not stage the upload ({})", e.getClass().getSimpleName());
+            metrics.record(tenant, OPERATION, "UNAVAILABLE", null, Duration.ofNanos(System.nanoTime() - started));
+            throw new WorkerUnavailableException();
         } finally {
             pool.release();
         }
@@ -107,6 +112,7 @@ public class InspectionService {
             case SandboxOutcome.OutOfMemory o ->
                 rejected(ReasonCode.RESOURCE_LIMIT_EXCEEDED, declaredType.name(), staged);
             case SandboxOutcome.Failed f -> rejected(ReasonCode.UNREADABLE, declaredType.name(), staged);
+            case SandboxOutcome.Unavailable u -> throw new WorkerUnavailableException();
             case SandboxOutcome.Completed c -> fromChild(c.result(), declaredType, staged);
         };
     }

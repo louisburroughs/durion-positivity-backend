@@ -11,7 +11,8 @@ ARG GRAFANA_OTEL_AGENT_VERSION=v2.9.0
 ADD --chmod=0644 https://github.com/grafana/grafana-opentelemetry-java/releases/download/${GRAFANA_OTEL_AGENT_VERSION}/grafana-opentelemetry-java.jar /opt/grafana-opentelemetry-java.jar
 
 # The web JVM never parses a file, so it stays small; each parse is a child JVM with its own -Xmx.
-ARG JAVA_OPTS="-Xmx256m -XX:-UsePerfData"
+# --enable-native-access: ProcessHardening calls prctl through the foreign-function API.
+ARG JAVA_OPTS="-Xmx256m -XX:-UsePerfData --enable-native-access=ALL-UNNAMED"
 ENV JAVA_OPTS=$JAVA_OPTS
 ENV OTEL_RESOURCE_ATTRIBUTES="service.name=DURION-POSITIVITY-BACKEND,service.namespace=durion-group,deployment.environment=pre-production"
 ENV OTEL_SERVICE_NAME=pos-extraction-worker

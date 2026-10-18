@@ -46,7 +46,7 @@ public class InspectionController {
                     + " file is at most 25 MiB. Required inputs: a multipart file part named file and a declaredType of"
                     + " PDF, JPEG, PNG, HEIC, TIFF, CSV or XLSX. No events are emitted and nothing is stored; the call"
                     + " can be repeated safely. Returns 413 when the file is over the size limit and 503 with"
-                    + " Retry-After when every parse slot is busy.")
+                    + " Retry-After when every parse slot is busy or the sandbox cannot run.")
     @RequestBody(
             description = "The file to inspect and the type the caller says it is.",
             required = true,
@@ -72,7 +72,7 @@ public class InspectionController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description = "Every parse slot is busy; retry after the Retry-After seconds.",
+            description = "WORKER_BUSY (every parse slot is busy) or WORKER_UNAVAILABLE (the sandbox could not run); retry after the Retry-After seconds.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping(value = "/inspections", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public InspectionResponse inspect(

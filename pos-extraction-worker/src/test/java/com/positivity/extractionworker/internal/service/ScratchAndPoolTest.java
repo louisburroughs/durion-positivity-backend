@@ -20,17 +20,18 @@ class ScratchAndPoolTest {
     private ExtractionWorkerProperties properties(int concurrent) {
         return new ExtractionWorkerProperties(
                 null,
+                null,
                 root.toString(),
                 concurrent,
                 26_214_400L,
                 new ExtractionWorkerProperties.Sandbox("64m", null, "x"),
                 new ExtractionWorkerProperties.Deadline(
                         Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(1), Duration.ofSeconds(1)),
-                new ExtractionWorkerProperties.Pdf(30),
+                new ExtractionWorkerProperties.Pdf(30, 268_435_456L),
                 new ExtractionWorkerProperties.Image(50_000_000L, 30),
                 new ExtractionWorkerProperties.Spreadsheet(10_000, 100, 1_000, 10_000, 1L, 1L, 0.01),
                 new ExtractionWorkerProperties.Render(150, 25_000_000L),
-                new ExtractionWorkerProperties.Heif("heif-dec", Duration.ofSeconds(20)));
+                new ExtractionWorkerProperties.Heif("heif-dec", Duration.ofSeconds(20), 1024L));
     }
 
     @Test

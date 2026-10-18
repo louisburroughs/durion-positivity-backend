@@ -35,8 +35,8 @@ public class OpenApiConfig {
                         .version("v1")
                         .contact(new Contact().email("platform@durionpos.org").name("Durion Support Services")))
                 .servers(List.of(new Server()
-                        .url("http://pos-extraction-worker:8080")
-                        .description("Direct container address on extraction-net (Compose and alpha)")))
+                        .url("http://extraction-proxy:8080")
+                        .description("Through extraction-proxy (Compose and alpha); the worker itself is only on extraction-net")))
                 .components(new Components()
                         .addSecuritySchemes(
                                 WORKER_SECRET_SCHEME,

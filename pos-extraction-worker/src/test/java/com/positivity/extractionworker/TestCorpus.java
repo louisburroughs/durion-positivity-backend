@@ -19,6 +19,7 @@ import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
+import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -53,7 +54,7 @@ public final class TestCorpus {
                 209_715_200L,
                 0.01,
                 "heif-dec",
-                20);
+                 20, 1024, 268_435_456L);
     }
 
     // ---- PDF ---------------------------------------------------------------------------------------
@@ -122,6 +123,53 @@ public final class TestCorpus {
             COSDictionary additional = new COSDictionary();
             additional.setItem(COSName.getPDFName("E"), action("JavaScript", "JS", "app.alert('y')"));
             link.getCOSObject().setItem(COSName.getPDFName("AA"), additional);
+            page.setAnnotations(java.util.List.of(link));
+            return save(document);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** A generated invoice's go-to-page open action, as a destination array: not active content. */
+    public static byte[] pdfWithBenignOpenAction() {
+        COSArray destination = new COSArray();
+        destination.add(COSName.getPDFName("Fit"));
+        return pdfWithCatalogItem("OpenAction", destination);
+    }
+
+    /** A benign GoTo action in an annotation's additional-actions dictionary and as a go-to open action. */
+    public static byte[] pdfWithBenignAdditionalActions() {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            COSDictionary goTo = new COSDictionary();
+            goTo.setItem(COSName.S, COSName.getPDFName("GoTo"));
+            COSDictionary additional = new COSDictionary();
+            additional.setItem(COSName.getPDFName("E"), goTo);
+            PDAnnotationLink link = new PDAnnotationLink();
+            link.getCOSObject().setItem(COSName.getPDFName("AA"), additional);
+            page.setAnnotations(java.util.List.of(link));
+            document.getDocumentCatalog().getCOSObject().setItem(COSName.getPDFName("OpenAction"), goTo);
+            return save(document);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /** A PDF with an {@code /XFA} entry in its AcroForm. */
+    public static byte[] pdfWithXfa() {
+        COSDictionary acroForm = new COSDictionary();
+        acroForm.setItem(COSName.getPDFName("XFA"), new COSArray());
+        return pdfWithCatalogItem("AcroForm", acroForm);
+    }
+
+    /** A URI action (a hyperlink) in a link annotation. */
+    public static byte[] pdfWithUriAction() {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+            PDAnnotationLink link = new PDAnnotationLink();
+            link.getCOSObject().setItem(COSName.A, action("URI", "URI", "http://example.test/"));
             page.setAnnotations(java.util.List.of(link));
             return save(document);
         } catch (IOException e) {

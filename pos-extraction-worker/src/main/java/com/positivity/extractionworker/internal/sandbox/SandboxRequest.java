@@ -12,6 +12,12 @@ import com.positivity.extractionworker.internal.enums.DeclaredType;
  */
 public record SandboxRequest(String operation, DeclaredType declaredType, int page, SandboxLimits limits) {
 
+    /** Files in the call directory: the staged upload, the request and the child's result. */
+    public static final String INPUT_FILE = "input";
+
+    public static final String REQUEST_FILE = "request.json";
+    public static final String RESULT_FILE = "result.json";
+
     public static final String INSPECT = "inspect";
     public static final String RENDER = "render";
 }

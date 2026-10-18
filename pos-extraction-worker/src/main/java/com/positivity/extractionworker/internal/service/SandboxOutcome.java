@@ -14,6 +14,13 @@ sealed interface SandboxOutcome {
     /** The child ran out of heap and exited with code 3. */
     record OutOfMemory() implements SandboxOutcome {}
 
+    /**
+     * Infrastructure failed, not the file: the child could not be started, its request could not be written,
+     * its classpath is broken, or the HEIC decoder is missing. The caller is told to retry (503), and no
+     * file is ever rejected for it (S26 ruling 2).
+     */
+    record Unavailable() implements SandboxOutcome {}
+
     /** Any other failure: another exit code, no result, an oversized or unparseable result. */
     record Failed() implements SandboxOutcome {}
 }

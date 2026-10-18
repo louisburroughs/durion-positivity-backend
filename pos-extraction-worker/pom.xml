@@ -36,10 +36,6 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
             <scope>runtime</scope>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-        </dependency>
         <!-- The shared Clock bean (ADR-0024). The worker emits no events and registers no event types. -->
         <dependency>
             <groupId>com.positivity</groupId>
@@ -163,7 +159,6 @@
                                     <arguments>
                                         <argument>--server.port=8086</argument>
                                         <argument>--spring.profiles.active=dev</argument>
-                                        <argument>--eureka.client.enabled=false</argument>
                                         <argument>--spring.boot.admin.client.enabled=false</argument>
                                         <argument>--logging.level.root=WARN</argument>
                                     </arguments>

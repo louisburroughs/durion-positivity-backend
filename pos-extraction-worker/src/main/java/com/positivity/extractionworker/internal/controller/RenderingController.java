@@ -81,7 +81,7 @@ public class RenderingController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",
-            description = "Every parse slot is busy; retry after the Retry-After seconds.",
+            description = "WORKER_BUSY (every parse slot is busy) or WORKER_UNAVAILABLE (the sandbox could not run); retry after the Retry-After seconds.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @PostMapping(
             value = "/renderings",

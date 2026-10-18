@@ -17,7 +17,7 @@ import org.apache.pdfbox.cos.COSDocument;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSObject;
 import org.apache.pdfbox.cos.COSObjectKey;
-import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.io.MemoryUsageSetting;
 import org.apache.pdfbox.io.RandomAccessReadBufferedFile;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -33,18 +33,24 @@ final class PdfInspector {
 
     private static final COSName JS = COSName.getPDFName("JS");
     private static final COSName JAVASCRIPT = COSName.getPDFName("JavaScript");
-    private static final COSName LAUNCH = COSName.getPDFName("Launch");
     private static final COSName EMBEDDED_FILES = COSName.getPDFName("EmbeddedFiles");
     private static final COSName EMBEDDED_FILE = COSName.getPDFName("EmbeddedFile");
     private static final COSName EF = COSName.getPDFName("EF");
     private static final COSName FILE_ATTACHMENT = COSName.getPDFName("FileAttachment");
-    private static final COSName OPEN_ACTION = COSName.getPDFName("OpenAction");
-    private static final COSName AA = COSName.getPDFName("AA");
+    private static final COSName XFA = COSName.getPDFName("XFA");
+
+    /**
+     * Action types ({@code /S}) that run code, leave the file or reach out. An action dictionary is judged by
+     * its type wherever it sits (catalog, page, annotation, field, a {@code /Next} chain), so a plain
+     * go-to-page {@code /OpenAction} or {@code /AA} on a generated invoice is not active content.
+     */
+    private static final Set<String> RISKY_ACTIONS =
+            Set.of("JavaScript", "Launch", "SubmitForm", "ImportData", "GoToR", "URI");
 
     private PdfInspector() {}
 
     static SandboxResult inspect(Path input, SandboxLimits limits) {
-        try (PDDocument document = load(input)) {
+        try (PDDocument document = load(input, limits.maxStreamCacheBytes())) {
             if (document.isEncrypted()) {
                 return SandboxResult.rejected(ReasonCode.ENCRYPTED_PDF);
             }
@@ -61,19 +67,26 @@ final class PdfInspector {
             return SandboxResult.accepted(pages);
         } catch (InvalidPasswordException e) {
             return SandboxResult.rejected(ReasonCode.ENCRYPTED_PDF);
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
+            // PDFBox's fixed message when the temp-file stream cache passes its cap.
+            boolean cacheBreach = e.getMessage() != null && e.getMessage().contains("scratch file memory exceeded");
+            return SandboxResult.rejected(cacheBreach ? ReasonCode.RESOURCE_LIMIT_EXCEEDED : ReasonCode.UNREADABLE);
+        } catch (RuntimeException e) {
             return SandboxResult.rejected(ReasonCode.UNREADABLE);
         }
     }
 
-    /** Opens the file with the empty password and the temp-file-only stream cache. */
-    static PDDocument load(Path input) throws IOException {
+    /**
+     * Opens the file with the empty password and a temp-file-only stream cache capped at
+     * {@code maxCacheBytes}, so a stream bomb costs bounded scratch space and never heap.
+     */
+    static PDDocument load(Path input, long maxCacheBytes) throws IOException {
         return Loader.loadPDF(
                 new RandomAccessReadBufferedFile(input.toFile()),
                 "",
                 null,
                 null,
-                IOUtils.createTempFileOnlyStreamCache());
+                MemoryUsageSetting.setupTempFileOnly(maxCacheBytes).streamCache);
     }
 
     /** Counts page-tree leaves, stopping one past {@code limit}. */
@@ -127,14 +140,14 @@ final class PdfInspector {
 
     private static boolean isActive(COSDictionary dictionary) {
         if (dictionary.containsKey(JS)
+                || dictionary.containsKey(JAVASCRIPT)
                 || dictionary.containsKey(EMBEDDED_FILES)
                 || dictionary.containsKey(EF)
-                || dictionary.containsKey(OPEN_ACTION)
-                || dictionary.containsKey(AA)) {
+                || dictionary.containsKey(XFA)) {
             return true;
         }
         COSName action = dictionary.getCOSName(COSName.S);
-        if (JAVASCRIPT.equals(action) || LAUNCH.equals(action)) {
+        if (action != null && RISKY_ACTIONS.contains(action.getName())) {
             return true;
         }
         return EMBEDDED_FILE.equals(dictionary.getCOSName(COSName.TYPE))

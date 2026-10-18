@@ -159,6 +159,10 @@ services:
     # POS_EXTRACTION_WORKER_PROVIDERS stays on the base compose default 'none' until Security records
     # the Textract retention check (AW61): until then every extract answers UNAVAILABLE.
 
+  extraction-proxy:
+    restart: unless-stopped
+    logging: *logging
+
   pos-mcp-server:
     image: ${ECR_REGISTRY}/durion/pos-mcp-server:${BACKEND_TAG}
     restart: unless-stopped

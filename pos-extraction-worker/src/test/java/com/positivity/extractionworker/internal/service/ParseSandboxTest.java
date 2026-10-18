@@ -26,6 +26,7 @@ class ParseSandboxTest {
     static ExtractionWorkerProperties properties(String mainClass, String heap) {
         return new ExtractionWorkerProperties(
                 "secret-value-that-must-not-reach-the-child",
+                null,
                 System.getProperty("java.io.tmpdir"),
                 2,
                 26_214_400L,
@@ -35,12 +36,12 @@ class ParseSandboxTest {
                         Duration.ofSeconds(30),
                         Duration.ofSeconds(30),
                         Duration.ofSeconds(120)),
-                new ExtractionWorkerProperties.Pdf(30),
+                new ExtractionWorkerProperties.Pdf(30, 268_435_456L),
                 new ExtractionWorkerProperties.Image(50_000_000L, 30),
                 new ExtractionWorkerProperties.Spreadsheet(
                         10_000, 100, 1_000, 10_000, 104_857_600L, 209_715_200L, 0.01),
                 new ExtractionWorkerProperties.Render(150, 25_000_000L),
-                new ExtractionWorkerProperties.Heif("heif-dec", Duration.ofSeconds(20)));
+                new ExtractionWorkerProperties.Heif("heif-dec", Duration.ofSeconds(20), 1024L));
     }
 
     private SandboxOutcome run(String operation, Duration deadline, String heap, String mainClass) {
@@ -104,11 +105,32 @@ class ParseSandboxTest {
     }
 
     @Test
-    void childOutputGoesToAFileThatIsNeverRead() throws IOException {
+    void childOutputIsDiscardedAndLeavesNoFileBehind() throws IOException {
         SandboxOutcome outcome = run("stderr", Duration.ofSeconds(30), "64m", TEST_MAIN);
 
         assertThat(outcome).isInstanceOf(SandboxOutcome.Completed.class);
-        // The text exists only in a file inside the call directory, which the service deletes with it.
-        assertThat(Files.readString(dir.resolve("child.out"))).contains("SECRET-FILE-CONTENT-IN-STDERR");
+        // stdout and stderr go nowhere: no file on the tmpfs to fill, nothing to read or log.
+        try (var files = Files.list(dir)) {
+            assertThat(files.map(path -> path.getFileName().toString())).doesNotContain("child.out");
+        }
+    }
+
+    @Test
+    void childThatCannotStartIsUnavailableNotAVerdict() {
+        SandboxOutcome outcome = run("inspect", Duration.ofSeconds(30), "64m", "no.such.MainClass");
+
+        assertThat(outcome).isInstanceOf(SandboxOutcome.Unavailable.class);
+    }
+
+    @Test
+    void unwritableCallDirectoryIsUnavailable() {
+        ParseSandbox sandbox = new ParseSandbox(properties(TEST_MAIN, "64m"));
+
+        SandboxOutcome outcome = sandbox.run(
+                dir.resolve("does-not-exist"),
+                new SandboxRequest("inspect", DeclaredType.PDF, 0, TestCorpus.limits()),
+                Duration.ofSeconds(5));
+
+        assertThat(outcome).isInstanceOf(SandboxOutcome.Unavailable.class);
     }
 }

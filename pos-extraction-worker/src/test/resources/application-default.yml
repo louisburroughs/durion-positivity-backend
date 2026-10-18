@@ -4,12 +4,3 @@ pos:
   extraction-worker:
     api-secret: test-worker-secret
     scratch-dir: ${java.io.tmpdir}/extraction-worker-test-scratch
-
-eureka:
-  client:
-    enabled: false
-
-spring:
-  cloud:
-    discovery:
-      enabled: false

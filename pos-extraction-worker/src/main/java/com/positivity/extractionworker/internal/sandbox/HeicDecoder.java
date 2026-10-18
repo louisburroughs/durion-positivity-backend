@@ -13,7 +13,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Decodes HEIC through libheif's command line tool, a grandchild process with its own timeout (S26
  * ruling 6): no pure-Java HEIC decoder exists. The image dimensions are read from the file's
- * {@code ispe} boxes first, so an oversized image is refused before the native decoder runs. The output
+ * {@code ispe} boxes first, so an oversized image (or one with no readable size) is refused before the native
+ * decoder runs, and the decoder itself runs under {@code ulimit -v}. The output
  * is a JPEG in the call directory, which then takes the ordinary image path.
  */
 final class HeicDecoder {
@@ -21,17 +22,40 @@ final class HeicDecoder {
     private static final int SCAN_BYTES = 4 * 1024 * 1024;
     private static final byte[] ISPE = {'i', 's', 'p', 'e'};
 
-    /** The decoded JPEG, or why there is none. */
-    record Decoded(@Nullable Path jpeg, @Nullable ReasonCode failure) {}
+    /**
+     * The decoded JPEG, or why there is none. {@code unavailable} means the decoder itself could not run
+     * (missing binary, no shell): an infrastructure fault, not a verdict on the file.
+     */
+    record Decoded(@Nullable Path jpeg, @Nullable ReasonCode failure, boolean unavailable) {
+        static Decoded ok(Path jpeg) {
+            return new Decoded(jpeg, null, false);
+        }
+
+        static Decoded rejected(ReasonCode reason) {
+            return new Decoded(null, reason, false);
+        }
+
+        static Decoded unavailable() {
+            return new Decoded(null, null, true);
+        }
+    }
 
     private HeicDecoder() {}
 
     static Decoded decode(Path input, Path callDir, SandboxLimits limits) throws IOException {
-        if (largestDeclaredPixels(input) > limits.maxImagePixels()) {
-            return new Decoded(null, ReasonCode.RESOURCE_LIMIT_EXCEEDED);
+        // Fail closed: a HEIC with no readable ispe box cannot be sized, so it is not decoded.
+        long declared = largestDeclaredPixels(input);
+        if (declared == 0 || declared > limits.maxImagePixels()) {
+            return Decoded.rejected(ReasonCode.RESOURCE_LIMIT_EXCEEDED);
         }
         Path out = callDir.resolve("heic-decoded.jpg");
+        // The native decoder runs under an address-space limit, so a hostile file cannot take the container's
+        // memory. exec keeps the limit on heif-dec itself and lets a missing binary show as exit 127.
         ProcessBuilder builder = new ProcessBuilder(
+                        "sh",
+                        "-c",
+                        "ulimit -v \"$0\" && exec \"$1\" \"$2\" \"$3\"",
+                        Long.toString(limits.heifMaxMemoryMb() * 1024L),
                         limits.heifBinary(),
                         input.toAbsolutePath().toString(),
                         out.toAbsolutePath().toString())
@@ -42,31 +66,36 @@ final class HeicDecoder {
         try {
             process = builder.start();
         } catch (IOException e) {
-            return new Decoded(null, ReasonCode.UNREADABLE);
+            return Decoded.unavailable();
         }
         try {
             process.getOutputStream().close();
             if (!process.waitFor(limits.heifTimeoutSeconds(), TimeUnit.SECONDS)) {
                 killTree(process);
-                return new Decoded(null, ReasonCode.RESOURCE_LIMIT_EXCEEDED);
+                return Decoded.rejected(ReasonCode.RESOURCE_LIMIT_EXCEEDED);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             killTree(process);
-            return new Decoded(null, ReasonCode.UNREADABLE);
+            return Decoded.rejected(ReasonCode.UNREADABLE);
         }
-        if (process.exitValue() != 0) {
-            return new Decoded(null, ReasonCode.UNREADABLE);
+        int exit = process.exitValue();
+        if (exit == 126 || exit == 127) {
+            return Decoded.unavailable();
+        }
+        if (exit != 0) {
+            // Killed by the address-space limit shows as a failed allocation (non-zero) or a signal.
+            return Decoded.rejected(exit > 128 ? ReasonCode.RESOURCE_LIMIT_EXCEEDED : ReasonCode.UNREADABLE);
         }
         // heif-dec writes the file as named for a single image; older tools add a "-1" suffix.
         Path suffixed = callDir.resolve("heic-decoded-1.jpg");
         if (Files.isRegularFile(out)) {
-            return new Decoded(out, null);
+            return Decoded.ok(out);
         }
         if (Files.isRegularFile(suffixed)) {
-            return new Decoded(suffixed, null);
+            return Decoded.ok(suffixed);
         }
-        return new Decoded(null, ReasonCode.UNREADABLE);
+        return Decoded.rejected(ReasonCode.UNREADABLE);
     }
 
     private static void killTree(Process process) {

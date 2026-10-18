@@ -36,7 +36,7 @@ class HeicDecoderTest {
     }
 
     private SandboxResult inspect(byte[] bytes, String binary) throws IOException {
-        Files.write(dir.resolve(ParseMain.INPUT_FILE), bytes);
+        Files.write(dir.resolve(SandboxRequest.INPUT_FILE), bytes);
         SandboxLimits limits = new SandboxLimits(
                 30,
                 30,
@@ -51,7 +51,7 @@ class HeicDecoderTest {
                 209_715_200L,
                 0.01,
                 binary,
-                20);
+                 20, 1024, 268_435_456L);
         return ParseMain.execute(dir, new SandboxRequest(SandboxRequest.INSPECT, DeclaredType.HEIC, 0, limits));
     }
 
@@ -74,11 +74,21 @@ class HeicDecoderTest {
     }
 
     @Test
-    void missingDecoderBinaryIsUnreadableNotACrash() throws IOException {
+    void missingDecoderBinaryIsInfrastructureNotAVerdictOnTheFile() throws IOException {
         SandboxResult result = inspect(heicDeclaring(64, 64), "no-such-heif-decoder");
 
+        assertThat(result.outcome()).isEqualTo(SandboxResult.Outcome.UNAVAILABLE);
+        assertThat(result.reasonCode()).isNull();
+    }
+
+    @Test
+    void heicWithNoReadableSizeFailsClosedBeforeTheDecoder() throws IOException {
+        byte[] noIspe = new byte[] {0, 0, 0, 24, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0, 0, 0, 0, 'm', 'i', 'f', '1'};
+
+        SandboxResult result = inspect(noIspe, "no-such-heif-decoder");
+
         assertThat(result.outcome()).isEqualTo(SandboxResult.Outcome.REJECTED);
-        assertThat(result.reasonCode()).isEqualTo(ReasonCode.UNREADABLE);
+        assertThat(result.reasonCode()).isEqualTo(ReasonCode.RESOURCE_LIMIT_EXCEEDED);
     }
 
     @Test

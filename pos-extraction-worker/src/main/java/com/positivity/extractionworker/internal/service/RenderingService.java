@@ -10,7 +10,6 @@ import com.positivity.extractionworker.internal.sandbox.SandboxRequest;
 import com.positivity.extractionworker.internal.sandbox.SandboxResult;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -99,8 +98,9 @@ public class RenderingService {
             outcome = "RENDERED";
             return png;
         } catch (IOException e) {
-            throw new UncheckedIOException(
-                    "Could not stage the upload", new IOException(e.getClass().getSimpleName()));
+            log.warn("Could not stage the upload ({})", e.getClass().getSimpleName());
+            outcome = "UNAVAILABLE";
+            throw new WorkerUnavailableException();
         } finally {
             pool.release();
             Duration elapsed = Duration.ofNanos(System.nanoTime() - started);

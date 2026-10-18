@@ -4,6 +4,7 @@ import com.positivity.extractionworker.internal.exception.FileTooLargeException;
 import com.positivity.extractionworker.internal.exception.InvalidRequestException;
 import com.positivity.extractionworker.internal.exception.PageNotRenderableException;
 import com.positivity.extractionworker.internal.exception.WorkerBusyException;
+import com.positivity.extractionworker.internal.exception.WorkerUnavailableException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,10 +14,13 @@ import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -28,6 +32,7 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
  * through to {@code pos-web-common}'s {@code GlobalApiExceptionHandler}.
  */
 @ControllerAdvice
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @Slf4j
 @RequiredArgsConstructor
 public class WorkerExceptionHandler {
@@ -35,6 +40,7 @@ public class WorkerExceptionHandler {
     private static final String X_CORRELATION_ID = "X-Correlation-Id";
     private static final String CODE_FILE_TOO_LARGE = "FILE_TOO_LARGE";
     private static final String CODE_WORKER_BUSY = "WORKER_BUSY";
+    private static final String CODE_WORKER_UNAVAILABLE = "WORKER_UNAVAILABLE";
     private static final String CODE_NOT_RENDERABLE = "PAGE_NOT_RENDERABLE";
     private static final String CODE_VALIDATION = "VALIDATION_FAILED";
 
@@ -45,6 +51,20 @@ public class WorkerExceptionHandler {
             WorkerBusyException ex, HttpServletRequest request, HttpServletResponse response) {
         response.setHeader(HttpHeaders.RETRY_AFTER, "5");
         return error(request, response, HttpStatus.SERVICE_UNAVAILABLE, CODE_WORKER_BUSY, ex.getMessage());
+    }
+
+    @ExceptionHandler(WorkerUnavailableException.class)
+    public ResponseEntity<ApiError> handleUnavailable(
+            WorkerUnavailableException ex, HttpServletRequest request, HttpServletResponse response) {
+        response.setHeader(HttpHeaders.RETRY_AFTER, "30");
+        return error(request, response, HttpStatus.SERVICE_UNAVAILABLE, CODE_WORKER_UNAVAILABLE, ex.getMessage());
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiError> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex, HttpServletRequest request, HttpServletResponse response) {
+        // Fixed text: the rejected value is a caller's input and never echoed.
+        return validation(request, response, ex.getName(), "The value is not valid for this parameter");
     }
 
     @ExceptionHandler({FileTooLargeException.class, MaxUploadSizeExceededException.class})

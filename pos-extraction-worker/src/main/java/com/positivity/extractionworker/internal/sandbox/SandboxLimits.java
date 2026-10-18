@@ -18,6 +18,8 @@ package com.positivity.extractionworker.internal.sandbox;
  * @param minInflateRatio smallest compressed to inflated ratio an entry may show
  * @param heifBinary the HEIC decoder command (resolved on PATH)
  * @param heifTimeoutSeconds deadline for the HEIC decoder
+ * @param heifMaxMemoryMb address-space limit (ulimit -v) for the HEIC decoder
+ * @param maxStreamCacheBytes most bytes PDFBox may spill to its temp-file stream cache
  */
 public record SandboxLimits(
         int maxPdfPages,
@@ -33,4 +35,6 @@ public record SandboxLimits(
         long maxZipTotalBytes,
         double minInflateRatio,
         String heifBinary,
-        int heifTimeoutSeconds) {}
+        int heifTimeoutSeconds,
+        long heifMaxMemoryMb,
+        long maxStreamCacheBytes) {}
