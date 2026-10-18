@@ -695,6 +695,14 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                 .containsEntry("purchase_order_id", none.purchaseOrderId())
                 .containsEntry("currency_code", null);
 
+        assertThat(owner.queryForMap(
+                        "SELECT accrued_amount_minor, currency_code FROM ext_inventory_goods_receipt"
+                                + " WHERE tenant_id = ? AND goods_receipt_id = ?",
+                        tenant,
+                        uncosted.receiptId()))
+                .containsEntry("accrued_amount_minor", 0L)
+                .containsEntry("currency_code", "USD");
+
         // A corrected re-emit (new eventId, same receipt, later occurredAt): one row, new amount, first received time.
         GoodsReceiptRecordedV1 corrected = new GoodsReceiptRecordedV1(
                 posted.receiptId(),
