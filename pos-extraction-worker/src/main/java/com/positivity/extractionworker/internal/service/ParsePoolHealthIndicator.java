@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
  * the worker is unserviceable, and reporting DOWN would restart a container that is doing its job (the
  * Compose healthcheck reads the aggregate status).
  */
-@Component("parsePool")
+@Component
 public class ParsePoolHealthIndicator implements HealthIndicator {
 
     private final ParsePool pool;
