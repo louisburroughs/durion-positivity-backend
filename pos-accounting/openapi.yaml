@@ -66,6 +66,8 @@ tags:
   name: Mapping Keys
 - description: Manage posting categories for GL mapping taxonomy
   name: Posting Categories
+- description: What needs a person in accounting, and what was done automatically
+  name: Work Items
 - description: Approval limits and separation of duties for vendor bills
   name: AP Approval Policy
 - description: 'Manual bank reconciliation: match statement lines to posted GL entries, record adjustments, and finalize when balanced.'
@@ -14913,6 +14915,160 @@ paths:
       - Vendor Directory API
       x-required-permissions:
       - accounting:ap:approve
+  /v1/accounting/work-items:
+    get:
+      description: 'Lists what needs a person in accounting, oldest first: vendor bills to check, pick a match for, send, approve or pay; customer payments to match; unpaid walk-in sales; vendor payments that did not post; drawer cash to deposit; unmatched bank lines; and reconciliations waiting for approval. Each item names its business references, why it is listed, its amount and date, the actions the caller may take (an action a rule blocks is shown with allowed false and its blockedReason code) and the entry an action would post. Items are built on read and shown only for the permissions the caller holds.
+
+        Use this tool to answer "what needs me today"; use listAutomaticWorkItems for what the system already did, and do not use it to find a bill or payment by name.
+
+        Preconditions: the caller holds at least one of the permissions the item types need.
+
+        Required inputs: none; area narrows the list to BILLS, PAYMENTS, BANK or CASH, cursor is the nextCursor of the previous page for the same area, limit is 1 to 200 and 50 when omitted.
+
+        Emits an ACCOUNTING_WORK_ITEMS_LIST event and changes no state; countsByArea counts every area the caller may see, before the area filter and paging.
+
+        Returns 200 with the page, 400 VALIDATION_ERROR for an area that is not BILLS, PAYMENTS, BANK or CASH or a limit outside 1 to 200, 400 WORK_ITEMS_CURSOR_INVALID for a cursor that is malformed or issued for another area (start again from the first page), and 403 when the caller holds none of the permissions.
+
+        '
+      operationId: listWorkItems
+      parameters:
+      - description: 'Only this area''s items: BILLS, PAYMENTS, BANK or CASH'
+        example: BILLS
+        in: query
+        name: area
+        required: false
+        schema:
+          type: string
+      - description: The nextCursor of the previous page, issued for the same area
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - description: Page size, from 1 to 200
+        example: 50
+        in: query
+        name: limit
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItemsResponse'
+          description: A page of work items, oldest first, with the caller's counts per area
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: area is not BILLS, PAYMENTS, BANK or CASH, or limit is outside 1 to 200 (VALIDATION_ERROR), or the cursor is not valid for this list (WORK_ITEMS_CURSOR_INVALID)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds none of the permissions the work item types need
+      security:
+      - bearerAuth:
+        - accounting:ap:approve
+        - accounting:ap:approve_over_limit
+        - accounting:ap:pay
+        - accounting:payment:apply
+        - accounting:deposit:create
+        - accounting:reconciliation:adjust
+        - accounting:reconciliation:approve
+        - reporting:view:financial-statements
+        - accounting:je:post
+      summary: List Work Items
+      tags:
+      - Work Items
+      x-required-permissions:
+      - accounting:ap:approve
+      - accounting:ap:approve_over_limit
+      - accounting:ap:pay
+      - accounting:payment:apply
+      - accounting:deposit:create
+      - accounting:reconciliation:adjust
+      - accounting:reconciliation:approve
+      - reporting:view:financial-statements
+      - accounting:je:post
+  /v1/accounting/work-items/automatic:
+    get:
+      description: 'Lists what the system did without a person since a time, oldest first: customer payments applied to their invoices automatically (with UNDO for a holder of accounting:payment:reverse, and listed without it once reversed), settlement lines matched automatically and vendor bills approved by the system approver. Bank reconciliation proposals are never listed; they stay to-do items.
+
+        Use this tool to show "done automatically" and to undo a payment application; do not use it to find work that needs a person, use listWorkItems instead.
+
+        Preconditions: the caller holds one of accounting:payment:apply, accounting:payment:reverse, accounting:reconciliation:view, accounting:ap:approve or accounting:ap:approve_over_limit; each kind is listed only to the holders of its own permission: payment applications to the first two, settlement matches to the third, system-approved bills to the last two.
+
+        Required inputs: none; since is an ISO instant or a date read as the start of that day in the tenant''s accounting time zone, the start of today when omitted, at most 31 days back and not in the future; cursor is the nextCursor of the previous page for the same since; limit is 1 to 200 and 50 when omitted.
+
+        Emits an ACCOUNTING_WORK_ITEMS_AUTOMATIC_LIST event and changes no state.
+
+        Returns 200 with the page, 400 VALIDATION_ERROR for a since or limit out of range, 400 WORK_ITEMS_CURSOR_INVALID for a cursor that is malformed or issued for another since, and 403 when the caller holds none of the permissions.
+
+        '
+      operationId: listAutomaticWorkItems
+      parameters:
+      - description: An ISO instant, or a date read in the tenant's accounting time zone; the start of today when omitted
+        example: '2026-10-17'
+        in: query
+        name: since
+        required: false
+        schema:
+          type: string
+      - description: The nextCursor of the previous page, issued for the same since
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+      - description: Page size, from 1 to 200
+        example: 50
+        in: query
+        name: limit
+        required: false
+        schema:
+          format: int32
+          type: integer
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutomaticWorkItemsResponse'
+          description: A page of what was done automatically, oldest first
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: since or limit is out of range (VALIDATION_ERROR), or the cursor is not valid for this list (WORK_ITEMS_CURSOR_INVALID)
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+          description: Caller holds none of the permissions the work item types need
+      security:
+      - bearerAuth:
+        - accounting:payment:apply
+        - accounting:payment:reverse
+        - accounting:reconciliation:view
+        - accounting:ap:approve
+        - accounting:ap:approve_over_limit
+      summary: List Work Done Automatically
+      tags:
+      - Work Items
+      x-required-permissions:
+      - accounting:payment:apply
+      - accounting:payment:reverse
+      - accounting:reconciliation:view
+      - accounting:ap:approve
+      - accounting:ap:approve_over_limit
 components:
   schemas:
     APPaymentGLPostingRetryRequest:
@@ -16540,6 +16696,82 @@ components:
       - size
       - totalElements
       - totalPages
+      type: object
+    AutomaticWorkItem:
+      description: Something the system did on its own, with the undo the caller may take
+      properties:
+        actions:
+          description: UNDO for a payment application the caller may reverse; empty otherwise
+          items:
+            $ref: '#/components/schemas/WorkItemAction'
+          type: array
+        amount:
+          description: The amount concerned, in the functional currency
+          example: 250.0
+          type:
+          - number
+          - 'null'
+        itemId:
+          description: 'Stable identifier: the kind, a colon and the source''s identifier'
+          example: SETTLEMENT_LINE_MATCHED:0198a000-0000-7000-8000-000000000001
+          type: string
+        kind:
+          description: What was done
+          enum:
+          - PAYMENT_APPLIED_AUTOMATICALLY
+          - SETTLEMENT_LINE_MATCHED
+          - BILL_APPROVED_BY_SYSTEM
+          type: string
+        occurredOn:
+          description: The business date it was done, in the tenant's accounting time zone
+          example: '2026-10-17'
+          format: date
+          type: string
+        references:
+          additionalProperties:
+            type: string
+          description: Business values to name the item, by key; the keys depend on the kind
+          type: object
+        routing:
+          additionalProperties:
+            format: uuid
+            type: string
+          description: Identifiers for routing, by key; the only place an identifier appears
+          type: object
+        status:
+          description: The source's status; REVERSED for an application already undone
+          example: APPLIED
+          type: string
+      required:
+      - actions
+      - itemId
+      - kind
+      - occurredOn
+      - references
+      - routing
+      - status
+      type: object
+    AutomaticWorkItemsResponse:
+      description: A page of what was done automatically since a given time, oldest first
+      properties:
+        asOf:
+          description: When the list was computed
+          example: '2026-10-17T15:00:00Z'
+          format: date-time
+          type: string
+        items:
+          description: The items of this page, oldest first
+          items:
+            $ref: '#/components/schemas/AutomaticWorkItem'
+          type: array
+        nextCursor:
+          description: Opaque cursor of the next page; null on the last page. Valid only with the same since
+          type:
+          - string
+          - 'null'
+      required:
+      - asOf
+      - items
       type: object
     BalanceSheetReport:
       description: Balance Sheet report response with assets, liabilities, and equity totals derived from POSTED journal entries
@@ -28783,6 +29015,168 @@ components:
       - paymentId
       - receivedAt
       - unappliedAmount
+      type: object
+    WorkItem:
+      description: A thing that needs a person, with the actions the caller may take on it
+      properties:
+        actions:
+          description: What the caller may do, each allowed or blocked with its reason
+          items:
+            $ref: '#/components/schemas/WorkItemAction'
+          type: array
+        amount:
+          description: The amount the item concerns, in the functional currency; null when it has none
+          example: 1197.0
+          type:
+          - number
+          - 'null'
+        area:
+          description: The area the item is listed under
+          enum:
+          - BILLS
+          - PAYMENTS
+          - BANK
+          - CASH
+          type: string
+        itemId:
+          description: 'Stable identifier: the type, a colon and the source''s identifier'
+          example: BILL_AWAITING_APPROVAL:0198a000-0000-7000-8000-000000000001
+          type: string
+        occurredOn:
+          description: The business date the item dates from, in the tenant's accounting time zone
+          example: '2026-10-12'
+          format: date
+          type: string
+        postingPreview:
+          description: The entry the item's posting action would make; empty where no action posts
+          items:
+            $ref: '#/components/schemas/WorkItemPostingLine'
+          type: array
+        reasonCode:
+          description: Why the item is listed, a code
+          example: OVERPAID
+          type: string
+        references:
+          additionalProperties:
+            type: string
+          description: 'Business values to name the item, by key: vendor, bill number, purchase order number, customer, payment reference, invoice number, location, terminal, bag numbers, statement month and the like; the keys depend on the type'
+          type: object
+        routing:
+          additionalProperties:
+            format: uuid
+            type: string
+          description: Identifiers for routing to the item's screen, by key; the only place an identifier appears
+          type: object
+        status:
+          description: The source's status
+          example: AWAITING_APPROVAL
+          type: string
+        type:
+          description: The kind of item
+          enum:
+          - BILL_MATCH_EXCEPTION
+          - BILL_PICK_MATCH
+          - BILL_WAITING_ON_DELIVERY
+          - BILL_AWAITING_APPROVAL
+          - BILLS_DUE_SOON
+          - PAYMENT_TO_MATCH
+          - PAYMENT_NO_CUSTOMER
+          - UNPAID_WALK_IN_SALE
+          - AP_PAYMENT_NOT_POSTED
+          - CASH_TO_DEPOSIT
+          - UNDEPOSITED_SESSION_UNBALANCED
+          - BANK_LINE_UNMATCHED
+          - RECONCILIATION_AWAITING_APPROVAL
+          type: string
+      required:
+      - actions
+      - area
+      - itemId
+      - occurredOn
+      - postingPreview
+      - reasonCode
+      - references
+      - routing
+      - status
+      - type
+      type: object
+    WorkItemAction:
+      description: An action the caller may take on a work item, or see blocked with why
+      properties:
+        action:
+          description: The action's code
+          example: APPROVE
+          type: string
+        allowed:
+          description: False when a rule blocks this caller; the action is then shown disabled
+          example: true
+          type: boolean
+        blockedReason:
+          description: The code of the rule that blocks the caller; null when allowed
+          example: AP_BILL_SELF_APPROVAL
+          type:
+          - string
+          - 'null'
+      required:
+      - action
+      - allowed
+      type: object
+    WorkItemPostingLine:
+      description: A line of the entry the item's action would post
+      properties:
+        accountCode:
+          description: The account's number
+          example: '2000'
+          type: string
+        accountName:
+          description: The account's name
+          example: Accounts Payable
+          type: string
+        amount:
+          description: The amount, positive, in the functional currency
+          example: 1197.0
+          type: number
+        side:
+          description: DEBIT or CREDIT
+          enum:
+          - DEBIT
+          - CREDIT
+          example: DEBIT
+          type: string
+      required:
+      - accountCode
+      - accountName
+      - amount
+      - side
+      type: object
+    WorkItemsResponse:
+      description: A page of the caller's to-do items, oldest first, with counts
+      properties:
+        asOf:
+          description: When the list was computed
+          example: '2026-10-17T15:00:00Z'
+          format: date-time
+          type: string
+        countsByArea:
+          additionalProperties:
+            format: int32
+            type: integer
+          description: How many items the caller may act on in each area, before the area filter and paging
+          type: object
+        items:
+          description: The items of this page, oldest first
+          items:
+            $ref: '#/components/schemas/WorkItem'
+          type: array
+        nextCursor:
+          description: Opaque cursor of the next page; null on the last page. Valid only with the same area
+          type:
+          - string
+          - 'null'
+      required:
+      - asOf
+      - countsByArea
+      - items
       type: object
   securitySchemes:
     bearerAuth:
