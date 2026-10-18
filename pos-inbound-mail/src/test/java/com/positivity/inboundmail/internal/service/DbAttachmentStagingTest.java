@@ -3,6 +3,7 @@ package com.positivity.inboundmail.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,28 +16,33 @@ import com.positivity.inboundmail.internal.entity.StagedAttachment;
 import com.positivity.inboundmail.internal.entity.StagedAttachmentContent;
 import com.positivity.inboundmail.internal.repository.StagedAttachmentContentRepository;
 import com.positivity.inboundmail.internal.repository.StagedAttachmentRepository;
+import com.positivity.tenancy.TenantResolver;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @DisplayName("DbAttachmentStaging: stage, fetch, release and purge")
 class DbAttachmentStagingTest {
 
+    private static final UUID TENANT = UUID.fromString("01900000-0000-7000-8000-000000000001");
     private static final Instant NOW = Instant.parse("2026-10-17T12:00:00Z");
     // sha256("hello")
     private static final String HELLO_SHA = "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824";
 
     private final StagedAttachmentRepository attachments = mock(StagedAttachmentRepository.class);
     private final StagedAttachmentContentRepository contents = mock(StagedAttachmentContentRepository.class);
+    private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
+    private final TenantResolver tenantResolver = mock(TenantResolver.class);
     private DbAttachmentStaging staging;
 
     @BeforeEach
@@ -44,8 +50,12 @@ class DbAttachmentStagingTest {
         staging = new DbAttachmentStaging(
                 attachments,
                 contents,
-                new InboundMailProperties("s", "none", "mail.example.com", Duration.ofDays(7), "x", 10L),
-                Clock.fixed(NOW, ZoneOffset.UTC));
+                new InboundMailProperties("s", "none", "mail.example.com", Duration.ofDays(7), "x", 10L, 200, 2),
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                jdbc,
+                tenantResolver,
+                mock(PlatformTransactionManager.class));
+        when(tenantResolver.require()).thenReturn(TENANT);
     }
 
     private static StagedAttachment staged(UUID ref, Instant collectedAt) {
@@ -125,32 +135,35 @@ class DbAttachmentStagingTest {
     }
 
     @Test
-    @DisplayName("release marks the message's attachments collected and deletes their bytes")
-    void releaseDeletesBytes() {
+    @DisplayName("release is two bulk statements scoped to the tenant and the message: mark collected, delete bytes")
+    void releaseIsBulkSql() {
         UUID messageId = UUID.randomUUID();
-        UUID ref = UUID.randomUUID();
-        StagedAttachment attachment = staged(ref, null);
-        when(attachments.findByInboundMessageId(messageId)).thenReturn(List.of(attachment));
-        when(contents.existsById(ref)).thenReturn(true);
+        when(jdbc.update(startsWith("DELETE FROM staged_attachment_content"), any(Object[].class))).thenReturn(2);
 
-        assertThat(staging.release(messageId)).isEqualTo(1);
+        assertThat(staging.release(messageId)).isEqualTo(2);
 
-        assertThat(attachment.getCollectedAt()).isEqualTo(NOW);
-        verify(contents).deleteById(ref);
+        ArgumentCaptor<Object[]> update = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).update(startsWith("UPDATE staged_attachment SET collected_at"), update.capture());
+        assertThat(update.getValue()).contains(TENANT, messageId);
+        verify(attachments, never()).findByInboundMessageId(any());
+        verify(contents, never()).deleteById(any());
     }
 
     @Test
-    @DisplayName("purge deletes the bytes and then the metadata of everything older than the cutoff")
-    void purgeDeletesBoth() {
-        UUID ref = UUID.randomUUID();
-        StagedAttachment old = staged(ref, null);
+    @DisplayName("purge deletes in bounded batches until a batch removes nothing, never loading an entity")
+    void purgeLoopsInBatches() {
         Instant cutoff = NOW.minus(Duration.ofDays(7));
-        when(attachments.findByCreatedAtBefore(cutoff)).thenReturn(List.of(old));
-        when(contents.existsById(ref)).thenReturn(true);
+        when(jdbc.update(startsWith("DELETE FROM staged_attachment WHERE"), any(Object[].class)))
+                .thenReturn(200)
+                .thenReturn(7)
+                .thenReturn(0);
 
-        assertThat(staging.purgeStagedBefore(cutoff)).isEqualTo(1);
+        assertThat(staging.purgeStagedBefore(cutoff)).isEqualTo(207);
 
-        verify(contents).deleteById(ref);
-        verify(attachments).delete(old);
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc, org.mockito.Mockito.times(3)).update(startsWith("DELETE FROM staged_attachment WHERE"), args.capture());
+        assertThat(args.getValue()).containsExactly(TENANT, TENANT, java.sql.Timestamp.from(cutoff), 200);
+        verify(attachments, never()).findByCreatedAtBefore(any());
+        verify(attachments, never()).delete(any());
     }
 }

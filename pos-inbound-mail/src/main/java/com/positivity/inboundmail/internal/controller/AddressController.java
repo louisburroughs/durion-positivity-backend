@@ -67,7 +67,8 @@ public class AddressController {
     @ApiResponse(
             responseCode = "401",
             description =
-                    "Missing or wrong X-Inbound-Mail-Secret, the edge's own secret unset, or no tenant (TENANT_REQUIRED)",
+                    "Missing or wrong X-Inbound-Mail-Secret, the edge's own secret unset, or no tenant (TENANT_REQUIRED)."
+                    + " The tenant check runs first, so a request with neither a tenant nor a valid secret answers TENANT_REQUIRED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<IssuedAddressResponse> issue() {
         return ResponseEntity.ok(addressRegistry.issueOrGet());
@@ -103,7 +104,8 @@ public class AddressController {
     @ApiResponse(
             responseCode = "401",
             description =
-                    "Missing or wrong X-Inbound-Mail-Secret, the edge's own secret unset, or no tenant (TENANT_REQUIRED)",
+                    "Missing or wrong X-Inbound-Mail-Secret, the edge's own secret unset, or no tenant (TENANT_REQUIRED)."
+                    + " The tenant check runs first, so a request with neither a tenant nor a valid secret answers TENANT_REQUIRED",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<IssuedAddressResponse> rotate(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(

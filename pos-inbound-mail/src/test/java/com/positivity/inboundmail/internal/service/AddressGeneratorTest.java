@@ -16,7 +16,7 @@ class AddressGeneratorTest {
     private static final Pattern FORMAT = Pattern.compile("bills-[a-z2-7]{26}@mail\\.example\\.com");
 
     private final AddressGenerator generator = new AddressGenerator(new InboundMailProperties(
-            "s", "none", "Mail.Example.COM", Duration.ofDays(7), "0 15 3 * * *", 26_214_400L));
+            "s", "none", "Mail.Example.COM", Duration.ofDays(7), "0 15 3 * * *", 26_214_400L, 200, 2));
 
     @Test
     void formatIsExactAndDomainIsLowerCased() {

@@ -35,7 +35,7 @@ class StagingPurgeJobTest {
         StagingPurgeJob job = new StagingPurgeJob(
                 staging,
                 iterator,
-                new InboundMailProperties("s", "none", "mail.example.com", Duration.ofDays(7), "x", 1L),
+                new InboundMailProperties("s", "none", "mail.example.com", Duration.ofDays(7), "x", 1L, 200, 2),
                 Clock.fixed(NOW, ZoneOffset.UTC));
 
         job.purgeExpiredAttachments();

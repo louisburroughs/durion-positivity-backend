@@ -90,7 +90,12 @@ pos:
     staging-ttl: ${POS_INBOUND_MAIL_STAGING_TTL:P7D}
     # Cron of the nightly staging purge, once per active tenant.
     staging-purge-cron: ${POS_INBOUND_MAIL_STAGING_PURGE_CRON:0 15 3 * * *}
-    # Largest staged attachment the fetch endpoint will stream, in bytes (pos-accounting's S25 limit is 25 MB).
+    # Largest attachment the edge will stage, in bytes (pos-accounting's S25 limit is 25 MB).
     max-attachment-bytes: ${POS_INBOUND_MAIL_MAX_ATTACHMENT_BYTES:26214400}
+    # Rows the staging purge deletes per transaction (a backlog is cleared in bounded batches).
+    staging-purge-batch-size: ${POS_INBOUND_MAIL_STAGING_PURGE_BATCH_SIZE:200}
+    # Staged attachments served at once. A bytea is held whole in memory while it is written out (pgjdbc reads it
+    # whole), so concurrency is capped; a fetch beyond the cap is answered 503 STAGING_BUSY and retried by the caller.
+    max-concurrent-fetches: ${POS_INBOUND_MAIL_MAX_CONCURRENT_FETCHES:2}
   security:
     base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}

@@ -53,6 +53,7 @@ public class AddressRegistryImpl implements AddressRegistry {
     @Override
     public @NonNull IssuedAddressResponse issueOrGet() {
         UUID tenantId = tenantResolver.require();
+        DataIntegrityViolationException last = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 return Objects.requireNonNull(transaction.execute(status -> addresses
@@ -61,25 +62,29 @@ public class AddressRegistryImpl implements AddressRegistry {
                         .orElseGet(() -> toResponse(issue(tenantId, null)))));
             } catch (DataIntegrityViolationException raced) {
                 // A concurrent first request won the one-active-address index; the next pass reads its row.
+                last = raced;
                 log.debug("Address issue lost a race for the tenant; re-reading (attempt {})", attempt);
             }
         }
-        throw new IllegalStateException("Unable to issue or read the tenant's intake address");
+        // Not a race that resolves (for example the address text itself collided): surface the real cause.
+        throw last;
     }
 
     @Override
     public @NonNull IssuedAddressResponse rotate(@NonNull UUID requestId) {
         UUID tenantId = tenantResolver.require();
+        DataIntegrityViolationException last = null;
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             try {
                 return Objects.requireNonNull(transaction.execute(status -> rotateInTransaction(tenantId, requestId)));
             } catch (DataIntegrityViolationException raced) {
                 // Same request id raced with itself (answered from its row on the next pass), or another
                 // rotation retired the row under us (the next pass rotates the new active one).
+                last = raced;
                 log.debug("Address rotation lost a race for the tenant; retrying (attempt {})", attempt);
             }
         }
-        throw new IllegalStateException("Unable to rotate the tenant's intake address");
+        throw last;
     }
 
     private IssuedAddressResponse rotateInTransaction(UUID tenantId, UUID requestId) {

@@ -104,7 +104,7 @@ class InboundMailApiIT extends PostgresTenancyTestBase {
                 TENANT_A,
                 () -> messages.saveAndFlush(InboundMessage.builder()
                                 .addressId(address.addressId())
-                                .messageKey("api-it-" + UUID.randomUUID())
+                                .messageKey((UUID.randomUUID().toString() + UUID.randomUUID()).replace("-", "").substring(0, 64))
                                 .receivedAt(NOW)
                                 .status(MessageStatus.STAGED)
                                 .build())

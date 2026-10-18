@@ -27,7 +27,8 @@ public class AddressGenerator {
         this(new SecureRandom(), properties.domain());
     }
 
-    AddressGenerator(SecureRandom random, String domain) {
+    /** Visible so a test can pin the random source; the Spring constructor above is the injectable one. */
+    public AddressGenerator(SecureRandom random, String domain) {
         this.random = random;
         this.domain = domain;
     }

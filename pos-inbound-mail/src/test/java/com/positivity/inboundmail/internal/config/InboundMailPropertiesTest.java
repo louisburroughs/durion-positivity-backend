@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class InboundMailPropertiesTest {
 
     private static InboundMailProperties with(String source, String domain, Duration ttl, long max) {
-        return new InboundMailProperties("s", source, domain, ttl, "0 15 3 * * *", max);
+        return new InboundMailProperties("s", source, domain, ttl, "0 15 3 * * *", max, 200, 2);
     }
 
     @Test
@@ -34,6 +34,16 @@ class InboundMailPropertiesTest {
         assertThatThrownBy(() -> with("none", "mail.example.com", Duration.ZERO, 1L))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> with("none", "mail.example.com", Duration.ofDays(7), 0L))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void batchAndConcurrencyMustBePositive() {
+        assertThatThrownBy(() -> new InboundMailProperties(
+                        "s", "none", "mail.example.com", Duration.ofDays(7), "x", 1L, 0, 2))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new InboundMailProperties(
+                        "s", "none", "mail.example.com", Duration.ofDays(7), "x", 1L, 200, 0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }

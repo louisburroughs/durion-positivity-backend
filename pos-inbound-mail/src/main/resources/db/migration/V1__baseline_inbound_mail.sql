@@ -37,19 +37,21 @@ COMMENT ON COLUMN public.inbound_address.tenant_id IS
 COMMENT ON COLUMN public.inbound_address.issued_by_request_id IS
     'pos-accounting requestId of the rotation that issued this address; a replayed rotation returns it (ruling 8). NULL for an address issued by POST /addresses.';
 
--- One record per message the edge has seen for a tenant: the idempotency key, the verdict and the
+-- One record per message the edge has seen for a tenant: the idempotency key (message_key, the lower-case hex
+-- sha256 of the normalised Message-ID, or of the raw message when it has none), the verdict and the
 -- outcome. Sender address is CONFIDENTIAL (ADR-0072 Decision 1): never logged, never a metric tag.
 CREATE TABLE public.inbound_message (
     tenant_id uuid DEFAULT public.app_current_tenant() NOT NULL,
     inbound_message_id uuid NOT NULL,
     address_id uuid NOT NULL,
-    message_key character varying(1024) NOT NULL,
+    message_key character varying(64) NOT NULL,
     ses_message_id character varying(128),
     received_at timestamp(6) with time zone NOT NULL,
     from_address character varying(320),
     status character varying(16) NOT NULL,
     reason character varying(64),
     rate_limit_window_id uuid,
+    CONSTRAINT inbound_message_key_chk CHECK (((message_key)::text ~ '^[0-9a-f]{64}$'::text)),
     CONSTRAINT inbound_message_status_chk CHECK (((status)::text = ANY ((ARRAY['RECEIVED'::character varying, 'REJECTED'::character varying, 'STAGED'::character varying, 'COLLECTED'::character varying, 'EXPIRED'::character varying])::text[])))
 );
 
@@ -118,6 +120,9 @@ ALTER TABLE ONLY public.inbound_address
     ADD CONSTRAINT inbound_address_address_key UNIQUE (address);
 
 ALTER TABLE ONLY public.inbound_address
+    ADD CONSTRAINT inbound_address_tenant_key UNIQUE (tenant_id, address_id);
+
+ALTER TABLE ONLY public.inbound_address
     ADD CONSTRAINT inbound_address_request_key UNIQUE (tenant_id, issued_by_request_id);
 
 -- One ACTIVE address per tenant: concurrent first requests resolve here, the loser re-reads.
@@ -172,15 +177,16 @@ CREATE INDEX staged_attachment_message_idx ON public.staged_attachment USING btr
 CREATE INDEX staged_attachment_created_idx ON public.staged_attachment USING btree (created_at);
 CREATE INDEX staged_attachment_content_tenant_idx ON public.staged_attachment_content USING btree (tenant_id);
 
--- Foreign keys: tenant-scoped (tenant_id, ...) between scoped tables; single-column to the global registry.
+-- Foreign keys: tenant-scoped (tenant_id, ...) everywhere, including to the global registry, so a row can never
+-- name another tenant's address.
 ALTER TABLE ONLY public.inbound_message
-    ADD CONSTRAINT inbound_message_address_fk FOREIGN KEY (address_id) REFERENCES public.inbound_address(address_id);
+    ADD CONSTRAINT inbound_message_address_fk FOREIGN KEY (tenant_id, address_id) REFERENCES public.inbound_address(tenant_id, address_id);
 
 ALTER TABLE ONLY public.inbound_message
     ADD CONSTRAINT inbound_message_window_fk FOREIGN KEY (tenant_id, rate_limit_window_id) REFERENCES public.rate_limit_window(tenant_id, window_id);
 
 ALTER TABLE ONLY public.rate_limit_window
-    ADD CONSTRAINT rate_limit_window_address_fk FOREIGN KEY (address_id) REFERENCES public.inbound_address(address_id);
+    ADD CONSTRAINT rate_limit_window_address_fk FOREIGN KEY (tenant_id, address_id) REFERENCES public.inbound_address(tenant_id, address_id);
 
 ALTER TABLE ONLY public.staged_attachment
     ADD CONSTRAINT staged_attachment_message_fk FOREIGN KEY (tenant_id, inbound_message_id) REFERENCES public.inbound_message(tenant_id, inbound_message_id) ON DELETE CASCADE;

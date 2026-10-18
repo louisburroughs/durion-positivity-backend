@@ -1,6 +1,7 @@
 package com.positivity.inboundmail.internal.config;
 
 import com.positivity.inboundmail.internal.exception.StagedAttachmentNotFoundException;
+import com.positivity.inboundmail.internal.exception.StagingBusyException;
 import com.positivity.shared.error.ApiError;
 import com.positivity.shared.id.UUIDv7Generator;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,6 +37,14 @@ public class InboundMailExceptionHandler {
         // No ref in the log line: the 404 carries no information and neither does its log.
         log.debug("Staged attachment fetch answered 404 on {}", path(request));
         return error(request, response, HttpStatus.NOT_FOUND, StagedAttachmentNotFoundException.CODE, ex.getMessage());
+    }
+
+    @ExceptionHandler(StagingBusyException.class)
+    public ResponseEntity<ApiError> handleStagingBusy(
+            StagingBusyException ex, HttpServletRequest request, HttpServletResponse response) {
+        response.setHeader("Retry-After", "2");
+        log.warn("Staged attachment fetch refused on {}: every fetch slot is in use", path(request));
+        return error(request, response, HttpStatus.SERVICE_UNAVAILABLE, StagingBusyException.CODE, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

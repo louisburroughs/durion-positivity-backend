@@ -43,8 +43,11 @@ public class InboundMessage extends TenantScopedEntity {
     @Column(name = "address_id", nullable = false, updatable = false)
     private UUID addressId;
 
-    /** The message's {@code Message-ID}, or the sha256 of the raw message when it has none; unique per tenant. */
-    @Column(name = "message_key", nullable = false, updatable = false, length = 1024)
+    /**
+     * Lower-case hex sha256 of the normalised {@code Message-ID}, or of the raw message when it has none; unique
+     * per tenant. Part B computes it; a hash keeps the unique index small and the key free of sender text.
+     */
+    @Column(name = "message_key", nullable = false, updatable = false, length = 64)
     private String messageKey;
 
     @Column(name = "ses_message_id", updatable = false, length = 128)

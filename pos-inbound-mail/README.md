@@ -20,7 +20,7 @@ amendment call the edge "stateless"; S34 corrects that word to "holds no busines
 | Table | Scope | Holds |
 | --- | --- | --- |
 | `inbound_address` | global (`tenancy-global-tables.txt`) | the registry: `address` (unique), owning `tenant_id` as data, `ACTIVE`/`RETIRED`; one `ACTIVE` per tenant |
-| `inbound_message` | RLS | one row per message and tenant: `message_key` (unique per tenant), sender, status, reason |
+| `inbound_message` | RLS | one row per message and tenant: `message_key` (lower-case hex sha256 of the normalised `Message-ID`, unique per tenant; Part B computes it), sender, status, reason |
 | `rate_limit_window` | RLS | fixed clock-hour windows per address (used by Part B) |
 | `staged_attachment` | RLS | ref (UUIDv7), file name as text, declared type, size, sha256 |
 | `staged_attachment_content` | RLS | the bytes (`bytea`), behind the `AttachmentStaging` port (ruling 3) |
@@ -40,7 +40,7 @@ the gateway's aggregated index and out of both SDKs. Regenerate it with
 | --- | --- |
 | `POST /addresses` | The tenant's `ACTIVE` address; issues one when none exists. Body is empty. 200 `{addressId, address, issuedAt}` |
 | `POST /addresses/rotation` | Body `{requestId}`. Retires the `ACTIVE` address and issues a new one in one transaction. Idempotent on `requestId`: a replay returns the address that request issued |
-| `GET /staged-attachments/{ref}` | The staged bytes: `application/octet-stream`, `Content-Length`, `X-Content-SHA256`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` |
+| `GET /staged-attachments/{ref}` | The staged bytes, written out untouched and never parsed. A Postgres `bytea` is read whole by the driver, so true streaming is not available: the bytes are held in memory while served, and `pos.inbound-mail.max-concurrent-fetches` (default 2) caps how many are served at once; another fetch is answered `503 STAGING_BUSY` with `Retry-After`. Headers: `application/octet-stream`, `Content-Length`, `X-Content-SHA256`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff` |
 
 | Header | Value |
 | --- | --- |
@@ -53,9 +53,12 @@ the gateway's aggregated index and out of both SDKs. Regenerate it with
 | --- | --- | --- |
 | `401` | `INBOUND_MAIL_SECRET_MISSING` | The edge's own secret is blank, so every request is refused (fail closed) |
 | `401` | `INVALID_INBOUND_MAIL_SECRET` | The `X-Inbound-Mail-Secret` header is missing or wrong |
-| `401` | `TENANT_REQUIRED` | No `X-Tenant-Id` (from `TenantContextFilter`; it runs before the secret check) |
+| `401` | `TENANT_REQUIRED` | No `X-Tenant-Id` (from `TenantContextFilter`) |
 | `400` | `VALIDATION_FAILED` | Malformed body, for example a rotation without `requestId` |
+| `503` | `STAGING_BUSY` | Every fetch slot is in use; retry the same ref |
 | `404` | `STAGED_ATTACHMENT_NOT_FOUND` | The ref is unknown, another tenant's, collected or purged. **One identical body for all four** (control 6) |
+
+Order of checks: the tenant check runs **before** the secret check (`TenantContextFilter` is platform-wide and runs ahead of every security chain), so a request with neither a tenant nor a valid secret answers `TENANT_REQUIRED`, and a blank edge secret shows as `INBOUND_MAIL_SECRET_MISSING` only on requests that carry a tenant. The 401 descriptions in `openapi.yaml` say so.
 
 The envelope is `ApiError` (ADR-0017) from `pos-web-common`. The module registers **no permissions**: the
 secret is its only gate (ruling 11). It registers three event types at start-up and marks its three
@@ -73,7 +76,7 @@ Lookup is exact after lower-casing, with no sub-addressing.
 
 Staged bytes live in `staged_attachment_content` under the same RLS as their metadata, so another
 tenant's ref reads as absent. `AttachmentStaging` is the port (`stage`, `fetch`, `release`,
-`purgeStagedBefore`); `DbAttachmentStaging` is the v1 adapter. A per-tenant job (`StagingPurgeJob`,
+`purgeStagedBefore`); `DbAttachmentStaging` is the v1 adapter. A per-tenant job (`StagingPurgeJob`, bulk deletes in bounded batches,
 `TenantIterator`, cron `pos.inbound-mail.staging-purge-cron`) deletes attachments older than
 `pos.inbound-mail.staging-ttl`. It visits the tenants of the tenant registry, so a deployed run needs
 `pos.tenancy.registry.mode=REMOTE` with `POS_TENANT_REGISTRY_API_SECRET` (or `pos.tenancy.tenants` listing
@@ -105,6 +108,8 @@ records are kept 30 days (Part B purges them).
 | `pos.inbound-mail.staging-ttl` | `POS_INBOUND_MAIL_STAGING_TTL` | `P7D` | Staged attachments older than this are purged |
 | `pos.inbound-mail.staging-purge-cron` | `POS_INBOUND_MAIL_STAGING_PURGE_CRON` | `0 15 3 * * *` | Nightly per-tenant purge |
 | `pos.inbound-mail.max-attachment-bytes` | `POS_INBOUND_MAIL_MAX_ATTACHMENT_BYTES` | `26214400` | Largest attachment staged (S25's 25 MB limit) |
+| `pos.inbound-mail.staging-purge-batch-size` | `POS_INBOUND_MAIL_STAGING_PURGE_BATCH_SIZE` | `200` | Rows the purge deletes per transaction (bulk delete; the bytes go with the row by cascade) |
+| `pos.inbound-mail.max-concurrent-fetches` | `POS_INBOUND_MAIL_MAX_CONCURRENT_FETCHES` | `2` | Staged attachments served at once |
 | `pos.tenancy.registry.*` | `POS_TENANCY_REGISTRY_MODE`, `_URL`, `POS_TENANT_REGISTRY_API_SECRET` | `REMOTE`, `http://pos-tenant:8080/internal/v1/tenants`, blank | Where the purge finds its tenants |
 
 Scheduled jobs: `StagingPurgeJob` is per-tenant (`TenantIterator`); there is no `@PlatformScoped` job in

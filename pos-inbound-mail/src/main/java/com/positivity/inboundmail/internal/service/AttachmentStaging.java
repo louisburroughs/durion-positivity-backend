@@ -29,9 +29,15 @@ public interface AttachmentStaging {
     @NonNull
     Optional<StagedAttachmentBytes> fetch(@NonNull UUID ref);
 
-    /** Marks every attachment of the message collected and deletes its bytes; returns how many were released. */
+    /**
+     * Marks every attachment of the message collected and deletes its bytes, by bulk SQL without reading them;
+     * returns how many byte rows were deleted (0 on a repeat).
+     */
     int release(@NonNull UUID inboundMessageId);
 
-    /** Deletes every attachment (and its bytes) staged before {@code cutoff}; returns how many were removed. */
+    /**
+     * Deletes every attachment (and its bytes) staged before {@code cutoff}, in bounded batches of short
+     * transactions, without reading the bytes; returns how many attachments were removed.
+     */
     int purgeStagedBefore(@NonNull Instant cutoff);
 }

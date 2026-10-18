@@ -18,7 +18,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param domain the domain of every intake address, lower-cased
  * @param stagingTtl how long a staged attachment lives before the purge removes it
  * @param stagingPurgeCron cron of the nightly per-tenant purge (read where the job is declared)
- * @param maxAttachmentBytes the largest staged attachment the fetch endpoint will serve
+ * @param maxAttachmentBytes the largest attachment the edge will stage
+ * @param stagingPurgeBatchSize rows deleted per transaction by the staging purge, so a backlog never sits in one
+ *     transaction
+ * @param maxConcurrentFetches staged attachments served at once; a fetch beyond it is answered 503, because a
+ *     bytea is held whole in memory while it is written out
  */
 @ConfigurationProperties(prefix = "pos.inbound-mail")
 public record InboundMailProperties(
@@ -27,7 +31,9 @@ public record InboundMailProperties(
         @DefaultValue("mail.invalid") String domain,
         @DefaultValue("P7D") Duration stagingTtl,
         @DefaultValue("0 15 3 * * *") String stagingPurgeCron,
-        @DefaultValue("26214400") long maxAttachmentBytes) {
+        @DefaultValue("26214400") long maxAttachmentBytes,
+        @DefaultValue("200") int stagingPurgeBatchSize,
+        @DefaultValue("2") int maxConcurrentFetches) {
 
     public static final String SOURCE_NONE = "none";
 
@@ -46,6 +52,12 @@ public record InboundMailProperties(
         }
         if (maxAttachmentBytes <= 0) {
             throw new IllegalArgumentException("pos.inbound-mail.max-attachment-bytes must be positive");
+        }
+        if (stagingPurgeBatchSize <= 0) {
+            throw new IllegalArgumentException("pos.inbound-mail.staging-purge-batch-size must be positive");
+        }
+        if (maxConcurrentFetches <= 0) {
+            throw new IllegalArgumentException("pos.inbound-mail.max-concurrent-fetches must be positive");
         }
     }
 }

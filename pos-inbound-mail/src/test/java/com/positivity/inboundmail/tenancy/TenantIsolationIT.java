@@ -18,9 +18,22 @@ import com.positivity.inboundmail.internal.repository.StagedAttachmentContentRep
 import com.positivity.inboundmail.internal.repository.StagedAttachmentRepository;
 import com.positivity.inboundmail.internal.service.AddressRegistry;
 import com.positivity.inboundmail.internal.service.AttachmentStaging;
+import com.positivity.inboundmail.internal.config.InboundMailProperties;
+import com.positivity.inboundmail.internal.service.AddressGenerator;
+import com.positivity.inboundmail.internal.service.AddressRegistryImpl;
+import com.positivity.inboundmail.internal.service.StagingPurgeJob;
+import com.positivity.tenancy.StaticTenantRegistry;
+import com.positivity.tenancy.TenancyProperties;
 import com.positivity.tenancy.TenantContext;
+import com.positivity.tenancy.TenantIterator;
+import com.positivity.tenancy.TenantResolver;
 import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
@@ -30,6 +43,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Proves the isolation, not just the mapping: staged rows written as tenant A are invisible to tenant B
@@ -63,9 +77,20 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
     @Autowired
     private DataSource dataSource;
 
+    @Autowired
+    private TenantResolver tenantResolver;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
     @AfterEach
     void clear() {
         TenantContext.clear();
+    }
+
+    /** A message key as Part B will compute it: 64 lower-case hex characters. */
+    private static String key() {
+        return (UUID.randomUUID().toString() + UUID.randomUUID()).replace("-", "").substring(0, 64);
     }
 
     private UUID messageFor(UUID tenant, String key) {
@@ -83,7 +108,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Test
     void aStagedAttachmentIsInvisibleToAnotherTenantAndToNoTenant() {
-        UUID messageId = messageFor(TENANT_A, "msg-" + UUID.randomUUID());
+        UUID messageId = messageFor(TENANT_A, key());
         StagedAttachmentRef ref = asTenant(
                 TENANT_A,
                 () -> staging.stage(
@@ -128,7 +153,7 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
     @Test
     void theMessageKeyIsUniquePerTenantNotAcrossThePlatform() {
-        String key = "shared-message-id-" + UUID.randomUUID();
+        String key = key();
         messageFor(TENANT_A, key);
 
         assertThat(messageFor(TENANT_B, key))
@@ -182,6 +207,118 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
         assertThat(addresses.findById(before.addressId()).orElseThrow().getRetiredAt())
                 .isNotNull();
         assertThat(asTenant(TENANT_B, registry::issueOrGet).addressId()).isEqualTo(rotated.addressId());
+    }
+
+    private UUID stageAt(UUID tenant, UUID messageId, Instant createdAt) {
+        return asTenant(tenant, () -> {
+            UUID ref = staging.stage(messageId, "f.pdf", "application/pdf", new byte[] {1, 2, 3})
+                    .ref();
+            new JdbcTemplate(dataSource)
+                    .update("UPDATE staged_attachment SET created_at = ? WHERE ref = ?", Timestamp.from(createdAt), ref);
+            return ref;
+        });
+    }
+
+    @Test
+    void thePurgeJobRemovesOnlyEachTenantsExpiredRowsAndBytes() {
+        Instant now = Instant.now();
+        Instant old = now.minus(Duration.ofDays(30));
+        UUID messageA = messageFor(TENANT_A, key());
+        UUID messageB = messageFor(TENANT_B, key());
+        List<UUID> oldA = List.of(stageAt(TENANT_A, messageA, old), stageAt(TENANT_A, messageA, old), stageAt(TENANT_A, messageA, old));
+        UUID freshA = stageAt(TENANT_A, messageA, now);
+        UUID oldB = stageAt(TENANT_B, messageB, old);
+        UUID freshB = stageAt(TENANT_B, messageB, now);
+
+        TenancyProperties tenancy = new TenancyProperties();
+        tenancy.setTenants(List.of(TENANT_A, TENANT_B));
+        StagingPurgeJob job = new StagingPurgeJob(
+                staging,
+                new TenantIterator(new StaticTenantRegistry(tenancy)),
+                new InboundMailProperties(
+                        "s", "none", "mail.invalid", Duration.ofDays(7), "x", 26_214_400L, 200, 2),
+                Clock.fixed(now, ZoneOffset.UTC));
+
+        job.purgeExpiredAttachments();
+
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+        asTenant(TENANT_A, () -> {
+            for (UUID ref : oldA) {
+                assertThat(staging.fetch(ref)).as("expired A row is gone").isEmpty();
+                assertThat(count(jdbc, "staged_attachment", ref)).isZero();
+                assertThat(count(jdbc, "staged_attachment_content", ref)).as("and its bytes").isZero();
+            }
+            assertThat(staging.fetch(freshA)).as("a fresh A row stays").isPresent();
+            assertThat(count(jdbc, "staged_attachment_content", freshA)).isEqualTo(1);
+        });
+        asTenant(TENANT_B, () -> {
+            assertThat(staging.fetch(oldB)).as("expired B row is gone").isEmpty();
+            assertThat(count(jdbc, "staged_attachment_content", oldB)).isZero();
+            assertThat(staging.fetch(freshB)).as("a fresh B row stays").isPresent();
+            assertThat(count(jdbc, "staged_attachment_content", freshB)).isEqualTo(1);
+        });
+    }
+
+    @Test
+    void releaseDeletesTheBytesMarksCollectedAndLaterFetchesFindNothing() {
+        UUID messageId = messageFor(TENANT_A, key());
+        UUID other = messageFor(TENANT_A, key());
+        UUID ref = stageAt(TENANT_A, messageId, Instant.now());
+        UUID untouched = stageAt(TENANT_A, other, Instant.now());
+        JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+
+        int released = asTenant(TENANT_A, () -> staging.release(messageId));
+
+        assertThat(released).isEqualTo(1);
+        asTenant(TENANT_A, () -> {
+            assertThat(count(jdbc, "staged_attachment_content", ref)).as("bytes deleted").isZero();
+            assertThat(attachments.findById(ref).orElseThrow().getCollectedAt()).isNotNull();
+            assertThat(staging.fetch(ref)).as("a collected ref is a 404").isEmpty();
+            assertThat(staging.fetch(untouched)).as("another message's attachment is untouched").isPresent();
+            assertThat(staging.release(messageId)).as("a repeat releases nothing").isZero();
+        });
+        asTenant(TENANT_B, () -> assertThat(staging.release(messageId)).as("another tenant releases nothing").isZero());
+    }
+
+    @Test
+    void theGlobalAddressKeyRefusesTheSameAddressTextForTwoTenants() {
+        AddressRegistryImpl stubbed = new AddressRegistryImpl(
+                addresses,
+                new AddressGenerator(new java.security.SecureRandom() {
+                    @Override
+                    public int nextInt(int bound) {
+                        return 0;
+                    }
+                }, "mail.invalid"),
+                tenantResolver,
+                Clock.systemUTC(),
+                transactionManager);
+        // 26 characters, all 'a' (nextInt always 0): the same text for every tenant that asks.
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        IssuedAddressResponse issued = asTenant(first, stubbed::issueOrGet);
+        assertThat(issued.address()).isEqualTo("bills-aaaaaaaaaaaaaaaaaaaaaaaaaa@mail.invalid");
+
+        assertThatThrownBy(() -> asTenant(second, stubbed::issueOrGet))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .rootCause()
+                .hasMessageContaining("inbound_address_address_key");
+    }
+
+    @Test
+    void aRetiredAddressStillResolvesButIsNeverIssuedAgain() {
+        UUID tenant = UUID.randomUUID();
+        IssuedAddressResponse original = asTenant(tenant, registry::issueOrGet);
+        IssuedAddressResponse rotated = asTenant(tenant, () -> registry.rotate(UUID.randomUUID()));
+
+        TenantContext.clear();
+        InboundAddress retired = addresses.findByAddress(original.address()).orElseThrow();
+        assertThat(retired.getStatus()).as("Part B answers ADDRESS_RETIRED from this").isEqualTo(AddressStatus.RETIRED);
+        assertThat(retired.getTenantId()).isEqualTo(tenant);
+
+        IssuedAddressResponse current = asTenant(tenant, registry::issueOrGet);
+        assertThat(current.addressId()).isEqualTo(rotated.addressId()).isNotEqualTo(original.addressId());
+        assertThat(current.address()).isNotEqualTo(original.address());
     }
 
     private static int count(JdbcTemplate jdbc, String table, UUID ref) {
