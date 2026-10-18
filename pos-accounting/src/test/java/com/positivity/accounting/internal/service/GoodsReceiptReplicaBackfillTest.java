@@ -81,7 +81,8 @@ class GoodsReceiptReplicaBackfillTest {
     }
 
     private void firstSlice(AccountingEvent... stored) {
-        when(events.findGoodsReceiptFactsWithoutCopy(eq(Instant.EPOCH), any(), eq(GoodsReceiptReplicaBackfill.SLICE_SIZE)))
+        when(events.findGoodsReceiptFactsWithoutCopy(
+                        eq(Instant.EPOCH), any(), eq(GoodsReceiptReplicaBackfill.SLICE_SIZE)))
                 .thenReturn(List.of(stored));
     }
 

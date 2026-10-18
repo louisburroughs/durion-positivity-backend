@@ -80,10 +80,7 @@ public class GoodsReceiptReplicaBackfill {
     /** Starts the backfill on a daemon thread once the application is ready; never fails startup. */
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {
-        Thread.ofPlatform()
-                .daemon()
-                .name("goods-receipt-replica-backfill")
-                .start(this::runSafely);
+        Thread.ofPlatform().daemon().name("goods-receipt-replica-backfill").start(this::runSafely);
     }
 
     /** The backfill as the startup thread runs it: any failure is logged, none escapes. */
@@ -171,7 +168,8 @@ public class GoodsReceiptReplicaBackfill {
         try {
             return objectMapper.convertValue(event.getPayload(), GoodsReceiptRecordedV1.class);
         } catch (Exception e) {
-            log.warn("Skipping unreadable stored goods receipt fact eventId={}: {}", event.getEventId(), e.getMessage());
+            log.warn(
+                    "Skipping unreadable stored goods receipt fact eventId={}: {}", event.getEventId(), e.getMessage());
             return null;
         }
     }

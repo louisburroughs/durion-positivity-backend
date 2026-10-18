@@ -213,7 +213,8 @@ class InventoryEventsListenerTransactionTest {
 
     /** ADR-0044 amendment (#2750): the goods-receipt copy shares the handler transaction with the record and mark. */
     @Test
-    @DisplayName("A goods-receipt copy that fails rolls back the ingestion record and the mark; redelivery then applies")
+    @DisplayName(
+            "A goods-receipt copy that fails rolls back the ingestion record and the mark; redelivery then applies")
     void goodsReceiptCopyFailureRollsBackRecordAndMark() {
         UUID receiptId = UUID.randomUUID();
         when(goodsReceiptAssessor.assess(any()))
@@ -224,8 +225,7 @@ class InventoryEventsListenerTransactionTest {
                 .recorded(any());
         String message = goodsReceipt(receiptId);
 
-        assertThatThrownBy(() -> listener.onInventoryEvent(message))
-                .isExactlyInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> listener.onInventoryEvent(message)).isExactlyInstanceOf(IllegalStateException.class);
 
         assertThat(processedEventRepository.existsById(eventId))
                 .as("a failed copy is retried, so the fact must not be marked")
