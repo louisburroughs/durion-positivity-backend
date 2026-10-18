@@ -181,6 +181,11 @@ pos:
         # tenant (which has no tenant.created fact) and carries template additions to tenants
         # provisioned earlier. Never blocks startup.
         enabled: ${POS_ACCOUNTING_TENANT_TEMPLATE_STARTUP_SWEEP_ENABLED:true}
+    # The goods-receipt copy (#2750).
+    goods-receipt-replica:
+      # At each start, replay the stored goodsreceipt.recorded facts of every tenant that have no copy row
+      # through the copy's own writer. Idempotent; never blocks startup.
+      backfill-enabled: ${POS_ACCOUNTING_GOODS_RECEIPT_REPLICA_BACKFILL_ENABLED:true}
 
 # Payment Gateway Configuration
 payment:

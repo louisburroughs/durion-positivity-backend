@@ -54,6 +54,7 @@ class InventoryEventsListenerTest {
             mock(InventoryRevaluationPostingService.class);
     private final GoodsReceiptAccrualPostingService goodsReceiptPostingService =
             mock(GoodsReceiptAccrualPostingService.class);
+    private final GoodsReceiptReplica goodsReceiptReplica = mock(GoodsReceiptReplica.class);
     private final KafkaFactIngestionRecorder ingestionRecorder = mock(KafkaFactIngestionRecorder.class);
 
     private InventoryEventsListener listener;
@@ -68,6 +69,7 @@ class InventoryEventsListenerTest {
                 adjustmentPostingService,
                 revaluationPostingService,
                 goodsReceiptPostingService,
+                goodsReceiptReplica,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 mock(PlatformTransactionManager.class),
@@ -629,6 +631,7 @@ class InventoryEventsListenerTest {
         when(goodsReceiptPostingService.postAccrual(any())).thenReturn(journalEntryId);
 
         listener.onInventoryEvent(goodsReceipt("g-1"));
+        verify(goodsReceiptReplica).recorded(any());
 
         ArgumentCaptor<com.positivity.domainevents.inventory.GoodsReceiptRecordedV1> fact =
                 ArgumentCaptor.forClass(com.positivity.domainevents.inventory.GoodsReceiptRecordedV1.class);
@@ -661,6 +664,7 @@ class InventoryEventsListenerTest {
         when(goodsReceiptPostingService.postAccrual(any())).thenReturn(null);
 
         listener.onInventoryEvent(goodsReceipt("g-2"));
+        verify(goodsReceiptReplica).recorded(any());
 
         verify(ingestionRecorder).recordPosted(any(), any(), eq("g-2"), eq(RECEIPT_ID), any(), any(), isNull(), any());
         verify(processedEvents).save(any());
@@ -672,6 +676,7 @@ class InventoryEventsListenerTest {
         when(processedEvents.existsById("g-3")).thenReturn(true);
 
         listener.onInventoryEvent(goodsReceipt("g-3"));
+        verifyNoInteractions(goodsReceiptReplica);
 
         verifyNoInteractions(goodsReceiptPostingService);
         verifyNoInteractions(ingestionRecorder);
@@ -685,6 +690,7 @@ class InventoryEventsListenerTest {
                 .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.CurrencyNotSupported("in EUR"));
 
         listener.onInventoryEvent(goodsReceipt("g-4"));
+        verify(goodsReceiptReplica).recorded(any());
 
         verify(ingestionRecorder)
                 .recordCurrencyHeld(
@@ -706,6 +712,7 @@ class InventoryEventsListenerTest {
                 .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.Malformed("lines do not sum"));
 
         listener.onInventoryEvent(goodsReceipt("g-5"));
+        verifyNoInteractions(goodsReceiptReplica);
 
         verify(ingestionRecorder)
                 .recordSuspended(
@@ -729,6 +736,7 @@ class InventoryEventsListenerTest {
                 .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.Uncosted("every line uncosted"));
 
         listener.onInventoryEvent(goodsReceipt("g-6"));
+        verify(goodsReceiptReplica).recorded(any());
 
         verify(ingestionRecorder)
                 .recordUncostedSkip(
@@ -750,6 +758,7 @@ class InventoryEventsListenerTest {
                 .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.NothingToPost());
 
         listener.onInventoryEvent(goodsReceipt("g-7"));
+        verify(goodsReceiptReplica).recorded(any());
 
         verify(ingestionRecorder)
                 .recordNothingToPost(
@@ -794,6 +803,7 @@ class InventoryEventsListenerTest {
                 adjustmentPostingService,
                 revaluationPostingService,
                 goodsReceiptPostingService,
+                goodsReceiptReplica,
                 ingestionRecorder,
                 provider,
                 mock(PlatformTransactionManager.class),

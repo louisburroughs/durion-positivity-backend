@@ -93,6 +93,9 @@ class InventoryShrinkageGLPostingIT {
     private GoodsReceiptAccrualPostingService goodsReceiptPostingService;
 
     @Autowired
+    private GoodsReceiptReplica goodsReceiptReplica;
+
+    @Autowired
     private KafkaFactIngestionRecorder ingestionRecorder;
 
     @Autowired
@@ -136,6 +139,7 @@ class InventoryShrinkageGLPostingIT {
                 adjustmentPostingService,
                 revaluationPostingService,
                 goodsReceiptPostingService,
+                goodsReceiptReplica,
                 ingestionRecorder,
                 org.mockito.Mockito.mock(ObjectProvider.class),
                 transactionManager,

@@ -69,3 +69,6 @@ pos.accounting.deposit-gauge.enabled: false
 
 # #2642: no settlement re-read in test contexts (the sweep would run against fixtures after its initial delay).
 accounting.ap.settlement.enabled: false
+
+# #2750: no goods-receipt copy backfill at startup in test contexts; GoodsReceiptReplicaBackfill ITs drive it directly.
+pos.accounting.goods-receipt-replica.backfill-enabled: false
