@@ -111,7 +111,7 @@ CREATE TABLE public.bill_intake_item (
     version bigint DEFAULT 0 NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
     updated_at timestamp(6) with time zone NOT NULL,
-    CONSTRAINT bill_intake_item_channel_check CHECK (channel IN ('UPLOAD', 'IMPORT', 'EDI')),
+    CONSTRAINT bill_intake_item_channel_check CHECK (channel IN ('UPLOAD', 'IMPORT', 'EDI', 'EMAIL_IN')),
     CONSTRAINT bill_intake_item_status_check CHECK (status IN
         ('QUARANTINED', 'FILE_REJECTED', 'EXTRACTING', 'READY_FOR_REVIEW', 'CONFIRMED', 'DISCARDED')),
     CONSTRAINT bill_intake_item_outcome_check CHECK (extraction_outcome IS NULL OR extraction_outcome IN ('MANUAL', 'EXTRACTED')),
@@ -214,7 +214,7 @@ ALTER TABLE public.vendor_bill ADD COLUMN extraction_outcome character varying(2
 ALTER TABLE public.vendor_bill ADD COLUMN delivery_reference character varying(100);
 ALTER TABLE public.vendor_bill ADD COLUMN delivery_reference_key character varying(255);
 ALTER TABLE public.vendor_bill
-    ADD CONSTRAINT vendor_bill_intake_channel_check CHECK (intake_channel IS NULL OR intake_channel IN ('UPLOAD', 'IMPORT'));
+    ADD CONSTRAINT vendor_bill_intake_channel_check CHECK (intake_channel IS NULL OR intake_channel IN ('UPLOAD', 'IMPORT', 'EMAIL_IN'));
 ALTER TABLE public.vendor_bill
     ADD CONSTRAINT vendor_bill_extraction_outcome_check CHECK (extraction_outcome IS NULL OR extraction_outcome IN ('MANUAL', 'EXTRACTED'));
 ALTER TABLE ONLY public.vendor_bill

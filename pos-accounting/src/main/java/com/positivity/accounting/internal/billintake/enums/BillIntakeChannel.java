@@ -7,5 +7,7 @@ public enum BillIntakeChannel {
     /** A person imported a spreadsheet; one draft per invoice in it. */
     IMPORT,
     /** A supplier invoice fact over EDI that names no vendor, until a person picks one. */
-    EDI
+    EDI,
+    /** A document received by email (S27); not written before it lands. */
+    EMAIL_IN
 }
