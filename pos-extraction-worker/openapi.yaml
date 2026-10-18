@@ -1,0 +1,389 @@
+openapi: 3.1.0
+info:
+  title: Positivity Extraction Worker API
+  description: "Stateless worker that opens untrusted bill files (CAP:550 S26). Every\
+    \ parse runs in a child JVM that holds no secret. Service-to-service only: pos-accounting\
+    \ is its one caller, and the API Gateway has no route here."
+  contact:
+    name: Durion Support Services
+    email: platform@durionpos.org
+  version: v1
+servers:
+- url: http://pos-extraction-worker:8080
+  description: Direct container address on extraction-net (Compose and alpha)
+security:
+- workerSecret: []
+  tenantLabel: []
+tags:
+- name: Inspection
+  description: Verdicts on untrusted bill files; no page and no copy of the file is
+    returned
+- name: Rendering
+  description: "One page of an uploaded document as a PNG, drawn in a sandboxed child\
+    \ process"
+paths:
+  /extraction-worker/v1/renderings:
+    post:
+      tags:
+      - Rendering
+      summary: Render one page of a bill file
+      description: "Draws one page of an uploaded document as a PNG with all metadata\
+        \ stripped, inside a sandboxed child process, at no more than the configured\
+        \ pixel limit. Use this tool when a reviewer opens a page preview and no stored\
+        \ copy of that page exists yet; do not use it for CSV or XLSX files, and do\
+        \ not use it to read values, which the extraction operation does instead.\
+        \ Preconditions: the caller holds the shared secret and names its tenant,\
+        \ and the file has already passed inspection. Required inputs: a multipart\
+        \ file part named file, a declaredType of PDF, JPEG, PNG, HEIC or TIFF, and\
+        \ a 1-based page. No events are emitted and nothing is stored. Returns 422\
+        \ when the page is past the last page or cannot be rendered."
+      operationId: render
+      parameters:
+      - name: declaredType
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - PDF
+          - JPEG
+          - PNG
+          - HEIC
+          - TIFF
+          - CSV
+          - XLSX
+      - name: page
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        description: "The file, the type the caller says it is, and the 1-based page\
+          \ to draw."
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+            examples:
+              page two of a pdf:
+                description: page two of a pdf
+                value: file=<bytes of bill.pdf>; declaredType=PDF; page=2
+        required: true
+      responses:
+        "200":
+          description: The page as image/png.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: "A part is missing, declaredType is not renderable, or page\
+            \ is below 1."
+          content:
+            image/png:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: "The secret is missing, wrong or unconfigured, or X-Tenant-Id\
+            \ is missing."
+          content:
+            image/png:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: The file is over the size limit.
+          content:
+            image/png:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "422":
+          description: "PAGE_NOT_RENDERABLE: the page does not exist or cannot be\
+            \ rendered."
+          content:
+            image/png:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Every parse slot is busy; retry after the Retry-After seconds.
+          content:
+            image/png:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      x-required-permissions:
+      - AUTHENTICATED
+  /extraction-worker/v1/inspections:
+    post:
+      tags:
+      - Inspection
+      summary: Inspect an uploaded bill file
+      description: "Checks one uploaded file in a sandboxed child process and answers\
+        \ whether it may be read further, with its page count and SHA-256. Use this\
+        \ tool when a file has just been uploaded and must be judged before anything\
+        \ renders, tabulates or extracts it; do not use it to read values from a file,\
+        \ because it returns none and the extraction and tabulation operations do\
+        \ that instead. Preconditions: the caller holds the shared secret and names\
+        \ its tenant, and the file is at most 25 MiB. Required inputs: a multipart\
+        \ file part named file and a declaredType of PDF, JPEG, PNG, HEIC, TIFF, CSV\
+        \ or XLSX. No events are emitted and nothing is stored; the call can be repeated\
+        \ safely. Returns 413 when the file is over the size limit and 503 with Retry-After\
+        \ when every parse slot is busy."
+      operationId: inspect
+      parameters:
+      - name: declaredType
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+          - PDF
+          - JPEG
+          - PNG
+          - HEIC
+          - TIFF
+          - CSV
+          - XLSX
+      requestBody:
+        description: The file to inspect and the type the caller says it is.
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required:
+              - file
+            examples:
+              pdf:
+                description: pdf
+                value: file=<bytes of bill.pdf>; declaredType=PDF
+        required: true
+      responses:
+        "200":
+          description: The verdict. A rejected file is still a 200 with verdict REJECTED
+            and a reasonCode.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InspectionResponse"
+        "400":
+          description: A part is missing or declaredType is not one of the allowed
+            types.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          description: "The secret is missing, wrong or unconfigured, or X-Tenant-Id\
+            \ is missing."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: The file is over the size limit.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Every parse slot is busy; retry after the Retry-After seconds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+      x-required-permissions:
+      - AUTHENTICATED
+components:
+  schemas:
+    ApiError:
+      type: object
+      description: Standard error response envelope returned by all Durion backend
+        APIs
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: ORDER_NOT_FOUND
+        message:
+          type: string
+          description: Human-readable error message
+          example: Order '550e8400-e29b-41d4-a716-446655440000' was not found
+        status:
+          type: integer
+          format: int32
+          description: HTTP status code
+          example: 404
+        timestamp:
+          type: string
+          description: ISO 8601 UTC timestamp of the error
+          example: 2026-03-17T14:30:00.000Z
+        correlationId:
+          type: string
+          description: Unique correlation ID for distributed request tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+        fieldErrors:
+          type: array
+          description: "Field-level validation errors. Optional and module-dependent:\
+            \ a module populates it for validation-related errors such as VALIDATION_ERROR\
+            \ or VALIDATION_FAILED where doing so is safe, and omits it otherwise\
+            \ — some modules deliberately withhold it because the binding result names\
+            \ internal property names and the response is provokable by any caller.\
+            \ Never present for non-validation errors. Treat it as absent unless the\
+            \ endpoint's own documentation says otherwise"
+          items:
+            $ref: "#/components/schemas/FieldError"
+        referenceId:
+          type: string
+          description: "Workflow or review-case reference identifier, when applicable"
+          example: REVIEW-2026-000123
+        nextAction:
+          type: string
+          description: "Recommended next step for the caller, when applicable"
+          example: Retry the request with a valid quantity
+        supportAction:
+          type: string
+          description: "Support or admin investigation guidance, when applicable"
+          example: Contact support with the correlation ID for assistance
+        conflicts:
+          type: array
+          description: "Itemized conflicts behind a 409 whose cause is a set of named\
+            \ conflicts, such as SCHEDULING_CONFLICT (ADR-0017 §3). Present only on\
+            \ such a 409; absent otherwise"
+          items:
+            $ref: "#/components/schemas/Conflict"
+        suggestedAlternatives:
+          type: array
+          description: "Alternatives the caller may retry with, accompanying conflicts\
+            \ when the service can compute them. Optional even when conflicts is present"
+          items:
+            $ref: "#/components/schemas/SuggestedAlternative"
+      required:
+      - code
+      - correlationId
+      - message
+      - status
+      - timestamp
+    Conflict:
+      type: object
+      description: A single named conflict behind a 409 response
+      properties:
+        severity:
+          type: string
+          description: Conflict severity (HARD or SOFT)
+          example: SOFT
+        code:
+          type: string
+          description: Machine-readable conflict code
+          example: MECHANIC_UNAVAILABLE
+        message:
+          type: string
+          description: User-safe description of the conflict
+          example: The selected mechanic is already booked
+        overridable:
+          type: boolean
+          description: "Whether the conflict can be overridden (HARD=false, SOFT=true)"
+          example: true
+        affectedResource:
+          type: string
+          description: Resource affected by the conflict
+          example: "Mechanic: John Doe"
+      required:
+      - code
+      - message
+      - overridable
+      - severity
+    FieldError:
+      type: object
+      description: Validation error for a specific request field
+      properties:
+        field:
+          type: string
+          description: Field name
+          example: quantity
+        message:
+          type: string
+          description: Validation failure message
+          example: must be greater than 0
+      required:
+      - field
+      - message
+    SuggestedAlternative:
+      type: object
+      description: A suggested alternative accompanying a 409 conflict
+      properties:
+        startDateTime:
+          type: string
+          description: Suggested start time (ISO-8601 with offset)
+          example: 2026-06-18T09:00:00-05:00
+        endDateTime:
+          type: string
+          description: Suggested end time (ISO-8601 with offset)
+          example: 2026-06-18T10:00:00-05:00
+        reason:
+          type: string
+          description: Reason this alternative is suggested
+          example: Mechanic available
+      required:
+      - endDateTime
+      - startDateTime
+    InspectionResponse:
+      type: object
+      properties:
+        verdict:
+          type: string
+          description: Whether the file may be read further.
+          enum:
+          - ACCEPTED
+          - REJECTED
+          example: ACCEPTED
+        reasonCode:
+          type: string
+          description: Why the file was rejected. Absent when it was accepted.
+          enum:
+          - TYPE_MISMATCH
+          - ENCRYPTED_PDF
+          - PDF_ACTIVE_CONTENT
+          - PAGE_LIMIT_EXCEEDED
+          - MACRO_CONTENT
+          - EXTERNAL_ENTITY
+          - DECOMPRESSION_LIMIT_EXCEEDED
+          - RESOURCE_LIMIT_EXCEEDED
+          - UNREADABLE
+          example: PAGE_LIMIT_EXCEEDED
+        detectedType:
+          type: string
+          description: "The type the bytes show: PDF, JPEG, PNG, HEIC, TIFF, CSV,\
+            \ XLSX or UNKNOWN."
+          example: PDF
+        pageCount:
+          type: integer
+          format: int32
+          description: "PDF pages, TIFF frames, 1 for a single image, or the count\
+            \ of data rows (all rows after the first) for CSV and XLSX. 0 when the\
+            \ file is rejected."
+          example: 3
+        sha256:
+          type: string
+          description: Lowercase hex SHA-256 of the uploaded bytes.
+          example: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+  securitySchemes:
+    workerSecret:
+      type: apiKey
+      description: "Shared secret, pos.extraction-worker.api-secret"
+      name: X-Extraction-Worker-Secret
+      in: header
+    tenantLabel:
+      type: apiKey
+      description: "Tenant UUID: a log and metric label only, never authorisation"
+      name: X-Tenant-Id
+      in: header
