@@ -143,12 +143,14 @@ class InboundMailApiIT extends PostgresTenancyTestBase {
         if (body != null) {
             request = request.contentType(MediaType.APPLICATION_JSON).content(body);
         }
-        return mockMvc.perform(request)
+        String json = mockMvc.perform(request)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.address").exists())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
+        // issuedAt may differ in the last microsecond between the issuing call and a re-read (Postgres rounds).
+        return json.replaceAll("\"issuedAt\":\"[^\"]*\"", "");
     }
 
     private static String normalise(MvcResult result) throws Exception {

@@ -175,7 +175,8 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
         IssuedAddressResponse replay = asTenant(TENANT_B, () -> registry.rotate(requestId));
 
         assertThat(rotated.addressId()).isNotEqualTo(before.addressId());
-        assertThat(replay).as("a replay never rotates twice").isEqualTo(rotated);
+        assertThat(replay.addressId()).as("a replay never rotates twice").isEqualTo(rotated.addressId());
+        assertThat(replay.address()).isEqualTo(rotated.address());
         assertThat(addresses.findById(before.addressId()).orElseThrow().getStatus())
                 .isEqualTo(AddressStatus.RETIRED);
         assertThat(addresses.findById(before.addressId()).orElseThrow().getRetiredAt())
