@@ -49,6 +49,9 @@ public final class AccountingPermissions {
     /** View accounts payable. */
     public static final String AP_VIEW = "accounting:ap:view";
 
+    /** Upload documents and create bill drafts (CAP:550 S25, #2518); bit 568, catalog v110. */
+    public static final String BILL_INTAKE_CREATE = "accounting:bill_intake:create";
+
     /** Create accounts in chart of accounts. */
     public static final String COA_CREATE = "accounting:coa:create";
 

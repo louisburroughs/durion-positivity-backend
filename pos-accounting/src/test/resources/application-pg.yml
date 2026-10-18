@@ -45,6 +45,9 @@ pos:
     bill-intake:
       vendorless-hold-conversion:
         enabled: false
+      # The scheduled intake processor stays off; ITs drive it directly.
+      processor:
+        enabled: false
 
 # CAP:550 S43: the bill read's purchase-tax rules are not cached across tests, so each test's stubbed pos-tax answer
 # (TaxReferenceClient is a mock, PostgresTenancyTestBase) is the one its read sees.

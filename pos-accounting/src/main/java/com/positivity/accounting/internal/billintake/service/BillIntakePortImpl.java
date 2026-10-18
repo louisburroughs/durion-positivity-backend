@@ -87,9 +87,6 @@ public class BillIntakePortImpl implements BillIntakePort {
     /** Prefix of the per-tenant {@code accounting_sequence} scope that numbers goods-receipt bills. */
     static final String BILL_NUMBER_SCOPE_PREFIX = "BILL-";
 
-    /** Prefix of the per-tenant {@code accounting_sequence} scope that numbers drafts: {@code BI-YYYYMM}. */
-    static final String INTAKE_REFERENCE_SCOPE_PREFIX = "BI-";
-
     private final Clock clock;
     private final VendorBillRepository billRepository;
     private final VendorBillLineRepository billLineRepository;
@@ -105,6 +102,7 @@ public class BillIntakePortImpl implements BillIntakePort {
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final AccountingSequenceLocker sequenceLocker;
     private final AccountingCalendarZoneResolver zoneResolver;
+    private final BillIntakeReferences references;
     private final @Nullable MeterRegistry meterRegistry;
 
     /**
@@ -147,6 +145,7 @@ public class BillIntakePortImpl implements BillIntakePort {
         this.ingestionRecorder = ingestionRecorder;
         this.sequenceLocker = sequenceLocker;
         this.zoneResolver = zoneResolver;
+        this.references = new BillIntakeReferences(sequenceLocker, zoneResolver);
         this.meterRegistry = meterRegistry.getIfAvailable();
         this.goodsReceiptTransaction = new TransactionTemplate(transactionManager);
     }
@@ -462,7 +461,7 @@ public class BillIntakePortImpl implements BillIntakePort {
         item.setReadBack(readBackOf(fact));
         item.setUploadedBy(EDI_CREATED_BY);
         item.setUploadedAt(now);
-        item.setIntakeReference(nextIntakeReference());
+        item.setIntakeReference(references.next());
         intakeItems.saveAndFlush(item);
         record(eventId, item.getIntakeId(), fact, FactPostingOutcome.nothingToPost());
         log.info(
@@ -470,16 +469,6 @@ public class BillIntakePortImpl implements BillIntakePort {
                 item.getIntakeReference(),
                 fact.vendorInvoiceNumber());
         return new MachineDocumentOutcome.Draft(item.getIntakeId(), item.getIntakeReference());
-    }
-
-    /** {@code BI-YYYYMM-nnnnnnn}, from the tenant's own counter, the month in the tenant's accounting calendar. */
-    private @NonNull String nextIntakeReference() {
-        LocalDate recorded = zoneResolver.today();
-        String period = String.format("%04d%02d", recorded.getYear(), recorded.getMonthValue());
-        AccountingSequence sequence = sequenceLocker.lockOrProvision(INTAKE_REFERENCE_SCOPE_PREFIX + period);
-        long assigned = sequence.getNextValue();
-        sequence.setNextValue(assigned + 1);
-        return String.format("%s%s-%07d", INTAKE_REFERENCE_SCOPE_PREFIX, period, assigned);
     }
 
     /**

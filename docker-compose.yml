@@ -607,6 +607,24 @@ services:
       retries: 20 # Give it enough time to start
       start_period: 300s
 
+  # ── ClamAV (Docker Hub image — no ECR): the malware scan of uploaded bill files (CAP:550 S25, #2518) ──────────
+  # pos-accounting streams each upload to clamd (INSTREAM, tcp 3310) before anyone can read it. No ports: only the
+  # compose network reaches it. First start downloads the signatures, which takes minutes; until clamd answers,
+  # uploads wait QUARANTINED and are never rejected (ruling 2), so pos-accounting does not depend on its health.
+  clamav:
+    image: clamav/clamav:1.4
+    volumes:
+      - clamav-data:/var/lib/clamav
+    healthcheck:
+      test: [ "CMD", "/usr/local/bin/clamdcheck.sh" ]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+    logging: *logging
+    networks:
+      - pos-network
+
   pos-accounting:
     build:
       context: ./pos-accounting
@@ -621,6 +639,9 @@ services:
       # CAP:550 S32c (ADR-0071 §6): the tax-registration front door's per-caller secret, the value pos-tax expects.
       # No default: unset, every registration write answers 503 (fail closed).
       POS_TAX_ACCOUNTING_SECRET: ${POS_TAX_ACCOUNTING_SECRET:-}
+      # CAP:550 S25 (#2518): the malware scan of uploaded bill files goes to the clamav service on this network.
+      POS_ACCOUNTING_BILL_INTAKE_SCANNER_ADAPTER: ${POS_ACCOUNTING_BILL_INTAKE_SCANNER_ADAPTER:-clamd}
+      POS_ACCOUNTING_BILL_INTAKE_SCANNER_HOST: clamav
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_accounting_db
       # ADR-0062 (plan WS3): the pool is the non-owner pos_app role; Flyway alone uses the owner.
       SPRING_DATASOURCE_USERNAME: pos_app
@@ -2037,4 +2058,6 @@ volumes:
   postgres-data:
     driver: local
   ollama-data:
+    driver: local
+  clamav-data:
     driver: local

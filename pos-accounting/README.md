@@ -673,6 +673,51 @@ Permission catalog note: catalog v23 adds bits 382 (`accounting:period:hard_lock
 The override permission is the constant `AccountingPermissions.PERIOD_OVERRIDE` (CAP:550 S3 moved it off
 the former `AccountingPeriodGate.OVERRIDE_AUTHORITY`; the code and bit are unchanged).
 
+## Bill intake: upload, scan and read (CAP:550 S25, #2518, Part B)
+
+A bill may now begin as a document. `POST /v1/accounting/bill-intake/uploads` (multipart `files` 1 to 10, `requestId`;
+permission `accounting:bill_intake:create`, event `ACCOUNTING_BILL_INTAKE_UPLOAD`) makes one `bill_intake_item` per file;
+a person checks the draft before any bill exists and nothing posts. Part C adds the draft commands and the remaining
+S25 permissions; this part adds only the one the upload needs.
+
+```text
+upload ─► QUARANTINED ─scan─► inspect ─► EXTRACTING ─read─► READY_FOR_REVIEW
+              │ INFECTED / ERROR / inspection REFUSED
+              └──────────────► FILE_REJECTED (MALWARE_FOUND, SCAN_FAILED, an inspect reason)
+bytes not PDF/JPEG/PNG/HEIC/TIFF (magic bytes) ─► FILE_REJECTED / TYPE_NOT_ALLOWED at once, nothing stored or scanned
+```
+
+- **Ports** (`internal/billintake/service`): `FileStore` (`DbFileStore`, bytes in `bill_source_file_content`; `quarantine`,
+  `recordRejected`, `promote`, `reject`, `open`, `storeDerived`, `setRetentionUntil`, `setLegalHold`, `purge`),
+  `MalwareScanner` (`ClamdMalwareScanner`: clamd `INSTREAM` over TCP; `UnavailableMalwareScanner`) and `ExtractionPort`
+  (`inspect`, `render`, `tabulate`, `extract`; result types are the worker's wire contract, S26 #2519;
+  `UnavailableExtractionPort` is all that ships). pos-accounting parses no file.
+- **An outage never rejects a file** (ruling 2). Scanner or reader unreachable: the item stays `QUARANTINED`, backs off
+  (30 s doubling, at most `processor.max-backoff`), and past `quarantine-alert-after` (PT24H) the stats pass WARNs and
+  sets `accounting.bill_intake.quarantine_age_seconds`. Only a verdict about the file rejects: `INFECTED` is
+  `MALWARE_FOUND`, a scanner `ERROR` (clamd answered and refused the file) is `SCAN_FAILED`; their bytes are kept 30 days.
+- **Reading.** A reading that failed, or an unavailable reader past `extraction-retry-window` (PT15M) since the upload,
+  leaves a blank draft: every field empty and `CHECK_THIS`, `extractionOutcome MANUAL`, `lastExtractionFailed`. Mapping a
+  successful reading into the read-back is S26's adapter; until then it is left blank with reason `RESULT_MAPPING_PENDING`.
+  Every draft passes `BillIntakeChecks` on its way to review: vendor resolution (ruling 3), totals consistency (ruling 5)
+  and the duplicate pre-check into `possibleDuplicates` (number rule, G16, a purchase-order warning, other open drafts).
+- **Idempotency.** A draft's `request_id` is unique per tenant and channel, so file *i* of a request is stored under a UUID
+  derived from `requestId` and *i*. A replay with the same files answers the same drafts; other files or a different file
+  count is 409 `IDEMPOTENCY_CONFLICT`.
+- **Limits** (ruling 13): 10 files, 25 MB each, 100 MB a request (`spring.servlet.multipart` 25MB / 101MB); a file over the
+  limit is 413 `PAYLOAD_TOO_LARGE`. Statement files keep their own 10 MB check.
+- **Logs and audit** name the draft's reference, the file's sha-256, size and content type, and verdicts: never a file name,
+  bytes or an extracted value (ADR-0072). `BILL_INTAKE` audit rows `UPLOAD` and `SCAN` carry the sha-256.
+- **Metrics:** `accounting.bill_intake.items{status,channel}`, `accounting.bill_intake.scan{verdict}`,
+  `accounting.bill_intake.quarantine_age_seconds`.
+- **Configuration** (`pos.accounting.bill-intake`): `scanner.adapter` (`unavailable` default, `clamd`), `scanner.host`
+  (`clamav`), `scanner.port` (3310), `scanner.timeout` (PT30S), `extraction.adapter` (`unavailable`), `extraction.base-url`
+  (`http://extraction-proxy:8080`; pos-accounting never joins the worker's network), `extraction-retry-window`,
+  `quarantine-alert-after`, `processor.enabled|interval|batch|max-backoff`. The compose files add a `clamav` service
+  (`docker-compose.yml`, `deployment/alpha/docker-compose.prod.yml`) and set the adapter to `clamd`; signatures download on
+  first start, and uploads wait quarantined until clamd answers.
+- **Refusals:** 400 `VALIDATION_ERROR` (no file, more than 10), 403, 409 `IDEMPOTENCY_CONFLICT`, 413 `PAYLOAD_TOO_LARGE`.
+
 ## Permissions and the accounting roles (CAP:550 S3, #2504)
 
 Every permission this module enforces is a constant in `internal/security/AccountingPermissions.java` and

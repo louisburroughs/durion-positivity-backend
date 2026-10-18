@@ -50,7 +50,7 @@ public record VendorBillTotals(
     }
 
     /** 0.01 per stated line, at most 0.05; a bill stating no lines counts as one. */
-    static @NonNull BigDecimal tolerance(@Nullable Integer statedLines) {
+    public static @NonNull BigDecimal tolerance(@Nullable Integer statedLines) {
         int lines = statedLines == null || statedLines < 1 ? 1 : statedLines;
         return TOLERANCE_PER_LINE.multiply(BigDecimal.valueOf(lines)).min(TOLERANCE_PER_BILL);
     }

@@ -82,6 +82,11 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # ClamAV (Docker Hub image — no ECR): the malware scan of uploaded bill files (CAP:550 S25, #2518).
+  clamav:
+    restart: unless-stopped
+    logging: *logging
+
   pos-accounting:
     image: ${ECR_REGISTRY}/durion/pos-accounting:${BACKEND_TAG}
     restart: unless-stopped

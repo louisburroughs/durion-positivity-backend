@@ -3,9 +3,10 @@ spring:
     name: accounting
   servlet:
     multipart:
-      # Statement files (story S3, #2302) up to pos.accounting.bankrec.import.max-file-bytes.
-      max-file-size: 10MB
-      max-request-size: 11MB
+      # Bill documents (S25, #2518 ruling 13): 25 MB a file, 100 MB a request (101 MB with the form parts). Statement
+      # files keep their own, lower limit: pos.accounting.bankrec.import.max-file-bytes.
+      max-file-size: 25MB
+      max-request-size: 101MB
   kafka:
     bootstrap-servers:
       - ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -174,6 +175,22 @@ pos:
       # Bounds on each call: a slow pos-tax answers 503 instead of holding the request thread.
       connect-timeout: ${POS_ACCOUNTING_TAX_CONNECT_TIMEOUT:2s}
       read-timeout: ${POS_ACCOUNTING_TAX_READ_TIMEOUT:5s}
+    # Bill intake (CAP:550 S25, #2518). An upload waits QUARANTINED, never rejected, while the scanner or the reader
+    # is down (ruling 2).
+    bill-intake:
+      quarantine-alert-after: ${POS_ACCOUNTING_BILL_INTAKE_QUARANTINE_ALERT_AFTER:PT24H}
+      extraction-retry-window: ${POS_ACCOUNTING_BILL_INTAKE_EXTRACTION_RETRY_WINDOW:PT15M}
+      scanner:
+        # unavailable (dev, tests: files stay quarantined) or clamd (the clamav service of the compose files).
+        adapter: ${POS_ACCOUNTING_BILL_INTAKE_SCANNER_ADAPTER:unavailable}
+        host: ${POS_ACCOUNTING_BILL_INTAKE_SCANNER_HOST:clamav}
+        port: ${POS_ACCOUNTING_BILL_INTAKE_SCANNER_PORT:3310}
+        timeout: ${POS_ACCOUNTING_BILL_INTAKE_SCANNER_TIMEOUT:PT30S}
+      extraction:
+        # Only unavailable ships before S26's worker adapter. The worker is reached through its proxy: pos-accounting
+        # never joins the worker's network.
+        adapter: ${POS_ACCOUNTING_BILL_INTAKE_EXTRACTION_ADAPTER:unavailable}
+        base-url: ${POS_ACCOUNTING_BILL_INTAKE_EXTRACTION_BASE_URL:http://extraction-proxy:8080}
     # The accounting template held in the platform tenant (#2526; ADR-0062 section 6).
     tenant-template:
       startup-sweep:

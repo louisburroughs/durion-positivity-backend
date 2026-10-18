@@ -188,6 +188,11 @@ public final class EventTypes {
                 EventTypeRegistration.write("ACCOUNTING_TAX_REGISTRATION_UPDATE", "Change a tax registration")
                         .build(),
 
+                // BillIntakeController - 1 event (CAP:550 S25, #2518); Part C adds the draft commands
+                EventTypeRegistration.write(
+                                "ACCOUNTING_BILL_INTAKE_UPLOAD", "Upload documents as bill drafts for checking")
+                        .build(),
+
                 // GLAccountController - 6 events
                 EventTypeRegistration.search("ACCOUNTING_GL_ACCOUNT_LIST", "List GL accounts with pagination")
                         .build(),

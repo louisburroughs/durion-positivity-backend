@@ -10,6 +10,12 @@ permissions:
     description: "Approve vendor bills over the clerk limit"
   - name: "accounting:ap:pay"
     description: "Process payments"
+  - name: "accounting:bill_intake:create"
+    description: "Upload documents and create bill drafts for checking (CAP:550 S25)"
+    grantTo:
+      - "ACCOUNTING_CLERK"
+      - "CONTROLLER"
+      - "ADMIN"
   - name: "accounting:ap_approval_policy:manage"
     description: "Read and change the AP approval policy: approval limits, separation-of-duties switches and default AP terms (CAP:550 S13)"
     grantTo:

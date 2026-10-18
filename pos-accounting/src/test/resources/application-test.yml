@@ -68,6 +68,8 @@ pos.accounting.event-drainer.enabled: false
 pos.accounting.deposit-gauge.enabled: false
 # S25 (#2518): the one-shot conversion of VENDOR_ID_MISSING holds walks every tenant at startup; tests call it directly.
 pos.accounting.bill-intake.vendorless-hold-conversion.enabled: false
+# S25 Part B: the scheduled intake processor stays off in tests; they drive it directly.
+pos.accounting.bill-intake.processor.enabled: false
 
 # #2642: no settlement re-read in test contexts (the sweep would run against fixtures after its initial delay).
 accounting.ap.settlement.enabled: false

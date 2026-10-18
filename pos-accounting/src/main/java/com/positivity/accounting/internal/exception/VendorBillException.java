@@ -123,6 +123,13 @@ public class VendorBillException extends RuntimeException {
          * #2517; Accounting ruling on PR #2648, separation of duties). 403, before anything is written.
          */
         VENDOR_REMIT_TO_SELF_CONFIRMATION(HttpStatus.FORBIDDEN),
+        /**
+         * An upload's {@code requestId} was used before with other content, or by a request still running (CAP:550
+         * S25, #2518). 409. A replay with the same files is not an error: it returns the first response.
+         */
+        IDEMPOTENCY_CONFLICT(HttpStatus.CONFLICT),
+        /** A file over the 25 MB limit, or a request over the 100 MB limit (ruling 13 of #2518). 413. */
+        PAYLOAD_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE),
         /** A justification or reason absent, blank or under 10 characters. */
         JUSTIFICATION_REQUIRED(HttpStatus.BAD_REQUEST),
         /** A request field outside its contract (an unknown action, a class the document cannot take). */

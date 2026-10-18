@@ -1671,9 +1671,9 @@ class SecurityGatewayConfigTest {
     // ── Task-2: new catalog version + extended array tests ───────────────────
 
     @Test
-    @DisplayName("CATALOG_VERSION is 109")
+    @DisplayName("CATALOG_VERSION is 110")
     void catalogVersionMatchesCurrent() {
-        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(109);
+        assertThat(GatewayPermissionCatalog.CATALOG_VERSION).isEqualTo(110);
     }
 
     @Test
@@ -2058,7 +2058,9 @@ class SecurityGatewayConfigTest {
         // catalog v109 (#2525): maintain the feed vendor to pos-supplier vendor mapping (bit 567)
         assertThat(GatewayPermissionCatalog.authorityForBit(567))
                 .isEqualTo("PERM_inventory:vendor_feed_mapping:manage");
-        assertThat(GatewayPermissionCatalog.authorityForBit(568)).isNull();
+        // catalog v110 (#2518): upload and create bill drafts (bit 568)
+        assertThat(GatewayPermissionCatalog.authorityForBit(568)).isEqualTo("PERM_accounting:bill_intake:create");
+        assertThat(GatewayPermissionCatalog.authorityForBit(569)).isNull();
     }
 
     @Test

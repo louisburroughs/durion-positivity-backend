@@ -2,8 +2,8 @@ generatedAt: "2026-10-17T19:34:16.797785+00:00"
 root: "."
 summary:
   manifestCount: 24
-  permissionCount: 534
-  uniquePermissionCount: 534
+  permissionCount: 535
+  uniquePermissionCount: 535
   duplicatePermissionNameCount: 0
   parseIssueCount: 0
 manifests:
@@ -12,7 +12,7 @@ manifests:
     domain: "accounting"
     serviceName: "pos-accounting"
     version: "1.0"
-    permissionCount: 65
+    permissionCount: 66
     permissions:
       - name: "accounting:analytics:view"
         description: "View Wave 2 read-only accounting analytics (invoiced-vs-collected, payment-lag cohorts)"
@@ -28,6 +28,8 @@ manifests:
         description: "Reject vendor bills and void match exceptions or approved bills"
       - name: "accounting:ap:view"
         description: "View accounts payable"
+      - name: "accounting:bill_intake:create"
+        description: "Upload documents and create bill drafts for checking (CAP:550 S25)"
       - name: "accounting:coa:create"
         description: "Create accounts in chart of accounts"
       - name: "accounting:coa:deactivate"
@@ -1276,6 +1278,12 @@ permissions:
     source: "pos-accounting/src/main/resources/permissions.yaml"
   - name: "accounting:ap:view"
     description: "View accounts payable"
+    domain: "accounting"
+    serviceName: "pos-accounting"
+    module: "pos-accounting"
+    source: "pos-accounting/src/main/resources/permissions.yaml"
+  - name: "accounting:bill_intake:create"
+    description: "Upload documents and create bill drafts for checking (CAP:550 S25)"
     domain: "accounting"
     serviceName: "pos-accounting"
     module: "pos-accounting"

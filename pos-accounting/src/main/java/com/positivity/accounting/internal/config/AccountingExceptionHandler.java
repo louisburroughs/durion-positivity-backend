@@ -327,6 +327,20 @@ public class AccountingExceptionHandler {
     }
 
     /**
+     * A multipart request over the configured limits (25 MB a file, 100 MB a request; ruling 13 of #2518): 413
+     * {@code PAYLOAD_TOO_LARGE}. The message names no file (ADR-0072).
+     */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiError> handleUploadTooLarge(
+            org.springframework.web.multipart.MaxUploadSizeExceededException ex, HttpServletRequest request) {
+        return build(
+                HttpStatus.CONTENT_TOO_LARGE,
+                "PAYLOAD_TOO_LARGE",
+                "The upload is over the size limit: 25 MB a file and 100 MB a request",
+                request);
+    }
+
+    /**
      * Vendor-bill command refusals (#2509): the exception carries its code and status (404
      * {@code VENDOR_BILL_NOT_FOUND}, 409 {@code AP_BILL_NOT_APPROVABLE}, 422 {@code AP_BILL_UNCLASSIFIED}, ...).
      */
