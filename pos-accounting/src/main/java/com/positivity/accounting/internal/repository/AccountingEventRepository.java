@@ -2,6 +2,7 @@ package com.positivity.accounting.internal.repository;
 
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
+import com.positivity.tenancy.TenantAudited;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.time.Instant;
@@ -31,6 +32,33 @@ public interface AccountingEventRepository
      * Uses indexed column for efficient querying.
      */
     Page<AccountingEvent> findBySourceSystem(String sourceSystem, Pageable pageable);
+
+    /**
+     * The stored {@code goodsreceipt.recorded} facts whose receipt has no copy row, oldest first, one keyset slice
+     * (#2750): the goods-receipt copy's backfill. Keyed on {@code (received_at, event_id)}, so slices neither overlap
+     * nor skip; served by {@code idx_accounting_event_type_received_event}. Pass {@link Instant#EPOCH} and the nil
+     * UUID for the first slice.
+     */
+    @TenantAudited(
+            reason = "reads the bound tenant's rows only: RLS on accounting_event and on the copy table decides what"
+                    + " the NOT EXISTS sees, and the backfill runs it inside TenantIterator's binding")
+    @Query(value = """
+                    SELECT e.* FROM accounting_event e
+                    WHERE e.event_type = 'goodsreceipt.recorded'
+                      AND (e.received_at, e.event_id) > (CAST(:afterReceivedAt AS timestamptz), CAST(:afterEventId AS uuid))
+                      AND NOT EXISTS (SELECT 1 FROM ext_inventory_goods_receipt r
+                                      WHERE r.goods_receipt_id = CAST(e.payload ->> 'receiptId' AS uuid))
+                    ORDER BY e.received_at, e.event_id
+                    LIMIT :limit
+                    """, nativeQuery = true)
+    List<AccountingEvent> findGoodsReceiptFactsWithoutCopy(
+            @Param("afterReceivedAt") Instant afterReceivedAt,
+            @Param("afterEventId") UUID afterEventId,
+            @Param("limit") int limit);
+
+    /** Every record of {@code eventType} about one domain key, oldest first: a receipt's stored history (#2750). */
+    List<AccountingEvent> findByEventTypeAndDomainKeyIdOrderByReceivedAtAscEventIdAsc(
+            String eventType, String domainKeyId);
 
     /**
      * Whether an ingestion record already holds this fact for this reason, so a redelivered fact

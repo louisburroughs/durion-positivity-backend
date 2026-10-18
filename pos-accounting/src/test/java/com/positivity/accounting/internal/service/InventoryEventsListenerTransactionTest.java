@@ -3,6 +3,11 @@ package com.positivity.accounting.internal.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.positivity.accounting.internal.entity.AccountingEvent;
 import com.positivity.accounting.internal.enums.AccountingEventStatus;
@@ -81,6 +86,9 @@ class InventoryEventsListenerTransactionTest {
     private ObjectProvider<MeterRegistry> meterRegistry;
 
     private InventoryEventsListener listener;
+    private final GoodsReceiptAccrualPostingService goodsReceiptAssessor =
+            org.mockito.Mockito.mock(GoodsReceiptAccrualPostingService.class);
+    private final GoodsReceiptReplica goodsReceiptReplica = org.mockito.Mockito.mock(GoodsReceiptReplica.class);
     private String eventId;
     private UUID adjustmentId;
 
@@ -97,7 +105,8 @@ class InventoryEventsListenerTransactionTest {
                 shrinkagePostingService,
                 failingPostingService,
                 revaluationPostingService,
-                org.mockito.Mockito.mock(GoodsReceiptAccrualPostingService.class),
+                goodsReceiptAssessor,
+                goodsReceiptReplica,
                 ingestionRecorder,
                 meterRegistry,
                 transactionManager,
@@ -200,6 +209,52 @@ class InventoryEventsListenerTransactionTest {
                 .as("a propagated failure is retried, so it must not be marked")
                 .isFalse();
         assertThat(records()).isEmpty();
+    }
+
+    /** ADR-0044 amendment (#2750): the goods-receipt copy shares the handler transaction with the record and mark. */
+    @Test
+    @DisplayName(
+            "A goods-receipt copy that fails rolls back the ingestion record and the mark; redelivery then applies")
+    void goodsReceiptCopyFailureRollsBackRecordAndMark() {
+        UUID receiptId = UUID.randomUUID();
+        when(goodsReceiptAssessor.assess(any()))
+                .thenReturn(new GoodsReceiptAccrualPostingService.Assessment.NothingToPost());
+        doThrow(new IllegalStateException("simulated copy failure"))
+                .doNothing()
+                .when(goodsReceiptReplica)
+                .recorded(any());
+        String message = goodsReceipt(receiptId);
+
+        assertThatThrownBy(() -> listener.onInventoryEvent(message)).isExactlyInstanceOf(IllegalStateException.class);
+
+        assertThat(processedEventRepository.existsById(eventId))
+                .as("a failed copy is retried, so the fact must not be marked")
+                .isFalse();
+        assertThat(receiptRecords(receiptId))
+                .as("the ingestion record rolls back with the copy")
+                .isEmpty();
+
+        listener.onInventoryEvent(message);
+
+        assertThat(processedEventRepository.existsById(eventId)).isTrue();
+        assertThat(receiptRecords(receiptId)).hasSize(1);
+        verify(goodsReceiptReplica, times(2)).recorded(any());
+        accountingEventRepository.deleteAll(receiptRecords(receiptId));
+    }
+
+    private List<AccountingEvent> receiptRecords(UUID receiptId) {
+        return accountingEventRepository.findAll().stream()
+                .filter(record -> receiptId.toString().equals(record.getDomainKeyId()))
+                .toList();
+    }
+
+    private String goodsReceipt(UUID receiptId) {
+        return """
+                {"eventId":"%s","eventType":"goodsreceipt.recorded","schemaVersion":1,"aggregateId":"%s",
+                 "aggregateVersion":0,"payload":{"receiptId":"%s","receiptNumber":"GR-9","purchaseOrderId":"%s",
+                   "locationId":null,"totalAccruedAmountMinor":0,"occurredAt":"2026-07-21T09:15:00Z",
+                   "currencyCode":"USD","lines":[]}}
+                """.formatted(eventId, UUID.randomUUID(), receiptId, UUID.randomUUID());
     }
 
     private List<AccountingEvent> records() {

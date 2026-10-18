@@ -12,12 +12,15 @@ import com.positivity.accounting.internal.dto.VendorInvoiceReceivedEvent;
 import com.positivity.accounting.internal.enums.VendorBillStatus;
 import com.positivity.accounting.internal.exception.AccountingPeriodClosedException;
 import com.positivity.accounting.internal.repository.AccountingEventRepository;
+import com.positivity.accounting.internal.repository.ExtInventoryGoodsReceiptRepository;
 import com.positivity.accounting.internal.repository.JournalEntryRepository;
 import com.positivity.accounting.internal.repository.ProcessedEventRepository;
 import com.positivity.accounting.internal.service.AccountingCalendarZoneResolver;
 import com.positivity.accounting.internal.service.EventIngestionService;
 import com.positivity.accounting.internal.service.FinancialReportingService;
 import com.positivity.accounting.internal.service.GoodsReceiptAccrualPostingService;
+import com.positivity.accounting.internal.service.GoodsReceiptReplica;
+import com.positivity.accounting.internal.service.GoodsReceiptReplicaBackfill;
 import com.positivity.accounting.internal.service.IdempotencyService;
 import com.positivity.accounting.internal.service.InventoryAdjustmentPostingService;
 import com.positivity.accounting.internal.service.InventoryEventsListener;
@@ -101,6 +104,12 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
     private GoodsReceiptAccrualPostingService goodsReceiptPostingService;
 
     @Autowired
+    private GoodsReceiptReplica goodsReceiptReplica;
+
+    @Autowired
+    private ExtInventoryGoodsReceiptRepository receiptCopies;
+
+    @Autowired
     private KafkaFactIngestionRecorder ingestionRecorder;
 
     @Autowired
@@ -148,6 +157,7 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                 adjustmentPostingService,
                 revaluationPostingService,
                 goodsReceiptPostingService,
+                goodsReceiptReplica,
                 ingestionRecorder,
                 meterRegistry,
                 transactionManager,
@@ -650,6 +660,115 @@ class GoodsReceiptAccrualPostgresIT extends PostgresTenancyTestBase {
                         BigDecimal.class,
                         tenant,
                         accountCode);
+    }
+
+    @Test
+    @DisplayName("#2750 AC4, AC6, AC7: every well-formed receipt is copied once, whatever its accrual outcome; a"
+            + " corrected re-emit updates it and keeps the first received time; a malformed one is not copied; RLS")
+    void receiptCopyIsWrittenOncePerReceiptUnderRls() {
+        UUID tenant = tenant();
+        GoodsReceiptRecordedV1 posted = fact("USD", 40_000L, line("4", 40_000L, 40_000L, "AVERAGE"));
+        GoodsReceiptRecordedV1 euro = fact("EUR", 40_000L, line("4", 40_000L, null, "AVERAGE"));
+        GoodsReceiptRecordedV1 none = fact(null, 40_000L, line("4", 40_000L, null, "AVERAGE"));
+        GoodsReceiptRecordedV1 uncosted = fact("USD", 0L, line("4", 0L, null, "NONE"));
+        GoodsReceiptRecordedV1 malformed = fact("USD", 40_001L, line("4", 40_000L, 40_000L, "AVERAGE"));
+        for (GoodsReceiptRecordedV1 fact : List.of(posted, euro, none, uncosted, malformed)) {
+            asTenant(
+                    tenant,
+                    () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), fact)));
+        }
+
+        JdbcTemplate owner = new JdbcTemplate(ownerDataSource());
+        assertThat(count(tenant, "ext_inventory_goods_receipt")).isEqualTo(4);
+        assertThat(owner.queryForObject(
+                        "SELECT count(*) FROM ext_inventory_goods_receipt WHERE tenant_id = ? AND goods_receipt_id = ?",
+                        Integer.class,
+                        tenant,
+                        malformed.receiptId()))
+                .isZero();
+        assertThat(owner.queryForMap(
+                        "SELECT receipt_number, purchase_order_id, accrued_amount_minor, currency_code, received_at"
+                                + " FROM ext_inventory_goods_receipt WHERE tenant_id = ? AND goods_receipt_id = ?",
+                        tenant,
+                        none.receiptId()))
+                .containsEntry("accrued_amount_minor", 40_000L)
+                .containsEntry("purchase_order_id", none.purchaseOrderId())
+                .containsEntry("currency_code", null);
+
+        assertThat(owner.queryForMap(
+                        "SELECT accrued_amount_minor, currency_code FROM ext_inventory_goods_receipt"
+                                + " WHERE tenant_id = ? AND goods_receipt_id = ?",
+                        tenant,
+                        uncosted.receiptId()))
+                .containsEntry("accrued_amount_minor", 0L)
+                .containsEntry("currency_code", "USD");
+
+        // A corrected re-emit (new eventId, same receipt, later occurredAt): one row, new amount, first received time.
+        GoodsReceiptRecordedV1 corrected = new GoodsReceiptRecordedV1(
+                posted.receiptId(),
+                "GR-41A",
+                posted.purchaseOrderId(),
+                null,
+                50_000L,
+                occurredAt.plus(1, ChronoUnit.HOURS),
+                List.of(line("5", 50_000L, 50_000L, "AVERAGE")),
+                "USD");
+        asTenant(
+                tenant,
+                () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), corrected)));
+        assertThat(count(tenant, "ext_inventory_goods_receipt")).isEqualTo(4);
+        Map<String, Object> row = owner.queryForMap(
+                "SELECT receipt_number, accrued_amount_minor, received_at FROM ext_inventory_goods_receipt"
+                        + " WHERE tenant_id = ? AND goods_receipt_id = ?",
+                tenant,
+                posted.receiptId());
+        assertThat(row.get("receipt_number")).isEqualTo("GR-41A");
+        assertThat(row.get("accrued_amount_minor")).isEqualTo(50_000L);
+        assertThat(((java.sql.Timestamp) row.get("received_at")).toInstant()).isEqualTo(occurredAt);
+
+        // RLS: the other tenant reads none of it, through the application pool.
+        UUID other = tenant();
+        assertThat(asTenant(tenant, () -> receiptCopies.findAll())).hasSize(4);
+        assertThat(asTenant(other, () -> receiptCopies.findAll())).isEmpty();
+        assertThat(asTenant(other, () -> receiptCopies.findById(posted.receiptId())))
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("#2750 AC8: the backfill copies stored facts that have no row, once; a second run copies nothing")
+    void backfillCopiesStoredFactsOnce() {
+        UUID tenant = tenant();
+        GoodsReceiptRecordedV1 first = fact("USD", 40_000L, line("4", 40_000L, 40_000L, "AVERAGE"));
+        GoodsReceiptRecordedV1 heldForCurrency = fact("EUR", 40_000L, line("4", 40_000L, null, "AVERAGE"));
+        GoodsReceiptRecordedV1 malformed = fact("USD", 40_001L, line("4", 40_000L, 40_000L, "AVERAGE"));
+        for (GoodsReceiptRecordedV1 fact : List.of(first, heldForCurrency, malformed)) {
+            asTenant(
+                    tenant,
+                    () -> listener.onInventoryEvent(envelope(UUID.randomUUID().toString(), fact)));
+        }
+        // The receipts accrued before the copy existed: no copy rows, the stored facts remain.
+        new JdbcTemplate(ownerDataSource())
+                .update("DELETE FROM ext_inventory_goods_receipt WHERE tenant_id = ?", tenant);
+        assertThat(count(tenant, "ext_inventory_goods_receipt")).isZero();
+        GoodsReceiptReplicaBackfill backfill = new GoodsReceiptReplicaBackfill(
+                null,
+                accountingEventRepository,
+                receiptCopies,
+                goodsReceiptReplica,
+                goodsReceiptPostingService,
+                objectMapper,
+                transactionManager);
+
+        assertThat(asTenant(tenant, () -> backfill.backfillTenant())).isEqualTo(2);
+        assertThat(count(tenant, "ext_inventory_goods_receipt")).isEqualTo(2);
+        assertThat(asTenant(tenant, () -> backfill.backfillTenant())).isZero();
+        assertThat(count(tenant, "ext_inventory_goods_receipt")).isEqualTo(2);
+        assertThat(asTenant(tenant, () -> receiptCopies.findById(first.receiptId())))
+                .get()
+                .satisfies(copy -> {
+                    assertThat(copy.getAccruedAmountMinor()).isEqualTo(40_000L);
+                    assertThat(copy.getReceivedAt()).isEqualTo(occurredAt);
+                });
     }
 
     private static Map<String, Object> onlyEntry(UUID tenant) {

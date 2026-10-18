@@ -102,6 +102,9 @@ class InventoryRevaluationGLPostingIT {
     private GoodsReceiptAccrualPostingService goodsReceiptPostingService;
 
     @Autowired
+    private GoodsReceiptReplica goodsReceiptReplica;
+
+    @Autowired
     private KafkaFactIngestionRecorder ingestionRecorder;
 
     @Autowired
@@ -158,6 +161,7 @@ class InventoryRevaluationGLPostingIT {
                 adjustmentPostingService,
                 revaluationPostingService,
                 goodsReceiptPostingService,
+                goodsReceiptReplica,
                 ingestionRecorder,
                 registryProvider,
                 transactionManager,

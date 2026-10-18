@@ -52,7 +52,9 @@ import tools.jackson.databind.ObjectMapper;
  *       excluded from auto-retry, recorded once per receipt and reason, nothing posted), an uncosted one {@code
  *       SKIPPED / UNCOSTED_FACT}; nothing accrued and nothing valued is {@code PROCESSED} with no entry. The ingestion
  *       record keeps the fact's payload, so each posted line stays readable for bill matching and 2100
- *       reconciliation;
+ *       reconciliation. Every well-formed receipt, whatever the outcome, is also copied to {@code
+ *       ext_inventory_goods_receipt} ({@link GoodsReceiptReplica}, #2750) in the same transaction as its ingestion
+ *       record and mark, so a rollback takes the copy with it; a malformed fact is not copied;
  *   <li>every other type on the topic (high-volume snapshots) is ignored without recording its
  *       eventId.
  * </ul>
@@ -114,6 +116,7 @@ public class InventoryEventsListener {
     private final InventoryAdjustmentPostingService adjustmentPostingService;
     private final InventoryRevaluationPostingService revaluationPostingService;
     private final GoodsReceiptAccrualPostingService goodsReceiptPostingService;
+    private final GoodsReceiptReplica goodsReceiptReplica;
     private final KafkaFactIngestionRecorder ingestionRecorder;
     private final @Nullable MeterRegistry meterRegistry;
     private final @Nullable Counter payloadRejectedCounter;
@@ -131,6 +134,7 @@ public class InventoryEventsListener {
             InventoryAdjustmentPostingService adjustmentPostingService,
             InventoryRevaluationPostingService revaluationPostingService,
             GoodsReceiptAccrualPostingService goodsReceiptPostingService,
+            GoodsReceiptReplica goodsReceiptReplica,
             KafkaFactIngestionRecorder ingestionRecorder,
             ObjectProvider<MeterRegistry> meterRegistry,
             PlatformTransactionManager transactionManager,
@@ -143,6 +147,7 @@ public class InventoryEventsListener {
         this.adjustmentPostingService = adjustmentPostingService;
         this.revaluationPostingService = revaluationPostingService;
         this.goodsReceiptPostingService = goodsReceiptPostingService;
+        this.goodsReceiptReplica = goodsReceiptReplica;
         this.ingestionRecorder = ingestionRecorder;
         this.handlerTransaction = new TransactionTemplate(transactionManager);
         this.handlerTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
@@ -299,12 +304,11 @@ public class InventoryEventsListener {
         switch (goodsReceiptPostingService.assess(fact)) {
             case GoodsReceiptAccrualPostingService.Assessment.CurrencyNotSupported held -> {
                 log.warn("Goods receipt held for its currency | eventId={} | {}", eventId, held.detail());
-                hold(
-                        eventType,
-                        eventId,
-                        HOLD_REASON_CURRENCY,
-                        () -> ingestionRecorder.recordCurrencyHeld(
-                                SOURCE_SYSTEM, eventType, eventId, receiptId, transactionDate, fact, held.detail()));
+                hold(eventType, eventId, HOLD_REASON_CURRENCY, () -> {
+                    ingestionRecorder.recordCurrencyHeld(
+                            SOURCE_SYSTEM, eventType, eventId, receiptId, transactionDate, fact, held.detail());
+                    goodsReceiptReplica.recorded(fact);
+                });
             }
             case GoodsReceiptAccrualPostingService.Assessment.Malformed malformed -> {
                 log.error("Goods receipt held as malformed | eventId={} | {}", eventId, malformed.detail());
@@ -325,7 +329,14 @@ public class InventoryEventsListener {
             }
             case GoodsReceiptAccrualPostingService.Assessment.Uncosted uncosted -> {
                 log.warn("Skipping uncosted goods receipt | eventId={} | {}", eventId, uncosted.detail());
-                skipUncosted(eventType, eventId, receiptId, transactionDate, fact, uncosted.detail());
+                skipUncosted(
+                        eventType,
+                        eventId,
+                        receiptId,
+                        transactionDate,
+                        fact,
+                        uncosted.detail(),
+                        () -> goodsReceiptReplica.recorded(fact));
             }
             case GoodsReceiptAccrualPostingService.Assessment.NothingToPost _ -> {
                 log.info("Goods receipt accrues and values nothing | eventId={} | receiptId={}", eventId, receiptId);
@@ -333,6 +344,7 @@ public class InventoryEventsListener {
                     handlerTransaction.executeWithoutResult(_ -> {
                         ingestionRecorder.recordNothingToPost(
                                 SOURCE_SYSTEM, eventType, eventId, receiptId, transactionDate, fact);
+                        goodsReceiptReplica.recorded(fact);
                         markProcessed(eventId);
                     });
                 } catch (DatabindException e) {
@@ -343,7 +355,11 @@ public class InventoryEventsListener {
                 post(
                         eventType,
                         eventId,
-                        () -> goodsReceiptPostingService.postAccrual(fact),
+                        () -> {
+                            UUID journalEntryId = goodsReceiptPostingService.postAccrual(fact);
+                            goodsReceiptReplica.recorded(fact);
+                            return journalEntryId;
+                        },
                         receiptId,
                         transactionDate,
                         fact,
@@ -423,10 +439,23 @@ public class InventoryEventsListener {
             LocalDateTime transactionDate,
             Object fact,
             String detail) {
+        skipUncosted(eventType, eventId, domainKeyId, transactionDate, fact, detail, () -> {});
+    }
+
+    /** As above, with {@code alsoInTransaction} run in the same transaction (a goods receipt's copy, #2750). */
+    private void skipUncosted(
+            String eventType,
+            String eventId,
+            UUID domainKeyId,
+            LocalDateTime transactionDate,
+            Object fact,
+            String detail,
+            Runnable alsoInTransaction) {
         try {
             handlerTransaction.executeWithoutResult(_ -> {
                 ingestionRecorder.recordUncostedSkip(
                         SOURCE_SYSTEM, eventType, eventId, domainKeyId, transactionDate, fact, detail);
+                alsoInTransaction.run();
                 markProcessed(eventId);
             });
         } catch (DatabindException e) {
