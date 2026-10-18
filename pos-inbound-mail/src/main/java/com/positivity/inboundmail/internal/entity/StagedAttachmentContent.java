@@ -8,6 +8,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import com.positivity.shared.id.UUIDv7Id;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,5 +41,14 @@ public class StagedAttachmentContent extends TenantScopedEntity {
     public StagedAttachmentContent(UUID ref, byte[] content) {
         this.ref = ref;
         this.content = content;
+    }
+
+    /**
+     * Explicit dependency hook for the ArchUnit UUIDv7 rule: the id is the owning attachment's UUIDv7 ref,
+     * assigned from it and never generated here.
+     */
+    @Transient
+    public Class<?> uuidv7Dependency() {
+        return UUIDv7Id.class;
     }
 }
