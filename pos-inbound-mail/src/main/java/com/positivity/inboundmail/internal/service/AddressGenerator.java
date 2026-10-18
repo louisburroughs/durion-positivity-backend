@@ -3,6 +3,7 @@ package com.positivity.inboundmail.internal.service;
 import com.positivity.inboundmail.internal.config.InboundMailProperties;
 import java.security.SecureRandom;
 import org.jspecify.annotations.NonNull;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,6 +22,7 @@ public class AddressGenerator {
     private final SecureRandom random;
     private final String domain;
 
+    @Autowired
     public AddressGenerator(InboundMailProperties properties) {
         this(new SecureRandom(), properties.domain());
     }
