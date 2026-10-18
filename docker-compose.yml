@@ -621,6 +621,8 @@ services:
       # CAP:550 S32c (ADR-0071 §6): the tax-registration front door's per-caller secret, the value pos-tax expects.
       # No default: unset, every registration write answers 503 (fail closed).
       POS_TAX_ACCOUNTING_SECRET: ${POS_TAX_ACCOUNTING_SECRET:-}
+      # CAP:550 S27: pos-accounting's calls to pos-inbound-mail (X-Inbound-Mail-Secret); read from Part C.
+      POS_INBOUND_MAIL_API_SECRET: ${POS_INBOUND_MAIL_API_SECRET:-}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_accounting_db
       # ADR-0062 (plan WS3): the pool is the non-owner pos_app role; Flyway alone uses the owner.
       SPRING_DATASOURCE_USERNAME: pos_app
@@ -1898,6 +1900,64 @@ services:
     depends_on:
       eureka-server:
         condition: service_healthy
+    logging: *logging
+    networks:
+      - pos-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 300s
+
+  # CAP:550 S27 (#2520): inbound-mail edge. Holds the intake-address registry and staged attachments in its
+  # own database (operating state only); called by pos-accounting with X-Inbound-Mail-Secret, no gateway route.
+  pos-inbound-mail:
+    build:
+      context: ./pos-inbound-mail
+      dockerfile: Dockerfile
+    # No external ports exposed - internal service only (pos-accounting calls it directly; no gateway route)
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_inbound_mail_db
+      # ADR-0062: the pool is the non-owner pos_app role; Flyway alone uses the owner credential.
+      SPRING_DATASOURCE_USERNAME: pos_app
+      SPRING_DATASOURCE_PASSWORD: ${POS_APP_PASSWORD:-${POSTGRES_PASSWORD}}
+      SPRING_FLYWAY_USER: ${POSTGRES_USER}
+      SPRING_FLYWAY_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.postgresql.Driver
+      # Security env carries the Prometheus scrape credentials GatewaySecurityConfig checks.
+      <<: [ *pos-security-client-env, *pos-events-client-env, *db-pool-small ]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+      # The edge never reaches AWS through the instance profile (S27 ruling 10): any container that could
+      # reach IMDS would otherwise read every tenant's raw mail. Part B builds explicit credentials.
+      AWS_EC2_METADATA_DISABLED: "true"
+      # Edge API secret (X-Inbound-Mail-Secret); no default, unset refuses every request.
+      POS_INBOUND_MAIL_API_SECRET: ${POS_INBOUND_MAIL_API_SECRET:-}
+      # 'none' receives nothing (the only source until the platform owner's SES sign-off, Part B).
+      POS_INBOUND_MAIL_SOURCE: ${POS_INBOUND_MAIL_SOURCE:-none}
+      # Domain of every intake address; mail.invalid can never be a real mailbox.
+      POS_INBOUND_MAIL_DOMAIN: ${POS_INBOUND_MAIL_DOMAIN:-mail.invalid}
+      # The staging purge visits each active tenant: it reads pos-tenant's registry (no default tenant here).
+      POS_TENANCY_REGISTRY_MODE: ${POS_TENANCY_REGISTRY_MODE:-REMOTE}
+      POS_TENANT_REGISTRY_API_SECRET: ${POS_TENANT_REGISTRY_API_SECRET:-}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    # Hardening: it holds tenant mail metadata and attachment bytes, so run read-only and unprivileged.
+    read_only: true
+    tmpfs:
+      - /tmp
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 768m
+    pids_limit: 256
     logging: *logging
     networks:
       - pos-network

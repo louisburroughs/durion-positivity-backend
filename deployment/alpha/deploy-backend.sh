@@ -991,6 +991,7 @@ DOMAIN_SERVICES=(
   pos-customer
   pos-documents
   pos-image
+  pos-inbound-mail
   pos-inventory
   pos-invoice
   pos-location

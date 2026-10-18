@@ -107,6 +107,9 @@ services:
   pos-platform-sender:
     environment: *accelerated-env
 
+  pos-inbound-mail:
+    environment: *accelerated-env
+
   pos-mcp-server:
     environment: *accelerated-env
 

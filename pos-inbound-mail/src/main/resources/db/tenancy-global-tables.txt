@@ -1,0 +1,7 @@
+# pos-inbound-mail: tables with no row-level-security policy and no tenant discriminator (ADR-0062 section 5);
+# a tenant_id column here is plain data, as on inbound_address and event_outbox.
+# Format: <table>  # <reason>. Every other table in this module is tenant-scoped.
+# TenancySchemaConformanceIT reads this file.
+inbound_address  # address registry: the receive path resolves a recipient to its tenant before any tenant is bound (tenant_id carried as data)
+event_outbox  # transactional outbox; the unbound poller publishes every tenant's rows (tenant_id carried as data)
+processed_events  # consumer idempotency ledger keyed by event id, deduplicated across tenants; tenant_id carried as data for per-tenant reconciliation

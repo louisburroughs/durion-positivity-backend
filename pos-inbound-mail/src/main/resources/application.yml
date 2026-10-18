@@ -1,0 +1,96 @@
+spring:
+  application:
+    name: inbound-mail
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:org.postgresql.Driver}
+    hikari:
+      data-source-properties:
+        # ADR-0072 (#2650): no pgjdbc "Failing row contains" detail in driver messages; guarded by PgjdbcServerErrorDetailTest.
+        logServerErrorDetail: false
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+  servlet:
+    multipart:
+      enabled: false
+
+server:
+  port: 0
+  tomcat:
+    max-http-header-size: 65536
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:}
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        inboundmail: INFO
+
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  default-produces-media-type: application/json
+
+pos:
+  tenancy:
+    # Deliberately NO default tenant (unlike the other modules): every request must carry the caller's
+    # X-Tenant-Id or it is a 401 TENANT_REQUIRED (S27 ruling 11). The edge never invents a tenant.
+    default-tenant-id: ${POS_TENANCY_DEFAULT_TENANT_ID:}
+    registry:
+      # The staging purge visits each active tenant (TenantIterator); with no default tenant a static
+      # list would be empty, so deployed profiles read pos-tenant's list. dev and test profiles use STATIC.
+      mode: ${POS_TENANCY_REGISTRY_MODE:REMOTE}
+      url: ${POS_TENANCY_REGISTRY_URL:http://pos-tenant:8080/internal/v1/tenants}
+      secret: ${POS_TENANT_REGISTRY_API_SECRET:}
+  inbound-mail:
+    # Shared secret callers send as X-Inbound-Mail-Secret. Blank refuses every request.
+    api-secret: ${POS_INBOUND_MAIL_API_SECRET:}
+    # Mail source: 'none' (receive nothing; the only source in Part A and until the platform owner's
+    # SES sign-off) or, from Part B, 'ses'.
+    source: ${POS_INBOUND_MAIL_SOURCE:none}
+    # Domain of every intake address: bills-<26 base32 characters>@<domain>. mail.invalid is a reserved
+    # TLD: unset, no address can ever be a real mailbox.
+    domain: ${POS_INBOUND_MAIL_DOMAIN:mail.invalid}
+    # Staged attachments older than this are purged (ISO-8601 duration).
+    staging-ttl: ${POS_INBOUND_MAIL_STAGING_TTL:P7D}
+    # Cron of the nightly staging purge, once per active tenant.
+    staging-purge-cron: ${POS_INBOUND_MAIL_STAGING_PURGE_CRON:0 15 3 * * *}
+    # Largest staged attachment the fetch endpoint will stream, in bytes (pos-accounting's S25 limit is 25 MB).
+    max-attachment-bytes: ${POS_INBOUND_MAIL_MAX_ATTACHMENT_BYTES:26214400}
+  security:
+    base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}

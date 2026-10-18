@@ -47,6 +47,7 @@ class TenancyArchitectureTest {
         "com.positivity.warranty..",
         "com.positivity.people..",
         "com.positivity.invoice..",
+        "com.positivity.inboundmail..",
         "com.positivity.marketing..",
         "com.positivity.vehicle..",
         "com.positivity.price..",

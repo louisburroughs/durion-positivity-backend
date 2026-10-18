@@ -41,6 +41,7 @@ class EntityStandardsArchitectureTest {
         "com.positivity.accounting.internal.bankfeed.file.entity..",
         // Bill intake (CAP:550 S25, #2518).
         "com.positivity.accounting.internal.billintake.entity..",
+        "com.positivity.inboundmail.internal.entity..",
         "com.positivity.invoice.internal.entity..",
         "com.positivity.order.internal.entity..",
         "com.positivity.people.internal.entity..",
