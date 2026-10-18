@@ -93,24 +93,37 @@ class BillIntakeEmailEventsTest {
         assertThat(summary.fromAddress()).isNull();
     }
 
-    @Test
-    @DisplayName("the subject is stripped of control characters and cut to 200 characters")
-    void subjectIsCleaned() {
-        BillIntakeEmailReceivedV1 command = new BillIntakeEmailReceivedV1(
-                ID,
-                ID,
-                ID,
-                AT,
-                SENDER,
-                "Bill\r\nBcc: x\u0000" + "y".repeat(300),
-                Status.ACCEPTED,
-                null,
-                null,
-                List.of(),
-                List.of());
+    private static String subjectOf(String raw) {
+        return new BillIntakeEmailReceivedV1(
+                        ID, ID, ID, AT, SENDER, raw, Status.ACCEPTED, null, null, List.of(), List.of())
+                .subject();
+    }
 
-        assertThat(command.subject()).hasSize(BillIntakeEmailReceivedV1.MAX_SUBJECT_LENGTH);
-        assertThat(command.subject()).doesNotContain("\r", "\n", "\u0000");
+    @Test
+    @DisplayName("control, format and separator characters are stripped, not replaced by spaces")
+    void subjectIsStripped() {
+        assertThat(subjectOf("Bill\r\nBcc: x\u0000y")).isEqualTo("BillBcc: xy");
+        assertThat(subjectOf("a\u0085b")).as("C1 control NEL").isEqualTo("ab");
+        assertThat(subjectOf("pay\u202Etxt.exe")).as("U+202E right-to-left override").isEqualTo("paytxt.exe");
+        assertThat(subjectOf("x\u200By")).as("zero-width space is a format character").isEqualTo("xy");
+        assertThat(subjectOf("l1\u2028l2\u2029l3")).as("line and paragraph separators").isEqualTo("l1l2l3");
+        assertThat(subjectOf("Invoice 4471 \u00e9")).as("ordinary text survives").isEqualTo("Invoice 4471 \u00e9");
+    }
+
+    @Test
+    @DisplayName("the subject is cut to 200 code points and never inside a surrogate pair")
+    void subjectIsCutByCodePoint() {
+        assertThat(subjectOf("y".repeat(300))).hasSize(200);
+
+        String emojiAtBoundary = "a".repeat(199) + "\uD83D\uDE00" + "tail";
+        String cut = subjectOf(emojiAtBoundary);
+        assertThat(cut.codePointCount(0, cut.length())).isEqualTo(200);
+        assertThat(cut).endsWith("\uD83D\uDE00").doesNotContain("tail");
+
+        String emojiPastBoundary = "a".repeat(200) + "\uD83D\uDE00";
+        String cut2 = subjectOf(emojiPastBoundary);
+        assertThat(cut2).isEqualTo("a".repeat(200));
+        assertThat(Character.isHighSurrogate(cut2.charAt(cut2.length() - 1))).isFalse();
     }
 
     @Test

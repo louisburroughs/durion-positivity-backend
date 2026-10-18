@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -31,8 +32,8 @@ import org.jspecify.annotations.Nullable;
  * @param receivingAddressId the registry id of the address the message was sent to
  * @param receivedAt when the transport received the message
  * @param fromAddress the authenticated outer {@code From} address; absent on a rate-limit summary
- * @param subject the subject as text, control characters stripped and at most {@value #MAX_SUBJECT_LENGTH}
- *     characters; absent on a rate-limit summary
+ * @param subject the subject as text, control, format and separator characters stripped and at most
+ *     {@value #MAX_SUBJECT_LENGTH} code points; absent on a rate-limit summary
  * @param status {@code ACCEPTED} (its attachments follow) or {@code REJECTED} ({@link #rejectionReason} says why)
  * @param rejectionReason the edge's reason name for a {@code REJECTED} command, for example {@code
  *     SENDER_NOT_AUTHENTICATED}, {@code NO_ATTACHMENT} or {@code RATE_LIMITED}; required when rejected
@@ -58,6 +59,8 @@ public record BillIntakeEmailReceivedV1(
     public static final int SCHEMA_VERSION = 1;
     public static final int MAX_SUBJECT_LENGTH = 200;
     public static final int MAX_ATTACHMENTS = 20;
+
+    private static final Pattern SUBJECT_STRIPPED = Pattern.compile("[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]");
 
     /** Whether the edge accepted the message's attachments or rejected the message. */
     public enum Status {
@@ -153,13 +156,19 @@ public record BillIntakeEmailReceivedV1(
         }
     }
 
-    /** Strips control characters and cuts the subject to {@link #MAX_SUBJECT_LENGTH}; the producer's duty, enforced here. */
+    /**
+     * Strips control, format and line/paragraph-separator characters (so a CR/LF or a right-to-left override
+     * cannot dress up the subject) and cuts it to {@link #MAX_SUBJECT_LENGTH} code points, never inside a
+     * surrogate pair. The producer's duty (ruling 6), enforced here.
+     */
     private static @Nullable String cleanSubject(@Nullable String subject) {
         if (subject == null) {
             return null;
         }
-        String cleaned = subject.replaceAll("\\p{Cntrl}", " ");
-        return cleaned.length() > MAX_SUBJECT_LENGTH ? cleaned.substring(0, MAX_SUBJECT_LENGTH) : cleaned;
+        String cleaned = SUBJECT_STRIPPED.matcher(subject).replaceAll("");
+        return cleaned.codePointCount(0, cleaned.length()) > MAX_SUBJECT_LENGTH
+                ? cleaned.substring(0, cleaned.offsetByCodePoints(0, MAX_SUBJECT_LENGTH))
+                : cleaned;
     }
 
     @Override
