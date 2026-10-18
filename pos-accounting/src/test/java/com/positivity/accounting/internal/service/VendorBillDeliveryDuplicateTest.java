@@ -47,7 +47,7 @@ class VendorBillDeliveryDuplicateTest {
                 .thenReturn(List.of(goodsReceiptBill()));
 
         assertThatThrownBy(() -> guard.refuseIfDeliveryDuplicate(
-                        VendorBillDuplicateGuard.Channel.UPLOAD, VENDOR, "INV-1", DATE, " po-042 ", " dn-088213 "))
+                        VendorBillDuplicateGuard.Channel.UPLOAD, VENDOR, "INV-1", DATE, " po-42 ", " dn-088213 "))
                 .isInstanceOfSatisfying(VendorBillDuplicateException.class, e -> {
                     assertThat(e.getMatchedBy()).isEqualTo(VendorBillDuplicateException.MatchedBy.DELIVERY_REFERENCE);
                     assertThat(e.getMessage()).contains("BILL_X_1").doesNotContain("018f0a1b");
