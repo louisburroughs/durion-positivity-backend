@@ -87,6 +87,10 @@ public class RenderingService {
                     new SandboxRequest(SandboxRequest.RENDER, declaredType, page, properties.sandboxLimits());
             SandboxOutcome run =
                     sandbox.run(dir.path(), request, properties.deadline().render());
+            if (run instanceof SandboxOutcome.Unavailable) {
+                outcome = "UNAVAILABLE";
+                throw new WorkerUnavailableException();
+            }
             if (run instanceof SandboxOutcome.TimedOut || run instanceof SandboxOutcome.OutOfMemory) {
                 reason = ReasonCode.RESOURCE_LIMIT_EXCEEDED;
                 throw new PageNotRenderableException();
