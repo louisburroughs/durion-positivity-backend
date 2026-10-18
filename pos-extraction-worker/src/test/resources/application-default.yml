@@ -1,0 +1,6 @@
+# Loaded for the worker's Spring tests: they activate no profile, and Spring Boot reads
+# application-default.* whenever no profile is active. Main's application.yml still applies underneath.
+pos:
+  extraction-worker:
+    api-secret: test-worker-secret
+    scratch-dir: ${java.io.tmpdir}/extraction-worker-test-scratch

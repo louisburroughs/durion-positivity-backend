@@ -18,7 +18,7 @@ AGGREGATE_OUTPUT="pos-api-gateway/docs/openapi-aggregate.yaml"
 # their spec documents a service-to-service API, not one a client can reach (#2428).
 # pos-tax (CAP:550 S32c): internal-only (ADR-0021); its tax-registration writes accept only the pos-accounting
 # front door, by per-caller secret (ADR-0071 §6), so they must never reach the gateway index or an SDK.
-AGGREGATE_EXCLUDED_MODULES=(pos-platform-sender pos-tax)
+AGGREGATE_EXCLUDED_MODULES=(pos-platform-sender pos-tax pos-extraction-worker)
 VALIDATION_MODE="${OPENAPI_VALIDATION_MODE:-report}"
 GENERATE_PERMISSIONS=true
 

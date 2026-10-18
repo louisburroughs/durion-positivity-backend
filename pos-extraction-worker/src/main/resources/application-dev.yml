@@ -1,0 +1,14 @@
+# Local JVM: a scratch directory that exists, details visible. The worker does not register with Eureka.
+pos:
+  extraction-worker:
+    scratch-dir: ${java.io.tmpdir}/extraction-worker-scratch
+
+server:
+  port: 0
+
+management:
+  server:
+    port: 0
+  endpoint:
+    health:
+      show-details: always

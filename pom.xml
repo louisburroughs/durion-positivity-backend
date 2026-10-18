@@ -307,6 +307,7 @@
 		<module>pos-warranty</module>
 		<module>pos-marketing</module>
 		<module>pos-platform-sender</module>
+		<module>pos-extraction-worker</module>
 		<module>pos-document-helper</module>
 		<module>pos-bulk-ingest-lib</module>
 		<module>pos-bulk-loader</module>
@@ -386,6 +387,11 @@
 		<vavr.version>0.10.4</vavr.version>
 		<spring-ai.version>2.0.1</spring-ai.version>
 		<aws-sdk.version>2.55.11</aws-sdk.version>
+		<!-- pos-extraction-worker (CAP:550 S26): the parsers of untrusted bill files. Only that module may use
+		     them, and only inside its child JVM (S26 ruling 5; ArchUnit rule in the module). -->
+		<pdfbox.version>3.0.5</pdfbox.version>
+		<poi.version>5.4.1</poi.version>
+		<commons-csv.version>1.12.0</commons-csv.version>
 		<!-- Build Plugins -->
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>

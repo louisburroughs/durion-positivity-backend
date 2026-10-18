@@ -990,6 +990,8 @@ DOMAIN_SERVICES=(
   pos-catalog
   pos-customer
   pos-documents
+  pos-extraction-worker
+extraction-proxy
   pos-image
   pos-inventory
   pos-invoice

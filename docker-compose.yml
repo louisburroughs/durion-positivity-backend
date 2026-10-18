@@ -77,6 +77,7 @@ services:
     logging: *logging
     networks:
       - pos-network
+      - extraction-net
 
   # Grafana - Visualization and Dashboards
   grafana:
@@ -117,6 +118,7 @@ services:
     logging: *logging
     networks:
       - pos-network
+      - extraction-net
 
   # Loki - Log aggregation (#858)
   loki:
@@ -621,6 +623,12 @@ services:
       # CAP:550 S32c (ADR-0071 §6): the tax-registration front door's per-caller secret, the value pos-tax expects.
       # No default: unset, every registration write answers 503 (fail closed).
       POS_TAX_ACCOUNTING_SECRET: ${POS_TAX_ACCOUNTING_SECRET:-}
+      # CAP:550 S26 (#2519): shared secret for the extraction worker (X-Extraction-Worker-Secret); the worker
+      # holds the same value. No default: unset, the worker refuses every call (fail closed).
+      POS_EXTRACTION_WORKER_API_SECRET: ${POS_EXTRACTION_WORKER_API_SECRET:-}
+      # The worker is reached through extraction-proxy (pos-accounting is not on extraction-net, so a
+      # compromised parser has no route to it). Part D's client reads this base URL.
+      POS_ACCOUNTING_BILL_INTAKE_EXTRACTION_BASE_URL: ${POS_ACCOUNTING_BILL_INTAKE_EXTRACTION_BASE_URL:-http://extraction-proxy:8080}
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pos_accounting_db
       # ADR-0062 (plan WS3): the pool is the non-owner pos_app role; Flyway alone uses the owner.
       SPRING_DATASOURCE_USERNAME: pos_app
@@ -1860,6 +1868,83 @@ services:
       retries: 12
       start_period: 300s
 
+  pos-extraction-worker:
+    build:
+      context: ./pos-extraction-worker
+      dockerfile: Dockerfile
+    # No external ports, no Eureka registration, no gateway route. Not on pos-network: extraction-net is
+    # internal, so the worker has no route to the internet, IMDS, pos-accounting or Eureka (S26 ruling 11).
+    # Callers reach it through extraction-proxy only.
+    environment:
+      # Security env carries the Prometheus scrape credentials GatewaySecurityConfig checks.
+      <<: *pos-security-client-env
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_METRICS_EXPORTER: none # app metrics are pull-only via /actuator/prometheus (#867)
+      SERVER_PORT: 8080
+      MANAGEMENT_SERVER_PORT: 8080
+      # The shared secret is a mounted file, not an environment variable: /proc/<pid>/environ is readable
+      # by every process of this uid, the parse children included. Blank refuses every call.
+      POS_EXTRACTION_WORKER_API_SECRET_FILE: /run/secrets/extraction_worker_secret
+      # Provider list in order. 'none' answers every extract UNAVAILABLE and never parses (README).
+      POS_EXTRACTION_WORKER_PROVIDERS: ${POS_EXTRACTION_WORKER_PROVIDERS:-none}
+      # The worker never reads instance-profile credentials, and has no route to IMDS anyway.
+      AWS_EC2_METADATA_DISABLED: "true"
+    secrets:
+      - extraction_worker_secret
+    logging: *logging
+    networks:
+      - extraction-net
+    # Outer bound for the parse sandbox (S26 ruling 5): the web JVM never parses a file; each parse is a
+    # child JVM with its own heap cap. Sizing (README): web ~0.45 G + 2 slots x (0.5 G heap + 0.25 G
+    # non-heap) + 0.5 G tmpfs = ~2.45 G, so 3 G leaves margin. tmpfs counts against it.
+    read_only: true
+    tmpfs:
+      - /scratch:size=512m,mode=0700,uid=10001
+      - /tmp:size=64m
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 3g
+    cpus: 2.0
+    # Tomcat is capped at 16 threads (application.yml); web JVM ~45 threads, each child ~30, heif-dec a few.
+    pids_limit: 128
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 120s
+
+  # Forwards /extraction-worker/v1/ to the worker and nothing else (nginx, read-only, unprivileged). On both
+  # networks so pos-accounting reaches the worker without joining extraction-net.
+  extraction-proxy:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    volumes:
+      - ./pos-extraction-worker/proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - pos-extraction-worker
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    user: "101:101"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 32
+    logging: *logging
+    networks:
+      - pos-network
+      - extraction-net
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
   pos-platform-sender:
     build:
       context: ./pos-platform-sender
@@ -2018,9 +2103,23 @@ services:
       - pos-network
 
 # Docker Networks
+secrets:
+  # Sourced from the POS_EXTRACTION_WORKER_API_SECRET variable of the Compose environment (.env); mounted
+  # as a file in the worker. Unset or blank: the worker refuses every call.
+  extraction_worker_secret:
+    environment: POS_EXTRACTION_WORKER_API_SECRET
+
 networks:
   pos-network:
     driver: bridge
+  # CAP:550 S26 (#2519, ruling 11): the extraction worker's only network. internal: true means no
+  # route out, so the worker has no internet and no IMDS. Members: extraction-proxy (the one door for
+  # pos-accounting), prometheus (scrapes the worker; residual risk: its read-only API is reachable from a
+  # compromised parser) and otel-collector (receives spans only). pos-accounting and eureka-server are
+  # NOT members: no service with a gateway chain or a registry API shares a network with the parsers.
+  extraction-net:
+    driver: bridge
+    internal: true
 
 # Docker Volumes for Observability Data Persistence
 volumes:

@@ -1,0 +1,4 @@
+<configuration>
+    <!-- The parse child logs nothing: a library message can quote file content (ADR-0072). -->
+    <root level="OFF"/>
+</configuration>

@@ -1,0 +1,96 @@
+spring:
+  application:
+    name: extraction-worker
+  servlet:
+    multipart:
+      # The file goes to the scratch dir, never held in memory; each call deletes its own copy.
+      max-file-size: 25MB
+      max-request-size: 26MB
+      file-size-threshold: 0
+      location: ${pos.extraction-worker.scratch-dir}
+
+server:
+  port: 0
+  tomcat:
+    max-http-header-size: 65536
+    # The container's pids_limit is 128 (Compose): 16 request threads + 2 slots' children keep well under it.
+    threads:
+      max: 16
+      min-spare: 2
+    accept-count: 20
+
+management:
+  server:
+    port: 0
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    root: INFO
+    org:
+      springframework: INFO
+    com:
+      positivity:
+        extractionworker: INFO
+      netflix:
+        discovery:
+          shared:
+            resolver:
+              aws:
+                ConfigClusterResolver: WARN
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+  default-produces-media-type: application/json
+
+pos:
+  extraction-worker:
+    # Shared secret callers send as X-Extraction-Worker-Secret. Blank refuses every call (401).
+    # Local-development fallback only; Compose and alpha mount a file (below) and pass no variable.
+    api-secret: ${POS_EXTRACTION_WORKER_API_SECRET:}
+    # File holding the secret; wins over api-secret. Unreadable or blank refuses every call.
+    api-secret-file: ${POS_EXTRACTION_WORKER_API_SECRET_FILE:}
+    # A tmpfs in Compose; each call's private directory is created here and deleted after the call.
+    scratch-dir: ${POS_EXTRACTION_WORKER_SCRATCH_DIR:/scratch}
+    # Calls admitted at once; the next is answered 503 WORKER_BUSY.
+    max-concurrent-parses: ${POS_EXTRACTION_WORKER_MAX_CONCURRENT_PARSES:2}
+    max-file-bytes: 26214400
+    sandbox:
+      child-heap: ${POS_EXTRACTION_WORKER_CHILD_HEAP:512m}
+    deadline:
+      inspect: PT30S
+      render: PT30S
+      tabulate: PT30S
+      extract: PT120S
+    pdf:
+      max-pages: 30
+      max-stream-cache-bytes: 268435456
+    image:
+      max-pixels: 50000000
+      max-tiff-frames: 30
+    spreadsheet:
+      max-rows: 10000
+      max-columns: 100
+      max-cell-chars: 1000
+      max-zip-entries: 10000
+      max-zip-entry-bytes: 104857600
+      max-zip-total-bytes: 209715200
+      min-inflate-ratio: 0.01
+    render:
+      dpi: 150
+      max-pixels: 25000000
+    heif:
+      binary: heif-dec
+      timeout: PT20S
+      max-memory-mb: 1024
+  security:
+    base-url: ${POS_SECURITY_BASE_URL:http://pos-security-service:8080}
