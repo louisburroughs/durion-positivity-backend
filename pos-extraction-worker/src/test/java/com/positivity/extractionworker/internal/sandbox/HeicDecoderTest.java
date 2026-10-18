@@ -28,7 +28,8 @@ class HeicDecoderTest {
     /** A file that looks like HEIC to the magic check and carries one {@code ispe} box. */
     private static byte[] heicDeclaring(int width, int height) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        out.writeBytes(new byte[] {0, 0, 0, 24, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0, 0, 0, 0, 'm', 'i', 'f', '1'});
+        out.writeBytes(
+                new byte[] {0, 0, 0, 24, 'f', 't', 'y', 'p', 'h', 'e', 'i', 'c', 0, 0, 0, 0, 'm', 'i', 'f', '1'});
         out.writeBytes(new byte[] {0, 0, 0, 20, 'i', 's', 'p', 'e', 0, 0, 0, 0});
         out.writeBytes(ByteBuffer.allocate(8).putInt(width).putInt(height).array());
         return out.toByteArray();
@@ -36,8 +37,21 @@ class HeicDecoderTest {
 
     private SandboxResult inspect(byte[] bytes, String binary) throws IOException {
         Files.write(dir.resolve(ParseMain.INPUT_FILE), bytes);
-        SandboxLimits limits = new SandboxLimits(30, 30, 50_000_000L, 25_000_000L, 150, 10_000, 100, 1_000, 10_000,
-                104_857_600L, 209_715_200L, 0.01, binary, 20);
+        SandboxLimits limits = new SandboxLimits(
+                30,
+                30,
+                50_000_000L,
+                25_000_000L,
+                150,
+                10_000,
+                100,
+                1_000,
+                10_000,
+                104_857_600L,
+                209_715_200L,
+                0.01,
+                binary,
+                20);
         return ParseMain.execute(dir, new SandboxRequest(SandboxRequest.INSPECT, DeclaredType.HEIC, 0, limits));
     }
 

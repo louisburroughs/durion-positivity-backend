@@ -54,8 +54,21 @@ class RendererTest {
 
     @Test
     void pdfRenderingLowersTheDpiToStayWithinThePixelCap() throws IOException {
-        SandboxLimits capped = new SandboxLimits(30, 30, 50_000_000L, 100_000L, 150, 10_000, 100, 1_000, 10_000,
-                104_857_600L, 209_715_200L, 0.01, "heif-dec", 20);
+        SandboxLimits capped = new SandboxLimits(
+                30,
+                30,
+                50_000_000L,
+                100_000L,
+                150,
+                10_000,
+                100,
+                1_000,
+                10_000,
+                104_857_600L,
+                209_715_200L,
+                0.01,
+                "heif-dec",
+                20);
 
         render(DeclaredType.PDF, TestCorpus.pdf(1), 1, capped);
 
@@ -74,15 +87,19 @@ class RendererTest {
 
     @Test
     void imagesAreReEncodedAsPng() throws IOException {
-        assertThat(render(DeclaredType.JPEG, TestCorpus.image("jpeg", 50, 40), 1, TestCorpus.limits()).outcome())
+        assertThat(render(DeclaredType.JPEG, TestCorpus.image("jpeg", 50, 40), 1, TestCorpus.limits())
+                        .outcome())
                 .isEqualTo(SandboxResult.Outcome.RENDERED);
         BufferedImage fromJpeg = page();
         assertThat(fromJpeg.getWidth()).isEqualTo(50);
-        assertThat(Files.readAllBytes(dir.resolve(SandboxResult.RENDERED_FILE))[1]).isEqualTo((byte) 'P');
+        assertThat(Files.readAllBytes(dir.resolve(SandboxResult.RENDERED_FILE))[1])
+                .isEqualTo((byte) 'P');
 
-        assertThat(render(DeclaredType.PNG, TestCorpus.image("png", 20, 20), 1, TestCorpus.limits()).outcome())
+        assertThat(render(DeclaredType.PNG, TestCorpus.image("png", 20, 20), 1, TestCorpus.limits())
+                        .outcome())
                 .isEqualTo(SandboxResult.Outcome.RENDERED);
-        assertThat(render(DeclaredType.PNG, TestCorpus.image("png", 20, 20), 2, TestCorpus.limits()).outcome())
+        assertThat(render(DeclaredType.PNG, TestCorpus.image("png", 20, 20), 2, TestCorpus.limits())
+                        .outcome())
                 .isEqualTo(SandboxResult.Outcome.NOT_RENDERABLE);
     }
 
@@ -98,8 +115,21 @@ class RendererTest {
 
     @Test
     void imageOverThePixelCapIsScaledDown() throws IOException {
-        SandboxLimits capped = new SandboxLimits(30, 30, 50_000_000L, 1_000L, 150, 10_000, 100, 1_000, 10_000,
-                104_857_600L, 209_715_200L, 0.01, "heif-dec", 20);
+        SandboxLimits capped = new SandboxLimits(
+                30,
+                30,
+                50_000_000L,
+                1_000L,
+                150,
+                10_000,
+                100,
+                1_000,
+                10_000,
+                104_857_600L,
+                209_715_200L,
+                0.01,
+                "heif-dec",
+                20);
 
         render(DeclaredType.PNG, TestCorpus.image("png", 100, 100), 1, capped);
 
@@ -109,11 +139,14 @@ class RendererTest {
 
     @Test
     void spreadsheetsAndEncryptedOrOversizedFilesDoNotRender() throws IOException {
-        assertThat(render(DeclaredType.CSV, TestCorpus.csv("a,b\n1,2\n"), 1, TestCorpus.limits()).outcome())
+        assertThat(render(DeclaredType.CSV, TestCorpus.csv("a,b\n1,2\n"), 1, TestCorpus.limits())
+                        .outcome())
                 .isEqualTo(SandboxResult.Outcome.NOT_RENDERABLE);
-        assertThat(render(DeclaredType.PDF, TestCorpus.encryptedPdf("pw"), 1, TestCorpus.limits()).outcome())
+        assertThat(render(DeclaredType.PDF, TestCorpus.encryptedPdf("pw"), 1, TestCorpus.limits())
+                        .outcome())
                 .isEqualTo(SandboxResult.Outcome.NOT_RENDERABLE);
-        assertThat(render(DeclaredType.PDF, TestCorpus.pdf(31), 1, TestCorpus.limits()).outcome())
+        assertThat(render(DeclaredType.PDF, TestCorpus.pdf(31), 1, TestCorpus.limits())
+                        .outcome())
                 .isEqualTo(SandboxResult.Outcome.NOT_RENDERABLE);
         assertThat(render(DeclaredType.PNG, TestCorpus.pngDeclaring(100_000, 100_000), 1, TestCorpus.limits())
                         .outcome())

@@ -69,7 +69,11 @@ final class PdfInspector {
     /** Opens the file with the empty password and the temp-file-only stream cache. */
     static PDDocument load(Path input) throws IOException {
         return Loader.loadPDF(
-                new RandomAccessReadBufferedFile(input.toFile()), "", null, null, IOUtils.createTempFileOnlyStreamCache());
+                new RandomAccessReadBufferedFile(input.toFile()),
+                "",
+                null,
+                null,
+                IOUtils.createTempFileOnlyStreamCache());
     }
 
     /** Counts page-tree leaves, stopping one past {@code limit}. */

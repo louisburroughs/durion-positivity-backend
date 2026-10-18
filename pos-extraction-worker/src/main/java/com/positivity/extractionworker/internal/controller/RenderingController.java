@@ -59,7 +59,10 @@ public class RenderingController {
     @ApiResponse(
             responseCode = "200",
             description = "The page as image/png.",
-            content = @Content(mediaType = MediaType.IMAGE_PNG_VALUE, schema = @Schema(type = "string", format = "binary")))
+            content =
+                    @Content(
+                            mediaType = MediaType.IMAGE_PNG_VALUE,
+                            schema = @Schema(type = "string", format = "binary")))
     @ApiResponse(
             responseCode = "400",
             description = "A part is missing, declaredType is not renderable, or page is below 1.",
@@ -80,7 +83,10 @@ public class RenderingController {
             responseCode = "503",
             description = "Every parse slot is busy; retry after the Retry-After seconds.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
-    @PostMapping(value = "/renderings", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.IMAGE_PNG_VALUE)
+    @PostMapping(
+            value = "/renderings",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.IMAGE_PNG_VALUE)
     public ResponseEntity<byte[]> render(
             @RequestParam("file") MultipartFile file,
             @RequestParam("declaredType") DeclaredType declaredType,

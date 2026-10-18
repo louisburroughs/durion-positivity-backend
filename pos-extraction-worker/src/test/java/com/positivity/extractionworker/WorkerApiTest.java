@@ -61,8 +61,8 @@ class WorkerApiTest {
     }
 
     static MockMultipartHttpServletRequestBuilder authorised(MockMultipartHttpServletRequestBuilder builder) {
-        return (MockMultipartHttpServletRequestBuilder)
-                builder.header(WorkerSecretFilter.SECRET_HEADER, SECRET).header(TenantLabelFilter.TENANT_HEADER, TENANT);
+        return (MockMultipartHttpServletRequestBuilder) builder.header(WorkerSecretFilter.SECRET_HEADER, SECRET)
+                .header(TenantLabelFilter.TENANT_HEADER, TENANT);
     }
 
     private ResultActions inspect(String declaredType, byte[] bytes) throws Exception {
@@ -126,13 +126,15 @@ class WorkerApiTest {
 
     @Test
     void missingPartsAndUnknownTypesAre400() throws Exception {
-        mvc.perform(authorised(multipart(WorkerSecretFilter.PATH_PREFIX + "/inspections")).param("declaredType", "PDF"))
+        mvc.perform(authorised(multipart(WorkerSecretFilter.PATH_PREFIX + "/inspections"))
+                        .param("declaredType", "PDF"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
         mvc.perform(authorised(post("/inspections", "bill.pdf", TestCorpus.pdf(1))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
-        mvc.perform(authorised(post("/inspections", "bill.pdf", TestCorpus.pdf(1))).param("declaredType", "DOCX"))
+        mvc.perform(authorised(post("/inspections", "bill.pdf", TestCorpus.pdf(1)))
+                        .param("declaredType", "DOCX"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -192,8 +194,10 @@ class WorkerApiTest {
                 .andExpect(jsonPath("$.pageCount").value(2))
                 .andExpect(jsonPath("$.detectedType").value("CSV"));
         inspect("XLSX", TestCorpus.xlsx(4, 3)).andExpect(jsonPath("$.pageCount").value(4));
-        inspect("XLSX", TestCorpus.xlsxWithVbaProject()).andExpect(jsonPath("$.reasonCode").value("MACRO_CONTENT"));
-        inspect("XLSX", TestCorpus.xlsxWithEntity()).andExpect(jsonPath("$.reasonCode").value("EXTERNAL_ENTITY"));
+        inspect("XLSX", TestCorpus.xlsxWithVbaProject())
+                .andExpect(jsonPath("$.reasonCode").value("MACRO_CONTENT"));
+        inspect("XLSX", TestCorpus.xlsxWithEntity())
+                .andExpect(jsonPath("$.reasonCode").value("EXTERNAL_ENTITY"));
         inspect("XLSX", TestCorpus.xlsxZipBomb())
                 .andExpect(jsonPath("$.reasonCode").value("DECOMPRESSION_LIMIT_EXCEEDED"));
     }
@@ -279,7 +283,9 @@ class WorkerApiTest {
         render("PNG", TestCorpus.image("png", 40, 40), "1").andExpect(status().isOk());
         mvc.perform(post("/renderings", "bill.pdf", TestCorpus.pdf(1))
                         .header(WorkerSecretFilter.SECRET_HEADER, "wrong")
-                        .header(TenantLabelFilter.TENANT_HEADER, UUID.randomUUID().toString())
+                        .header(
+                                TenantLabelFilter.TENANT_HEADER,
+                                UUID.randomUUID().toString())
                         .param("declaredType", "PDF")
                         .param("page", "1"))
                 .andExpect(status().isUnauthorized());

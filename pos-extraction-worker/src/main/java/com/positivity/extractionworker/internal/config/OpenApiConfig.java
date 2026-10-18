@@ -52,6 +52,7 @@ public class OpenApiConfig {
                                         .in(SecurityScheme.In.HEADER)
                                         .name(TenantLabelFilter.TENANT_HEADER)
                                         .description("Tenant UUID: a log and metric label only, never authorisation")))
-                .addSecurityItem(new SecurityRequirement().addList(WORKER_SECRET_SCHEME).addList(TENANT_SCHEME));
+                .addSecurityItem(
+                        new SecurityRequirement().addList(WORKER_SECRET_SCHEME).addList(TENANT_SCHEME));
     }
 }

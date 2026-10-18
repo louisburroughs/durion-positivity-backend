@@ -52,7 +52,8 @@ public final class SandboxTestMain {
                 System.out.println("SECRET-FILE-CONTENT-IN-STDOUT");
                 Files.writeString(dir.resolve("result.json"), "{\"outcome\":\"ACCEPTED\",\"pageCount\":2}");
             }
-            case "badpages" -> Files.writeString(dir.resolve("result.json"), "{\"outcome\":\"ACCEPTED\",\"pageCount\":-5}");
+            case "badpages" ->
+                Files.writeString(dir.resolve("result.json"), "{\"outcome\":\"ACCEPTED\",\"pageCount\":-5}");
             default -> Files.writeString(dir.resolve("result.json"), "{\"outcome\":\"ACCEPTED\",\"pageCount\":7}");
         }
     }

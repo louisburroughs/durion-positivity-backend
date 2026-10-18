@@ -21,9 +21,7 @@ final class ApiErrorWriter {
     /** The caller's correlation id, or a fresh one. */
     static String correlationId(HttpServletRequest request) {
         String inbound = request.getHeader(X_CORRELATION_ID);
-        return inbound == null || inbound.isBlank()
-                ? UUIDv7Generator.generate().toString()
-                : inbound.trim();
+        return inbound == null || inbound.isBlank() ? UUIDv7Generator.generate().toString() : inbound.trim();
     }
 
     static void unauthorized(

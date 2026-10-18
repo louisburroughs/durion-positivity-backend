@@ -35,7 +35,8 @@ final class CsvInspector {
         }
         String text = decode(bytes);
         char delimiter = sniffDelimiter(text);
-        CSVFormat format = CSVFormat.DEFAULT.builder()
+        CSVFormat format = CSVFormat.DEFAULT
+                .builder()
                 .setDelimiter(delimiter)
                 .setIgnoreEmptyLines(true)
                 .build();

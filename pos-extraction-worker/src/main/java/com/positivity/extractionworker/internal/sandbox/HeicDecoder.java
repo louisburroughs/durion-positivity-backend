@@ -32,7 +32,9 @@ final class HeicDecoder {
         }
         Path out = callDir.resolve("heic-decoded.jpg");
         ProcessBuilder builder = new ProcessBuilder(
-                        limits.heifBinary(), input.toAbsolutePath().toString(), out.toAbsolutePath().toString())
+                        limits.heifBinary(),
+                        input.toAbsolutePath().toString(),
+                        out.toAbsolutePath().toString())
                 .directory(callDir.toFile())
                 .redirectErrorStream(true)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD);
@@ -87,7 +89,10 @@ final class HeicDecoder {
             byte[] bytes = buffer.array();
             int length = buffer.position();
             for (int i = 0; i + ISPE.length + 12 <= length; i++) {
-                if (bytes[i] == ISPE[0] && bytes[i + 1] == ISPE[1] && bytes[i + 2] == ISPE[2] && bytes[i + 3] == ISPE[3]) {
+                if (bytes[i] == ISPE[0]
+                        && bytes[i + 1] == ISPE[1]
+                        && bytes[i + 2] == ISPE[2]
+                        && bytes[i + 3] == ISPE[3]) {
                     long width = readUnsignedInt(bytes, i + 8);
                     long height = readUnsignedInt(bytes, i + 12);
                     long pixels;

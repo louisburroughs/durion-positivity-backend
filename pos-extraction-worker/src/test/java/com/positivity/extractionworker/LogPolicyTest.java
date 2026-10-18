@@ -78,7 +78,8 @@ class LogPolicyTest {
         List<ILoggingEvent> events = List.copyOf(appender.list);
         assertThat(events).isNotEmpty();
         for (ILoggingEvent event : events) {
-            String text = event.getFormattedMessage() + " " + event.getThrowableProxy() + " " + event.getMDCPropertyMap();
+            String text =
+                    event.getFormattedMessage() + " " + event.getThrowableProxy() + " " + event.getMDCPropertyMap();
             assertThat(text)
                     .doesNotContain(FILE_NAME)
                     .doesNotContain("ACME")

@@ -84,7 +84,9 @@ class ScratchAndPoolTest {
         assertThat(pool.inUse()).isEqualTo(2);
         assertThat(registry.get("extraction.pool.in_use").gauge().value()).isEqualTo(2.0);
         assertThat(health.health().getStatus()).isEqualTo(Status.UP);
-        assertThat(health.health().getDetails()).containsEntry("saturated", true).containsEntry("capacity", 2);
+        assertThat(health.health().getDetails())
+                .containsEntry("saturated", true)
+                .containsEntry("capacity", 2);
 
         pool.release();
 

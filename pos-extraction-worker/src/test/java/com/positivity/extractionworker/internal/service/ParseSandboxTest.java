@@ -31,7 +31,10 @@ class ParseSandboxTest {
                 26_214_400L,
                 new ExtractionWorkerProperties.Sandbox(heap, null, mainClass),
                 new ExtractionWorkerProperties.Deadline(
-                        Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(120)),
+                        Duration.ofSeconds(30),
+                        Duration.ofSeconds(30),
+                        Duration.ofSeconds(30),
+                        Duration.ofSeconds(120)),
                 new ExtractionWorkerProperties.Pdf(30),
                 new ExtractionWorkerProperties.Image(50_000_000L, 30),
                 new ExtractionWorkerProperties.Spreadsheet(
@@ -42,15 +45,17 @@ class ParseSandboxTest {
 
     private SandboxOutcome run(String operation, Duration deadline, String heap, String mainClass) {
         ParseSandbox sandbox = new ParseSandbox(properties(mainClass, heap));
-        return sandbox.run(
-                dir, new SandboxRequest(operation, DeclaredType.PDF, 0, TestCorpus.limits()), deadline);
+        return sandbox.run(dir, new SandboxRequest(operation, DeclaredType.PDF, 0, TestCorpus.limits()), deadline);
     }
 
     @Test
     void realChildInspectsAPdfEndToEnd() throws IOException {
         Files.write(dir.resolve("input"), TestCorpus.pdf(3));
 
-        SandboxOutcome outcome = run("inspect", Duration.ofSeconds(30), "256m",
+        SandboxOutcome outcome = run(
+                "inspect",
+                Duration.ofSeconds(30),
+                "256m",
                 "com.positivity.extractionworker.internal.sandbox.ParseMain");
 
         assertThat(outcome).isInstanceOf(SandboxOutcome.Completed.class);

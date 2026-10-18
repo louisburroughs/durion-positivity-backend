@@ -40,8 +40,20 @@ public final class TestCorpus {
     /** The production defaults. */
     public static SandboxLimits limits() {
         return new SandboxLimits(
-                30, 30, 50_000_000L, 25_000_000L, 150, 10_000, 100, 1_000, 10_000, 104_857_600L, 209_715_200L, 0.01,
-                "heif-dec", 20);
+                30,
+                30,
+                50_000_000L,
+                25_000_000L,
+                150,
+                10_000,
+                100,
+                1_000,
+                10_000,
+                104_857_600L,
+                209_715_200L,
+                0.01,
+                "heif-dec",
+                20);
     }
 
     // ---- PDF ---------------------------------------------------------------------------------------
@@ -201,7 +213,13 @@ public final class TestCorpus {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         out.writeBytes(new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
         ByteBuffer ihdr = ByteBuffer.allocate(13);
-        ihdr.putInt(width).putInt(height).put((byte) 8).put((byte) 2).put((byte) 0).put((byte) 0).put((byte) 0);
+        ihdr.putInt(width)
+                .putInt(height)
+                .put((byte) 8)
+                .put((byte) 2)
+                .put((byte) 0)
+                .put((byte) 0)
+                .put((byte) 0);
         chunk(out, "IHDR", ihdr.array());
         chunk(out, "IDAT", new byte[] {0x78, (byte) 0x9C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01});
         chunk(out, "IEND", new byte[0]);

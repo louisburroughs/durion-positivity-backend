@@ -97,13 +97,12 @@ public class WorkerExceptionHandler {
         String correlationId = correlationId(request);
         response.setHeader(X_CORRELATION_ID, correlationId);
         return ResponseEntity.status(status)
-                .body(ApiError.of(code, message, status.value(), Instant.now(clock).toString(), correlationId));
+                .body(ApiError.of(
+                        code, message, status.value(), Instant.now(clock).toString(), correlationId));
     }
 
     private static String correlationId(HttpServletRequest request) {
         String inbound = request == null ? null : request.getHeader(X_CORRELATION_ID);
-        return inbound == null || inbound.isBlank()
-                ? UUIDv7Generator.generate().toString()
-                : inbound.trim();
+        return inbound == null || inbound.isBlank() ? UUIDv7Generator.generate().toString() : inbound.trim();
     }
 }

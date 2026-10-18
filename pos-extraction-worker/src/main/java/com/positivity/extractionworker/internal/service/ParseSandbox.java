@@ -44,7 +44,8 @@ public class ParseSandbox {
         this.properties = properties;
     }
 
-    @NonNull SandboxOutcome run(@NonNull Path callDir, @NonNull SandboxRequest request, @NonNull Duration deadline) {
+    @NonNull
+    SandboxOutcome run(@NonNull Path callDir, @NonNull SandboxRequest request, @NonNull Duration deadline) {
         Process process = null;
         try {
             mapper.writeValue(callDir.resolve(ParseMain.REQUEST_FILE).toFile(), request);
@@ -101,9 +102,10 @@ public class ParseSandbox {
 
     private List<String> command(Path callDir, SandboxRequest request) {
         ExtractionWorkerProperties.Sandbox sandbox = properties.sandbox();
-        String classpath = sandbox.childClasspath() == null || sandbox.childClasspath().isBlank()
-                ? System.getProperty("java.class.path")
-                : sandbox.childClasspath();
+        String classpath =
+                sandbox.childClasspath() == null || sandbox.childClasspath().isBlank()
+                        ? System.getProperty("java.class.path")
+                        : sandbox.childClasspath();
         List<String> command = new ArrayList<>();
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         command.add("-Xmx" + sandbox.childHeap());

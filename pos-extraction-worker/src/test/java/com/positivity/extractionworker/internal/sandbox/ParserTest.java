@@ -87,8 +87,10 @@ class ParserTest {
 
     @Test
     void validImagesAreAcceptedWithOnePage() throws IOException {
-        assertThat(inspect(DeclaredType.PNG, TestCorpus.image("png", 40, 30)).pageCount()).isEqualTo(1);
-        assertThat(inspect(DeclaredType.JPEG, TestCorpus.image("jpeg", 40, 30)).pageCount()).isEqualTo(1);
+        assertThat(inspect(DeclaredType.PNG, TestCorpus.image("png", 40, 30)).pageCount())
+                .isEqualTo(1);
+        assertThat(inspect(DeclaredType.JPEG, TestCorpus.image("jpeg", 40, 30)).pageCount())
+                .isEqualTo(1);
         assertThat(inspect(DeclaredType.TIFF, TestCorpus.tiff(1)).pageCount()).isEqualTo(1);
     }
 
@@ -126,7 +128,8 @@ class ParserTest {
     void csvDelimiterIsSniffedAndBomAndLatin1AreHandled() throws IOException {
         assertThat(inspect(DeclaredType.CSV, TestCorpus.csv("﻿a;b;c\n1;2;3\n")).pageCount())
                 .isEqualTo(1);
-        assertThat(inspect(DeclaredType.CSV, TestCorpus.csv("a\tb\n1\t2\n3\t4\n")).pageCount())
+        assertThat(inspect(DeclaredType.CSV, TestCorpus.csv("a\tb\n1\t2\n3\t4\n"))
+                        .pageCount())
                 .isEqualTo(2);
         byte[] latin1 = "name,city\nJosé,München\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
         assertThat(inspect(DeclaredType.CSV, latin1).pageCount()).isEqualTo(1);
@@ -139,8 +142,21 @@ class ParserTest {
 
     @Test
     void csvLimitsOnRowsColumnsAndCellLengthAreEnforced() throws IOException {
-        SandboxLimits tight = new SandboxLimits(30, 30, 50_000_000L, 25_000_000L, 150, 3, 4, 10, 10_000,
-                104_857_600L, 209_715_200L, 0.01, "heif-dec", 20);
+        SandboxLimits tight = new SandboxLimits(
+                30,
+                30,
+                50_000_000L,
+                25_000_000L,
+                150,
+                3,
+                4,
+                10,
+                10_000,
+                104_857_600L,
+                209_715_200L,
+                0.01,
+                "heif-dec",
+                20);
 
         assertRejected(
                 inspect(DeclaredType.CSV, TestCorpus.csv("a\n1\n2\n3\n4\n"), tight),
@@ -186,29 +202,66 @@ class ParserTest {
 
     @Test
     void zipEntryLimitsAreEnforced() throws IOException {
-        SandboxLimits smallEntries = new SandboxLimits(30, 30, 50_000_000L, 25_000_000L, 150, 10_000, 100, 1_000,
-                10_000, 1024, 209_715_200L, 0.01, "heif-dec", 20);
-        SandboxLimits fewEntries = new SandboxLimits(30, 30, 50_000_000L, 25_000_000L, 150, 10_000, 100, 1_000, 2,
-                104_857_600L, 209_715_200L, 0.01, "heif-dec", 20);
+        SandboxLimits smallEntries = new SandboxLimits(
+                30,
+                30,
+                50_000_000L,
+                25_000_000L,
+                150,
+                10_000,
+                100,
+                1_000,
+                10_000,
+                1024,
+                209_715_200L,
+                0.01,
+                "heif-dec",
+                20);
+        SandboxLimits fewEntries = new SandboxLimits(
+                30,
+                30,
+                50_000_000L,
+                25_000_000L,
+                150,
+                10_000,
+                100,
+                1_000,
+                2,
+                104_857_600L,
+                209_715_200L,
+                0.01,
+                "heif-dec",
+                20);
 
         assertRejected(
                 inspect(DeclaredType.XLSX, TestCorpus.xlsx(50, 4), smallEntries),
                 ReasonCode.DECOMPRESSION_LIMIT_EXCEEDED);
         assertRejected(
-                inspect(DeclaredType.XLSX, TestCorpus.xlsx(2, 2), fewEntries),
-                ReasonCode.DECOMPRESSION_LIMIT_EXCEEDED);
+                inspect(DeclaredType.XLSX, TestCorpus.xlsx(2, 2), fewEntries), ReasonCode.DECOMPRESSION_LIMIT_EXCEEDED);
     }
 
     @Test
     void spreadsheetRowColumnAndCellLimitsAreEnforced() throws IOException {
-        SandboxLimits tight = new SandboxLimits(30, 30, 50_000_000L, 25_000_000L, 150, 5, 3, 20, 10_000,
-                104_857_600L, 209_715_200L, 0.01, "heif-dec", 20);
+        SandboxLimits tight = new SandboxLimits(
+                30,
+                30,
+                50_000_000L,
+                25_000_000L,
+                150,
+                5,
+                3,
+                20,
+                10_000,
+                104_857_600L,
+                209_715_200L,
+                0.01,
+                "heif-dec",
+                20);
 
         assertRejected(inspect(DeclaredType.XLSX, TestCorpus.xlsx(10, 2), tight), ReasonCode.RESOURCE_LIMIT_EXCEEDED);
         assertRejected(inspect(DeclaredType.XLSX, TestCorpus.xlsx(2, 5), tight), ReasonCode.RESOURCE_LIMIT_EXCEEDED);
         assertRejected(
-                inspect(DeclaredType.XLSX, TestCorpus.xlsxWithLongCell(21), tight),
-                ReasonCode.RESOURCE_LIMIT_EXCEEDED);
+                inspect(DeclaredType.XLSX, TestCorpus.xlsxWithLongCell(21), tight), ReasonCode.RESOURCE_LIMIT_EXCEEDED);
     }
 
     @Test

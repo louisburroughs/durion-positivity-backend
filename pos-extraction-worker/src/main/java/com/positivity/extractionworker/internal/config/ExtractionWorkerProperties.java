@@ -37,7 +37,9 @@ public record ExtractionWorkerProperties(
     public record Sandbox(
             @DefaultValue("768m") String childHeap,
             @Nullable String childClasspath,
-            @DefaultValue("com.positivity.extractionworker.internal.sandbox.ParseMain") String childMainClass) {}
+
+            @DefaultValue("com.positivity.extractionworker.internal.sandbox.ParseMain")
+            String childMainClass) {}
 
     /** Per-operation deadlines; the child is killed when one passes. */
     public record Deadline(
@@ -53,7 +55,9 @@ public record ExtractionWorkerProperties(
      * @param maxPixels most pixels an image may declare in its header
      * @param maxTiffFrames most frames a TIFF may have
      */
-    public record Image(@DefaultValue("50000000") long maxPixels, @DefaultValue("30") int maxTiffFrames) {}
+    public record Image(
+            @DefaultValue("50000000") long maxPixels,
+            @DefaultValue("30") int maxTiffFrames) {}
 
     /**
      * @param maxRows most rows a CSV or first XLSX sheet may have
@@ -77,13 +81,17 @@ public record ExtractionWorkerProperties(
      * @param dpi resolution a PDF page is rendered at
      * @param maxPixels most pixels in a rendered page; the resolution is lowered to fit
      */
-    public record Render(@DefaultValue("150") int dpi, @DefaultValue("25000000") long maxPixels) {}
+    public record Render(
+            @DefaultValue("150") int dpi,
+            @DefaultValue("25000000") long maxPixels) {}
 
     /**
      * @param binary the HEIC decoder command
      * @param timeout deadline for the HEIC decoder
      */
-    public record Heif(@DefaultValue("heif-dec") String binary, @DefaultValue("PT20S") Duration timeout) {}
+    public record Heif(
+            @DefaultValue("heif-dec") String binary,
+            @DefaultValue("PT20S") Duration timeout) {}
 
     /** The limits the child enforces, in the form it reads from {@code request.json}. */
     public SandboxLimits sandboxLimits() {

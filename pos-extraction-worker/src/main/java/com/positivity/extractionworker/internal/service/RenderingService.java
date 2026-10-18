@@ -85,7 +85,8 @@ public class RenderingService {
             }
             SandboxRequest request =
                     new SandboxRequest(SandboxRequest.RENDER, declaredType, page, properties.sandboxLimits());
-            SandboxOutcome run = sandbox.run(dir.path(), request, properties.deadline().render());
+            SandboxOutcome run =
+                    sandbox.run(dir.path(), request, properties.deadline().render());
             if (run instanceof SandboxOutcome.TimedOut || run instanceof SandboxOutcome.OutOfMemory) {
                 reason = ReasonCode.RESOURCE_LIMIT_EXCEEDED;
                 throw new PageNotRenderableException();
@@ -98,7 +99,8 @@ public class RenderingService {
             outcome = "RENDERED";
             return png;
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not stage the upload", new IOException(e.getClass().getSimpleName()));
+            throw new UncheckedIOException(
+                    "Could not stage the upload", new IOException(e.getClass().getSimpleName()));
         } finally {
             pool.release();
             Duration elapsed = Duration.ofNanos(System.nanoTime() - started);

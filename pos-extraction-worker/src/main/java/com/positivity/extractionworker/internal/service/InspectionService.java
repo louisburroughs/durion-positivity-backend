@@ -81,7 +81,8 @@ public class InspectionService {
                     elapsed.toMillis());
             return response;
         } catch (IOException e) {
-            throw new UncheckedIOException("Could not stage the upload", new IOException(e.getClass().getSimpleName()));
+            throw new UncheckedIOException(
+                    "Could not stage the upload", new IOException(e.getClass().getSimpleName()));
         } finally {
             pool.release();
         }
@@ -99,7 +100,8 @@ public class InspectionService {
         }
         SandboxRequest request =
                 new SandboxRequest(SandboxRequest.INSPECT, declaredType, 0, properties.sandboxLimits());
-        SandboxOutcome outcome = sandbox.run(dir.path(), request, properties.deadline().inspect());
+        SandboxOutcome outcome =
+                sandbox.run(dir.path(), request, properties.deadline().inspect());
         return switch (outcome) {
             case SandboxOutcome.TimedOut t -> rejected(ReasonCode.RESOURCE_LIMIT_EXCEEDED, declaredType.name(), staged);
             case SandboxOutcome.OutOfMemory o ->

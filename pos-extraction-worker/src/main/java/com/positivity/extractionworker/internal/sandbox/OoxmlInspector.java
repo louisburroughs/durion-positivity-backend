@@ -143,7 +143,10 @@ final class OoxmlInspector {
         }
         int a = chunk[0] & 0xFF;
         int b = chunk[1] & 0xFF;
-        return (a == 0xFE && b == 0xFF) || (a == 0xFF && b == 0xFE) || (a == 0x00 && b == 0x3C) || (a == 0x3C && b == 0x00);
+        return (a == 0xFE && b == 0xFF)
+                || (a == 0xFF && b == 0xFE)
+                || (a == 0x00 && b == 0x3C)
+                || (a == 0x3C && b == 0x00);
     }
 
     private static byte[] concat(byte[] carry, byte[] chunk, int read) {
@@ -274,7 +277,8 @@ final class OoxmlInspector {
                 case "v", "t" -> {
                     String value = text.toString();
                     if (sharedString && "v".equals(localName) && !value.isBlank()) {
-                        value = strings.getItemAt(Integer.parseInt(value.trim())).getString();
+                        value = strings.getItemAt(Integer.parseInt(value.trim()))
+                                .getString();
                         if (value.length() > limits.maxCellChars()) {
                             throw new LimitBreach();
                         }

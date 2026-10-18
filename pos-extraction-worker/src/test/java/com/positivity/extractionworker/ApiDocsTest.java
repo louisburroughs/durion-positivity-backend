@@ -40,7 +40,8 @@ class ApiDocsTest {
     void actuatorKeepsTheGatewayChainRules() throws Exception {
         // The management port is separate, so MockMvc has no actuator handler: what matters here is that the
         // security chain answers before dispatch. Health is open, every other endpoint needs credentials.
-        int health = mvc.perform(get("/actuator/health")).andReturn().getResponse().getStatus();
+        int health =
+                mvc.perform(get("/actuator/health")).andReturn().getResponse().getStatus();
         assertThat(health).isNotIn(401, 403);
         mvc.perform(get("/actuator/prometheus")).andExpect(status().isUnauthorized());
         mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());

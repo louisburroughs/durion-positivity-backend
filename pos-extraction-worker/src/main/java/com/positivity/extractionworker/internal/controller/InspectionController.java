@@ -54,9 +54,7 @@ public class InspectionController {
                     @Content(
                             mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
                             examples =
-                                    @ExampleObject(
-                                            name = "pdf",
-                                            value = "file=<bytes of bill.pdf>; declaredType=PDF")))
+                                    @ExampleObject(name = "pdf", value = "file=<bytes of bill.pdf>; declaredType=PDF")))
     @ApiResponse(
             responseCode = "200",
             description = "The verdict. A rejected file is still a 200 with verdict REJECTED and a reasonCode.")
