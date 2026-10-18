@@ -74,7 +74,7 @@ public class RenderingController {
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "422",
-            description = "The page does not exist or cannot be rendered.",
+            description = "PAGE_NOT_RENDERABLE: the page does not exist or cannot be rendered.",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     @ApiResponse(
             responseCode = "503",

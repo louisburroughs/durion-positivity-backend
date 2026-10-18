@@ -127,9 +127,13 @@ public class ParseSandbox {
         return path == null || path.isBlank() ? DEFAULT_PATH : path;
     }
 
-    private static void kill(Process process) throws InterruptedException {
+    private static void kill(Process process) {
         process.descendants().forEach(ProcessHandle::destroyForcibly);
         process.destroyForcibly();
-        process.waitFor(KILL_WAIT_SECONDS, TimeUnit.SECONDS);
+        try {
+            process.waitFor(KILL_WAIT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

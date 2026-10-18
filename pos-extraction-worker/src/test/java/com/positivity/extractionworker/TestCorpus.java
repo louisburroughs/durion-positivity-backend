@@ -88,7 +88,7 @@ public final class TestCorpus {
             document.addPage(page);
             PDAnnotationLink link = new PDAnnotationLink();
             link.getCOSObject().setItem(COSName.A, action("Launch", "F", "calc.exe"));
-            page.getAnnotations().add(link);
+            page.setAnnotations(java.util.List.of(link));
             return save(document);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -110,7 +110,7 @@ public final class TestCorpus {
             COSDictionary additional = new COSDictionary();
             additional.setItem(COSName.getPDFName("E"), action("JavaScript", "JS", "app.alert('y')"));
             link.getCOSObject().setItem(COSName.getPDFName("AA"), additional);
-            page.getAnnotations().add(link);
+            page.setAnnotations(java.util.List.of(link));
             return save(document);
         } catch (IOException e) {
             throw new UncheckedIOException(e);

@@ -22,7 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 public class TenantLabelFilter extends OncePerRequestFilter {
 
     public static final String TENANT_HEADER = "X-Tenant-Id";
-    public static final String TENANT_ATTRIBUTE = TenantLabelFilter.class.getName() + ".tenant";
+    public static final String TENANT_ATTRIBUTE = "extractionWorker.tenantLabel";
     public static final String MDC_KEY = "tenantId";
     public static final String CODE_TENANT_REQUIRED = "TENANT_REQUIRED";
 

@@ -11,7 +11,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
 import javax.xml.parsers.ParserConfigurationException;
-import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
 import org.apache.poi.openxml4j.exceptions.OpenXML4JException;
 import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.openxml4j.opc.PackageAccess;
@@ -52,7 +51,7 @@ final class OoxmlInspector {
         ZipSecureFile.setMaxFileCount(limits.maxZipEntries());
         try (OPCPackage pkg = OPCPackage.open(input.toFile(), PackageAccess.READ)) {
             return countRows(pkg, limits);
-        } catch (InvalidFormatException | OpenXML4JException | SAXException | ParserConfigurationException e) {
+        } catch (OpenXML4JException | SAXException | ParserConfigurationException e) {
             return SandboxResult.rejected(ReasonCode.UNREADABLE);
         }
     }
