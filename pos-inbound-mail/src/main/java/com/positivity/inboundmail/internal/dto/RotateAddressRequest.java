@@ -13,6 +13,5 @@ import java.util.UUID;
  */
 @Schema(description = "Rotation request keyed by the caller's own request id")
 public record RotateAddressRequest(
-        @Schema(description = "Caller's idempotency key; a replay returns the address this request issued")
-                @NotNull
-                UUID requestId) {}
+        @Schema(description = "Caller's idempotency key; a replay returns the address this request issued") @NotNull
+        UUID requestId) {}

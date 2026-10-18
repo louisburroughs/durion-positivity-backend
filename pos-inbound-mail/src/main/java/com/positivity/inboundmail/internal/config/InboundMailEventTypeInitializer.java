@@ -54,10 +54,7 @@ public class InboundMailEventTypeInitializer implements ApplicationRunner {
 
             request.retrieve().toBodilessEntity();
         } catch (Exception ex) {
-            log.warn(
-                    "Failed to register inbound-mail event type {}: {}",
-                    registration.getTypeCode(),
-                    ex.getMessage());
+            log.warn("Failed to register inbound-mail event type {}: {}", registration.getTypeCode(), ex.getMessage());
         }
     }
 }

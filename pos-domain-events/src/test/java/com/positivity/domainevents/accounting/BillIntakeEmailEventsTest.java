@@ -46,8 +46,12 @@ class BillIntakeEmailEventsTest {
         assertThat(BillIntakeEmailReceivedV1.EVENT_TYPE).isEqualTo("accounting.bill-intake.email-received");
         assertThat(BillIntakeEmailReceivedV1.SCHEMA_VERSION).isEqualTo(1);
         assertThat(json.has("receivingAddressId")).isTrue();
-        assertThat(json.has("receivingAddress")).as("the address text is a capability").isFalse();
-        assertThat(json.has("rejectionReason")).as("absent fields are omitted, not null").isFalse();
+        assertThat(json.has("receivingAddress"))
+                .as("the address text is a capability")
+                .isFalse();
+        assertThat(json.has("rejectionReason"))
+                .as("absent fields are omitted, not null")
+                .isFalse();
         assertThat(json.path("attachments").get(0).path("ref").asString()).isEqualTo(ID.toString());
     }
 

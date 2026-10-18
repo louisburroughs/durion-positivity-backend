@@ -23,10 +23,7 @@ public class StagingPurgeJob {
     private final Clock clock;
 
     public StagingPurgeJob(
-            AttachmentStaging staging,
-            TenantIterator tenantIterator,
-            InboundMailProperties properties,
-            Clock clock) {
+            AttachmentStaging staging, TenantIterator tenantIterator, InboundMailProperties properties, Clock clock) {
         this.staging = staging;
         this.tenantIterator = tenantIterator;
         this.properties = properties;

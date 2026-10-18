@@ -43,7 +43,10 @@ public class AddressController {
 
     @PostMapping
     @EmitEvent(id = "INBOUND_MAIL_ADDRESS_ISSUE", apiVersion = "1")
-    @Operation(operationId = "issueInboundMailAddress", summary = "Return or issue the tenant's intake address", description = """
+    @Operation(
+            operationId = "issueInboundMailAddress",
+            summary = "Return or issue the tenant's intake address",
+            description = """
             Returns the caller's tenant's ACTIVE intake address, the one shops email vendor bills to, and issues one \
             first when the tenant has none. Concurrent first calls agree on a single address.
             Use this tool to show a shop where to forward bills; do not use it to replace an address, call the \
@@ -72,7 +75,10 @@ public class AddressController {
 
     @PostMapping(path = "/rotation", consumes = MediaType.APPLICATION_JSON_VALUE)
     @EmitEvent(id = "INBOUND_MAIL_ADDRESS_ROTATE", apiVersion = "1")
-    @Operation(operationId = "rotateInboundMailAddress", summary = "Retire the tenant's address and issue a new one", description = """
+    @Operation(
+            operationId = "rotateInboundMailAddress",
+            summary = "Retire the tenant's address and issue a new one",
+            description = """
             Retires the tenant's ACTIVE intake address and issues a new one in one transaction. Mail sent to the \
             retired address is refused from then on.
             Use this tool when an address has leaked or is being abused; do not use it to look up the current \

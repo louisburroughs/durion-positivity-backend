@@ -34,7 +34,8 @@ import org.springframework.test.web.servlet.MvcResult;
 
 /** The fetch contract: bytes untouched with the integrity headers, and one identical 404 for every unreadable ref. */
 @WebMvcTest(StagedAttachmentController.class)
-@Import({SecurityConfig.class, InboundMailExceptionHandler.class, StagedAttachmentControllerWebMvcTest.SliceConfig.class})
+@Import({SecurityConfig.class, InboundMailExceptionHandler.class, StagedAttachmentControllerWebMvcTest.SliceConfig.class
+})
 @TestPropertySource(properties = "pos.inbound-mail.api-secret=edge-s3cret")
 class StagedAttachmentControllerWebMvcTest {
 
@@ -89,8 +90,10 @@ class StagedAttachmentControllerWebMvcTest {
                 .andExpect(status().isNotFound())
                 .andReturn();
 
-        String firstBody = first.getResponse().getContentAsString().replaceAll("\"(timestamp|correlationId)\":\"[^\"]*\"", "");
-        String secondBody = second.getResponse().getContentAsString().replaceAll("\"(timestamp|correlationId)\":\"[^\"]*\"", "");
+        String firstBody =
+                first.getResponse().getContentAsString().replaceAll("\"(timestamp|correlationId)\":\"[^\"]*\"", "");
+        String secondBody =
+                second.getResponse().getContentAsString().replaceAll("\"(timestamp|correlationId)\":\"[^\"]*\"", "");
         org.assertj.core.api.Assertions.assertThat(firstBody).isEqualTo(secondBody);
         org.assertj.core.api.Assertions.assertThat(firstBody).doesNotContain(foreignOrUnknown.toString());
     }

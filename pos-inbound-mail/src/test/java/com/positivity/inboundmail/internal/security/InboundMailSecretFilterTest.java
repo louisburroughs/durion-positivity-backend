@@ -34,7 +34,8 @@ class InboundMailSecretFilterTest {
     }
 
     @Test
-    @DisplayName("a blank configured secret refuses every request with INBOUND_MAIL_SECRET_MISSING, whatever the caller sends")
+    @DisplayName(
+            "a blank configured secret refuses every request with INBOUND_MAIL_SECRET_MISSING, whatever the caller sends")
     void blankSecretRefusesAll() throws Exception {
         InboundMailSecretFilter filter = new InboundMailSecretFilter(" ", CLOCK, new ObjectMapper());
         MockHttpServletResponse response = new MockHttpServletResponse();

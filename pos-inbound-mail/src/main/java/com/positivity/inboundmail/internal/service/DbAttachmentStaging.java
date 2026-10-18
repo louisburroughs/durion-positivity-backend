@@ -64,7 +64,8 @@ public class DbAttachmentStaging implements AttachmentStaging {
                 .build());
         contents.save(new StagedAttachmentContent(saved.getRef(), content));
         log.debug("Staged attachment ref={}", saved.getRef());
-        return new StagedAttachmentRef(saved.getRef(), saved.getDeclaredType(), saved.getSizeBytes(), saved.getSha256());
+        return new StagedAttachmentRef(
+                saved.getRef(), saved.getDeclaredType(), saved.getSizeBytes(), saved.getSha256());
     }
 
     @Override
@@ -73,10 +74,9 @@ public class DbAttachmentStaging implements AttachmentStaging {
         return attachments
                 .findById(ref)
                 .filter(attachment -> attachment.getCollectedAt() == null)
-                .flatMap(attachment -> contents
-                        .findById(ref)
-                        .map(content ->
-                                new StagedAttachmentBytes(content.getContent(), attachment.getSizeBytes(), attachment.getSha256())));
+                .flatMap(attachment -> contents.findById(ref)
+                        .map(content -> new StagedAttachmentBytes(
+                                content.getContent(), attachment.getSizeBytes(), attachment.getSha256())));
     }
 
     @Override

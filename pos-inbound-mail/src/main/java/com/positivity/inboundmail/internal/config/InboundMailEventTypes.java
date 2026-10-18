@@ -18,7 +18,8 @@ public final class InboundMailEventTypes {
                         .apiVersion("1")
                         .build(),
                 EventTypeRegistration.write(
-                                "INBOUND_MAIL_ADDRESS_ROTATE", "Retire the tenant's inbound bill address and issue a new one")
+                                "INBOUND_MAIL_ADDRESS_ROTATE",
+                                "Retire the tenant's inbound bill address and issue a new one")
                         .apiVersion("1")
                         .build(),
                 // StagedAttachmentController (S27)

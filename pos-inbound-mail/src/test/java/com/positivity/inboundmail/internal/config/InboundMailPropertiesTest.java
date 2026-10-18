@@ -29,7 +29,8 @@ class InboundMailPropertiesTest {
 
     @Test
     void rejectsNonsenseLimits() {
-        assertThatThrownBy(() -> with("none", " ", Duration.ofDays(7), 1L)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> with("none", " ", Duration.ofDays(7), 1L))
+                .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> with("none", "mail.example.com", Duration.ZERO, 1L))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> with("none", "mail.example.com", Duration.ofDays(7), 0L))

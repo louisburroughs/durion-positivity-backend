@@ -17,14 +17,17 @@ class OpenApiConfigTest {
 
     @Test
     void documentsTheSharedSecretAsTheOnlySecurityScheme() {
-        assertThat(openApi.getComponents().getSecuritySchemes()).containsOnlyKeys(OpenApiConfig.INBOUND_MAIL_SECRET_SCHEME);
-        SecurityScheme scheme = openApi.getComponents().getSecuritySchemes().get(OpenApiConfig.INBOUND_MAIL_SECRET_SCHEME);
+        assertThat(openApi.getComponents().getSecuritySchemes())
+                .containsOnlyKeys(OpenApiConfig.INBOUND_MAIL_SECRET_SCHEME);
+        SecurityScheme scheme =
+                openApi.getComponents().getSecuritySchemes().get(OpenApiConfig.INBOUND_MAIL_SECRET_SCHEME);
         assertThat(scheme.getType()).isEqualTo(SecurityScheme.Type.APIKEY);
         assertThat(scheme.getIn()).isEqualTo(SecurityScheme.In.HEADER);
         assertThat(scheme.getName()).isEqualTo(InboundMailSecretFilter.SECRET_HEADER);
         assertThat(openApi.getSecurity())
                 .singleElement()
-                .satisfies(requirement -> assertThat(requirement).containsOnlyKeys(OpenApiConfig.INBOUND_MAIL_SECRET_SCHEME));
+                .satisfies(requirement ->
+                        assertThat(requirement).containsOnlyKeys(OpenApiConfig.INBOUND_MAIL_SECRET_SCHEME));
     }
 
     @Test

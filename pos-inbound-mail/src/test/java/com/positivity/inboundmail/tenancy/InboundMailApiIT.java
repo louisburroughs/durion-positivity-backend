@@ -133,7 +133,9 @@ class InboundMailApiIT extends PostgresTenancyTestBase {
                         .header("X-Tenant-Id", TENANT_A))
                 .andExpect(status().isNotFound())
                 .andReturn();
-        assertThat(normalise(foreign)).as("a foreign ref and an unknown ref are indistinguishable").isEqualTo(normalise(unknown));
+        assertThat(normalise(foreign))
+                .as("a foreign ref and an unknown ref are indistinguishable")
+                .isEqualTo(normalise(unknown));
     }
 
     private String exchange(UUID tenant, String path, String body) throws Exception {

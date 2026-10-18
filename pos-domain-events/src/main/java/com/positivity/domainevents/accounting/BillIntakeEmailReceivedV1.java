@@ -111,7 +111,8 @@ public record BillIntakeEmailReceivedV1(
      * @param fileName the file name as text, CONFIDENTIAL
      * @param reason the edge's reason name, for example {@code FILE_TOO_LARGE}
      */
-    public record RefusedAttachment(@NonNull String fileName, @NonNull String reason) {
+    public record RefusedAttachment(
+            @NonNull String fileName, @NonNull String reason) {
 
         public RefusedAttachment {
             if (fileName == null || fileName.isBlank()) {
@@ -163,7 +164,8 @@ public record BillIntakeEmailReceivedV1(
 
     @Override
     public String toString() {
-        // fromAddress, subject and file names are CONFIDENTIAL (ADR-0072): a record's default toString would print them.
+        // fromAddress, subject and file names are CONFIDENTIAL (ADR-0072): a record's default toString would print
+        // them.
         return "BillIntakeEmailReceivedV1[commandId=" + commandId + ", inboundMessageId=" + inboundMessageId
                 + ", status=" + status + ", rejectionReason=" + rejectionReason + ", attachments="
                 + attachments.size() + ", refusedAttachments=" + refusedAttachments.size() + "]";

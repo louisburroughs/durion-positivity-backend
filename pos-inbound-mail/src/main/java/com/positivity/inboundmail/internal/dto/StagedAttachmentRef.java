@@ -8,4 +8,7 @@ import org.jspecify.annotations.NonNull;
  * and digest the consumer checks the fetched bytes against.
  */
 public record StagedAttachmentRef(
-        @NonNull UUID ref, @NonNull String declaredType, long sizeBytes, @NonNull String sha256) {}
+        @NonNull UUID ref,
+        @NonNull String declaredType,
+        long sizeBytes,
+        @NonNull String sha256) {}

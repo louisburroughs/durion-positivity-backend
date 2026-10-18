@@ -15,10 +15,14 @@ import org.jspecify.annotations.NonNull;
  */
 @Schema(description = "An intake address of the caller's tenant")
 public record IssuedAddressResponse(
-        @Schema(description = "Registry id of the address; logs and events use it instead of the address text")
-                @NonNull
-                UUID addressId,
-        @Schema(description = "Full lower-case intake address; a capability, never to be logged", example = "bills-abcdefghijklmnopqrstuvwxyz@mail.example.com")
-                @NonNull
-                String address,
-        @Schema(description = "When the address was issued") @NonNull Instant issuedAt) {}
+        @Schema(description = "Registry id of the address; logs and events use it instead of the address text") @NonNull
+        UUID addressId,
+
+        @Schema(
+                description = "Full lower-case intake address; a capability, never to be logged",
+                example = "bills-abcdefghijklmnopqrstuvwxyz@mail.example.com")
+        @NonNull
+        String address,
+
+        @Schema(description = "When the address was issued") @NonNull
+        Instant issuedAt) {}

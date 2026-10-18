@@ -92,23 +92,30 @@ class TenantIsolationIT extends PostgresTenancyTestBase {
 
         asTenant(TENANT_A, () -> {
             assertThat(staging.fetch(ref.ref())).isPresent();
-            assertThat(attachments.findById(ref.ref()).orElseThrow().getTenantId()).isEqualTo(TENANT_A);
+            assertThat(attachments.findById(ref.ref()).orElseThrow().getTenantId())
+                    .isEqualTo(TENANT_A);
             assertThat(count(jdbc, "staged_attachment", ref.ref())).isEqualTo(1);
             assertThat(count(jdbc, "staged_attachment_content", ref.ref())).isEqualTo(1);
         });
 
         asTenant(TENANT_B, () -> {
-            assertThat(staging.fetch(ref.ref())).as("another tenant's ref reads as absent").isEmpty();
+            assertThat(staging.fetch(ref.ref()))
+                    .as("another tenant's ref reads as absent")
+                    .isEmpty();
             assertThat(attachments.findById(ref.ref())).isEmpty();
             assertThat(contents.existsById(ref.ref())).isFalse();
-            assertThat(count(jdbc, "staged_attachment", ref.ref())).as("RLS hides it from raw SQL").isZero();
+            assertThat(count(jdbc, "staged_attachment", ref.ref()))
+                    .as("RLS hides it from raw SQL")
+                    .isZero();
             assertThat(count(jdbc, "staged_attachment_content", ref.ref())).isZero();
             assertThat(jdbc.update("DELETE FROM staged_attachment_content WHERE ref = ?", ref.ref()))
                     .as("nor can tenant B delete it")
                     .isZero();
         });
 
-        assertThat(count(jdbc, "staged_attachment_content", ref.ref())).as("no tenant bound: empty").isZero();
+        assertThat(count(jdbc, "staged_attachment_content", ref.ref()))
+                .as("no tenant bound: empty")
+                .isZero();
         assertThatThrownBy(() -> jdbc.update(
                         "INSERT INTO staged_attachment_content (ref, content) VALUES (?, ?)",
                         UUID.randomUUID(),

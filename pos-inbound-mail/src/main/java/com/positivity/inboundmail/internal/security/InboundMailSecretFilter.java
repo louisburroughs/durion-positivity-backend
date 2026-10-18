@@ -96,7 +96,8 @@ public class InboundMailSecretFilter extends OncePerRequestFilter {
                 ? UUIDv7Generator.generate().toString()
                 : inbound.trim();
         // Method and path only: the path of a staged-attachment fetch carries a ref, never an address.
-        log.warn("{} on {} {} [correlationId={}]", message, request.getMethod(), request.getRequestURI(), correlationId);
+        log.warn(
+                "{} on {} {} [correlationId={}]", message, request.getMethod(), request.getRequestURI(), correlationId);
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader(X_CORRELATION_ID, correlationId);

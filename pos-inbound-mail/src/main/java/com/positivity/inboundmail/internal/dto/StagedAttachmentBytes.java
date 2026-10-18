@@ -7,7 +7,8 @@ import org.jspecify.annotations.NonNull;
  * One staged attachment as fetched. The bytes stay out of {@link #toString()} (ADR-0072: no
  * attachment byte is ever logged).
  */
-public record StagedAttachmentBytes(@NonNull byte[] content, long sizeBytes, @NonNull String sha256) {
+public record StagedAttachmentBytes(
+        @NonNull byte[] content, long sizeBytes, @NonNull String sha256) {
 
     @Override
     public boolean equals(Object other) {

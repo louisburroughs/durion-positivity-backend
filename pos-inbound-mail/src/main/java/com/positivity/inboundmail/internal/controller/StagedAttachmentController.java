@@ -33,7 +33,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/inbound-mail/v1/staged-attachments")
 @RequiredArgsConstructor
-@Tag(name = "Inbound mail staging", description = "Attachments of accepted emails, waiting for pos-accounting to collect them")
+@Tag(
+        name = "Inbound mail staging",
+        description = "Attachments of accepted emails, waiting for pos-accounting to collect them")
 @PreAuthorize("isAuthenticated()")
 public class StagedAttachmentController {
 
@@ -43,7 +45,10 @@ public class StagedAttachmentController {
 
     @GetMapping(path = "/{ref}", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     @EmitEvent(id = "INBOUND_MAIL_STAGED_ATTACHMENT_GET", apiVersion = "1")
-    @Operation(operationId = "getStagedInboundMailAttachment", summary = "Fetch one staged email attachment", description = """
+    @Operation(
+            operationId = "getStagedInboundMailAttachment",
+            summary = "Fetch one staged email attachment",
+            description = """
             Returns the raw bytes of one attachment the edge staged from an accepted email, so pos-accounting can \
             hand them to its bill intake. The bytes are never parsed or altered; the digest of what was staged \
             travels in X-Content-SHA256 so the caller can verify what it received.
@@ -78,8 +83,7 @@ public class StagedAttachmentController {
             description = "STAGED_ATTACHMENT_NOT_FOUND: unknown, another tenant's, collected or purged ref",
             content = @Content(schema = @Schema(implementation = ApiError.class)))
     public ResponseEntity<Resource> get(@PathVariable("ref") UUID ref) {
-        StagedAttachmentBytes staged =
-                attachmentStaging.fetch(ref).orElseThrow(StagedAttachmentNotFoundException::new);
+        StagedAttachmentBytes staged = attachmentStaging.fetch(ref).orElseThrow(StagedAttachmentNotFoundException::new);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .contentLength(staged.sizeBytes())

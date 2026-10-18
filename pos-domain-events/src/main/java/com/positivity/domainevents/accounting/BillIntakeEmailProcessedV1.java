@@ -55,7 +55,10 @@ public record BillIntakeEmailProcessedV1(
      * @param outcome what became of it
      * @param intakeId the draft's intake id; required for {@code DRAFT_CREATED}, absent otherwise
      */
-    public record Outcome(@NonNull UUID ref, @NonNull OutcomeKind outcome, @Nullable UUID intakeId) {
+    public record Outcome(
+            @NonNull UUID ref,
+            @NonNull OutcomeKind outcome,
+            @Nullable UUID intakeId) {
 
         public Outcome {
             if (ref == null) {

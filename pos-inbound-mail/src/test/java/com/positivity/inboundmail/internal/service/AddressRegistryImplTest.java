@@ -123,8 +123,9 @@ class AddressRegistryImplTest {
         assertThat(response.addressId()).isNotEqualTo(active.getAddressId());
         InOrder order = inOrder(repository);
         order.verify(repository).saveAndFlush(active);
-        order.verify(repository).saveAndFlush(org.mockito.ArgumentMatchers.argThat(
-                (InboundAddress a) -> a.getStatus() == AddressStatus.ACTIVE && requestId.equals(a.getIssuedByRequestId())));
+        order.verify(repository)
+                .saveAndFlush(org.mockito.ArgumentMatchers.argThat((InboundAddress a) ->
+                        a.getStatus() == AddressStatus.ACTIVE && requestId.equals(a.getIssuedByRequestId())));
     }
 
     @Test

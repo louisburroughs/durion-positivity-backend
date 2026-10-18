@@ -35,8 +35,7 @@ public class InboundMailExceptionHandler {
             StagedAttachmentNotFoundException ex, HttpServletRequest request, HttpServletResponse response) {
         // No ref in the log line: the 404 carries no information and neither does its log.
         log.debug("Staged attachment fetch answered 404 on {}", path(request));
-        return error(
-                request, response, HttpStatus.NOT_FOUND, StagedAttachmentNotFoundException.CODE, ex.getMessage());
+        return error(request, response, HttpStatus.NOT_FOUND, StagedAttachmentNotFoundException.CODE, ex.getMessage());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

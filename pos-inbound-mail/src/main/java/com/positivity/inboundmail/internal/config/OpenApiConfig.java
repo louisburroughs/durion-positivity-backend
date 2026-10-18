@@ -27,9 +27,10 @@ public class OpenApiConfig {
         return new OpenAPI()
                 .info(new Info()
                         .title("Positivity Inbound Mail API")
-                        .description("CAP:550 S27 inbound-mail edge: the intake address registry and the staged-attachment"
-                                + " store behind vendor-bills-by-email. Service-to-service only: pos-accounting is its"
-                                + " one caller (ADR-0044 amendment 2026-10-05), and the API Gateway has no route here.")
+                        .description(
+                                "CAP:550 S27 inbound-mail edge: the intake address registry and the staged-attachment"
+                                        + " store behind vendor-bills-by-email. Service-to-service only: pos-accounting is its"
+                                        + " one caller (ADR-0044 amendment 2026-10-05), and the API Gateway has no route here.")
                         .version("v1")
                         .contact(new Contact().email("platform@durionpos.org").name("Durion Support Services")))
                 .servers(List.of(new Server()

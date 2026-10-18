@@ -114,6 +114,8 @@ public class AddressRegistryImpl implements AddressRegistry {
     private static IssuedAddressResponse toResponse(InboundAddress address) {
         // Truncated to the column's precision so the response of the issuing call and a later re-read agree.
         return new IssuedAddressResponse(
-                address.getAddressId(), address.getAddress(), address.getCreatedAt().truncatedTo(ChronoUnit.MICROS));
+                address.getAddressId(),
+                address.getAddress(),
+                address.getCreatedAt().truncatedTo(ChronoUnit.MICROS));
     }
 }
