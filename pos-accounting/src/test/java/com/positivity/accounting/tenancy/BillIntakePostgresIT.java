@@ -52,10 +52,7 @@ class BillIntakePostgresIT extends PostgresTenancyTestBase {
     void cleanUp() {
         for (UUID tenant : scratchTenants) {
             for (String table : List.of(
-                    "accounting_event",
-                    "bill_intake_item",
-                    "accounting_sequence",
-                    "accounting_configuration")) {
+                    "accounting_event", "bill_intake_item", "accounting_sequence", "accounting_configuration")) {
                 owner.update("DELETE FROM " + table + " WHERE tenant_id = ?", tenant);
             }
         }
